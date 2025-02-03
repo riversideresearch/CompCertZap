@@ -136,6 +136,8 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print (print_RTL 7)
   @@@ time "Unused globals" Unusedglob.transform_program
    @@ print (print_RTL 8)
+  @@@ time "Replication" Replicate.transf_program
+   @@ print (print_RTL 9)
   @@@ time "Register allocation" Allocation.transf_program
    @@ print print_LTL
    @@ time "Branch tunneling" Tunneling.tunnel_program

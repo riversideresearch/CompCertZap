@@ -166,6 +166,7 @@ BACKEND=\
   NeedDomain.v NeedOp.v Deadcode.v Deadcodeproof.v \
   Unusedglob.v Unusedglobproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v \
+  Replicate.v \
   Allocation.v Allocproof.v \
   Tunneling.v Tunnelingproof.v \
   Linear.v Lineartyping.v \
