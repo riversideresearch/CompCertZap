@@ -50,6 +50,25 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   | Ireturn None => []
   end.
 
+Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
+  match res with
+  | BR r => Some r
+  | _ => None
+  end.
+
+Definition res_of_instruction (instr : instruction) : option reg :=
+  match instr with
+  | Iop _ _ dst _ => Some dst
+  | Iload _ _ _ dst _ => Some dst
+  | Icall _ _ _ dst _ => Some dst
+  (* | Itailcall _ _ _ ? *)
+  | Ibuiltin _ _ res _ => reg_of_builtin_res res
+  | _ => None
+  end.
+
+Definition copy_to_shadow (rm : PMap.t reg) (r : reg) (next : node) : mon node :=
+  add_instr (Iop Omove [r] (PMap.get r rm) next).
+
 Definition transf_instr (rm : PMap.t reg) (ni : node * instruction)
   : mon unit :=
   let (pc, instr) := ni in
@@ -61,19 +80,13 @@ Definition transf_instr (rm : PMap.t reg) (ni : node * instruction)
                                 (PMap.get dst rm)
                                 n);
       update_instr n instr
-      (* do n <- add_instr (Iop op *)
-      (*                     (List.map (fun arg => PMap.get arg rm) args) *)
-      (*                     (PMap.get dst rm) *)
-      (*                     next); *)
-      (* update_instr pc (Iop op args dst n) *)
-  (* | Ireturn _ => *)
-  (*     do n <- sync_l rm (args_of_instruction instr) pc; *)
-  (*     update_instr n instr *)
-  (* | _ => *)
-  (*     update_instr pc instr *)
   | _ =>
       do n <- sync_regs rm (args_of_instruction instr) pc;
-      update_instr n instr
+      do m <- match res_of_instruction instr with
+             | Some res => copy_to_shadow rm res n
+             | _ => ret n
+             end;
+      update_instr m instr
   end.
 
 Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
@@ -112,7 +125,7 @@ Fixpoint list_union (l : list PSet.t) : PSet.t :=
 Definition instr_regs (i : instruction) : PSet.t :=
   match i with
   | Inop s => PSet.empty
-  | Iop op args res s => PSet.union (PSet_of_list args) (PSet.singleton res)
+  | Iop op args res s => PSet_of_list args
   | Iload chunk addr args dst s => PSet_of_list args
   | Istore chunk addr args src s => PSet_of_list args
   | Icall sig (inl r) args res s => PSet_of_list args
@@ -126,6 +139,35 @@ Definition instr_regs (i : instruction) : PSet.t :=
   | Ireturn (Some arg) => PSet.singleton arg
   end.
 
+(* Definition PSet_of_option (x : option positive) : PSet.t := *)
+(*   match x with *)
+(*   | Some p => PSet.singleton p *)
+(*   | None => PSet.empty *)
+(*   end. *)
+
+(* Definition instr_regs (i : instruction) : PSet.t := *)
+(*   match i with *)
+(*   | Inop s => PSet.empty *)
+(*   | Iop op args res s => PSet.union (PSet_of_list args) (PSet.singleton res) *)
+(*   | Iload chunk addr args dst s => *)
+(*       PSet.union (PSet_of_list args) (PSet.singleton dst) *)
+(*   | Istore chunk addr args src s => *)
+(*       PSet.union (PSet_of_list args) (PSet.singleton src) *)
+(*   | Icall sig (inl r) args res s => *)
+(*       PSet.union (PSet_of_list args) (PSet.singleton res) *)
+(*   | Icall sig (inr id) args res s => *)
+(*       PSet.union (PSet_of_list args) (PSet.singleton res) *)
+(*   | Itailcall sig (inl r) args => PSet_of_list args *)
+(*   | Itailcall sig (inr id) args => PSet_of_list args *)
+(*   | Ibuiltin ef args res s => *)
+(*       PSet.union (PSet_of_list (builtin_args_regs args)) *)
+(*         (PSet_of_option (reg_of_builtin_res res)) *)
+(*   | Icond cond args ifso ifnot => PSet_of_list args *)
+(*   | Ijumptable arg tbl => PSet.singleton arg *)
+(*   | Ireturn None => PSet.empty *)
+(*   | Ireturn (Some arg) => PSet.singleton arg *)
+(*   end. *)
+
 Definition code_regs (c : code) : PSet.t :=
   PTree.fold (fun rs _ instr => PSet.union rs (instr_regs instr)) c PSet.empty.
 
@@ -134,7 +176,7 @@ Fixpoint copy_params (rm : PMap.t reg) (params : list reg) (next : node)
   match params with
   | [] => ret next
   | r :: rs =>
-      do n <- add_instr (Iop Omove [r] (PMap.get r rm) next);
+      do n <- copy_to_shadow rm r next;
       copy_params rm rs n
   end.
 
