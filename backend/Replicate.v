@@ -1,3 +1,26 @@
+(** Add data redundancy to RTL
+
+  In a nutshell, per function:
+
+  1) reserve shadow registers for the function's parameters and all
+  registers that appear in the body,
+
+  2) begin new code with instructions that copy all the params into
+  their shadow copies,
+
+  3) for each IOp instruction in the original code, emit an additional
+  corresponding one in the shadow world,
+
+  4) for all other instructions, emit preceding synchronization code
+  for the arguments to the instruction (OR the regular and shadow
+  versions and store the result in both) and then just the regular
+  instruction only. Then emit a copy from the result register to its
+  shadow copy.
+
+  Since the Oor operation is only well-typed for integer arguments and
+  destination, we must insert casts when synchronizing float registers.
+*)
+
 Require Import
   AST
   Coqlib
@@ -8,24 +31,95 @@ Require Import
   Registers
   RTL
   RTLgen
+  RTLtyping
 .
 Import ListNotations.
 
-Definition sync (rm : PMap.t reg) (r : reg) (start : node) : mon node :=
-  let shadow_r := PMap.get r rm in
-  do n <- reserve_instr;
-  do next <- reserve_instr;
-  do _ <- update_instr start (Iop Oor [r; shadow_r] r n);
-  do _ <- update_instr n (Iop Oor [r; shadow_r] shadow_r next);
-  ret next.
+(* Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node) *)
+(*   : mon node := *)
+(*   let shadow_r := PMap.get r rm in *)
+(*   do n <- reserve_instr; *)
+(*   do m <- reserve_instr; *)
+(*   do _ <- update_instr pc (Iop Oor [r; shadow_r] r n); *)
+(*   do _ <- update_instr n (Iop Oor [r; shadow_r] shadow_r m); *)
+(*   ret m. *)
+(*   (* ret pc. *) *)
 
-Fixpoint sync_regs (rm : PMap.t reg) (regs : list reg) (start : node)
+Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
+  : mon node :=
+  let shadow_r := PMap.get r rm in
+  match re r with
+  | Tint =>
+      do n <- reserve_instr;
+      do succ <- reserve_instr;
+      do _ <- update_instr pc (Iop Oor [r; shadow_r] r n);
+      do _ <- update_instr n (Iop Oor [r; shadow_r] shadow_r succ);
+      ret succ
+
+  (* | Tlong => *)
+  (*     do n <- reserve_instr; *)
+  (*     do succ <- reserve_instr; *)
+  (*     do _ <- update_instr pc (Iop Oor [r; shadow_r] r n); *)
+  (*     do _ <- update_instr n (Iop Oor [r; shadow_r] shadow_r succ); *)
+  (*     ret succ *)
+
+  | Tlong =>
+      do n1 <- reserve_instr;
+      do n2 <- reserve_instr;
+      do n3 <- reserve_instr;
+      do n4 <- reserve_instr;
+      do succ <- reserve_instr;
+      do r_int <- new_reg;
+      do shadow_r_int <- new_reg;
+      do _ <- update_instr pc (Iop Olowlong [r] r_int n1);
+      do _ <- update_instr n1 (Iop Olowlong [shadow_r] shadow_r_int n2);
+      do _ <- update_instr n2 (Iop Oor [r_int; shadow_r_int] r_int n3);
+      do _ <- update_instr n3 (Iop Ocast32signed [r_int] r n4);
+      do _ <- update_instr n4 (Iop Ocast32signed [r_int] shadow_r succ);
+      ret succ
+
+  | Tsingle =>
+      do n1 <- reserve_instr;
+      do n2 <- reserve_instr;
+      do n3 <- reserve_instr;
+      do n4 <- reserve_instr;
+      do succ <- reserve_instr;
+      do r_int <- new_reg;
+      do shadow_r_int <- new_reg;
+      do _ <- update_instr pc (Iop Ointofsingle [r] r_int n1);
+      do _ <- update_instr n1 (Iop Ointofsingle [shadow_r] shadow_r_int n2);
+      do _ <- update_instr n2 (Iop Oor [r_int; shadow_r_int] r_int n3);
+      do _ <- update_instr n3 (Iop Osingleofint [r_int] r n4);
+      do _ <- update_instr n4 (Iop Osingleofint [r_int] shadow_r succ);
+      ret succ
+
+  | Tfloat =>
+      do n1 <- reserve_instr;
+      do n2 <- reserve_instr;
+      do n3 <- reserve_instr;
+      do n4 <- reserve_instr;
+      do succ <- reserve_instr;
+      do r_int <- new_reg;
+      do shadow_r_int <- new_reg;
+      do _ <- update_instr pc (Iop Ointoffloat [r] r_int n1);
+      do _ <- update_instr n1 (Iop Ointoffloat [shadow_r] shadow_r_int n2);
+      do _ <- update_instr n2 (Iop Oor [r_int; shadow_r_int] r_int n3);
+      do _ <- update_instr n3 (Iop Ofloatofint [r_int] r n4);
+      do _ <- update_instr n4 (Iop Ofloatofint [r_int] shadow_r succ);
+      ret succ
+
+  (* | Tlong => error (MSG "bad sync at Tlong instruction " :: POS pc :: nil) *)
+  | Tany32 => error (MSG "bad sync at Tany32 instruction " :: POS pc :: nil)
+  | Tany64 => error (MSG "bad sync at Tany64 instruction " :: POS pc :: nil)
+  end.
+
+Fixpoint sync_regs (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
-  | [] => ret start
+  | [] => ret pc
   | r :: rs =>
-      do next <- sync rm r start;
-      sync_regs rm rs next
+      do succ <- sync re rm r pc;
+      sync_regs re rm rs succ
   end.
 
 Fixpoint builtin_args_regs (args : list (builtin_arg reg)) : list reg :=
@@ -66,14 +160,37 @@ Definition res_of_instruction (instr : instruction) : option reg :=
   | _ => None
   end.
 
-Definition copy_to_shadow (rm : PMap.t reg) (r : reg) (next : node) : mon node :=
-  add_instr (Iop Omove [r] (PMap.get r rm) next).
+Definition succ_of_instruction (instr : instruction) : option node :=
+  match instr with
+  | Inop succ => Some succ
+  | Iop _ _ _ succ => Some succ
+  | Iload _ _ _ _ succ => Some succ
+  | Istore _ _ _ _ succ => Some succ
+  | Icall _ _ _ _ succ => Some succ
+  | Ibuiltin _ _ _ succ => Some succ
+  | _ => None
+  end.
 
-Definition transf_instr (rm : PMap.t reg) (ni : node * instruction)
+Definition change_succ (new_succ : node) (instr : instruction) : instruction :=
+  match instr with
+  | Inop _ => Inop new_succ
+  | Iop op args dst _ => Iop op args dst new_succ
+  | Iload chunk addr args dst _ => Iload chunk addr args dst new_succ
+  | Istore chunk addr args src _ => Istore chunk addr args src new_succ
+  | Icall sig fn args dst _ => Icall sig fn args dst new_succ
+  | Ibuiltin ef args dst _ => Ibuiltin ef args dst new_succ
+  | _ => instr
+  end.
+
+Definition copy_to_shadow (rm : PMap.t reg) (r : reg) (pc : node) (succ : node)
+  : mon unit :=
+  update_instr pc (Iop Omove [r] (PMap.get r rm) succ).
+
+Definition transf_instr (re : regenv) (rm : PMap.t reg) (ni : node * instruction)
   : mon unit :=
   let (pc, instr) := ni in
   match instr with
-  | Iop op args dst _next =>
+  | Iop op args dst _succ =>
       do n <- reserve_instr;
       do _ <- update_instr pc (Iop op
                                 (List.map (fun arg => PMap.get arg rm) args)
@@ -81,12 +198,14 @@ Definition transf_instr (rm : PMap.t reg) (ni : node * instruction)
                                 n);
       update_instr n instr
   | _ =>
-      do n <- sync_regs rm (args_of_instruction instr) pc;
-      do m <- match res_of_instruction instr with
-             | Some res => copy_to_shadow rm res n
-             | _ => ret n
-             end;
-      update_instr m instr
+      do n <- sync_regs re rm (args_of_instruction instr) pc;
+      match res_of_instruction instr, succ_of_instruction instr with
+      | Some res, Some succ =>
+          do m <- reserve_instr;
+          do _ <- update_instr n (change_succ m instr);
+          copy_to_shadow rm res m succ
+      | _, _ => update_instr n instr
+      end
   end.
 
 Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
@@ -105,8 +224,8 @@ Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a0 : A) : mon A 
       foldM f xs y
   end.
 
-Definition transf_code (rm : PMap.t reg) (c : code) : mon unit :=
-  iterM (transf_instr rm) (PTree.elements c).
+Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code) : mon unit :=
+  iterM (transf_instr re rm) (PTree.elements c).
 
 Module PSet := FSetAVL.Make(OrderedPositive).
 
@@ -122,65 +241,67 @@ Fixpoint list_union (l : list PSet.t) : PSet.t :=
   | x :: xs => PSet.union x (list_union xs)
   end.
 
-Definition instr_regs (i : instruction) : PSet.t :=
-  match i with
-  | Inop s => PSet.empty
-  | Iop op args res s => PSet_of_list args
-  | Iload chunk addr args dst s => PSet_of_list args
-  | Istore chunk addr args src s => PSet_of_list args
-  | Icall sig (inl r) args res s => PSet_of_list args
-  | Icall sig (inr id) args res s => PSet_of_list args
-  | Itailcall sig (inl r) args => PSet_of_list args
-  | Itailcall sig (inr id) args => PSet_of_list args
-  | Ibuiltin ef args res s => PSet_of_list (builtin_args_regs args)
-  | Icond cond args ifso ifnot => PSet_of_list args
-  | Ijumptable arg tbl => PSet.singleton arg
-  | Ireturn None => PSet.empty
-  | Ireturn (Some arg) => PSet.singleton arg
-  end.
-
-(* Definition PSet_of_option (x : option positive) : PSet.t := *)
-(*   match x with *)
-(*   | Some p => PSet.singleton p *)
-(*   | None => PSet.empty *)
-(*   end. *)
-
 (* Definition instr_regs (i : instruction) : PSet.t := *)
 (*   match i with *)
 (*   | Inop s => PSet.empty *)
-(*   | Iop op args res s => PSet.union (PSet_of_list args) (PSet.singleton res) *)
-(*   | Iload chunk addr args dst s => *)
-(*       PSet.union (PSet_of_list args) (PSet.singleton dst) *)
-(*   | Istore chunk addr args src s => *)
-(*       PSet.union (PSet_of_list args) (PSet.singleton src) *)
-(*   | Icall sig (inl r) args res s => *)
-(*       PSet.union (PSet_of_list args) (PSet.singleton res) *)
-(*   | Icall sig (inr id) args res s => *)
-(*       PSet.union (PSet_of_list args) (PSet.singleton res) *)
+(*   | Iop op args res s => PSet_of_list args *)
+(*   | Iload chunk addr args dst s => PSet_of_list args *)
+(*   | Istore chunk addr args src s => PSet_of_list args *)
+(*   | Icall sig (inl r) args res s => PSet_of_list args *)
+(*   | Icall sig (inr id) args res s => PSet_of_list args *)
 (*   | Itailcall sig (inl r) args => PSet_of_list args *)
 (*   | Itailcall sig (inr id) args => PSet_of_list args *)
-(*   | Ibuiltin ef args res s => *)
-(*       PSet.union (PSet_of_list (builtin_args_regs args)) *)
-(*         (PSet_of_option (reg_of_builtin_res res)) *)
+(*   | Ibuiltin ef args res s => PSet_of_list (builtin_args_regs args) *)
 (*   | Icond cond args ifso ifnot => PSet_of_list args *)
 (*   | Ijumptable arg tbl => PSet.singleton arg *)
 (*   | Ireturn None => PSet.empty *)
 (*   | Ireturn (Some arg) => PSet.singleton arg *)
 (*   end. *)
 
+Definition PSet_of_option (x : option positive) : PSet.t :=
+  match x with
+  | Some p => PSet.singleton p
+  | None => PSet.empty
+  end.
+
+(** All registers that appear in an instruction (arguments or destination). *)
+Definition instr_regs (i : instruction) : PSet.t :=
+  match i with
+  | Inop s => PSet.empty
+  | Iop op args res s => PSet.union (PSet_of_list args) (PSet.singleton res)
+  | Iload chunk addr args dst s =>
+      PSet.union (PSet_of_list args) (PSet.singleton dst)
+  | Istore chunk addr args src s =>
+      PSet.union (PSet_of_list args) (PSet.singleton src)
+  | Icall sig (inl r) args res s =>
+      PSet.union (PSet_of_list args) (PSet.singleton res)
+  | Icall sig (inr id) args res s =>
+      PSet.union (PSet_of_list args) (PSet.singleton res)
+  | Itailcall sig (inl r) args => PSet_of_list args
+  | Itailcall sig (inr id) args => PSet_of_list args
+  | Ibuiltin ef args res s =>
+      PSet.union (PSet_of_list (builtin_args_regs args))
+        (PSet_of_option (reg_of_builtin_res res))
+  | Icond cond args ifso ifnot => PSet_of_list args
+  | Ijumptable arg tbl => PSet.singleton arg
+  | Ireturn None => PSet.empty
+  | Ireturn (Some arg) => PSet.singleton arg
+  end.
+
 Definition code_regs (c : code) : PSet.t :=
   PTree.fold (fun rs _ instr => PSet.union rs (instr_regs instr)) c PSet.empty.
 
-Fixpoint copy_params (rm : PMap.t reg) (params : list reg) (next : node)
+Fixpoint copy_params (rm : PMap.t reg) (params : list reg) (succ : node)
   : mon node :=
   match params with
-  | [] => ret next
+  | [] => ret succ
   | r :: rs =>
-      do n <- copy_to_shadow rm r next;
+      do n <- reserve_instr;
+      do _ <- copy_to_shadow rm r n succ;
       copy_params rm rs n
   end.
 
-Definition transf_fun (f : function) : mon node :=
+Definition transf_fun (re : regenv) (f : function) : mon node :=
   let all_regs := PSet.union
                     (PSet_of_list f.(fn_params))
                     (code_regs f.(fn_code)) in
@@ -189,7 +310,7 @@ Definition transf_fun (f : function) : mon node :=
                    ret (PMap.set r shadow_r rm)
             ) (PSet.elements all_regs) (PMap.init xH);
   do entry_point <- copy_params rm f.(fn_params) f.(fn_entrypoint);
-  do _ <- transf_code rm f.(fn_code);
+  do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
 
 Program Definition initial_state (f : function) : state :=
@@ -199,18 +320,21 @@ Program Definition initial_state (f : function) : state :=
     (PTree.empty instruction)
     _.
 
-Definition transf_fun' (f : function) : function :=
-  match transf_fun f (initial_state f) with
-  | Error err => f
-  | OK entrypoint s _ => {| fn_sig := f.(fn_sig);
-                           fn_params := f.(fn_params);
-                           fn_stacksize := f.(fn_stacksize);
-                           fn_code := s.(st_code);
-                           fn_entrypoint := entrypoint |}
+Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
+  match transf_fun re f (initial_state f) with
+  | Error err => Errors.Error err
+  | OK entrypoint s _ => Errors.OK {| fn_sig := f.(fn_sig);
+                                    fn_params := f.(fn_params);
+                                    fn_stacksize := f.(fn_stacksize);
+                                    fn_code := s.(st_code);
+                                    fn_entrypoint := entrypoint |}
   end.
 
+Local Open Scope error_monad_scope.
+
 Definition transf_function (f: function) : Errors.res function :=
-  Errors.OK (transf_fun' f).
+  do re <- type_function f;
+  transf_fun' re f.
 
 Definition transf_fundef (fd: fundef) : Errors.res fundef :=
   AST.transf_partial_fundef transf_function fd.
