@@ -74,10 +74,6 @@ Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
         do _ <- update_instr n5 (Iop Oor [r_hi; shadow_r_hi] r_hi n6);
         do _ <- update_instr n6 (Iop Omakelong [r_hi; r_lo] r n7);
         do _ <- update_instr n7 (Iop Omakelong [r_hi; r_lo] shadow_r succ);
-        do n <- reserve_instr;
-        do succ <- reserve_instr;
-        do _ <- update_instr pc (Iop Oorl [r; shadow_r] r n);
-        do _ <- update_instr n (Iop Oorl [r; shadow_r] shadow_r succ);
         ret succ
       else (* 64-bit architecture *)
         do n <- reserve_instr;
