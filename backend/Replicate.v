@@ -18,8 +18,13 @@
   shadow copy.
 
   Since the Oor operation is only well-typed for integer arguments and
-  destination, we must insert casts when synchronizing float registers.
- *)
+  destination, we must insert casts when synchronizing float
+  registers.
+
+  We use the state+error monad from [backend/RTLgen.v]. Each function
+  in the program is translated by a separate monadic computation that
+  builds up the result program in the [fn_code] field of the state.
+*)
 
 Require Import
   AST
@@ -39,19 +44,34 @@ Require Import
 Require Archi.
 Import ListNotations.
 
-(** This could be cleaned up a bit. *)
-Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
-  : mon node :=
-  let shadow_r := PMap.get r rm in
-  match re r with
+(** Emit instructions for synchronizing register [r] with its shadow
+    copy [shadow_r].
 
+    I.e.,
+    r        := r | shadow_r
+    shadow_r := r | shadow_r
+
+    Since bitwise OR is well-typed only for ints, floats must be cast
+    to ints.
+
+    Also, since 32-bit architectures don't support the Oorl (64-bit
+    OR) operation, longs must be explicitly split into their high and
+    low words, OR'd separately, and recombined.
+
+    [re] is the register typing context of the original function. [r]
+    and [shadow_r] are the registers being synchronized. [pc] is the
+    node at which the emitted instructions should begin. Reserves and
+    returns the node at which subsequent computation should continue.
+*)
+Definition sync (re : regenv) (r : reg) (shadow_r : reg) (pc : node)
+  : mon node :=
+  match re r with
   | Tint =>
       do n <- reserve_instr;
       do succ <- reserve_instr;
       do _ <- update_instr pc (Iop Oor [r; shadow_r] r n);
       do _ <- update_instr n (Iop Oor [r; shadow_r] shadow_r succ);
       ret succ
-
   | Tlong =>
       if Archi.splitlong then (* 32-bit architecture *)
         do n1 <- reserve_instr;
@@ -81,7 +101,6 @@ Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
         do _ <- update_instr pc (Iop Oorl [r; shadow_r] r n);
         do _ <- update_instr n (Iop Oorl [r; shadow_r] shadow_r succ);
         ret succ
-
   (* Single-precision float *)
   | Tsingle =>
       do n1 <- reserve_instr;
@@ -97,7 +116,6 @@ Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
       do _ <- update_instr n3 (Iop Osingleofint [r_int] r n4);
       do _ <- update_instr n4 (Iop Osingleofint [r_int] shadow_r succ);
       ret succ
-
   (* Double-precision float only on 64-bit architectures. *)
   | Tfloat =>
       if Archi.ptr64 then
@@ -114,20 +132,27 @@ Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
         ret succ
       else
         ret pc
-
   | Tany32 => error (MSG "bad sync at Tany32 instruction " :: POS pc :: nil)
   | Tany64 => error (MSG "bad sync at Tany64 instruction " :: POS pc :: nil)
   end.
 
+(** Emit code for synchronizing the list of registers [reg]. [re] is
+    the register typing context of the original function. [rm] (the
+    replication map) maps registers to their corresponding shadow
+    registers. [pc] is the node at which the emitted instructions
+    should begin. Reserves and returns the node at which subsequent
+    computation should continue. *)
 Fixpoint sync_regs (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
   | r :: rs =>
-      do succ <- sync re rm r pc;
+      let shadow_r := PMap.get r rm in
+      do succ <- sync re r shadow_r pc;
       sync_regs re rm rs succ
   end.
 
+(** Pull out registers from builtin_args. *)
 Fixpoint builtin_args_regs (args : list (builtin_arg reg)) : list reg :=
   match args with
   | [] => []
@@ -177,6 +202,7 @@ Definition succ_of_instruction (instr : instruction) : option node :=
   | _ => None
   end.
 
+(** Change [instr] to jump to [new_succ]. *)
 Definition change_succ (new_succ : node) (instr : instruction) : instruction :=
   match instr with
   | Inop _ => Inop new_succ
@@ -188,14 +214,22 @@ Definition change_succ (new_succ : node) (instr : instruction) : instruction :=
   | _ => instr
   end.
 
+(** Insert instruction at [pc] to move contents of [r] to its shadow
+    copy and then jump to [succ].  *)
 Definition copy_to_shadow (rm : PMap.t reg) (r : reg) (pc : node) (succ : node)
   : mon unit :=
   update_instr pc (Iop Omove [r] (PMap.get r rm) succ).
 
+(** Generate fault-tolerant instruction sequence corresponding to the
+    input instruction. [re] is the register typing context of the
+    original function. [rm] (the replication map) maps registers to
+    their corresponding shadow registers. *)
 Definition transf_instr (re : regenv) (rm : PMap.t reg) (ni : node * instruction)
   : mon unit :=
   let (pc, instr) := ni in
   match instr with
+  (* For data operations, simply execute the instruction in both
+     regular and shadow worlds. *)
   | Iop op args dst _succ =>
       do n <- reserve_instr;
       do _ <- update_instr pc (Iop op
@@ -203,6 +237,10 @@ Definition transf_instr (re : regenv) (rm : PMap.t reg) (ni : node * instruction
                                 (PMap.get dst rm)
                                 n);
       update_instr n instr
+  (* For other instructions, synchronize the argument registers and
+     then execute the instruction only in the regular world. For
+     instruction with result registers, copy the result into the
+     result shadow register. *)
   | _ =>
       do n <- sync_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
@@ -214,6 +252,7 @@ Definition transf_instr (re : regenv) (rm : PMap.t reg) (ni : node * instruction
       end
   end.
 
+(** Monadic iteration. *)
 Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
   match l with
   | [] => ret tt
@@ -222,6 +261,7 @@ Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
       iterM f xs
   end.
 
+(** Monadic fold. *)
 Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a0 : A) : mon A :=
   match l with
   | [] => ret a0
@@ -230,22 +270,18 @@ Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a0 : A) : mon A 
       foldM f xs y
   end.
 
+(** Transform function code by transforming the instructions. *)
 Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code) : mon unit :=
   iterM (transf_instr re rm) (PTree.elements c).
 
+(** Sets of positives. *)
 Module PSet := FSetAVL.Make(OrderedPositive).
 
-Fixpoint PSet_of_list (l : list positive) : PSet.t :=
-  match l with
-  | [] => PSet.empty
-  | p :: ps => PSet.add p (PSet_of_list ps)
-  end.
+Definition list_union (l : list PSet.t) : PSet.t :=
+  fold_left PSet.union l PSet.empty.
 
-Fixpoint list_union (l : list PSet.t) : PSet.t :=
-  match l with
-  | [] => PSet.empty
-  | x :: xs => PSet.union x (list_union xs)
-  end.
+Definition PSet_of_list (l : list positive) : PSet.t :=
+  list_union (List.map PSet.singleton l).
 
 Definition PSet_of_option (x : option positive) : PSet.t :=
   match x with
@@ -277,9 +313,14 @@ Definition instr_regs (i : instruction) : PSet.t :=
   | Ireturn (Some arg) => PSet.singleton arg
   end.
 
+(** All registers that appear in the given code. *)
 Definition code_regs (c : code) : PSet.t :=
   PTree.fold (fun rs _ instr => PSet.union rs (instr_regs instr)) c PSet.empty.
 
+(** Generate instructions to copy contents of registers [params] to
+    their corresponding shadow registers. [succ] is the node to jump
+    to after copying. Reserves and returns the node at which copying
+    starts (to become the new entry point of the function). *)
 Fixpoint copy_params (rm : PMap.t reg) (params : list reg) (succ : node)
   : mon node :=
   match params with
@@ -290,6 +331,17 @@ Fixpoint copy_params (rm : PMap.t reg) (params : list reg) (succ : node)
       copy_params rm rs n
   end.
 
+(** Generate fault-tolerant version of function [f]. [re] should be
+    the typing context resulting from typechecking [f].
+
+    1) Gather all registers that are used by the function,
+    2) reserve shadow registers for each,
+    3) emit preamble code that copies the function's parameters to
+       their shadow registers,
+    4) translate the function body
+    5) return the new entry point node for the function (since new
+       instructions were inserted at the front).
+*)
 Definition transf_fun (re : regenv) (f : function) : mon node :=
   let all_regs := PSet.union
                     (PSet_of_list f.(fn_params))
@@ -302,6 +354,12 @@ Definition transf_fun (re : regenv) (f : function) : mon node :=
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
 
+(** Initialize the generator state with [st_nextreg] and [st_nextnode]
+    greater than all of the registers and nodes appearing in the
+    original function. This ensures that we can reuse the old param
+    registers, nodes, and instructions as-is since all of our new
+    registers and nodes won't collide with them.
+*)
 Program Definition initial_state (f : function) : state :=
   mkstate
     (max_reg_function f + 1)
@@ -309,6 +367,7 @@ Program Definition initial_state (f : function) : state :=
     (PTree.empty instruction)
     _.
 
+(** Run [transf_fun] on [f] with the appropriate initial state. *)
 Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
   match transf_fun re f (initial_state f) with
   | Error err => Errors.Error err
@@ -319,11 +378,8 @@ Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
                                     fn_entrypoint := entrypoint |}
   end.
 
-Local Open Scope error_monad_scope.
-
 Definition transf_function (f : function) : Errors.res function :=
-  do re <- type_function f;
-  transf_fun' re f.
+  Errors.bind (type_function f) (fun re => transf_fun' re f).
 
 Definition transf_fundef (fd : fundef) : Errors.res fundef :=
   AST.transf_partial_fundef transf_function fd.
