@@ -19,13 +19,16 @@
 
   Since the Oor operation is only well-typed for integer arguments and
   destination, we must insert casts when synchronizing float registers.
-*)
+ *)
 
 Require Import
   AST
+  Binary
   Coqlib
   Errors
+  Floats
   Maps
+  Integers
   Op
   Ordered
   Registers
@@ -33,6 +36,7 @@ Require Import
   RTLgen
   RTLtyping
 .
+Require Archi.
 Import ListNotations.
 
 (** This could be cleaned up a bit. *)
@@ -40,6 +44,7 @@ Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
   : mon node :=
   let shadow_r := PMap.get r rm in
   match re r with
+
   | Tint =>
       do n <- reserve_instr;
       do succ <- reserve_instr;
@@ -48,27 +53,38 @@ Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
       ret succ
 
   | Tlong =>
-      do n1 <- reserve_instr;
-      do n2 <- reserve_instr;
-      do n3 <- reserve_instr;
-      do n4 <- reserve_instr;
-      do n5 <- reserve_instr;
-      do n6 <- reserve_instr;
-      do n7 <- reserve_instr;
-      do succ <- reserve_instr;
-      do r_lo <- new_reg;
-      do r_hi <- new_reg;
-      do shadow_r_lo <- new_reg;
-      do shadow_r_hi <- new_reg;
-      do _ <- update_instr pc (Iop Olowlong [r] r_lo n1);
-      do _ <- update_instr n1 (Iop Olowlong [shadow_r] shadow_r_lo n2);
-      do _ <- update_instr n2 (Iop Oor [r_lo; shadow_r_lo] r_lo n3);
-      do _ <- update_instr n3 (Iop Ohighlong [r] r_hi n4);
-      do _ <- update_instr n4 (Iop Ohighlong [shadow_r] shadow_r_hi n5);
-      do _ <- update_instr n5 (Iop Oor [r_hi; shadow_r_hi] r_hi n6);
-      do _ <- update_instr n6 (Iop Omakelong [r_hi; r_lo] r n7);
-      do _ <- update_instr n7 (Iop Omakelong [r_hi; r_lo] shadow_r succ);
-      ret succ
+      if Archi.splitlong then (* 32-bit architecture *)
+        do n1 <- reserve_instr;
+        do n2 <- reserve_instr;
+        do n3 <- reserve_instr;
+        do n4 <- reserve_instr;
+        do n5 <- reserve_instr;
+        do n6 <- reserve_instr;
+        do n7 <- reserve_instr;
+        do succ <- reserve_instr;
+        do r_lo <- new_reg;
+        do r_hi <- new_reg;
+        do shadow_r_lo <- new_reg;
+        do shadow_r_hi <- new_reg;
+        do _ <- update_instr pc (Iop Olowlong [r] r_lo n1);
+        do _ <- update_instr n1 (Iop Olowlong [shadow_r] shadow_r_lo n2);
+        do _ <- update_instr n2 (Iop Oor [r_lo; shadow_r_lo] r_lo n3);
+        do _ <- update_instr n3 (Iop Ohighlong [r] r_hi n4);
+        do _ <- update_instr n4 (Iop Ohighlong [shadow_r] shadow_r_hi n5);
+        do _ <- update_instr n5 (Iop Oor [r_hi; shadow_r_hi] r_hi n6);
+        do _ <- update_instr n6 (Iop Omakelong [r_hi; r_lo] r n7);
+        do _ <- update_instr n7 (Iop Omakelong [r_hi; r_lo] shadow_r succ);
+        do n <- reserve_instr;
+        do succ <- reserve_instr;
+        do _ <- update_instr pc (Iop Oorl [r; shadow_r] r n);
+        do _ <- update_instr n (Iop Oorl [r; shadow_r] shadow_r succ);
+        ret succ
+      else (* 64-bit architecture *)
+        do n <- reserve_instr;
+        do succ <- reserve_instr;
+        do _ <- update_instr pc (Iop Oorl [r; shadow_r] r n);
+        do _ <- update_instr n (Iop Oorl [r; shadow_r] shadow_r succ);
+        ret succ
 
   (* Single-precision float *)
   | Tsingle =>
@@ -86,43 +102,22 @@ Definition sync (re : regenv) (rm : PMap.t reg) (r : reg) (pc : node)
       do _ <- update_instr n4 (Iop Osingleofint [r_int] shadow_r succ);
       ret succ
 
-  (* Double-precision floats aren't working... *)
-  (* | Tfloat => *)
-  (*     do n1 <- reserve_instr; *)
-  (*     do n2 <- reserve_instr; *)
-  (*     do n3 <- reserve_instr; *)
-  (*     do n4 <- reserve_instr; *)
-  (*     do n5 <- reserve_instr; *)
-  (*     do n6 <- reserve_instr; *)
-  (*     do n7 <- reserve_instr; *)
-  (*     do n8 <- reserve_instr; *)
-  (*     do n9 <- reserve_instr; *)
-  (*     do n10 <- reserve_instr; *)
-  (*     do succ <- reserve_instr; *)
-  (*     do r_long <- new_reg; *)
-  (*     do r_lo <- new_reg; *)
-  (*     do r_hi <- new_reg; *)
-  (*     do shadow_r_long <- new_reg; *)
-  (*     do shadow_r_lo <- new_reg; *)
-  (*     do shadow_r_hi <- new_reg; *)
-  (*     do _ <- update_instr pc (Iop Ointoffloat [r] r_long n9); *)
-  (*     (* do _ <- update_instr n1 (Iop Olongoffloat [shadow_r] shadow_r_long n2); *) *)
-  (*     (* do _ <- update_instr n2 (Iop Olowlong [r_long] r_lo n3); *) *)
-  (*     (* do _ <- update_instr n3 (Iop Olowlong [shadow_r_long] shadow_r_lo n4); *) *)
-  (*     (* do _ <- update_instr n4 (Iop Oor [r_lo; shadow_r_lo] r_lo n5); *) *)
-  (*     (* do _ <- update_instr n5 (Iop Ohighlong [r_long] r_hi n6); *) *)
-  (*     (* do _ <- update_instr n6 (Iop Ohighlong [shadow_r_long] shadow_r_hi n7); *) *)
-  (*     (* do _ <- update_instr n7 (Iop Oor [r_hi; shadow_r_hi] r_hi n8); *) *)
-  (*     (* do _ <- update_instr n8 (Iop Omakelong [r_hi; r_lo] r_long n9); *) *)
-
-      (* (* do _ <- update_instr n9 (Iop Omakelong [shadow_r_hi; shadow_r_lo] shadow_r_long n10); *) *)
-      
-      (* do _ <- update_instr n9 (Iop Ofloatofint [r_long] r succ); *)
-      (* (* do _ <- update_instr n9 (Iop Ofloatoflong [r_long] shadow_r n10); *) *)
-      (* (* do _ <- update_instr n10 (Iop Omove [shadow_r] r succ); *) *)
-      (* ret succ *)
-
-  | Tfloat => ret pc
+  (* Double-precision float only on 64-bit architectures. *)
+  | Tfloat =>
+      if Archi.ptr64 then
+        do n1 <- reserve_instr;
+        do n2 <- reserve_instr;
+        do n3 <- reserve_instr;
+        do succ <- reserve_instr;
+        do r_long <- new_reg;
+        do shadow_r_long <- new_reg;
+        do _ <- update_instr pc (Iop Olongoffloat [r] r_long n1);
+        do _ <- update_instr n1 (Iop Olongoffloat [shadow_r] shadow_r_long n2);
+        do _ <- update_instr n2 (Iop Oorl [r_long; shadow_r_long] r_long n3);
+        do _ <- update_instr n3 (Iop Ofloatoflong [r_long] r succ);
+        ret succ
+      else
+        ret pc
 
   | Tany32 => error (MSG "bad sync at Tany32 instruction " :: POS pc :: nil)
   | Tany64 => error (MSG "bad sync at Tany64 instruction " :: POS pc :: nil)
