@@ -1,6 +1,6 @@
-(** Add data redundancy to RTL
+(** * Add data redundancy to RTL *)
 
-  In a nutshell, per function:
+(** In a nutshell, per function:
 
   1) reserve shadow registers for the function's parameters and all
   registers that appear in the body,
@@ -17,10 +17,6 @@
   instruction only. Then emit a copy from the result register to its
   shadow copy.
 
-  Since the Oor operation is only well-typed for integer arguments and
-  destination, we must insert casts when synchronizing float
-  registers.
-
   We use the state+error monad from [backend/RTLgen.v]. Each function
   in the program is translated by a separate monadic computation that
   builds up the result program in the [fn_code] field of the state.
@@ -28,12 +24,9 @@
 
 Require Import
   AST
-  Binary
   Coqlib
   Errors
-  Floats
   Maps
-  Integers
   Op
   Ordered
   Registers
@@ -41,7 +34,6 @@ Require Import
   RTLgen
   RTLtyping
 .
-Require Archi.
 Import ListNotations.
 
 (** Emit instructions for synchronizing register [r] with its shadow
@@ -50,9 +42,6 @@ Import ListNotations.
     I.e.,
     r        := r | shadow_r
     shadow_r := r | shadow_r
-
-    Since bitwise OR is well-typed only for ints, floats must be cast
-    to ints.
 
     Also, since 32-bit architectures don't support the Oorl (64-bit
     OR) operation, longs must be explicitly split into their high and
@@ -101,51 +90,9 @@ Definition sync (re : regenv) (r : reg) (shadow_r : reg) (pc : node)
         do _ <- update_instr pc (Iop Oorl [r; shadow_r] r n);
         do _ <- update_instr n (Iop Oorl [r; shadow_r] shadow_r succ);
         ret succ
-  (* Single-precision float *)
-  | Tsingle =>
-  (*     do n1 <- reserve_instr; *)
-  (*     do n2 <- reserve_instr; *)
-  (*     do n3 <- reserve_instr; *)
-  (*     do n4 <- reserve_instr; *)
-  (*     do succ <- reserve_instr; *)
-  (*     do r_int <- new_reg; *)
-  (*     do shadow_r_int <- new_reg; *)
-  (*     do _ <- update_instr pc (Iop Ointofsingle [r] r_int n1); *)
-  (*     do _ <- update_instr n1 (Iop Ointofsingle [shadow_r] shadow_r_int n2); *)
-  (*     do _ <- update_instr n2 (Iop Oor [r_int; shadow_r_int] r_int n3); *)
-  (*     do _ <- update_instr n3 (Iop Osingleofint [r_int] r n4); *)
-  (*     do _ <- update_instr n4 (Iop Osingleofint [r_int] shadow_r succ); *)
-  (*     ret succ *)
-      
-      ret pc
-          
-  (* Double-precision float only on 64-bit architectures. *)
-  | Tfloat =>
-      if Archi.ptr64 then
-        
-        (* do n1 <- reserve_instr; *)
-        (* do succ <- reserve_instr; *)
-        (* do r_long <- new_reg; *)
-        (* do _ <- update_instr pc (Iop Olongoffloat [r] r_long n1); *)
-        (* do _ <- update_instr n1 (Iop Ofloatoflong [r_long] r succ); *)
-        (* ret succ *)
 
-        (* do n1 <- reserve_instr; *)
-        (* do n2 <- reserve_instr; *)
-        (* do n3 <- reserve_instr; *)
-        (* do succ <- reserve_instr; *)
-        (* do r_long <- new_reg; *)
-        (* do shadow_r_long <- new_reg; *)
-        (* do _ <- update_instr pc (Iop Olongoffloat [r] r_long n1); *)
-        (* do _ <- update_instr n1 (Iop Olongoffloat [shadow_r] shadow_r_long n2); *)
-        (* do _ <- update_instr n2 (Iop Oorl [r_long; shadow_r_long] r_long n3); *)
-        (* do _ <- update_instr n3 (Iop Ofloatoflong [r_long] r succ); *)
-        (* ret succ *)
-
-        ret pc
-
-      else
-        ret pc
+  | Tsingle => ret pc
+  | Tfloat => ret pc
   | Tany32 => error (MSG "bad sync at Tany32 instruction " :: POS pc :: nil)
   | Tany64 => error (MSG "bad sync at Tany64 instruction " :: POS pc :: nil)
   end.
