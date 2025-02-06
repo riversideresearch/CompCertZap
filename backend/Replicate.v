@@ -103,33 +103,47 @@ Definition sync (re : regenv) (r : reg) (shadow_r : reg) (pc : node)
         ret succ
   (* Single-precision float *)
   | Tsingle =>
-      do n1 <- reserve_instr;
-      do n2 <- reserve_instr;
-      do n3 <- reserve_instr;
-      do n4 <- reserve_instr;
-      do succ <- reserve_instr;
-      do r_int <- new_reg;
-      do shadow_r_int <- new_reg;
-      do _ <- update_instr pc (Iop Ointofsingle [r] r_int n1);
-      do _ <- update_instr n1 (Iop Ointofsingle [shadow_r] shadow_r_int n2);
-      do _ <- update_instr n2 (Iop Oor [r_int; shadow_r_int] r_int n3);
-      do _ <- update_instr n3 (Iop Osingleofint [r_int] r n4);
-      do _ <- update_instr n4 (Iop Osingleofint [r_int] shadow_r succ);
-      ret succ
+  (*     do n1 <- reserve_instr; *)
+  (*     do n2 <- reserve_instr; *)
+  (*     do n3 <- reserve_instr; *)
+  (*     do n4 <- reserve_instr; *)
+  (*     do succ <- reserve_instr; *)
+  (*     do r_int <- new_reg; *)
+  (*     do shadow_r_int <- new_reg; *)
+  (*     do _ <- update_instr pc (Iop Ointofsingle [r] r_int n1); *)
+  (*     do _ <- update_instr n1 (Iop Ointofsingle [shadow_r] shadow_r_int n2); *)
+  (*     do _ <- update_instr n2 (Iop Oor [r_int; shadow_r_int] r_int n3); *)
+  (*     do _ <- update_instr n3 (Iop Osingleofint [r_int] r n4); *)
+  (*     do _ <- update_instr n4 (Iop Osingleofint [r_int] shadow_r succ); *)
+  (*     ret succ *)
+      
+      ret pc
+          
   (* Double-precision float only on 64-bit architectures. *)
   | Tfloat =>
       if Archi.ptr64 then
-        do n1 <- reserve_instr;
-        do n2 <- reserve_instr;
-        do n3 <- reserve_instr;
-        do succ <- reserve_instr;
-        do r_long <- new_reg;
-        do shadow_r_long <- new_reg;
-        do _ <- update_instr pc (Iop Olongoffloat [r] r_long n1);
-        do _ <- update_instr n1 (Iop Olongoffloat [shadow_r] shadow_r_long n2);
-        do _ <- update_instr n2 (Iop Oorl [r_long; shadow_r_long] r_long n3);
-        do _ <- update_instr n3 (Iop Ofloatoflong [r_long] r succ);
-        ret succ
+        
+        (* do n1 <- reserve_instr; *)
+        (* do succ <- reserve_instr; *)
+        (* do r_long <- new_reg; *)
+        (* do _ <- update_instr pc (Iop Olongoffloat [r] r_long n1); *)
+        (* do _ <- update_instr n1 (Iop Ofloatoflong [r_long] r succ); *)
+        (* ret succ *)
+
+        (* do n1 <- reserve_instr; *)
+        (* do n2 <- reserve_instr; *)
+        (* do n3 <- reserve_instr; *)
+        (* do succ <- reserve_instr; *)
+        (* do r_long <- new_reg; *)
+        (* do shadow_r_long <- new_reg; *)
+        (* do _ <- update_instr pc (Iop Olongoffloat [r] r_long n1); *)
+        (* do _ <- update_instr n1 (Iop Olongoffloat [shadow_r] shadow_r_long n2); *)
+        (* do _ <- update_instr n2 (Iop Oorl [r_long; shadow_r_long] r_long n3); *)
+        (* do _ <- update_instr n3 (Iop Ofloatoflong [r_long] r succ); *)
+        (* ret succ *)
+
+        ret pc
+
       else
         ret pc
   | Tany32 => error (MSG "bad sync at Tany32 instruction " :: POS pc :: nil)
@@ -141,7 +155,7 @@ Definition sync (re : regenv) (r : reg) (shadow_r : reg) (pc : node)
     replication map) maps registers to their corresponding shadow
     registers. [pc] is the node at which the emitted instructions
     should begin. Reserves and returns the node at which subsequent
-    computation should continue. *)
+    instructions should continue. *)
 Fixpoint sync_regs (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
@@ -239,8 +253,8 @@ Definition transf_instr (re : regenv) (rm : PMap.t reg) (ni : node * instruction
       update_instr n instr
   (* For other instructions, synchronize the argument registers and
      then execute the instruction only in the regular world. For
-     instruction with result registers, copy the result into the
-     result shadow register. *)
+     instructions with result registers, copy the result into its
+     shadow register. *)
   | _ =>
       do n <- sync_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
@@ -262,7 +276,8 @@ Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
   end.
 
 (** Monadic fold. *)
-Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a0 : A) : mon A :=
+Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a0 : A)
+  : mon A :=
   match l with
   | [] => ret a0
   | x :: xs =>
@@ -271,7 +286,8 @@ Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a0 : A) : mon A 
   end.
 
 (** Transform function code by transforming the instructions. *)
-Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code) : mon unit :=
+Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code)
+  : mon unit :=
   iterM (transf_instr re rm) (PTree.elements c).
 
 (** Sets of positives. *)
@@ -289,7 +305,8 @@ Definition PSet_of_option (x : option positive) : PSet.t :=
   | None => PSet.empty
   end.
 
-(** All registers that appear in an instruction (arguments or destination). *)
+(** All registers that appear in an instruction (arguments or
+    destination). *)
 Definition instr_regs (i : instruction) : PSet.t :=
   match i with
   | Inop s => PSet.empty
@@ -332,7 +349,7 @@ Fixpoint copy_params (rm : PMap.t reg) (params : list reg) (succ : node)
   end.
 
 (** Generate fault-tolerant version of function [f]. [re] should be
-    the typing context resulting from typechecking [f].
+    the typing context that resulted from typechecking [f].
 
     1) Gather all registers that are used by the function,
     2) reserve shadow registers for each,
@@ -358,8 +375,7 @@ Definition transf_fun (re : regenv) (f : function) : mon node :=
     greater than all of the registers and nodes appearing in the
     original function. This ensures that we can reuse the old param
     registers, nodes, and instructions as-is since all of our new
-    registers and nodes won't collide with them.
-*)
+    registers and nodes won't collide with them. *)
 Program Definition initial_state (f : function) : state :=
   mkstate
     (max_reg_function f + 1)
