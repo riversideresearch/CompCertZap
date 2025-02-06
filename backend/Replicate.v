@@ -26,6 +26,7 @@ Require Import
   AST
   Coqlib
   Errors
+  Integers
   Maps
   Op
   Ordered
@@ -52,43 +53,50 @@ Import ListNotations.
     node at which the emitted instructions should begin. Reserves and
     returns the node at which subsequent computation should continue.
 *)
-Definition sync (re : regenv) (r : reg) (shadow_r : reg) (pc : node)
+Definition sync (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
-  match re r with
+  match re r1 with
+
   | Tint =>
-      do n <- reserve_instr;
+      do n1 <- reserve_instr;
+      do n2 <- reserve_instr;
       do succ <- reserve_instr;
-      do _ <- update_instr pc (Iop Oor [r; shadow_r] r n);
-      do _ <- update_instr n (Iop Oor [r; shadow_r] shadow_r succ);
+      do _ <- update_instr pc (Icond (Ccomp Ceq) [r1; r2] succ n1);
+      do _ <- update_instr n1 (Icond (Ccomp Ceq) [r2; r3] n2 succ);
+      do _ <- update_instr n2 (Iop Omove [r2] r1 succ);
       ret succ
+
   | Tlong =>
       if Archi.splitlong then (* 32-bit architecture *)
+        (* do n1 <- reserve_instr; *)
+        (* do n2 <- reserve_instr; *)
+        (* do n3 <- reserve_instr; *)
+        (* do n4 <- reserve_instr; *)
+        (* do n5 <- reserve_instr; *)
+        (* do n6 <- reserve_instr; *)
+        (* do n7 <- reserve_instr; *)
+        (* do succ <- reserve_instr; *)
+        (* do r_lo <- new_reg; *)
+        (* do r_hi <- new_reg; *)
+        (* do shadow_r_lo <- new_reg; *)
+        (* do shadow_r_hi <- new_reg; *)
+        (* do _ <- update_instr pc (Iop Olowlong [r] r_lo n1); *)
+        (* do _ <- update_instr n1 (Iop Olowlong [shadow_r] shadow_r_lo n2); *)
+        (* do _ <- update_instr n2 (Iop Oor [r_lo; shadow_r_lo] r_lo n3); *)
+        (* do _ <- update_instr n3 (Iop Ohighlong [r] r_hi n4); *)
+        (* do _ <- update_instr n4 (Iop Ohighlong [shadow_r] shadow_r_hi n5); *)
+        (* do _ <- update_instr n5 (Iop Oor [r_hi; shadow_r_hi] r_hi n6); *)
+        (* do _ <- update_instr n6 (Iop Omakelong [r_hi; r_lo] r n7); *)
+        (* do _ <- update_instr n7 (Iop Omakelong [r_hi; r_lo] shadow_r succ); *)
+        (* ret succ *)
+        ret pc
+      else (* 64-bit architecture *)
         do n1 <- reserve_instr;
         do n2 <- reserve_instr;
-        do n3 <- reserve_instr;
-        do n4 <- reserve_instr;
-        do n5 <- reserve_instr;
-        do n6 <- reserve_instr;
-        do n7 <- reserve_instr;
         do succ <- reserve_instr;
-        do r_lo <- new_reg;
-        do r_hi <- new_reg;
-        do shadow_r_lo <- new_reg;
-        do shadow_r_hi <- new_reg;
-        do _ <- update_instr pc (Iop Olowlong [r] r_lo n1);
-        do _ <- update_instr n1 (Iop Olowlong [shadow_r] shadow_r_lo n2);
-        do _ <- update_instr n2 (Iop Oor [r_lo; shadow_r_lo] r_lo n3);
-        do _ <- update_instr n3 (Iop Ohighlong [r] r_hi n4);
-        do _ <- update_instr n4 (Iop Ohighlong [shadow_r] shadow_r_hi n5);
-        do _ <- update_instr n5 (Iop Oor [r_hi; shadow_r_hi] r_hi n6);
-        do _ <- update_instr n6 (Iop Omakelong [r_hi; r_lo] r n7);
-        do _ <- update_instr n7 (Iop Omakelong [r_hi; r_lo] shadow_r succ);
-        ret succ
-      else (* 64-bit architecture *)
-        do n <- reserve_instr;
-        do succ <- reserve_instr;
-        do _ <- update_instr pc (Iop Oorl [r; shadow_r] r n);
-        do _ <- update_instr n (Iop Oorl [r; shadow_r] shadow_r succ);
+        do _ <- update_instr pc (Icond (Ccompl Ceq) [r1; r2] succ n1);
+        do _ <- update_instr n1 (Icond (Ccompl Ceq) [r2; r3] n2 succ);
+        do _ <- update_instr n2 (Iop Omove [r2] r1 succ);
         ret succ
 
   | Tsingle => ret pc
@@ -103,13 +111,13 @@ Definition sync (re : regenv) (r : reg) (shadow_r : reg) (pc : node)
     registers. [pc] is the node at which the emitted instructions
     should begin. Reserves and returns the node at which subsequent
     instructions should continue. *)
-Fixpoint sync_regs (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node)
+Fixpoint sync_regs (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
-  | r :: rs =>
-      let shadow_r := PMap.get r rm in
-      do succ <- sync re r shadow_r pc;
+  | r1 :: rs =>
+      let (r2, r3) := PMap.get r1 rm in
+      do succ <- sync re r1 r2 r3 pc;
       sync_regs re rm rs succ
   end.
 
@@ -177,27 +185,36 @@ Definition change_succ (new_succ : node) (instr : instruction) : instruction :=
 
 (** Insert instruction at [pc] to move contents of [r] to its shadow
     copy and then jump to [succ].  *)
-Definition copy_to_shadow (rm : PMap.t reg) (r : reg) (pc : node) (succ : node)
+Definition copy_to_shadows
+  (rm : PMap.t (reg * reg)) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
-  update_instr pc (Iop Omove [r] (PMap.get r rm) succ).
+  let (r2, r3) := PMap.get r1 rm in
+  do n <- reserve_instr;
+  do _ <- update_instr pc (Iop Omove [r1] r2 n);
+  update_instr n (Iop Omove [r1] r3 succ).
 
 (** Generate fault-tolerant instruction sequence corresponding to the
     input instruction. [re] is the register typing context of the
     original function. [rm] (the replication map) maps registers to
     their corresponding shadow registers. *)
-Definition transf_instr (re : regenv) (rm : PMap.t reg) (ni : node * instruction)
+Definition transf_instr (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * instruction)
   : mon unit :=
   let (pc, instr) := ni in
   match instr with
   (* For data operations, simply execute the instruction in both
      regular and shadow worlds. *)
   | Iop op args dst _succ =>
-      do n <- reserve_instr;
+      do n1 <- reserve_instr;
+      do n2 <- reserve_instr;
       do _ <- update_instr pc (Iop op
-                                (List.map (fun arg => PMap.get arg rm) args)
-                                (PMap.get dst rm)
-                                n);
-      update_instr n instr
+                                (List.map (fun arg => fst (PMap.get arg rm)) args)
+                                (fst (PMap.get dst rm))
+                                n1);
+      do _ <- update_instr n1 (Iop op
+                                (List.map (fun arg => snd (PMap.get arg rm)) args)
+                                (snd (PMap.get dst rm))
+                                n2);
+      update_instr n2 instr
   (* For other instructions, synchronize the argument registers and
      then execute the instruction only in the regular world. For
      instructions with result registers, copy the result into its
@@ -208,7 +225,7 @@ Definition transf_instr (re : regenv) (rm : PMap.t reg) (ni : node * instruction
       | Some res, Some succ =>
           do m <- reserve_instr;
           do _ <- update_instr n (change_succ m instr);
-          copy_to_shadow rm res m succ
+          copy_to_shadows rm res m succ
       | _, _ => update_instr n instr
       end
   end.
@@ -233,7 +250,7 @@ Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a0 : A)
   end.
 
 (** Transform function code by transforming the instructions. *)
-Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code)
+Definition transf_code (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
   : mon unit :=
   iterM (transf_instr re rm) (PTree.elements c).
 
@@ -285,13 +302,13 @@ Definition code_regs (c : code) : PSet.t :=
     their corresponding shadow registers. [succ] is the node to jump
     to after copying. Reserves and returns the node at which copying
     starts (to become the new entry point of the function). *)
-Fixpoint copy_params (rm : PMap.t reg) (params : list reg) (succ : node)
+Fixpoint copy_params (rm : PMap.t (reg * reg)) (params : list reg) (succ : node)
   : mon node :=
   match params with
   | [] => ret succ
   | r :: rs =>
       do n <- reserve_instr;
-      do _ <- copy_to_shadow rm r n succ;
+      do _ <- copy_to_shadows rm r n succ;
       copy_params rm rs n
   end.
 
@@ -310,10 +327,11 @@ Definition transf_fun (re : regenv) (f : function) : mon node :=
   let all_regs := PSet.union
                     (PSet_of_list f.(fn_params))
                     (code_regs f.(fn_code)) in
-  do rm <- foldM (fun rm r =>
-                   do shadow_r <- new_reg;
-                   ret (PMap.set r shadow_r rm)
-            ) (PSet.elements all_regs) (PMap.init xH);
+  do rm <- foldM (fun rm r1 =>
+                   do r2 <- new_reg;
+                   do r3 <- new_reg;
+                   ret (PMap.set r1 (r2, r3) rm)
+            ) (PSet.elements all_regs) (PMap.init (xH, xH));
   do entry_point <- copy_params rm f.(fn_params) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
