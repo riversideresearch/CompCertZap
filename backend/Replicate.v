@@ -60,7 +60,7 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   do n1 <- reserve_instr;
   do n2 <- reserve_instr;
   do succ <- reserve_instr;
-  do _ <- update_instr pc (Icond (comp Ceq) [r1; r2] succ n1);
+  do _ <- update_instr pc (Icond (comp Cne) [r1; r2] n1 succ);
   do _ <- update_instr n1 (Icond (comp Ceq) [r2; r3] n2 succ);
   do _ <- update_instr n2 (Iop Omove [r2] r1 succ);
   ret succ.
