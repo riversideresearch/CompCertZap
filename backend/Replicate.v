@@ -1,26 +1,26 @@
-(** * Add data redundancy to RTL *)
+(** * Add redundancy to RTL *)
 
 (** In a nutshell, per function:
 
-  1) reserve shadow registers for the function's parameters and all
-  registers that appear in the body,
+  1) reserve two shadow registers for each function parameter and
+  register that appear in the body,
 
-  2) begin new code with instructions that copy all the params into
-  their shadow copies,
+  2) begin new code with instructions that copy the function
+  parameters into their shadow copies,
 
-  3) for each IOp instruction in the original code, emit an additional
-  corresponding one in the shadow world,
+  3) for each IOp instruction in the original code, emit two
+  additional corresponding instructions in the two shadow worlds,
 
-  4) for all other instructions, emit preceding synchronization code
-  for the arguments to the instruction (OR the regular and shadow
-  versions and store the result in both) and then just the regular
-  instruction only. Then emit a copy from the result register to its
-  shadow copy.
+  4) for all other instructions, emit preceding code to majority vote
+  their arguments (leaving the voted results in the regular world
+  registers) and then the regular instruction only. Then, if the
+  instruction has a result register, emit a move from the result
+  register to its shadow registers.
 
   We use the state+error monad from [backend/RTLgen.v]. Each function
   in the program is translated by a separate monadic computation that
   builds up the result program in the [fn_code] field of the state.
-*)
+  *)
 
 Require Import
   AST
@@ -37,88 +37,48 @@ Require Import
 .
 Import ListNotations.
 
-(** Emit instructions for synchronizing register [r] with its shadow
-    copy [shadow_r].
+(** Emit instructions for majority voting registers [r1], [r2], and
+    [r3], storing the result in [r1] and leaving the contents of [r2]
+    and [r3] the same.
 
-    I.e.,
-    r        := r | shadow_r
-    shadow_r := r | shadow_r
-
-    Also, since 32-bit architectures don't support the Oorl (64-bit
-    OR) operation, longs must be explicitly split into their high and
-    low words, OR'd separately, and recombined.
-
-    [re] is the register typing context of the original function. [r]
-    and [shadow_r] are the registers being synchronized. [pc] is the
-    node at which the emitted instructions should begin. Reserves and
-    returns the node at which subsequent computation should continue.
-*)
-Definition sync (re : regenv) (r1 r2 r3 : reg) (pc : node)
+    [re] is the register typing context of the original function. [pc]
+    is the node at which the emitted instructions should
+    begin. Reserves and returns the node at which subsequent
+    instructions should continue.  *)
+Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
-  match re r1 with
+  do comp <- match re r1 with
+            | Tint => ret Ccomp
+            | Tlong => ret Ccompl
+            | Tsingle => ret Ccompfs
+            | Tfloat => ret Ccompf
+            | Tany32 => error (MSG "unexpected Tany32 instruction at pc: "
+                                :: POS pc :: nil)
+            | Tany64 => error (MSG "unexpected Tany64 instruction at pc: "
+                                :: POS pc :: nil)
+            end;
+  do n1 <- reserve_instr;
+  do n2 <- reserve_instr;
+  do succ <- reserve_instr;
+  do _ <- update_instr pc (Icond (comp Ceq) [r1; r2] succ n1);
+  do _ <- update_instr n1 (Icond (comp Ceq) [r2; r3] n2 succ);
+  do _ <- update_instr n2 (Iop Omove [r2] r1 succ);
+  ret succ.
 
-  | Tint =>
-      do n1 <- reserve_instr;
-      do n2 <- reserve_instr;
-      do succ <- reserve_instr;
-      do _ <- update_instr pc (Icond (Ccomp Ceq) [r1; r2] succ n1);
-      do _ <- update_instr n1 (Icond (Ccomp Ceq) [r2; r3] n2 succ);
-      do _ <- update_instr n2 (Iop Omove [r2] r1 succ);
-      ret succ
-
-  | Tlong =>
-      if Archi.splitlong then (* 32-bit architecture *)
-        (* do n1 <- reserve_instr; *)
-        (* do n2 <- reserve_instr; *)
-        (* do n3 <- reserve_instr; *)
-        (* do n4 <- reserve_instr; *)
-        (* do n5 <- reserve_instr; *)
-        (* do n6 <- reserve_instr; *)
-        (* do n7 <- reserve_instr; *)
-        (* do succ <- reserve_instr; *)
-        (* do r_lo <- new_reg; *)
-        (* do r_hi <- new_reg; *)
-        (* do shadow_r_lo <- new_reg; *)
-        (* do shadow_r_hi <- new_reg; *)
-        (* do _ <- update_instr pc (Iop Olowlong [r] r_lo n1); *)
-        (* do _ <- update_instr n1 (Iop Olowlong [shadow_r] shadow_r_lo n2); *)
-        (* do _ <- update_instr n2 (Iop Oor [r_lo; shadow_r_lo] r_lo n3); *)
-        (* do _ <- update_instr n3 (Iop Ohighlong [r] r_hi n4); *)
-        (* do _ <- update_instr n4 (Iop Ohighlong [shadow_r] shadow_r_hi n5); *)
-        (* do _ <- update_instr n5 (Iop Oor [r_hi; shadow_r_hi] r_hi n6); *)
-        (* do _ <- update_instr n6 (Iop Omakelong [r_hi; r_lo] r n7); *)
-        (* do _ <- update_instr n7 (Iop Omakelong [r_hi; r_lo] shadow_r succ); *)
-        (* ret succ *)
-        ret pc
-      else (* 64-bit architecture *)
-        do n1 <- reserve_instr;
-        do n2 <- reserve_instr;
-        do succ <- reserve_instr;
-        do _ <- update_instr pc (Icond (Ccompl Ceq) [r1; r2] succ n1);
-        do _ <- update_instr n1 (Icond (Ccompl Ceq) [r2; r3] n2 succ);
-        do _ <- update_instr n2 (Iop Omove [r2] r1 succ);
-        ret succ
-
-  | Tsingle => ret pc
-  | Tfloat => ret pc
-  | Tany32 => error (MSG "bad sync at Tany32 instruction " :: POS pc :: nil)
-  | Tany64 => error (MSG "bad sync at Tany64 instruction " :: POS pc :: nil)
-  end.
-
-(** Emit code for synchronizing the list of registers [reg]. [re] is
+(** Emit code for majority voting the list of registers [reg]. [re] is
     the register typing context of the original function. [rm] (the
     replication map) maps registers to their corresponding shadow
     registers. [pc] is the node at which the emitted instructions
     should begin. Reserves and returns the node at which subsequent
     instructions should continue. *)
-Fixpoint sync_regs (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
+Fixpoint maj_vote_regs (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
   | r1 :: rs =>
       let (r2, r3) := PMap.get r1 rm in
-      do succ <- sync re r1 r2 r3 pc;
-      sync_regs re rm rs succ
+      do succ <- maj_vote re r1 r2 r3 pc;
+      maj_vote_regs re rm rs succ
   end.
 
 (** Pull out registers from builtin_args. *)
@@ -201,8 +161,8 @@ Definition transf_instr (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * ins
   : mon unit :=
   let (pc, instr) := ni in
   match instr with
-  (* For data operations, simply execute the instruction in both
-     regular and shadow worlds. *)
+  (* For data operations, simply execute the instruction in the
+     regular and two shadow worlds. *)
   | Iop op args dst _succ =>
       do n1 <- reserve_instr;
       do n2 <- reserve_instr;
@@ -215,12 +175,12 @@ Definition transf_instr (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * ins
                                 (snd (PMap.get dst rm))
                                 n2);
       update_instr n2 instr
-  (* For other instructions, synchronize the argument registers and
+  (* For other instructions, majority vote the argument registers and
      then execute the instruction only in the regular world. For
      instructions with result registers, copy the result into its
      shadow register. *)
   | _ =>
-      do n <- sync_regs re rm (args_of_instruction instr) pc;
+      do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | Some res, Some succ =>
           do m <- reserve_instr;
