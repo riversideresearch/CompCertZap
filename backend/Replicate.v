@@ -3,12 +3,12 @@
 (** In a nutshell, per function:
 
   1) reserve two shadow registers for each function parameter and
-  register that appear in the body,
+  register that appears in the body,
 
   2) begin new code with instructions that copy the function
   parameters into their shadow copies,
 
-  3) for each IOp instruction in the original code, emit two
+  3) for each Iop and Iload instruction in the original code, emit two
   additional corresponding instructions in the two shadow worlds,
 
   4) for all other instructions, emit preceding code to majority vote
@@ -20,7 +20,7 @@
   We use the state+error monad from [backend/RTLgen.v]. Each function
   in the program is translated by a separate monadic computation that
   builds up the result program in the [fn_code] field of the state.
-  *)
+*)
 
 Require Import
   AST
@@ -44,7 +44,8 @@ Import ListNotations.
     [re] is the register typing context of the original function. [pc]
     is the node at which the emitted instructions should
     begin. Reserves and returns the node at which subsequent
-    instructions should continue.  *)
+    instructions should continue.
+*)
 Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
   do comp <- match re r1 with
@@ -115,7 +116,6 @@ Definition res_of_instruction (instr : instruction) : option reg :=
   | Iop _ _ dst _ => Some dst
   | Iload _ _ _ dst _ => Some dst
   | Icall _ _ _ dst _ => Some dst
-  (* | Itailcall _ _ _ ? *)
   | Ibuiltin _ _ res _ => reg_of_builtin_res res
   | _ => None
   end.
@@ -171,6 +171,18 @@ Definition transf_instr (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * ins
                                 (fst (PMap.get dst rm))
                                 n1);
       do _ <- update_instr n1 (Iop op
+                                (List.map (fun arg => snd (PMap.get arg rm)) args)
+                                (snd (PMap.get dst rm))
+                                n2);
+      update_instr n2 instr
+  | Iload chunk addr args dst _succ =>
+      do n1 <- reserve_instr;
+      do n2 <- reserve_instr;
+      do _ <- update_instr pc (Iload chunk addr
+                                (List.map (fun arg => fst (PMap.get arg rm)) args)
+                                (fst (PMap.get dst rm))
+                                n1);
+      do _ <- update_instr n1 (Iload chunk addr
                                 (List.map (fun arg => snd (PMap.get arg rm)) args)
                                 (snd (PMap.get dst rm))
                                 n2);
@@ -319,6 +331,12 @@ Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
                                     fn_entrypoint := entrypoint |}
   end.
 
+(** Transform a function [f] by:
+
+    1) typecheck the function to obtain the register typing context [re],
+
+    2) Call [transf_fun'] with [re] on [f].
+*)
 Definition transf_function (f : function) : Errors.res function :=
   Errors.bind (type_function f) (fun re => transf_fun' re f).
 
