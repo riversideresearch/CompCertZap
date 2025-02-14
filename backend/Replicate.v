@@ -313,7 +313,7 @@ Definition transf_fun (re : regenv) (f : function) : mon node :=
     original function. This ensures that we can reuse the old param
     registers, nodes, and instructions as-is since all of our new
     registers and nodes won't collide with them. *)
-Program Definition initial_state (f : function) : state :=
+Program Definition init_state (f : function) : state :=
   mkstate
     (max_reg_function f + 1)
     (max_pc_function f + 1)
@@ -322,7 +322,7 @@ Program Definition initial_state (f : function) : state :=
 
 (** Run [transf_fun] on [f] with the appropriate initial state. *)
 Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
-  match transf_fun re f (initial_state f) with
+  match transf_fun re f (init_state f) with
   | Error err => Errors.Error err
   | OK entrypoint s _ => Errors.OK {| fn_sig := f.(fn_sig);
                                     fn_params := f.(fn_params);
