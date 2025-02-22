@@ -72,7 +72,8 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
     registers. [pc] is the node at which the emitted instructions
     should begin. Reserves and returns the node at which subsequent
     instructions should continue. *)
-Fixpoint maj_vote_regs (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
+Fixpoint maj_vote_regs
+  (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
@@ -131,8 +132,8 @@ Definition succ_of_instruction (instr : instruction) : option node :=
   | _ => None
   end.
 
-(** Change [instr] to jump to [new_succ]. *)
-Definition change_succ (new_succ : node) (instr : instruction) : instruction :=
+(** Modify [instr] to jump to [new_succ]. *)
+Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
   match instr with
   | Inop _ => Inop new_succ
   | Iop op args dst _ => Iop op args dst new_succ
@@ -143,8 +144,8 @@ Definition change_succ (new_succ : node) (instr : instruction) : instruction :=
   | _ => instr
   end.
 
-(** Insert instruction at [pc] to move contents of [r] to its shadow
-    copy and then jump to [succ].  *)
+(** Insert instructions at [pc] to move contents of [r] to its shadow
+    copies and then jump to [succ].  *)
 Definition copy_to_shadows
   (rm : PMap.t (reg * reg)) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
@@ -157,46 +158,53 @@ Definition copy_to_shadows
     input instruction. [re] is the register typing context of the
     original function. [rm] (the replication map) maps registers to
     their corresponding shadow registers. *)
-Definition transf_instr (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * instruction)
+Definition transf_instr
+  (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * instruction)
   : mon unit :=
   let (pc, instr) := ni in
   match instr with
+  | Inop n =>
+      update_instr pc (Inop n)
   (* For data operations, simply execute the instruction in the
      regular and two shadow worlds. *)
   | Iop op args dst _succ =>
       do n1 <- reserve_instr;
       do n2 <- reserve_instr;
-      do _ <- update_instr pc (Iop op
-                                (List.map (fun arg => fst (PMap.get arg rm)) args)
-                                (fst (PMap.get dst rm))
-                                n1);
-      do _ <- update_instr n1 (Iop op
-                                (List.map (fun arg => snd (PMap.get arg rm)) args)
-                                (snd (PMap.get dst rm))
-                                n2);
+      do _ <- update_instr pc
+               (Iop op
+                  (List.map (fun arg => fst (PMap.get arg rm)) args)
+                  (fst (PMap.get dst rm))
+                  n1);
+      do _ <- update_instr n1
+               (Iop op
+                  (List.map (fun arg => snd (PMap.get arg rm)) args)
+                  (snd (PMap.get dst rm))
+                  n2);
       update_instr n2 instr
   | Iload chunk addr args dst _succ =>
       do n1 <- reserve_instr;
       do n2 <- reserve_instr;
-      do _ <- update_instr pc (Iload chunk addr
-                                (List.map (fun arg => fst (PMap.get arg rm)) args)
-                                (fst (PMap.get dst rm))
-                                n1);
-      do _ <- update_instr n1 (Iload chunk addr
-                                (List.map (fun arg => snd (PMap.get arg rm)) args)
-                                (snd (PMap.get dst rm))
-                                n2);
+      do _ <- update_instr pc
+               (Iload chunk addr
+                  (List.map (fun arg => fst (PMap.get arg rm)) args)
+                  (fst (PMap.get dst rm))
+                  n1);
+      do _ <- update_instr n1
+               (Iload chunk addr
+                  (List.map (fun arg => snd (PMap.get arg rm)) args)
+                  (snd (PMap.get dst rm))
+                  n2);
       update_instr n2 instr
   (* For other instructions, majority vote the argument registers and
      then execute the instruction only in the regular world. For
      instructions with result registers, copy the result into its
-     shadow register. *)
+     shadow registers. *)
   | _ =>
       do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | Some res, Some succ =>
           do m <- reserve_instr;
-          do _ <- update_instr n (change_succ m instr);
+          do _ <- update_instr n (change_succ instr m);
           copy_to_shadows rm res m succ
       | _, _ => update_instr n instr
       end
@@ -212,13 +220,13 @@ Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
   end.
 
 (** Monadic fold. *)
-Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a0 : A)
+Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
   : mon A :=
   match l with
-  | [] => ret a0
+  | [] => ret a
   | x :: xs =>
-      do y <- f a0 x;
-      foldM f xs y
+      do a' <- foldM f xs a;
+      f a' x
   end.
 
 (** Transform function code by transforming the instructions. *)
@@ -229,11 +237,8 @@ Definition transf_code (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
 (** Sets of positives. *)
 Module PSet := FSetAVL.Make(OrderedPositive).
 
-Definition list_union (l : list PSet.t) : PSet.t :=
-  fold_left PSet.union l PSet.empty.
-
-Definition PSet_of_list (l : list positive) : PSet.t :=
-  list_union (List.map PSet.singleton l).
+Definition PSet_of_list (l : list positive) : PSet.t  :=
+  fold_right (fun acc p => PSet.add acc p) PSet.empty l.
 
 Definition PSet_of_option (x : option positive) : PSet.t :=
   match x with
@@ -243,10 +248,12 @@ Definition PSet_of_option (x : option positive) : PSet.t :=
 
 (** All registers that appear in an instruction (arguments or
     destination). *)
+(* TODO: relate to instr_uses and instr_defined? *)
 Definition instr_regs (i : instruction) : PSet.t :=
   match i with
   | Inop s => PSet.empty
-  | Iop op args res s => PSet.union (PSet_of_list args) (PSet.singleton res)
+  | Iop op args res s =>
+      PSet.union (PSet_of_list args) (PSet.singleton res)
   | Iload chunk addr args dst s =>
       PSet.union (PSet_of_list args) (PSet.singleton dst)
   | Istore chunk addr args src s =>
@@ -274,7 +281,8 @@ Definition code_regs (c : code) : PSet.t :=
     their corresponding shadow registers. [succ] is the node to jump
     to after copying. Reserves and returns the node at which copying
     starts (to become the new entry point of the function). *)
-Fixpoint copy_params (rm : PMap.t (reg * reg)) (params : list reg) (succ : node)
+Fixpoint copy_params
+  (rm : PMap.t (reg * reg)) (params : list reg) (succ : node)
   : mon node :=
   match params with
   | [] => ret succ
@@ -283,6 +291,20 @@ Fixpoint copy_params (rm : PMap.t (reg * reg)) (params : list reg) (succ : node)
       do _ <- copy_to_shadows rm r n succ;
       copy_params rm rs n
   end.
+
+Definition max_reg (regs : PSet.t) :=
+  match PSet.max_elt regs with
+  | Some p => p
+  | None => 1%positive
+  end.
+
+Definition replication_map (params : list reg) (c : code)
+  : mon (PMap.t (reg * reg)) :=
+  foldM (fun rm r1 =>
+           do r2 <- new_reg;
+           do r3 <- new_reg;
+           ret (PMap.set r1 (r2, r3) rm)
+    ) (PSet.elements (code_regs c)) (PMap.init (xH, xH)).
 
 (** Generate fault-tolerant version of function [f]. [re] should be
     the typing context that resulted from typechecking [f].
@@ -296,14 +318,7 @@ Fixpoint copy_params (rm : PMap.t (reg * reg)) (params : list reg) (succ : node)
        instructions were inserted at the front).
 *)
 Definition transf_fun (re : regenv) (f : function) : mon node :=
-  let all_regs := PSet.union
-                    (PSet_of_list f.(fn_params))
-                    (code_regs f.(fn_code)) in
-  do rm <- foldM (fun rm r1 =>
-                   do r2 <- new_reg;
-                   do r3 <- new_reg;
-                   ret (PMap.set r1 (r2, r3) rm)
-            ) (PSet.elements all_regs) (PMap.init (xH, xH));
+  do rm <- replication_map f.(fn_params) f.(fn_code);
   do entry_point <- copy_params rm f.(fn_params) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
@@ -311,11 +326,11 @@ Definition transf_fun (re : regenv) (f : function) : mon node :=
 (** Initialize the generator state with [st_nextreg] and [st_nextnode]
     greater than all of the registers and nodes appearing in the
     original function. This ensures that we can reuse the old param
-    registers, nodes, and instructions as-is since all of our new
-    registers and nodes won't collide with them. *)
+    registers, nodes, and instructions as-is because our new registers
+    and nodes won't collide with them. *)
 Program Definition init_state (f : function) : state :=
   mkstate
-    (max_reg_function f + 1)
+    (max_reg (code_regs f.(fn_code)) + 1)
     (max_pc_function f + 1)
     (PTree.empty instruction)
     _.
@@ -345,3 +360,6 @@ Definition transf_fundef (fd : fundef) : Errors.res fundef :=
 
 Definition transf_program (p : program) : Errors.res program :=
   transform_partial_program transf_fundef p.
+
+(* Definition transf_program (p : program) : Errors.res program := *)
+(*   Errors.OK p. *)
