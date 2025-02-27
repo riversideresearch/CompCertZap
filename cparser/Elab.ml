@@ -180,7 +180,7 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_extern,Storage_extern
     | Storage_default,Storage_default -> sto
     | _,Storage_static ->
-	error loc "static declaration of '%s' follows non-static declaration" s;
+  error loc "static declaration of '%s' follows non-static declaration" s;
         sto
     | Storage_static,_ -> Storage_static (* Static stays static *)
     | Storage_extern,_ -> if is_function_type env new_ty then Storage_extern else sto
@@ -196,7 +196,7 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_auto,_
     | _,Storage_register
     | Storage_register,_ ->
-	error loc "unexpected %s declaration of '%s'"
+  error loc "unexpected %s declaration of '%s'"
                   (name_of_storage_class sto) s;
         sto
   in
