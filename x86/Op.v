@@ -242,13 +242,13 @@ Definition minf (v1 v2: val) : val :=
     under the assumption that no global variable is bigger than
     [2^24] bytes. *)
 
-Definition offset_in_range (n: Z) : bool := 
+Definition offset_in_range (n: Z) : bool :=
   zle Int.min_signed n && zle n Int.max_signed.
 
 Definition ptroffset_min := -16777216.      (**r [-2^24] *)
 Definition ptroffset_max := 16777215.       (**r [2^24 - 1] *)
 
-Definition ptroffset_in_range (n: ptrofs) : bool := 
+Definition ptroffset_in_range (n: ptrofs) : bool :=
   let n := Ptrofs.signed n in zle ptroffset_min n && zle n ptroffset_max.
 
 Definition addressing_valid (a: addressing) : bool :=
@@ -264,7 +264,7 @@ Definition addressing_valid (a: addressing) : bool :=
     | Ainstack ofs => offset_in_range (Ptrofs.signed ofs)
     end
   else true.
-  
+
 (** * Evaluation functions *)
 
 (** Evaluation of conditions, operators and addressing modes applied
@@ -480,6 +480,53 @@ Ltac FuncInv :=
   | _ =>
       idtac
   end.
+
+Lemma eval_addressing_vundef F V (genv : Genv.t F V) sp addr vs a :
+  eval_addressing genv sp addr vs = Some a ->
+  In Vundef vs ->
+  a = Vundef.
+Proof.
+  intros Heval Hin.
+  unfold eval_addressing in Heval.
+  unfold eval_addressing64 in Heval.
+  unfold eval_addressing32 in Heval.
+  destruct Archi.ptr64.
+  - destruct vs eqn:Hvs; inv Hin.
+    + destruct addr; try congruence.
+      * destruct l; inv Heval; reflexivity.
+      * destruct l; inv Heval; destruct l; inv H0; reflexivity.
+      * destruct l; inv Heval; reflexivity.
+      * destruct l; inv Heval; destruct l; inv H0; reflexivity.
+    + destruct addr; try congruence; destruct l; inv Heval.
+      * inv H.
+      * destruct l; inv H1.
+        inv H.
+        { rewrite (Val.addl_commut v Vundef); reflexivity. }
+        inv H0.
+      * inv H.
+      * destruct l; inv H1.
+        inv H; simpl.
+        { rewrite Val.addl_commut; reflexivity. }
+        inv H0.
+  - destruct vs eqn:Hvs; inv Hin.
+    + destruct addr; try congruence.
+      * destruct l; inv Heval; reflexivity.
+      * destruct l; inv Heval; destruct l; inv H0; reflexivity.
+      * destruct l; inv Heval; reflexivity.
+      * destruct l; inv Heval; destruct l; inv H0; reflexivity.
+      * destruct l; inv Heval.
+        rewrite Val.add_commut; reflexivity.
+      * destruct l; inv Heval.
+        rewrite Val.add_commut; reflexivity.
+    + destruct addr; try congruence; destruct l; inv Heval; inv H.
+      * destruct l; inv H1.
+        { rewrite (Val.add_commut v Vundef); reflexivity. }
+      * destruct l; inv H1.
+        inv H0.
+      * destruct l; inv H1.
+        rewrite Val.add_commut; reflexivity.
+      * destruct l; inv H1; inv H0.
+Qed.
 
 (** * Static typing of conditions, operators and addressing modes. *)
 
@@ -1018,7 +1065,7 @@ Lemma condition_depends_on_memory_correct:
   condition_depends_on_memory c = false ->
   eval_condition c args m1 = eval_condition c args m2.
 Proof.
-  intros until m2. 
+  intros until m2.
   destruct c; simpl; intros SF; auto; rewrite ? negb_false_iff in SF;
   unfold Val.cmpu_bool, Val.cmplu_bool; rewrite SF; reflexivity.
 Qed.
@@ -1350,7 +1397,7 @@ Proof.
   exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
   destruct b; simpl; constructor.
   simpl; constructor.
-  apply Val.select_inject; auto.  
+  apply Val.select_inject; auto.
   destruct (eval_condition c vl1 m1) eqn:?; auto.
   right; symmetry; eapply eval_condition_inj; eauto.
 Qed.
@@ -1554,4 +1601,4 @@ Definition builtin_arg_ok
   match ba with
   | (BA _ | BA_splitlong (BA _) (BA _)) => true
   | _ => builtin_arg_ok_1 ba c
-  end.  
+  end.
