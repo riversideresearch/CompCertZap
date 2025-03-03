@@ -25,12 +25,18 @@ Local Open Scope positive_scope.
 
 Ltac gen_case H :=
   match goal with
-  | [ _: match ?X with | RTLgen.Error _ => _ | RTLgen.OK _ _ _ => _ end = _ |- _ ] => destruct X eqn:H
+  | [ _: match ?X with
+         | RTLgen.Error _ => _
+         | RTLgen.OK _ _ _ => _ end = _ |- _ ] =>
+      destruct X eqn:H
   end.
 
 Ltac lr_case :=
   match goal with
-  | [ _: match ?X with | left _ => _ | right _ => _ end = _ |- _ ] => destruct X
+  | [ _: match ?X with
+         | left _ => _
+         | right _ => _ end = _ |- _ ] =>
+      destruct X
   end.
 
 Definition rm_wf (rm : PMap.t (reg * reg)) (l : list positive) : Prop :=
@@ -678,8 +684,20 @@ Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
     reg_used_in_instr r (Istore chunk addr args src succ)
 | reg_used_istore_src : forall chunk addr args succ,
     reg_used_in_instr r (Istore chunk addr args r succ)
+| reg_used_icall_args : forall sig fn args dst succ,
+    In r args ->
+    reg_used_in_instr r (Icall sig fn args dst succ)
+| reg_used_icall_dst : forall sig fn args succ,
+    reg_used_in_instr r (Icall sig fn args r succ)
 (* TODO: rest of instructions *)
 .
+
+  (* | Icall: signature -> reg + ident -> list reg -> reg -> node -> instruction *)
+  (*     (** [Icall sig fn args dest succ] invokes the function determined by *)
+  (*         [fn] (either a function pointer found in a register or a *)
+  (*         function name), giving it the values of registers [args] *)
+  (*         as arguments.  It stores the return value in [dest] and branches *)
+  (*         to [succ]. *) *)
 
 Definition reg_used_in_code (c : code) (r : reg) : Prop :=
   exists pc instr,

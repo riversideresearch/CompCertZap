@@ -209,8 +209,8 @@ Definition transf_instr
       update_instr n2 instr
   (* For other instructions, majority vote the argument registers and
      then execute the instruction only in the regular world. For
-     instructions with result registers, copy the result into its
-     shadow registers. *)
+     instructions with result registers (Icall and Ibuiltin), copy the
+     result into its shadow registers. *)
   | _ =>
       do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
@@ -222,14 +222,14 @@ Definition transf_instr
       end
   end.
 
-(* The following two functions are not tail-recursive (because it
-   would be harder to do proofs by induction) which could potentially
-   be a problem for very large functions? Specifically, since iterM is
-   used in transf_code, it might overflow the call stack when
-   translating very large functions. One easy workaround might be to
-   do the proofs wrt. these versions of the functions but in the
-   implementation use tail-recursive versions on reversed argument
-   lists (using a tail-recursive rev function) and prove them
+(* The following two functions are not tail-recursive (because they
+   would be harder to reason about by induction) which could
+   potentially be a problem for very large functions? Specifically,
+   since iterM is used in transf_code, it might overflow the call
+   stack when translating very large functions. One easy workaround
+   might be to do the proofs wrt. these versions of the functions but
+   in the implementation use tail-recursive versions on reversed
+   argument lists (using a tail-recursive rev function) and prove them
    equivalent. *)
 
 (** Monadic iteration. *)
@@ -379,7 +379,7 @@ Definition transf_fun (re : regenv) (f : function) : mon node :=
     any new registers and nodes won't collide with them. *)
 Program Definition init_state (f : function) : state :=
   mkstate
-    (max_reg (code_regs f.(fn_code)) + 1)
+    (max_reg (fun_regs f) + 1)
     (max_pc_function f + 1)
     (PTree.empty instruction)
     _.
