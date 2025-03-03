@@ -39,7 +39,7 @@ Import ListNotations.
 
 (** Emit instructions for majority voting registers [r1], [r2], and
     [r3], storing the result in [r1] and leaving the contents of [r2]
-    and [r3] the same.
+    and [r3] unchanged.
 
     [re] is the register typing context of the original function. [pc]
     is the node at which the emitted instructions should
@@ -49,8 +49,8 @@ Import ListNotations.
 Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
   do comp <- match re r1 with
-            | Tint => ret Ccomp
-            | Tlong => ret Ccompl
+            | Tint => ret Ccompu
+            | Tlong => ret Ccomplu
             | Tsingle => ret Ccompfs
             | Tfloat => ret Ccompf
             | Tany32 => error (MSG "unexpected Tany32 instruction at pc: "
@@ -72,15 +72,27 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
     registers. [pc] is the node at which the emitted instructions
     should begin. Reserves and returns the node at which subsequent
     instructions should continue. *)
+(* TODO: right-to-left version for sake of induction. *)
+(* Fixpoint maj_vote_regs *)
+(*   (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node) *)
+(*   : mon node := *)
+(*   match regs with *)
+(*   | [] => ret pc *)
+(*   | r1 :: rs => *)
+(*       let (r2, r3) := PMap.get r1 rm in *)
+(*       do succ <- maj_vote re r1 r2 r3 pc; *)
+(*       maj_vote_regs re rm rs succ *)
+(*   end. *)
+
 Fixpoint maj_vote_regs
   (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
   | r1 :: rs =>
+      do succ <- maj_vote_regs re rm rs pc;
       let (r2, r3) := PMap.get r1 rm in
-      do succ <- maj_vote re r1 r2 r3 pc;
-      maj_vote_regs re rm rs succ
+      maj_vote re r1 r2 r3 succ
   end.
 
 (** Pull out registers from builtin_args. *)
@@ -210,13 +222,23 @@ Definition transf_instr
       end
   end.
 
+(* The following two functions are not tail-recursive (because it
+   would be harder to do proofs by induction) which could potentially
+   be a problem for very large functions? Specifically, since iterM is
+   used in transf_code, it might overflow the call stack when
+   translating very large functions. One easy workaround might be to
+   do the proofs wrt. these versions of the functions but in the
+   implementation use tail-recursive versions on reversed argument
+   lists (using a tail-recursive rev function) and prove them
+   equivalent. *)
+
 (** Monadic iteration. *)
 Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
   match l with
   | [] => ret tt
   | x :: xs =>
-      do _ <- f x;
-      iterM f xs
+      do _ <- iterM f xs;
+      f x
   end.
 
 (** Monadic fold. *)
@@ -273,23 +295,44 @@ Definition instr_regs (i : instruction) : PSet.t :=
   | Ireturn (Some arg) => PSet.singleton arg
   end.
 
-(** All registers that appear in the given code. *)
+(** All registers that appear in the given code (used in
+    instructions). *)
 Definition code_regs (c : code) : PSet.t :=
   PTree.fold (fun rs _ instr => PSet.union rs (instr_regs instr)) c PSet.empty.
+
+(** All registers that appear in the given function (params + regs
+    used in instructions). *)
+Definition fun_regs (f : function) : PSet.t :=
+  PSet.union (PSet_of_list f.(fn_params)) (code_regs (f.(fn_code))).
+
+Definition fun_regs_list (f : function) : list positive :=
+  PSet.elements (fun_regs f).
 
 (** Generate instructions to copy contents of registers [params] to
     their corresponding shadow registers. [succ] is the node to jump
     to after copying. Reserves and returns the node at which copying
     starts (to become the new entry point of the function). *)
+(* Fixpoint copy_params *)
+(*   (rm : PMap.t (reg * reg)) (params : list reg) (succ : node) *)
+(*   : mon node := *)
+(*   match params with *)
+(*   | [] => ret succ *)
+(*   | r :: rs => *)
+(*       do n <- reserve_instr; *)
+(*       do _ <- copy_to_shadows rm r n succ; *)
+(*       copy_params rm rs n *)
+(*   end. *)
+
 Fixpoint copy_params
   (rm : PMap.t (reg * reg)) (params : list reg) (succ : node)
   : mon node :=
   match params with
   | [] => ret succ
   | r :: rs =>
-      do n <- reserve_instr;
-      do _ <- copy_to_shadows rm r n succ;
-      copy_params rm rs n
+      do n <- copy_params rm rs succ;
+      do m <- reserve_instr;
+      do _ <- copy_to_shadows rm r m n;
+      ret m
   end.
 
 Definition max_reg (regs : PSet.t) :=
@@ -298,13 +341,18 @@ Definition max_reg (regs : PSet.t) :=
   | None => 1%positive
   end.
 
-Definition replication_map (params : list reg) (c : code)
-  : mon (PMap.t (reg * reg)) :=
+(** Build replication map (mapping each register to a pair of
+    corresponding shadow registers) for a function with parameters
+    [params] and code body [c]. *)
+  (* Definition replication_map (params : list reg) (c : code) *)
+Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
+  (* let regs := *)
+  (*   (PSet.elements (PSet.union (PSet_of_list params) (code_regs c))) in *)
   foldM (fun rm r1 =>
            do r2 <- new_reg;
            do r3 <- new_reg;
            ret (PMap.set r1 (r2, r3) rm)
-    ) (PSet.elements (code_regs c)) (PMap.init (xH, xH)).
+    ) (fun_regs_list f) (PMap.init (xH, xH)).
 
 (** Generate fault-tolerant version of function [f]. [re] should be
     the typing context that resulted from typechecking [f].
@@ -318,7 +366,8 @@ Definition replication_map (params : list reg) (c : code)
        instructions were inserted at the front).
 *)
 Definition transf_fun (re : regenv) (f : function) : mon node :=
-  do rm <- replication_map f.(fn_params) f.(fn_code);
+  (* do rm <- replication_map f.(fn_params) f.(fn_code); *)
+  do rm <- replication_map f;
   do entry_point <- copy_params rm f.(fn_params) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
@@ -326,8 +375,8 @@ Definition transf_fun (re : regenv) (f : function) : mon node :=
 (** Initialize the generator state with [st_nextreg] and [st_nextnode]
     greater than all of the registers and nodes appearing in the
     original function. This ensures that we can reuse the old param
-    registers, nodes, and instructions as-is because our new registers
-    and nodes won't collide with them. *)
+    registers, nodes, and instructions without modification because
+    any new registers and nodes won't collide with them. *)
 Program Definition init_state (f : function) : state :=
   mkstate
     (max_reg (code_regs f.(fn_code)) + 1)
