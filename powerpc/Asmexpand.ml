@@ -182,7 +182,7 @@ let expand_builtin_memcpy sz al args =
     match args with [d; s] -> (d, s) | _ -> assert false in
   if sz <= (if !Clflags.option_ffpu && al >= 4
             then if !Clflags.option_Osize then 35 else 51
-	    else if !Clflags.option_Osize then 19 else 27)
+      else if !Clflags.option_Osize then 19 else 27)
   then expand_builtin_memcpy_small sz al src dst
   else expand_builtin_memcpy_big sz al src dst
 

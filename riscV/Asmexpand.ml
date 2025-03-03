@@ -625,29 +625,29 @@ let expand_builtin_inline name args res =
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = ah) rl
-			(fun rl ->
+      (fun rl ->
                          emit (Psltuw (X1, X0, X al));
-			 emit (Psubw (rl, X0, X al));
-			 emit (Psubw (rh, X0, X ah));
-			 emit (Psubw (rh, X rh, X X1)))
+       emit (Psubw (rl, X0, X al));
+       emit (Psubw (rh, X0, X ah));
+       emit (Psubw (rh, X rh, X X1)))
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = bl || rl = ah || rl = bh) rl
-			(fun rl ->
-			 emit (Paddw (rl, X al, X bl));
+      (fun rl ->
+       emit (Paddw (rl, X al, X bl));
                          emit (Psltuw (X1, X rl, X bl));
-			 emit (Paddw (rh, X ah, X bh));
-			 emit (Paddw (rh, X rh, X X1)))
+       emit (Paddw (rh, X ah, X bh));
+       emit (Paddw (rh, X rh, X X1)))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = ah || rl = bh) rl
-			(fun rl ->
+      (fun rl ->
                          emit (Psltuw (X1, X al, X bl));
-			 emit (Psubw (rl, X al, X bl));
-			 emit (Psubw (rh, X ah, X bh));
-			 emit (Psubw (rh, X rh, X X1)))
+       emit (Psubw (rl, X al, X bl));
+       emit (Psubw (rh, X ah, X bh));
+       emit (Psubw (rh, X rh, X X1)))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = a || rl = b) rl
