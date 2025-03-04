@@ -31,7 +31,7 @@ Lemma transf_program_match:
   forall prog tprog, transf_program prog = OK tprog -> match_prog prog tprog.
 Proof.
   intros. eapply match_transform_partial_program_contextual; eauto.
-Qed.  
+Qed.
 
 Section PRESERVATION.
   Variable prog: program.
@@ -295,7 +295,7 @@ Section PRESERVATION.
             { intro HC; inv HC; try lia; destruct H6. }
             constructor; auto; constructor. }
           destruct Hin' as [? | Hin']; try contradiction.
-          rewrite PMap.gso in Hr1'; auto.            
+          rewrite PMap.gso in Hr1'; auto.
     - simpl.
       apply Forall_forall; intros r1 Hin r2 r3 Hr1.
       inv s0; simpl in *; unfold Ple in *.
@@ -386,7 +386,7 @@ Section PRESERVATION.
     intros Hinv Hused; apply Hinv in Hused.
     destruct (rm # r); intuition.
   Qed.
-  
+
   Lemma rs_args_rs'_args c rm args rs rs' :
     rm_inv c rm rs rs' ->
     Forall (reg_used_in_code c) args ->
@@ -470,7 +470,7 @@ Section PRESERVATION.
     Memory.Mem.storev chunk m a rs # src = Some v ->
     Memory.Mem.storev chunk m a rs' # src = Some v.
   Proof. intros Hinv Hused Hstore; erewrite <- rm_inv_get; eauto. Qed.
-                                               
+
   Lemma match_regs_1_2_eval_operation c sp op rm args1 args2 args3 rs rs' m v :
     rm_inv c rm rs rs' ->
     Forall (reg_used_in_code c) args1 ->
@@ -799,7 +799,7 @@ Section PRESERVATION.
   (*   apply reg_used_in_code_in_elements_code_regs; *)
   (*     eexists; eexists; split; eauto; solve [constructor; auto]. *)
   (* Qed. *)
-  
+
   (* forall r, Val.has_type (rs#r) (env r). *)
 
   Definition is_defined (v : val) : Prop :=
@@ -807,7 +807,7 @@ Section PRESERVATION.
     | Vundef => False
     | _ => True
     end.
-  
+
   (* Lemma int_canon v : *)
   (* Val.has_type v Tint -> *)
   (* is_defined v -> *)
@@ -842,7 +842,7 @@ Section PRESERVATION.
     - exists i; reflexivity.
     - congruence.
   Qed.
-  
+
   Lemma long_canon_32 v :
     Archi.ptr64 = false ->
     Val.has_type v Tlong ->
@@ -866,7 +866,7 @@ Section PRESERVATION.
     - left; exists i; reflexivity.
     - right; exists b, i; reflexivity.
   Qed.
-  
+
   Lemma single_canon v :
     Val.has_type v Tsingle ->
     is_defined v ->
@@ -1042,7 +1042,7 @@ Section PRESERVATION.
         apply star_refl.
       - intro; reflexivity. }
   Qed.
-    
+
   (* Lemma maj_voteR_step *)
   (*   r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m : *)
   (*   is_actual_type ty -> *)
@@ -1114,7 +1114,7 @@ Section PRESERVATION.
   (*       destruct Hty as [f Hf]. *)
   (*       rewrite Hf in Hr12. *)
   (*       inv Hr12. } *)
-    
+
   (*   destruct (eval_condition (comp_of_typ ty Cne) rs ## [r1; r2] m) eqn:Hr12. *)
   (*   2: { simpl in Hr12. *)
   (*        rewrite <- Hr2 in Hr12. *)
@@ -1243,53 +1243,6 @@ Section PRESERVATION.
       right; eapply kdfg; eauto.
   Qed.
 
-  Lemma eval_addressing_vundef sp addr a vs :
-    eval_addressing ge sp addr vs = Some a ->
-    In Vundef vs ->
-    a = Vundef.
-  Proof.
-    intros Heval Hin.
-    unfold eval_addressing in Heval.
-    unfold eval_addressing64 in Heval.
-    unfold eval_addressing32 in Heval.
-    destruct Archi.ptr64.
-    - destruct vs eqn:Hvs; inv Hin.
-      + destruct addr; try congruence.
-        * destruct l; inv Heval; reflexivity.
-        * destruct l; inv Heval; destruct l; inv H0; reflexivity.
-        * destruct l; inv Heval; reflexivity.
-        * destruct l; inv Heval; destruct l; inv H0; reflexivity.
-      + destruct addr; try congruence; destruct l; inv Heval.
-        * inv H.
-        * destruct l; inv H1.
-          inv H.
-          { rewrite (Val.addl_commut v Vundef); reflexivity. }
-          inv H0.
-        * inv H.
-        * destruct l; inv H1.
-          inv H; simpl.
-          { rewrite Val.addl_commut; reflexivity. }
-          inv H0.
-    - destruct vs eqn:Hvs; inv Hin.
-      + destruct addr; try congruence.
-        * destruct l; inv Heval; reflexivity.
-        * destruct l; inv Heval; destruct l; inv H0; reflexivity.
-        * destruct l; inv Heval; reflexivity.
-        * destruct l; inv Heval; destruct l; inv H0; reflexivity.
-        * destruct l; inv Heval.
-          rewrite Val.add_commut; reflexivity.
-        * destruct l; inv Heval.
-          rewrite Val.add_commut; reflexivity.
-      + destruct addr; try congruence; destruct l; inv Heval; inv H.
-        * destruct l; inv H1.
-          { rewrite (Val.add_commut v Vundef); reflexivity. }
-        * destruct l; inv H1.
-          inv H0.
-        * destruct l; inv H1.
-          rewrite Val.add_commut; reflexivity.
-        * destruct l; inv H1; inv H0.
-  Qed.
-
   Lemma eval_addressing_in_args_vundef sp addr rs a args r :
     eval_addressing ge sp addr rs ## args = Some a ->
     In r args ->
@@ -1338,7 +1291,7 @@ Section PRESERVATION.
   (*         eapply Memory.Mem.valid_access_implies in Hstore. *)
   (*         { eapply Memory.Mem.valid_access_perm in Hstore. *)
   (*           apply Memory.Mem.valid_pointer_nonempty_perm in Hstore. *)
-            
+
 
   (*         unfold Memory.Mem.valid_pointer. *)
   (*         destruct (Memory.Mem.perm_dec m b (Ptrofs.unsigned i) Memtype.Cur Memtype.Nonempty) eqn:H0; simpl. *)
@@ -1347,13 +1300,13 @@ Section PRESERVATION.
   (*         destruct (Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1)) eqn:H1. *)
   (*         { reflexivity. } *)
   (*         apply Memory.Mem.valid_pointer_nonempty_perm. *)
-          
-          
+
+
   (*         apply Memory.Mem.store_valid_access_3 in Hstore. *)
   (*         unfold Memory.Mem.valid_access in Hstore. *)
   (*         destruct Hstore. *)
   (*         Memory.Mem.valid_pointer *)
-          
+
   (*         eapply Memory.Mem.valid_access_perm in Hstore. *)
   (*         Memory.Mem.valid_pointer_nonempty_perm in Hstore. *)
   (*         rewrite <- Memory.Mem.valid_pointer_valid_access in Hstore. *)
@@ -1386,7 +1339,7 @@ Section PRESERVATION.
     (* assert (Hwt2: wt_state s2). *)
     (* { eapply subject_reduction; eauto. *)
     (*   apply wt_program_prog. } *)
-    
+
     (* inv Hmatch. *)
     inv Hstep.
 
@@ -1697,7 +1650,7 @@ Section PRESERVATION.
       destruct H10 as (rs'' & H10 & Hrs'').
       eexists; split.
       + eapply star_plus_trans.
-        { apply H10. }        
+        { apply H10. }
         2: { reflexivity. }
         econstructor.
         2: { apply star_refl. }
@@ -1841,7 +1794,7 @@ Section PRESERVATION.
       apply Hc.
       specialize (H17 p'); destruct H17; congruence.
   Qed.
-  
+
   Lemma copy_paramsR_match_entrypoint rm params entrypoint n c :
     copy_paramsR rm c params n entrypoint ->
     match_entrypoint rm c params n entrypoint.
