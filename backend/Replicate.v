@@ -19,7 +19,7 @@
 
   We use the state+error monad from [backend/RTLgen.v]. Each function
   in the program is translated by a separate monadic computation that
-  builds up the result program in the [fn_code] field of the state.
+  builds up the result code in the [fn_code] field of the state.
 *)
 
 Require Import
@@ -95,12 +95,19 @@ Fixpoint maj_vote_regs
       maj_vote re r1 r2 r3 succ
   end.
 
+Fixpoint builtin_arg_regs (arg : builtin_arg reg) : list reg :=
+  match arg with
+  | BA r => [r]
+  | BA_splitlong hi lo => builtin_arg_regs hi ++ builtin_arg_regs lo
+  | BA_addptr a1 a2 => builtin_arg_regs a1 ++ builtin_arg_regs a2
+  | _ => []
+  end.
+
 (** Pull out registers from builtin_args. *)
 Fixpoint builtin_args_regs (args : list (builtin_arg reg)) : list reg :=
   match args with
   | [] => []
-  | BA r :: rest => r :: builtin_args_regs rest
-  | _ :: rest => builtin_args_regs rest
+  | ba :: rest => builtin_arg_regs ba ++ builtin_args_regs rest
   end.
 
 Definition args_of_instruction (instr : instruction) : list reg :=
@@ -375,8 +382,8 @@ Definition transf_fun (re : regenv) (f : function) : mon node :=
 (** Initialize the generator state with [st_nextreg] and [st_nextnode]
     greater than all of the registers and nodes appearing in the
     original function. This ensures that we can reuse the old param
-    registers, nodes, and instructions without modification because
-    any new registers and nodes won't collide with them. *)
+    registers, nodes, and instructions without modification and any
+    new registers and nodes won't collide with them. *)
 Program Definition init_state (f : function) : state :=
   mkstate
     (max_reg (fun_regs f) + 1)
@@ -395,7 +402,7 @@ Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
                                     fn_entrypoint := entrypoint |}
   end.
 
-(** Transform a function [f] by:
+(** Transform a function [f]:
 
     1) typecheck the function to obtain the register typing context [re],
 
