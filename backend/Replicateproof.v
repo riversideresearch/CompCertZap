@@ -1000,41 +1000,18 @@ Section PRESERVATION.
     2: { simpl in Hr12.
          rewrite <- Hr2 in Hr12.
          apply Hcond in Hr12; contradiction. }
-    destruct (eval_condition (comp_of_typ ty Ceq) rs ## [r2; r3] m) eqn:Hr23.
-    2: { simpl in Hr23.
-         rewrite <- Hr3 in Hr23.
-         rewrite <- Hr2 in Hr23.
-         apply Hcond in Hr23; contradiction. }
-    destruct b, b0.
+    destruct b.
     { eexists; split.
       - econstructor.
-        { eapply exec_Icond; eauto. }
-        2: { reflexivity. }
-        eapply star_step.
         { eapply exec_Icond; eauto. }
         2: { reflexivity. }
         eapply star_step.
         { eapply exec_Iop. eauto.
           reflexivity. }
-        2: { reflexivity. }
-        rewrite <- Hr2.
+        rewrite <- Hr3, <- Hr2.
         apply star_refl.
+        reflexivity.
       - intro r; rewrite PMap.gsident; reflexivity. }
-    { eexists; split.
-      - econstructor.
-        { eapply exec_Icond; eauto. }
-        2: { reflexivity. }
-        eapply star_step.
-        { eapply exec_Icond; eauto. }
-        2: { reflexivity. }
-        apply star_refl.
-      - intro; reflexivity. }
-    { eexists; split.
-      - econstructor.
-        { eapply exec_Icond; eauto. }
-        2: { reflexivity. }
-        apply star_refl.
-      - intro; reflexivity. }
     { eexists; split.
       - econstructor.
         { eapply exec_Icond; eauto. }

@@ -58,12 +58,12 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
             | Tany64 => error (MSG "unexpected Tany64 instruction at pc: "
                                 :: POS pc :: nil)
             end;
-  do n1 <- reserve_instr;
-  do n2 <- reserve_instr;
+  do n <- reserve_instr;
+  (* do n2 <- reserve_instr; *)
   do succ <- reserve_instr;
-  do _ <- update_instr pc (Icond (comp Cne) [r1; r2] n1 succ);
-  do _ <- update_instr n1 (Icond (comp Ceq) [r2; r3] n2 succ);
-  do _ <- update_instr n2 (Iop Omove [r2] r1 succ);
+  do _ <- update_instr pc (Icond (comp Cne) [r1; r2] n succ);
+  (* do _ <- update_instr n1 (Icond (comp Ceq) [r2; r3] n2 succ); *)
+  do _ <- update_instr n (Iop Omove [r3] r1 succ);
   ret succ.
 
 (** Emit code for majority voting the list of registers [reg]. [re] is

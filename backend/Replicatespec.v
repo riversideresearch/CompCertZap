@@ -103,11 +103,10 @@ Definition is_actual_type (ty : typ) : Prop :=
 
 Inductive maj_voteR (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop :=
 | maj_vote_1 :
-  forall n1 n2,
+  forall n,
     is_actual_type ty ->
-    c ! pc = Some (Icond (comp_of_typ ty Cne) [r1; r2] n1 succ) ->
-    c ! n1 = Some (Icond (comp_of_typ ty Ceq) [r2; r3] n2 succ) ->
-    c ! n2 = Some (Iop Omove [r2] r1 succ) ->
+    c ! pc = Some (Icond (comp_of_typ ty Cne) [r1; r2] n succ) ->
+    c ! n = Some (Iop Omove [r3] r1 succ) ->
     maj_voteR c ty r1 r2 r3 pc succ.
 
 (* Fixpoint maj_vote_regs *)
@@ -241,12 +240,10 @@ Lemma state_incr_maj_voteR s s' ty r1 r2 r3 pc succ :
 Proof.
   intros Hty Hle Hmaj; inv Hmaj.
   destruct (Hle pc) as [?|Hpc]; try congruence.
-  destruct (Hle n1) as [?|Hn1]; try congruence.
-  destruct (Hle n2) as [?|Hn2]; try congruence.
+  destruct (Hle n) as [?|Hn]; try congruence.
   econstructor; auto.
   - rewrite Hpc; eauto.
-  - rewrite Hn1; eauto.
-  - rewrite Hn2; eauto.
+  - rewrite Hn; eauto.
 Qed.
 
 Lemma state_incr_maj_vote_regsR re rm p s s' rs n :
@@ -311,27 +308,18 @@ Proof.
   gen_case H1; inv H2.
   gen_case H2; inv H1.
   gen_case H1; inv H2.
-  gen_case H2; inv H1.
-  gen_case H1; inv H3.
-  gen_case H3; inv H1.
-  gen_case H1; inv H4.
-  gen_case H4; inv H1.
+  gen_case H2; inv H3.
+  gen_case H3; inv H2.
   unfold update_instr in *.
-  lr_case; try congruence; lr_case; inv H4.
   lr_case; try congruence; lr_case; inv H3.
+  lr_case; try congruence; lr_case; inv H1.
   simpl in *.
-  lr_case; try congruence; lr_case; inv H2.
-  simpl in *.
-  inv s9; inv s8; inv s7; inv s6; inv s5; inv s4; inv s3; inv s2; inv s1; inv pf.
+  inv s6; inv s5; inv s4; inv s3; inv s2; inv s1; inv pf.
   simpl in *; unfold Ple in *.
   assert (s.(st_nextnode) <= s'0.(st_nextnode)).
   { clear H0; inv s0; auto. }
-  eapply maj_vote_1 with (n1:=st_nextnode s'0)
-                         (n2:=Pos.succ (st_nextnode s'0)).
+  eapply maj_vote_1 with (n:=st_nextnode s'0).
   - destruct (re r1); inv H0; apply I.
-  - rewrite 2!PTree.gso; try lia.
-    rewrite PTree.gss.
-    destruct (re r1); inv H0; reflexivity.
   - rewrite PTree.gso; try lia.
     rewrite PTree.gss.
     destruct (re r1); inv H0; reflexivity.
@@ -349,15 +337,11 @@ Proof.
   gen_case H1; inv H2.
   gen_case H2; inv H1.
   gen_case H1; inv H2.
-  gen_case H2; inv H1.
-  gen_case H1; inv H3.
-  gen_case H3; inv H1.
-  gen_case H1; inv H4.
-  gen_case H4; inv H1.
+  gen_case H2; inv H3.
+  gen_case H3; inv H2.
   unfold update_instr in *.
-  lr_case; try congruence; lr_case; inv H4.
   lr_case; try congruence; lr_case; inv H3.
-  lr_case; try congruence; lr_case; inv H2.
+  lr_case; try congruence; lr_case; inv H1.
   simpl in *; lia.
 Qed.
 
@@ -407,10 +391,8 @@ Proof.
   econstructor; auto.
   - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc); subst; try congruence.
     rewrite PTree.gso; eauto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n n1); subst; try congruence.
-    rewrite PTree.gso; eauto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n n2); subst; try congruence.
-    rewrite PTree.gso; eauto.
+  - rewrite PTree.gso; eauto.
+    intro; subst; congruence.
 Qed.
 
 Lemma maj_vote_regsR_ptree_set c re rm rs pc succ n i :
