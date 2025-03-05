@@ -8,6 +8,7 @@ Require Import
   Integers
   Linking
   Maps
+  Memory
   Op
   Registers
   Replicate
@@ -101,7 +102,8 @@ Definition is_actual_type (ty : typ) : Prop :=
   | _ => True
   end.
 
-Inductive maj_voteR (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop :=
+Inductive maj_voteR
+  (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop :=
 | maj_vote_1 :
   forall n,
     is_actual_type ty ->
@@ -132,7 +134,8 @@ Inductive maj_vote_regsR c re rm : list reg -> node -> node -> Prop :=
     maj_vote_regsR c re rm (r1 :: args) pc succ
 .
 
-Inductive match_instr (re : regenv) (rm : PMap.t (reg * reg)) (pc : positive) (c : code)
+Inductive match_instr
+  (re : regenv) (rm : PMap.t (reg * reg)) (pc : positive) (c : code)
   : instruction -> Prop :=
 | match_inop :
   forall n,
@@ -227,7 +230,7 @@ Inductive match_fundef: fundef -> fundef -> Prop :=
 Lemma match_regs_map_rm rm l :
   match_regs rm l (map (fun r => fst rm # r) l) (map (fun r => snd rm # r) l).
 Proof.
-  induction l; simpl; constructor; auto.
+  induction l; constructor; auto.
   destruct (rm # a); reflexivity.
 Qed.
 
@@ -529,14 +532,16 @@ Proof.
       inv s12; inv s11; inv s10; inv s9; inv s8; inv s7;
         inv s6; inv s5; inv s4; inv s1; inv pf.
       simpl in *; unfold Ple in *.
-      econstructor.
-      { eauto. }
-      4: { rewrite PTree.gss; reflexivity. }
-      * repeat apply maj_vote_regsR_ptree_set; eauto.
+      destruct s3.
+      { admit. }
+      { econstructor.
+        { eauto. }
+        4: { rewrite PTree.gss; reflexivity. }
+        * repeat apply maj_vote_regsR_ptree_set; eauto.
       * rewrite 2!PTree.gso; try lia.
         rewrite PTree.gss; eauto.
       * rewrite PTree.gso; try lia.
-        rewrite PTree.gss; reflexivity.
+        rewrite PTree.gss; reflexivity. }
 
     + admit.
     + admit.
@@ -726,6 +731,10 @@ Inductive match_stackframe : stackframe -> stackframe -> Prop :=
 (*       Val.has_type v (proj_sig_res sg) -> *)
 (*       wt_state (Returnstate s v m). *)
 
+Definition valid_pointer m b ofs : Prop :=
+  Mem.valid_pointer m b (Ptrofs.unsigned ofs)
+  || Mem.valid_pointer m b (Ptrofs.unsigned ofs - 1) = true.
+
 Inductive match_states : state -> state -> Prop :=
 | match_regular_states :
   forall stk tstk f tf sp pc rs rs' m re rm
@@ -740,6 +749,9 @@ Inductive match_states : state -> state -> Prop :=
     (FUN : match_function re rm f tf)
     (RM : rm_inv f.(fn_code) rm rs rs')
     (RM_WF : rm_wf rm (fun_regs_list f)),
+    (* (PTR: forall r, reg_used_in_code f.(fn_code) r -> *)
+    (*            forall b ofs, rs # r = Vptr b ofs -> *)
+    (*                     valid_pointer m b ofs), *)
     (* (RM_EQ : replication_map f.(fn_params) f.(fn_code) (init_state f) = *)
     (*            RTLgen.OK rm s1 pf), *)
     match_states (State stk f sp pc rs m) (State tstk tf sp pc rs' m)

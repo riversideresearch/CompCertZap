@@ -1302,6 +1302,81 @@ Section PRESERVATION.
     repeat split; auto; rewrite <- Heq; auto.
   Qed.
 
+  (* Lemma asdfs sp op vs m b ofs : *)
+  (*   Forall (fun v => match v with *)
+  (*                 | Vptr b0 ofs0 => valid_pointer m b0 ofs0 *)
+  (*                 | _ => True *)
+  (*                 end) vs -> *)
+  (*   eval_operation ge sp op vs m = Some (Vptr b ofs) -> *)
+  (*   valid_pointer m b ofs. *)
+  (* Proof. *)
+  (*   intro Hall. *)
+  (*   unfold eval_operation. *)
+  (*   destruct op; try solve [destruct vs; congruence]; *)
+  (*     (* try solve [destruct vs; try congruence; *) *)
+  (*     (*            destruct vs; try congruence; *) *)
+  (*     (*            intro H; inv H; unfold Val.sign_ext in H1; *) *)
+  (*     (*            destruct v; congruence]; *) *)
+  (*     try solve [destruct vs; try congruence; *)
+  (*                destruct vs; try congruence; *)
+  (*                inv Hall; intro H; inv H; *)
+  (*                destruct v; simpl in *; congruence]. *)
+  (*   - destruct vs; try congruence. *)
+  (*     inv Hall. *)
+  (*     destruct vs; try congruence. *)
+  (*     intro H; inv H; auto. *)
+  (*   - destruct vs; try congruence. *)
+  (*     intro H; inv H. *)
+  (*     unfold Genv.symbol_address in H1. *)
+  (*     (* destruct (Genv.find_symbol ge id) eqn:Hsym; try congruence. *) *)
+  (*     (* inv H1. *) *)
+  (*     (* unfold valid_pointer. *) *)
+  (*     (* rewrite Ptrofs.unsigned_zero. *) *)
+  (*     (* simpl. *) *)
+  (*     (* apply orb_true_iff; left. *) *)
+  (*     admit. *)
+  (*   - destruct vs; try congruence. *)
+  (*     inv Hall. *)
+  (*     destruct vs; try congruence. *)
+  (*     inv H2. *)
+  (*     destruct vs; try congruence. *)
+  (*     intro H; inv H. *)
+  (*     destruct v; simpl in *; try congruence. *)
+  (*     destruct v0; simpl in *; try congruence. *)
+  (*     destruct v0; simpl in *; try congruence. *)
+  (*     + destruct Archi.ptr64; try congruence. *)
+  (*       inv H2. *)
+  (*       auto. *)
+  (*       valid_pointer *)
+  (*     destruct v; try contradiction. *)
+  (*     Val.sub *)
+  (*   (* - destruct vs; try congruence. *) *)
+  (*   (*   destruct vs; try congruence. *) *)
+  (*   (*   intro H; inv H. *) *)
+  (*   (*   unfold Val.sign_ext in H1. *) *)
+  (*   (*   destruct v; congruence. *) *)
+  (*   - destruct vs; try congruence. *)
+  (*     destruct vs; try congruence. *)
+  (*     intro H; inv H. *)
+  (*     unfold Val.zero_ext in H1. *)
+  (*     destruct v; congruence. *)
+  (*   (* - destruct vs; try congruence. *) *)
+  (*   (*   destruct vs; try congruence. *) *)
+  (*   (*   intro H; inv H. *) *)
+  (*   (*   unfold Val.sign_ext in H1. *) *)
+  (*     (*   destruct v; congruence. *) *)
+  (*   - destruct vs; try congruence. *)
+  (*     destruct vs; try congruence. *)
+  (*     intro H; inv H. *)
+  (*     unfold Val.zero_ext in H1. *)
+  (*     destruct v; congruence. *)
+  (*   - destruct vs; try congruence. *)
+  (*     destruct vs; try congruence. *)
+  (*     inv Hall. *)
+  (*     intro H; inv H. *)
+  (*     destruct v; simpl in *; congruence. *)
+  (*     unfold Val.neg in H1. *)
+
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
     forall ts1,
@@ -1458,6 +1533,14 @@ Section PRESERVATION.
               specialize (RM _ Hused); rewrite Hr in RM; intuition.
             - specialize (RM _ Hused); rewrite Hr in RM; intuition.
             - specialize (RM _ Hused); rewrite Hr in RM; intuition. }
+        (* * intros r Hused b ofs Heq. *)
+        (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec res r); subst. *)
+          (*   { (* rewrite PMap.gss in Heq; subst. *) *)
+          (*   (* eval_operation ge sp op rs ## args m = Some (Vptr b ofs) *) *)
+          (*   (*                                          valid_pointer m b ofs *) *)
+          (*   admit. } *)
+          (* rewrite PMap.gso in Heq; auto. *)
+          (* eapply PTR; eauto. *)
 
     - (* exec_Iload *)
       inv Hmatch.
@@ -1587,6 +1670,8 @@ Section PRESERVATION.
               specialize (RM _ Hused); rewrite Hr in RM; intuition.
             - specialize (RM _ Hused); rewrite Hr in RM; intuition.
             - specialize (RM _ Hused); rewrite Hr in RM; intuition. }
+        (* * intros r Hused b ofs Heq. *)
+        (*   admit. *)
 
     - (* exec_Istore *)
       inv Hmatch.
@@ -1641,8 +1726,10 @@ Section PRESERVATION.
           eapply rm_inv_storev; eauto.
           eexists; eexists; split; eauto; solve [constructor].
       + econstructor; eauto.
-        econstructor; eauto.
-        eapply rm_inv_ext_r; eauto.
+        * econstructor; eauto.
+        * eapply rm_inv_ext_r; eauto.
+        (* * intros r Hused b ofs Heq. *)
+        (*   admit. *)
 
     - (* exec_Icall *)
 
