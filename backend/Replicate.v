@@ -282,26 +282,26 @@ Definition PSet_of_option (x : option positive) : PSet.t :=
 (* TODO: relate to instr_uses and instr_defined? *)
 Definition instr_regs (i : instruction) : PSet.t :=
   match i with
-  | Inop s => PSet.empty
-  | Iop op args res s =>
+  | Inop _ => PSet.empty
+  | Iop _ args res _ =>
       PSet.union (PSet_of_list args) (PSet.singleton res)
-  | Iload chunk addr args dst s =>
+  | Iload _ _ args dst _ =>
       PSet.union (PSet_of_list args) (PSet.singleton dst)
-  | Istore chunk addr args src s =>
+  | Istore _ _ args src _ =>
       PSet.union (PSet_of_list args) (PSet.singleton src)
-  | Icall sig (inl r) args res s =>
+  | Icall _ (inl r) args res _ =>
+      PSet.union (PSet_of_list (r :: args)) (PSet.singleton res)
+  | Icall _ _ args res _ =>
       PSet.union (PSet_of_list args) (PSet.singleton res)
-  | Icall sig (inr id) args res s =>
-      PSet.union (PSet_of_list args) (PSet.singleton res)
-  | Itailcall sig (inl r) args => PSet_of_list args
-  | Itailcall sig (inr id) args => PSet_of_list args
-  | Ibuiltin ef args res s =>
+  | Itailcall _ (inl r) args => PSet_of_list (r :: args)
+  | Itailcall _ _ args => PSet_of_list args
+  | Ibuiltin _ args res _ =>
       PSet.union (PSet_of_list (builtin_args_regs args))
         (PSet_of_option (reg_of_builtin_res res))
-  | Icond cond args ifso ifnot => PSet_of_list args
-  | Ijumptable arg tbl => PSet.singleton arg
-  | Ireturn None => PSet.empty
+  | Icond _ args _ _ => PSet_of_list args
+  | Ijumptable arg _ => PSet.singleton arg
   | Ireturn (Some arg) => PSet.singleton arg
+  | Ireturn None => PSet.empty
   end.
 
 (** All registers that appear in the given code (used in
@@ -353,10 +353,7 @@ Definition max_reg (regs : PSet.t) :=
 (** Build replication map (mapping each register to a pair of
     corresponding shadow registers) for a function with parameters
     [params] and code body [c]. *)
-  (* Definition replication_map (params : list reg) (c : code) *)
 Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
-  (* let regs := *)
-  (*   (PSet.elements (PSet.union (PSet_of_list params) (code_regs c))) in *)
   foldM (fun rm r1 =>
            do r2 <- new_reg;
            do r3 <- new_reg;
@@ -375,7 +372,6 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
        instructions were inserted at the front).
 *)
 Definition transf_fun (re : regenv) (f : function) : mon node :=
-  (* do rm <- replication_map f.(fn_params) f.(fn_code); *)
   do rm <- replication_map f;
   do entry_point <- copy_params rm f.(fn_params) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);

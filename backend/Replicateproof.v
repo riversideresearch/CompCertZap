@@ -663,6 +663,8 @@ Section PRESERVATION.
     - inv Hused; simpl; try destruct fn;
         try solve [apply PSet.union_3, PSet.union_3, PSet.singleton_2; reflexivity];
         try solve [apply PSet.union_3, PSet.union_2, in_pset_of_list; auto].
+      + apply PSet.union_3; apply PSet.union_2; apply PSet.add_1; reflexivity.
+      + apply PSet.union_3, PSet.union_2,  PSet.add_2, in_pset_of_list; assumption.
     - inv Hused; simpl;
         solve [apply PSet.union_2; eapply IHl; eauto; constructor; auto].
   Qed.

@@ -671,6 +671,8 @@ Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
     reg_used_in_instr r (Istore chunk addr args src succ)
 | reg_used_istore_src : forall chunk addr args succ,
     reg_used_in_instr r (Istore chunk addr args r succ)
+| reg_used_icall_fn : forall sig args dst succ,
+    reg_used_in_instr r (Icall sig (inl r) args dst succ)
 | reg_used_icall_args : forall sig fn args dst succ,
     In r args ->
     reg_used_in_instr r (Icall sig fn args dst succ)
