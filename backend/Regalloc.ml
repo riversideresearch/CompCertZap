@@ -734,52 +734,93 @@ let rec add_interfs_block g blk live =
       add_interfs_instr g instr live';
       live_before instr live'
 
-let vars_of_reg tyenv (r : Registers.reg) : var list =
-  if Archi.splitlong && tyenv r = Tlong then
-    [V (r, Tint); V (twin_reg r, Tint)]
-  else
-    [V (r, tyenv r)]
+(* let vars_of_reg tyenv (r : Registers.reg) : var list = *)
+(*   if Archi.splitlong && tyenv r = Tlong then *)
+(*     [V (r, Tint); V (twin_reg r, Tint)] *)
+(*   else *)
+(*     [V (r, tyenv r)] *)
 
-let cartesian xs ys =
-  List.concat (List.map (fun x -> List.map (fun y -> (x, y)) ys) xs)
+(* let cartesian xs ys = *)
+(*   List.concat (List.map (fun x -> List.map (fun y -> (x, y)) ys) xs) *)
 
-(** Add replication map interference edges preventing registers from
-    being coalesced with their shadow copies. *)
-let add_rm_interfs g (rmo : (Registers.reg * Registers.reg) PMap.t option) tyenv =
-  match rmo with
-  | Some rm ->
-     List.iter (fun (r1, (r2, r3)) ->
+(* (\** Add replication map interference edges preventing registers from *)
+(*     being coalesced with their shadow copies. *\) *)
+(* let add_rm_interfs g (rmo : (Registers.reg * Registers.reg) PMap.t option) *)
+(*       tyenv (maps : Solver.L.t Maps.PMap.t) = *)
+(*   match rmo with *)
+(*   | Some rm -> *)
+(*      (\* List.iter (fun (r1, (r2, r3)) -> *\) *)
          
-         (* let r1_vars = vars_of_reg tyenv r1 in *)
-         (* List.iter (fun (_, (r2', r3')) -> *)
-         (*     let r2'_vars = vars_of_reg tyenv r2' in *)
-         (*     List.iter (fun (x, y) -> add_interf g x y) @@ *)
-         (*       cartesian r1_vars r2'_vars; *)
-         (*     let r3'_vars = vars_of_reg tyenv r3' in *)
-         (*     List.iter (fun (x, y) -> add_interf g x y) @@ *)
-         (*       cartesian r1_vars r3'_vars; *)
-         (*   ) @@ PTree.elements (snd rm); *)
-         (* let r2_vars = vars_of_reg tyenv r2 in *)
-         (* List.iter (fun (_, (_, r3')) -> *)
-         (*     let r3'_vars = vars_of_reg tyenv r3' in *)
-         (*     List.iter (fun (x, y) -> add_interf g x y) @@ *)
-         (*       cartesian r2_vars r3'_vars; *)
-         (*   ) @@ PTree.elements (snd rm); *)
+(*      (\*     (\\* let r1_vars = vars_of_reg tyenv r1 in *\\) *\) *)
+(*      (\*     (\\* List.iter (fun (_, (r2', r3')) -> *\\) *\) *)
+(*      (\*     (\\*     let r2'_vars = vars_of_reg tyenv r2' in *\\) *\) *)
+(*      (\*     (\\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\\) *\) *)
+(*      (\*     (\\*       cartesian r1_vars r2'_vars; *\\) *\) *)
+(*      (\*     (\\*     let r3'_vars = vars_of_reg tyenv r3' in *\\) *\) *)
+(*      (\*     (\\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\\) *\) *)
+(*      (\*     (\\*       cartesian r1_vars r3'_vars; *\\) *\) *)
+(*      (\*     (\\*   ) @@ PTree.elements (snd rm); *\\) *\) *)
+(*      (\*     (\\* let r2_vars = vars_of_reg tyenv r2 in *\\) *\) *)
+(*      (\*     (\\* List.iter (fun (_, (_, r3')) -> *\\) *\) *)
+(*      (\*     (\\*     let r3'_vars = vars_of_reg tyenv r3' in *\\) *\) *)
+(*      (\*     (\\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\\) *\) *)
+(*      (\*     (\\*       cartesian r2_vars r3'_vars; *\\) *\) *)
+(*      (\*     (\\*   ) @@ PTree.elements (snd rm); *\\) *\) *)
          
-         let r1_vars = vars_of_reg tyenv r1 in
-         let r2_vars = vars_of_reg tyenv r2 in
-         let r3_vars = vars_of_reg tyenv r3 in
-         List.iter (fun (x, y) -> add_interf g x y) @@
-           cartesian r1_vars r2_vars;
-         List.iter (fun (x, y) -> add_interf g x y) @@
-           cartesian r1_vars r3_vars;
-         List.iter (fun (x, y) -> add_interf g x y) @@
-           cartesian r2_vars r3_vars
+(*      (\*     let r1_vars = vars_of_reg tyenv r1 in *\) *)
+(*      (\*     let r2_vars = vars_of_reg tyenv r2 in *\) *)
+(*      (\*     let r3_vars = vars_of_reg tyenv r3 in *\) *)
+(*      (\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\) *)
+(*      (\*       cartesian r1_vars r2_vars; *\) *)
+(*      (\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\) *)
+(*      (\*       cartesian r1_vars r3_vars; *\) *)
+(*      (\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\) *)
+(*      (\*       cartesian r2_vars r3_vars *\) *)
 
-       ) @@ PTree.elements (snd rm)
-  | None -> ()
+(*   (\*   ) @@ PTree.elements (snd rm) *\) *)
 
-let find_coloring f liveness tyenv =
+(*      List.iter (fun (_pc, map) -> *)
+         
+(*          List.iter (fun (r1, (r2, r3)) -> *)
+(*              begin *)
+(*                match RMap.find_opt r1 map, RMap.find_opt r2 map with *)
+(*                | Some x, Some y -> *)
+(*                   let x_vars = vars_of_reg tyenv x.source in *)
+(*                   let y_vars = vars_of_reg tyenv y.source in *)
+(*                   List.iter (fun (a, b) -> *)
+(*                       add_interf g a b *)
+(*                     ) @@ cartesian x_vars y_vars *)
+(*                | _ -> () *)
+(*              end; *)
+
+(*              begin *)
+(*                match RMap.find_opt r1 map, RMap.find_opt r3 map with *)
+(*                | Some x, Some y -> *)
+(*                   let x_vars = vars_of_reg tyenv x.source in *)
+(*                   let y_vars = vars_of_reg tyenv y.source in *)
+(*                   List.iter (fun (a, b) -> *)
+(*                       add_interf g a b *)
+(*                     ) @@ cartesian x_vars y_vars *)
+(*                | _ -> () *)
+(*              end; *)
+
+(*              begin *)
+(*                match RMap.find_opt r2 map, RMap.find_opt r3 map with *)
+(*                | Some x, Some y -> *)
+(*                   let x_vars = vars_of_reg tyenv x.source in *)
+(*                   let y_vars = vars_of_reg tyenv y.source in *)
+(*                   List.iter (fun (a, b) -> *)
+(*                       add_interf g a b *)
+(*                     ) @@ cartesian x_vars y_vars *)
+(*                | _ -> () *)
+(*              end *)
+                    
+(*            ) @@ PTree.elements (snd rm) *)
+
+(*        ) @@ PTree.elements (snd maps) *)
+(* | None -> () *)
+
+let find_coloring f liveness tyenv maps =
   (*type_function f;  (* for debugging *)*)
 
   let g = IRC.init (spill_costs f) in
@@ -789,10 +830,10 @@ let find_coloring f liveness tyenv =
   add_interfs_destroyed g
     (transfer_live f f.fn_entrypoint (PMap.get f.fn_entrypoint liveness))
     destroyed_at_function_entry;
-  add_rm_interfs g f.fn_rm tyenv;
+  (* add_rm_interfs g f.fn_rm tyenv maps; *)
   IRC.coloring g
 
-
+
 (*********** Determination of variables that need spill code insertion *****)
 
 let is_reg alloc v =
@@ -1200,20 +1241,20 @@ let transl_function fn alloc =
 
 exception Timeout
 
-let rec first_round f liveness tyenv =
-  let alloc = find_coloring f liveness tyenv in
+let rec first_round f liveness tyenv maps =
+  let alloc = find_coloring f liveness tyenv maps in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- After initial register allocation\n\n";
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f
   end;
   let ts = tospill_function f alloc in
-  if VSet.is_empty ts then success f alloc else more_rounds f ts 1 tyenv
+  if VSet.is_empty ts then success f alloc else more_rounds f ts 1 tyenv maps
 
-and more_rounds f ts count tyenv =
+and more_rounds f ts count tyenv maps =
   if count >= 40 then raise Timeout;
   let f' = spill_function f ts count in
   let liveness = liveness_analysis f' in
-  let alloc = find_coloring f' liveness tyenv in
+  let alloc = find_coloring f' liveness tyenv maps in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- After register allocation (round %d)\n\n" count;
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f'
@@ -1227,7 +1268,7 @@ and more_rounds f ts count tyenv =
       VSet.iter (fun v -> fprintf !pp "%a " PrintXTL.var v) ts';
       fprintf !pp "\n\n"
     end;
-    more_rounds f (VSet.union ts ts') (count + 1) tyenv
+    more_rounds f (VSet.union ts ts') (count + 1) tyenv maps
   end
 
 and success f alloc =
@@ -1242,25 +1283,25 @@ and success f alloc =
 let regalloc f =
   init_trace();
   reset_temps();
-  let f1 = Splitting.rename_function f in
+  let f1, maps = Splitting.rename_function f in
   match RTLtyping.type_function f1 with
   | Errors.Error msg ->
-      Errors.Error(Errors.MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
+     Errors.Error(Errors.MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
   | Errors.OK tyenv ->
-      let f2 = function_of_RTL_function f1 tyenv in
-      let liveness = liveness_analysis f2 in
-      let f3 = dead_code_elimination f2 liveness in
-      if !option_dalloctrace then begin
-        fprintf !pp "-------------- Initial XTL\n\n";
-        PrintXTL.print_function !pp f3
-      end;
-      try
-        Errors.OK(first_round f3 liveness tyenv)
-      with
-      | Timeout ->
-          Errors.Error(Errors.msg (coqstring_of_camlstring "spilling fails to converge"))
-      | Type_error_at pc ->
-          Errors.Error [Errors.MSG(coqstring_of_camlstring "ill-typed XTL code at PC ");
-                 Errors.POS pc]
-      | Bad_LTL ->
-          Errors.Error(Errors.msg (coqstring_of_camlstring "bad LTL after spilling"))
+     let f2 = function_of_RTL_function f1 tyenv in
+     let liveness = liveness_analysis f2 in
+     let f3 = dead_code_elimination f2 liveness in
+     if !option_dalloctrace then begin
+         fprintf !pp "-------------- Initial XTL\n\n";
+         PrintXTL.print_function !pp f3
+       end;
+     try
+       Errors.OK(first_round f3 liveness tyenv maps)
+     with
+     | Timeout ->
+        Errors.Error(Errors.msg (coqstring_of_camlstring "spilling fails to converge"))
+     | Type_error_at pc ->
+        Errors.Error [Errors.MSG(coqstring_of_camlstring "ill-typed XTL code at PC ");
+                      Errors.POS pc]
+     | Bad_LTL ->
+        Errors.Error(Errors.msg (coqstring_of_camlstring "bad LTL after spilling"))

@@ -184,4 +184,4 @@ let rename_function f =
     fn_stacksize = f.fn_stacksize;
     fn_code = PTree.map (ren_instr f maps) f.fn_code;
     fn_entrypoint = f.fn_entrypoint;
-    fn_rm = f.fn_rm }
+    fn_rm = f.fn_rm }, maps
