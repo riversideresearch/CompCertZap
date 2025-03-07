@@ -326,7 +326,8 @@ let function_of_RTL_function f tyenv =
   { fn_sig = f.RTL.fn_sig;
     fn_stacksize = f.RTL.fn_stacksize;
     fn_entrypoint = pc_entrypoint;
-    fn_code = PTree.set pc_entrypoint b_entrypoint xc }
+    fn_code = PTree.set pc_entrypoint b_entrypoint xc;
+    fn_rm = f.RTL.fn_rm }
 
 
 (***************** Liveness analysis *****************)
@@ -733,8 +734,54 @@ let rec add_interfs_block g blk live =
       add_interfs_instr g instr live';
       live_before instr live'
 
-let find_coloring f liveness =
+let vars_of_reg tyenv (r : Registers.reg) : var list =
+  if Archi.splitlong && tyenv r = Tlong then
+    [V (r, Tint); V (twin_reg r, Tint)]
+  else
+    [V (r, tyenv r)]
+
+let cartesian xs ys =
+  List.concat (List.map (fun x -> List.map (fun y -> (x, y)) ys) xs)
+
+(** Add replication map interference edges preventing registers from
+    being coalesced with their shadow copies. *)
+let add_rm_interfs g (rmo : (Registers.reg * Registers.reg) PMap.t option) tyenv =
+  match rmo with
+  | Some rm ->
+     List.iter (fun (r1, (r2, r3)) ->
+         
+         (* let r1_vars = vars_of_reg tyenv r1 in *)
+         (* List.iter (fun (_, (r2', r3')) -> *)
+         (*     let r2'_vars = vars_of_reg tyenv r2' in *)
+         (*     List.iter (fun (x, y) -> add_interf g x y) @@ *)
+         (*       cartesian r1_vars r2'_vars; *)
+         (*     let r3'_vars = vars_of_reg tyenv r3' in *)
+         (*     List.iter (fun (x, y) -> add_interf g x y) @@ *)
+         (*       cartesian r1_vars r3'_vars; *)
+         (*   ) @@ PTree.elements (snd rm); *)
+         (* let r2_vars = vars_of_reg tyenv r2 in *)
+         (* List.iter (fun (_, (_, r3')) -> *)
+         (*     let r3'_vars = vars_of_reg tyenv r3' in *)
+         (*     List.iter (fun (x, y) -> add_interf g x y) @@ *)
+         (*       cartesian r2_vars r3'_vars; *)
+         (*   ) @@ PTree.elements (snd rm); *)
+         
+         let r1_vars = vars_of_reg tyenv r1 in
+         let r2_vars = vars_of_reg tyenv r2 in
+         let r3_vars = vars_of_reg tyenv r3 in
+         List.iter (fun (x, y) -> add_interf g x y) @@
+           cartesian r1_vars r2_vars;
+         List.iter (fun (x, y) -> add_interf g x y) @@
+           cartesian r1_vars r3_vars;
+         List.iter (fun (x, y) -> add_interf g x y) @@
+           cartesian r2_vars r3_vars
+
+       ) @@ PTree.elements (snd rm)
+  | None -> ()
+
+let find_coloring f liveness tyenv =
   (*type_function f;  (* for debugging *)*)
+
   let g = IRC.init (spill_costs f) in
   PTree.fold
     (fun () pc blk -> ignore (add_interfs_block g blk (PMap.get pc liveness)))
@@ -742,6 +789,7 @@ let find_coloring f liveness =
   add_interfs_destroyed g
     (transfer_live f f.fn_entrypoint (PMap.get f.fn_entrypoint liveness))
     destroyed_at_function_entry;
+  add_rm_interfs g f.fn_rm tyenv;
   IRC.coloring g
 
 
@@ -1152,20 +1200,20 @@ let transl_function fn alloc =
 
 exception Timeout
 
-let rec first_round f liveness =
-  let alloc = find_coloring f liveness in
+let rec first_round f liveness tyenv =
+  let alloc = find_coloring f liveness tyenv in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- After initial register allocation\n\n";
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f
   end;
   let ts = tospill_function f alloc in
-  if VSet.is_empty ts then success f alloc else more_rounds f ts 1
+  if VSet.is_empty ts then success f alloc else more_rounds f ts 1 tyenv
 
-and more_rounds f ts count =
+and more_rounds f ts count tyenv =
   if count >= 40 then raise Timeout;
   let f' = spill_function f ts count in
   let liveness = liveness_analysis f' in
-  let alloc = find_coloring f' liveness in
+  let alloc = find_coloring f' liveness tyenv in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- After register allocation (round %d)\n\n" count;
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f'
@@ -1179,7 +1227,7 @@ and more_rounds f ts count =
       VSet.iter (fun v -> fprintf !pp "%a " PrintXTL.var v) ts';
       fprintf !pp "\n\n"
     end;
-    more_rounds f (VSet.union ts ts') (count + 1)
+    more_rounds f (VSet.union ts ts') (count + 1) tyenv
   end
 
 and success f alloc =
@@ -1207,7 +1255,7 @@ let regalloc f =
         PrintXTL.print_function !pp f3
       end;
       try
-        Errors.OK(first_round f3 liveness)
+        Errors.OK(first_round f3 liveness tyenv)
       with
       | Timeout ->
           Errors.Error(Errors.msg (coqstring_of_camlstring "spilling fails to converge"))

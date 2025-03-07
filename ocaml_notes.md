@@ -17,6 +17,11 @@ sudo make install
 opam switch create 4.14.2+32bit ocaml-variants.4.14.2+options ocaml-option-bytecode-only ocaml-option-32bit
 ```
 
+### Regular bytecode only (choose `<tag>` to be whatever)
+```bash
+opam switch create 4.14.2+<tag> ocaml-variants.4.14.2+options ocaml-option-bytecode-only
+```
+
 ## Build OCaml 4.14.2 with CompCert
 
 ### Configure

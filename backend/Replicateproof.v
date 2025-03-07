@@ -70,7 +70,7 @@ Section PRESERVATION.
     destruct f as [f|f]; intro Heq; monadInv Heq; auto.
     monadInv EQ.
     unfold transf_fun' in EQ1.
-    destruct (transf_fun x0 f _); inv EQ1; auto.
+    destruct (transf_fun x0 f _); inv EQ1; destruct p; inv H0; auto.
   Qed.
 
   Lemma stacksize_translated f tf :
@@ -78,7 +78,7 @@ Section PRESERVATION.
   Proof.
     unfold transf_function; intro H; monadInv H.
     unfold transf_fun' in EQ0.
-    destruct (transf_fun _ _ _); inv EQ0; reflexivity.
+    destruct (transf_fun _ _ _); inv EQ0; destruct p; inv H0; reflexivity.
   Qed.
 
   Lemma rm_wf_neq_2_3 (rm : PMap.t (reg * reg)) (l : list positive) (r1 r2 r3 : reg) :
@@ -935,7 +935,7 @@ Section PRESERVATION.
   (*   apply PTree.extensionality. *)
 
     Lemma maj_voteR_step
-    r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
+    r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m rm :
     is_actual_type ty ->
     Val.has_type (rs # r1) ty ->
     is_defined (rs # r1) ->
@@ -951,14 +951,16 @@ Section PRESERVATION.
                     ; fn_params := params
                     ; fn_stacksize := stacksize
                     ; fn_code := c
-                    ; fn_entrypoint := entrypoint |}
+                    ; fn_entrypoint := entrypoint
+                    ; fn_rm := rm |}
                     sp pc rs m) []
              (State tstk
                     {| fn_sig := sig
                     ; fn_params := params
                     ; fn_stacksize := stacksize
                     ; fn_code := c
-                    ; fn_entrypoint := entrypoint |}
+                    ; fn_entrypoint := entrypoint
+                    ; fn_rm := rm |}
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
     intros Hact Hty Hdef Hptr Hr2 Hr3 Hmaj; inv Hmaj.
@@ -1139,14 +1141,16 @@ Section PRESERVATION.
                     ; fn_params := params
                     ; fn_stacksize := stacksize
                     ; fn_code := c
-                    ; fn_entrypoint := entrypoint |}
+                    ; fn_entrypoint := entrypoint
+                    ; fn_rm := Some rm |}
                     sp pc rs m) Events.E0
              (State tstk
                     {| fn_sig := sig
                     ; fn_params := params
                     ; fn_stacksize := stacksize
                     ; fn_code := c
-                    ; fn_entrypoint := entrypoint |}
+                    ; fn_entrypoint := entrypoint
+                    ; fn_rm := Some rm |}
                     sp n rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
     revert pc n.
@@ -1926,6 +1930,7 @@ Section PRESERVATION.
       destruct (type_function f) eqn:Htype; try congruence.
       unfold transf_fun' in Hf.
       gen_case Htransf; inv Hf.
+      destruct p; inv H5.
       unfold transf_fun in Htransf.
       unfold RTLgen.bind in Htransf.
       simpl in *.
@@ -1954,6 +1959,7 @@ Section PRESERVATION.
                                           (stacksize := fn_stacksize)
                                           (c := fn_code)
                                           (entrypoint := fn_entrypoint)
+                                          (rm := fn_rm)
           in Hget.
         simpl in *; lia.
       + eapply copy_params_match_entrypoint in Hcopy.

@@ -371,11 +371,12 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
     5) return the new entry point node for the function (since new
        instructions were inserted at the front).
 *)
-Definition transf_fun (re : regenv) (f : function) : mon node :=
+Definition transf_fun (re : regenv) (f : function)
+  : mon (node * PMap.t (reg * reg)) :=
   do rm <- replication_map f;
   do entry_point <- copy_params rm f.(fn_params) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
-  ret entry_point.
+  ret (entry_point, rm).
 
 (** Initialize the generator state with [st_nextreg] and [st_nextnode]
     greater than all of the registers and nodes appearing in the
@@ -393,11 +394,12 @@ Program Definition init_state (f : function) : state :=
 Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
   match transf_fun re f (init_state f) with
   | Error err => Errors.Error err
-  | OK entrypoint s _ => Errors.OK {| fn_sig := f.(fn_sig);
-                                    fn_params := f.(fn_params);
-                                    fn_stacksize := f.(fn_stacksize);
-                                    fn_code := s.(st_code);
-                                    fn_entrypoint := entrypoint |}
+  | OK (entrypoint, rm) s _ => Errors.OK {| fn_sig := f.(fn_sig);
+                                          fn_params := f.(fn_params);
+                                          fn_stacksize := f.(fn_stacksize);
+                                          fn_code := s.(st_code);
+                                          fn_entrypoint := entrypoint;
+                                          fn_rm := Some rm |}
   end.
 
 (** Transform a function [f]:
