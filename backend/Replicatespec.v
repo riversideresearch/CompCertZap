@@ -108,7 +108,8 @@ Inductive maj_voteR
   forall n,
     is_actual_type ty ->
     c ! pc = Some (Icond (comp_of_typ ty Cne) [r1; r2] n succ) ->
-    c ! n = Some (Iop Omove [r3] r1 succ) ->
+    (* c ! n = Some (Iop Omove [r3] r1 succ) -> *)
+    c ! n = Some (smove ty r3 r1 succ) ->
     maj_voteR c ty r1 r2 r3 pc succ.
 
 (* Fixpoint maj_vote_regs *)
@@ -168,8 +169,10 @@ Inductive match_instr
     rm !! dst1 = (dst2, dst3) ->
     maj_vote_regsR c re rm args pc n1 ->
     c ! n1 = Some (Icall sig fn args dst1 n2) ->
-    c ! n2 = Some (Iop Omove [dst1] dst2 n3) ->
-    c ! n3 = Some (Iop Omove [dst1] dst3 succ) ->
+    (* c ! n2 = Some (Iop Omove [dst1] dst2 n3) -> *)
+    (* c ! n3 = Some (Iop Omove [dst1] dst3 succ) -> *)
+    c ! n2 = Some (smove (re dst1) dst1 dst2 n3) ->
+    c ! n3 = Some (smove (re dst1) dst1 dst3 succ) ->
     match_instr re rm pc c (Icall sig fn args dst1 succ)
 .
 
@@ -184,24 +187,26 @@ Inductive match_instr
 Definition match_code (re : regenv) (rm : PMap.t (reg * reg)) (c c': code) : Prop :=
   forall p i, c ! p = Some i -> match_instr re rm p c' i.
 
-Inductive match_entrypoint (rm : PMap.t (reg * reg)) (c : code)
+Inductive match_entrypoint (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
   : list reg -> node -> node -> Prop :=
 | match_entrypoint_nil :
   forall entrypoint,
-    match_entrypoint rm c [] entrypoint entrypoint
+    match_entrypoint re rm c [] entrypoint entrypoint
 | match_entrypoint_cons :
   forall param params entrypoint n m p r2 r3,
     rm !! param = (r2, r3) ->
-    c ! entrypoint = Some (Iop Omove [param] r2 n) ->
-    c ! n = Some (Iop Omove [param] r3 m) ->
-    match_entrypoint rm c params m p ->
-    match_entrypoint rm c (param :: params) entrypoint p.
+    (* c ! entrypoint = Some (Iop Omove [param] r2 n) -> *)
+    (* c ! n = Some (Iop Omove [param] r3 m) -> *)
+    c ! entrypoint = Some (smove (re param) param r2 n) ->
+    c ! n = Some (smove (re param) param r3 m) ->
+    match_entrypoint re rm c params m p ->
+    match_entrypoint re rm c (param :: params) entrypoint p.
 
 Inductive match_function re rm : function -> function -> Prop :=
 | match_fun : forall old_rm sig params stacksize c c' entrypoint entrypoint',
     (* rm_wf rm (PSet.elements (all_regs params c)) -> *)
     match_code re rm c c' ->
-    match_entrypoint rm c' params entrypoint' entrypoint ->
+    match_entrypoint re rm c' params entrypoint' entrypoint ->
     match_function re rm
       ({|
           fn_sig := sig

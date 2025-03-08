@@ -1010,8 +1010,16 @@ Section PRESERVATION.
         { eapply exec_Icond; eauto. }
         2: { reflexivity. }
         eapply star_step.
-        { eapply exec_Iop. eauto.
-          reflexivity. }
+        (* { eapply exec_Iop. eauto. *)
+        (*   reflexivity. } *)
+        { eapply exec_Ibuiltin; eauto.
+          - repeat constructor.
+          - simpl.
+            unfold Events.builtin_or_external_sem.
+            simpl.
+            unfold Events.external_functions_sem.
+            Events.external_call
+
         rewrite <- Hr3, <- Hr2.
         apply star_refl.
         reflexivity.

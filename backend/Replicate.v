@@ -37,6 +37,13 @@ Require Import
 .
 Import ListNotations.
 
+Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction :=
+  Ibuiltin (EF_builtin "__smove"
+              (mksignature
+                 ([inj_type ty]) (inj_type ty)
+                 (mkcallconv None false false)))
+    [BA src] (BR dst) succ.
+
 (** Emit instructions for majority voting registers [r1], [r2], and
     [r3], storing the result in [r1] and leaving the contents of [r2]
     and [r3] unchanged.
@@ -63,7 +70,8 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   do succ <- reserve_instr;
   do _ <- update_instr pc (Icond (comp Cne) [r1; r2] n succ);
   (* do _ <- update_instr n1 (Icond (comp Ceq) [r2; r3] n2 succ); *)
-  do _ <- update_instr n (Iop Omove [r3] r1 succ);
+  (* do _ <- update_instr n (Iop Omove [r3] r1 succ); *)
+  do _ <- update_instr n (smove (re r1) r3 r1 succ);
   ret succ.
 
 (** Emit code for majority voting the list of registers [reg]. [re] is
@@ -127,6 +135,8 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   | Ireturn None => []
   end.
 
+(** TODO: make fixpoint to handle recursive case like for
+    builtin_args. *)
 Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
   match res with
   | BR r => Some r
@@ -168,12 +178,14 @@ Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
 (** Insert instructions at [pc] to move contents of [r] to its shadow
     copies and then jump to [succ].  *)
 Definition copy_to_shadows
-  (rm : PMap.t (reg * reg)) (r1 : reg) (pc : node) (succ : node)
+  (rm : PMap.t (reg * reg)) (ty : typ) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
   let (r2, r3) := PMap.get r1 rm in
   do n <- reserve_instr;
-  do _ <- update_instr pc (Iop Omove [r1] r2 n);
-  update_instr n (Iop Omove [r1] r3 succ).
+  (* do _ <- update_instr pc (Iop Omove [r1] r2 n); *)
+  (* update_instr n (Iop Omove [r1] r3 succ). *)
+  do _ <- update_instr pc (smove ty r1 r2 n);
+  update_instr n (smove ty r1 r3 succ).
 
 (** Generate fault-tolerant instruction sequence corresponding to the
     input instruction. [re] is the register typing context of the
@@ -226,7 +238,7 @@ Definition transf_instr
       | Some res, Some succ =>
           do m <- reserve_instr;
           do _ <- update_instr n (change_succ instr m);
-          copy_to_shadows rm res m succ
+          copy_to_shadows rm (re res) res m succ
       | _, _ => update_instr n instr
       end
   end.
@@ -332,15 +344,15 @@ Definition fun_regs_list (f : function) : list positive :=
 (*       copy_params rm rs n *)
 (*   end. *)
 
-Fixpoint copy_params
+Fixpoint copy_params (re : regenv)
   (rm : PMap.t (reg * reg)) (params : list reg) (succ : node)
   : mon node :=
   match params with
   | [] => ret succ
   | r :: rs =>
-      do n <- copy_params rm rs succ;
+      do n <- copy_params re rm rs succ;
       do m <- reserve_instr;
-      do _ <- copy_to_shadows rm r m n;
+      do _ <- copy_to_shadows rm (re r) r m n;
       ret m
   end.
 
@@ -374,7 +386,7 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
 Definition transf_fun (re : regenv) (f : function)
   : mon (node * PMap.t (reg * reg)) :=
   do rm <- replication_map f;
-  do entry_point <- copy_params rm f.(fn_params) f.(fn_entrypoint);
+  do entry_point <- copy_params re rm f.(fn_params) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret (entry_point, rm).
 
