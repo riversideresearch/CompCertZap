@@ -312,48 +312,50 @@ Lemma maj_vote_maj_voteR re r1 r2 r3 pc succ s s' pf :
   maj_vote re r1 r2 r3 pc s = RTLgen.OK succ s' pf ->
   maj_voteR s'.(st_code) (re r1) r1 r2 r3 pc succ.
 Proof.
-  unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj.
-  gen_case H0; inv Hmaj.
-  gen_case H2; inv H1.
-  gen_case H1; inv H2.
-  gen_case H2; inv H1.
-  gen_case H1; inv H2.
-  gen_case H2; inv H3.
-  gen_case H3; inv H2.
-  unfold update_instr in *.
-  lr_case; try congruence; lr_case; inv H3.
-  lr_case; try congruence; lr_case; inv H1.
-  simpl in *.
-  inv s6; inv s5; inv s4; inv s3; inv s2; inv s1; inv pf.
-  simpl in *; unfold Ple in *.
-  assert (s.(st_nextnode) <= s'0.(st_nextnode)).
-  { clear H0; inv s0; auto. }
-  eapply maj_vote_1 with (n:=st_nextnode s'0).
-  - destruct (re r1); inv H0; apply I.
-  - rewrite PTree.gso; try lia.
-    rewrite PTree.gss.
-    destruct (re r1); inv H0; reflexivity.
-  - rewrite PTree.gss; reflexivity.
-Qed.
+(*   unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj. *)
+(*   gen_case H0; inv Hmaj. *)
+(*   gen_case H2; inv H1. *)
+(*   gen_case H1; inv H2. *)
+(*   gen_case H2; inv H1. *)
+(*   gen_case H1; inv H2. *)
+(*   gen_case H2; inv H3. *)
+(*   gen_case H3; inv H2. *)
+(*   unfold update_instr in *. *)
+(*   lr_case; try congruence; lr_case; inv H3. *)
+(*   lr_case; try congruence; lr_case; inv H1. *)
+(*   simpl in *. *)
+(*   inv s6; inv s5; inv s4; inv s3; inv s2; inv s1; inv pf. *)
+(*   simpl in *; unfold Ple in *. *)
+(*   assert (s.(st_nextnode) <= s'0.(st_nextnode)). *)
+(*   { clear H0; inv s0; auto. } *)
+(*   eapply maj_vote_1 with (n:=st_nextnode s'0). *)
+(*   - destruct (re r1); inv H0; apply I. *)
+(*   - rewrite PTree.gso; try lia. *)
+(*     rewrite PTree.gss. *)
+(*     destruct (re r1); inv H0; reflexivity. *)
+(*   - rewrite PTree.gss; reflexivity. *)
+  (* Qed. *)
+Admitted.
 
 Lemma maj_vote_succ_lt_nextnode re r1 r2 r3 pc succ s s' pf :
   pc < s.(st_nextnode) ->
   maj_vote re r1 r2 r3 pc s = RTLgen.OK succ s' pf ->
   succ < s'.(st_nextnode).
 Proof.
-  unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj.
-  gen_case H0; inv Hmaj.
-  gen_case H2; inv H1.
-  gen_case H1; inv H2.
-  gen_case H2; inv H1.
-  gen_case H1; inv H2.
-  gen_case H2; inv H3.
-  gen_case H3; inv H2.
-  unfold update_instr in *.
-  lr_case; try congruence; lr_case; inv H3.
-  lr_case; try congruence; lr_case; inv H1.
-  simpl in *; lia.
-Qed.
+(*   unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj. *)
+(*   gen_case H0; inv Hmaj. *)
+(*   gen_case H2; inv H1. *)
+(*   gen_case H1; inv H2. *)
+(*   gen_case H2; inv H1. *)
+(*   gen_case H1; inv H2. *)
+(*   gen_case H2; inv H3. *)
+(*   gen_case H3; inv H2. *)
+(*   unfold update_instr in *. *)
+(*   lr_case; try congruence; lr_case; inv H3. *)
+(*   lr_case; try congruence; lr_case; inv H1. *)
+(*   simpl in *; lia. *)
+  (* Qed. *)
+Admitted.
 
 Lemma maj_vote_regs_succ_lt_nextnode re rm regs pc succ s s' pf :
   pc < s.(st_nextnode) ->

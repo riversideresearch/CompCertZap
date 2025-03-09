@@ -63,5 +63,3 @@ Proof.
   inv H. simpl. eapply lookup_builtin_sig; eauto.
   discriminate.
 Qed.
-
-

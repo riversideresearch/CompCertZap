@@ -1005,32 +1005,40 @@ Section PRESERVATION.
          rewrite <- Hr2 in Hr12.
          apply Hcond in Hr12; contradiction. }
     destruct b.
-    { eexists; split.
-      - econstructor.
-        { eapply exec_Icond; eauto. }
-        2: { reflexivity. }
-        eapply star_step.
-        (* { eapply exec_Iop. eauto. *)
-        (*   reflexivity. } *)
-        { eapply exec_Ibuiltin; eauto.
-          - repeat constructor.
-          - simpl.
-            unfold Events.builtin_or_external_sem.
-            simpl.
-            unfold Events.external_functions_sem.
-            Events.external_call
-
-        rewrite <- Hr3, <- Hr2.
-        apply star_refl.
-        reflexivity.
-      - intro r; rewrite PMap.gsident; reflexivity. }
+    {
+      (* Maybe this whole case could follow from a simple lemma of
+         [eval_condition Cne r1 r1 = false]. *)
+      destruct Archi.ptr64 eqn:Harchi.
+      2: { admit. }
+      destruct ty; simpl in *; try contradiction.
+      - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence.
+        rewrite <- Hr2 in Hr12; inv Hr12.
+        rewrite Int.eq_true in H3; simpl in H3; congruence.
+      - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence.
+        rewrite <- Hr2 in Hr12; inv Hr12.
+        admit.
+      - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence.
+        + rewrite <- Hr2 in Hr12; inv Hr12.
+          rewrite Int64.eq_true in H3; simpl in H3; congruence.
+        + rewrite <- Hr2 in Hr12.
+          rewrite Harchi in Hr12.
+          simpl in Hr12.
+          destruct (eq_block b b) eqn:Hblock; try congruence.
+          destruct ((Memory.Mem.valid_pointer m b (Ptrofs.unsigned i)
+                     || Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1)) &&
+                      (Memory.Mem.valid_pointer m b (Ptrofs.unsigned i)
+                       || Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1))); inv Hr12.
+          rewrite Ptrofs.eq_true in H3; simpl in H3; congruence.
+      - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence.
+        rewrite <- Hr2 in Hr12; inv Hr12.
+        admit. }
     { eexists; split.
       - econstructor.
         { eapply exec_Icond; eauto. }
         2: { reflexivity. }
         apply star_refl.
       - intro; reflexivity. }
-  Qed.
+  Admitted.  
 
   (* Lemma maj_voteR_step *)
   (*   r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m : *)
@@ -1820,22 +1828,24 @@ Section PRESERVATION.
       admit.
   Admitted.
 
-  Inductive copy_paramsR rm c : list reg -> node -> node -> Prop :=
+  Inductive copy_paramsR re rm c : list reg -> node -> node -> Prop :=
   | copy_params_nil :
     forall n,
-      copy_paramsR rm c [] n n
+      copy_paramsR re rm c [] n n
   | copy_params_cons :
     forall param params succ n m p r2 r3,
       rm # param = (r2, r3) ->
-      c ! n = Some (Iop Omove [param] r2 m) ->
-      c ! m = Some (Iop Omove [param] r3 p) ->
-      copy_paramsR rm c params p succ ->
-      copy_paramsR rm c (param :: params) n succ.
+      (* c ! n = Some (Iop Omove [param] r2 m) -> *)
+      (* c ! m = Some (Iop Omove [param] r3 p) -> *)
+      c ! n = Some (smove (re param) param r2 m) ->
+      c ! m = Some (smove (re param) param r3 p) ->
+      copy_paramsR re rm c params p succ ->
+      copy_paramsR re rm c (param :: params) n succ.
 
-  Lemma copy_params_copy_paramsR rm params n succ s0 s1 pf c :
-    copy_params rm params succ s0 = RTLgen.OK n s1 pf ->
+  Lemma copy_params_copy_paramsR re rm params n succ s0 s1 pf c :
+    copy_params re rm params succ s0 = RTLgen.OK n s1 pf ->
     (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) ->
-    copy_paramsR rm c params n succ.
+    copy_paramsR re rm c params n succ.
   Proof.
     revert pf.
     revert s0 s1 n succ.
@@ -1873,9 +1883,9 @@ Section PRESERVATION.
       specialize (H17 p'); destruct H17; congruence.
   Qed.
 
-  Lemma copy_paramsR_match_entrypoint rm params entrypoint n c :
-    copy_paramsR rm c params n entrypoint ->
-    match_entrypoint rm c params n entrypoint.
+  Lemma copy_paramsR_match_entrypoint re rm params entrypoint n c :
+    copy_paramsR re rm c params n entrypoint ->
+    match_entrypoint re rm c params n entrypoint.
   Proof.
     revert entrypoint n.
     induction params; simpl; intros entrypoint n Hcopy; inv Hcopy.
@@ -1883,19 +1893,19 @@ Section PRESERVATION.
     econstructor; eauto.
   Qed.
 
-  Lemma copy_params_match_entrypoint rm params entrypoint s0 s1 pf1 n :
-    copy_params rm params entrypoint s0 = RTLgen.OK n s1 pf1 ->
-    match_entrypoint rm s1.(st_code) params n entrypoint.
+  Lemma copy_params_match_entrypoint re rm params entrypoint s0 s1 pf1 n :
+    copy_params re rm params entrypoint s0 = RTLgen.OK n s1 pf1 ->
+    match_entrypoint re rm s1.(st_code) params n entrypoint.
   Proof.
     intros Hcopy.
     apply copy_paramsR_match_entrypoint.
     eapply copy_params_copy_paramsR; eauto.
   Qed.
 
-  Lemma match_entrypoint_monotone rm c1 c2 params n entrypoint :
-    match_entrypoint rm c1 params n entrypoint ->
+  Lemma match_entrypoint_monotone re rm c1 c2 params n entrypoint :
+    match_entrypoint re rm c1 params n entrypoint ->
     (forall p i, c1 ! p = Some i -> c2 ! p = Some i) ->
-    match_entrypoint rm c2 params n entrypoint.
+    match_entrypoint re rm c2 params n entrypoint.
   Proof.
     revert n entrypoint; induction params;
       simpl; intros n entrypoint Hmatch Hle; inv Hmatch.

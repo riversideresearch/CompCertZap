@@ -351,7 +351,7 @@ let expand_builtin_inline name args res =
        emit (Pmov_rr (res,a1));
      emit (Pbswap64 res)
   | "__builtin_bswap64", [BA_splitlong(BA(IR ah), BA(IR al))],
-                         BR_splitlong(BR(IR rh), BR(IR rl)) ->
+    BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = RAX && al = RDX && rh = RDX && rl = RAX);
      emit (Pbswap32 RAX);
      emit (Pbswap32 RDX)
@@ -364,12 +364,12 @@ let expand_builtin_inline name args res =
      emit (Pxorl_ri(res,coqint_of_camlint 31l))
   | "__builtin_clzl", [BA(IR a1)], BR(IR res) ->
      if not(Archi.ptr64) then begin
-       emit (Pbsrl (res,a1));
-       emit (Pxorl_ri(res,coqint_of_camlint 31l))
-     end else begin
-       emit (Pbsrq (res,a1));
-       emit (Pxorl_ri(res,coqint_of_camlint 63l))
-     end
+         emit (Pbsrl (res,a1));
+         emit (Pxorl_ri(res,coqint_of_camlint 31l))
+       end else begin
+         emit (Pbsrq (res,a1));
+         emit (Pxorl_ri(res,coqint_of_camlint 63l))
+       end
   | "__builtin_clzll", [BA(IR a1)], BR(IR res) ->
      emit (Pbsrq (res,a1));
      emit (Pxorl_ri(res,coqint_of_camlint 63l))
@@ -409,46 +409,46 @@ let expand_builtin_inline name args res =
   | ("__builtin_fsqrt" | "__builtin_sqrt"), [BA(FR a1)], BR(FR res) ->
      emit (Psqrtsd (res,a1))
   | "__builtin_fmadd",  _, _ ->
-      expand_fma args res
-        (fun r1 r2 r3 -> Pfmadd132(r1, r2, r3))
-        (fun r1 r2 r3 -> Pfmadd213(r1, r2, r3))
-        (fun r1 r2 r3 -> Pfmadd231(r1, r2, r3))
+     expand_fma args res
+       (fun r1 r2 r3 -> Pfmadd132(r1, r2, r3))
+       (fun r1 r2 r3 -> Pfmadd213(r1, r2, r3))
+       (fun r1 r2 r3 -> Pfmadd231(r1, r2, r3))
   | "__builtin_fmsub",  _, _ ->
-      expand_fma args res
-        (fun r1 r2 r3 -> Pfmsub132(r1, r2, r3))
-        (fun r1 r2 r3 -> Pfmsub213(r1, r2, r3))
-        (fun r1 r2 r3 -> Pfmsub231(r1, r2, r3))
+     expand_fma args res
+       (fun r1 r2 r3 -> Pfmsub132(r1, r2, r3))
+       (fun r1 r2 r3 -> Pfmsub213(r1, r2, r3))
+       (fun r1 r2 r3 -> Pfmsub231(r1, r2, r3))
   | "__builtin_fnmadd",  _, _ ->
-      expand_fma args res
-        (fun r1 r2 r3 -> Pfnmadd132(r1, r2, r3))
-        (fun r1 r2 r3 -> Pfnmadd213(r1, r2, r3))
-        (fun r1 r2 r3 -> Pfnmadd231(r1, r2, r3))
+     expand_fma args res
+       (fun r1 r2 r3 -> Pfnmadd132(r1, r2, r3))
+       (fun r1 r2 r3 -> Pfnmadd213(r1, r2, r3))
+       (fun r1 r2 r3 -> Pfnmadd231(r1, r2, r3))
   | "__builtin_fnmsub",  _, _ ->
-      expand_fma args res
-        (fun r1 r2 r3 -> Pfnmsub132(r1, r2, r3))
-        (fun r1 r2 r3 -> Pfnmsub213(r1, r2, r3))
-        (fun r1 r2 r3 -> Pfnmsub231(r1, r2, r3))
+     expand_fma args res
+       (fun r1 r2 r3 -> Pfnmsub132(r1, r2, r3))
+       (fun r1 r2 r3 -> Pfnmsub213(r1, r2, r3))
+       (fun r1 r2 r3 -> Pfnmsub231(r1, r2, r3))
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+    BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = RDX && al = RAX && rh = RDX && rl = RAX);
      emit (Pnegl RAX);
      emit (Padcl_ri (RDX,_0));
      emit (Pnegl RDX)
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
+    BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
      emit (Paddl_rr (RAX,RBX));
      emit (Padcl_rr (RDX,RCX))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
+    BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
      emit (Psubl_rr (RAX,RBX));
      emit (Psbbl_rr (RDX,RCX))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+    BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (a = RAX && b = RDX && rh = RDX && rl = RAX);
      emit (Pmull_r RDX)
   (* Memory accesses *)
@@ -485,6 +485,574 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
+
+  (* Shadow moves *)
+  | "__smove_int", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__smove_long", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+     emit (Pmov_rr (res, a))
+  | "__smove_single", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+     emit (Pmovsd_ff (res, a))
+  | "__smove_float", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+     emit (Pmovsd_ff (res, a))
+
+  (* (\* Special case optimized *\) *)
+  (* | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    if a = res then begin *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmov_rr (a, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if b = res then begin *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmov_rr (b, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if c = res then begin *)
+  (*        emit (Pcmpl_rr (a, c)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmov_rr (c, b)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else begin *)
+  (*        let lbl_tmp = new_label () in *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_tmp)); *)
+  (*        emit (Pmov_rr (res, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_tmp); *)
+  (*        emit (Pmov_rr (res, a)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (* | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    if a = res then begin *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmov_rr (a, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if b = res then begin *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmov_rr (b, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if c = res then begin *)
+  (*        emit (Pcmpl_rr (a, c)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmov_rr (c, b)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else begin *)
+  (*        let lbl_tmp = new_label () in *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_tmp)); *)
+  (*        emit (Pmov_rr (res, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_tmp); *)
+  (*        emit (Pmov_rr (res, a)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (* | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    if a = res then begin *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmovsd_ff (a, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if b = res then begin *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmovsd_ff (b, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if c = res then begin *)
+  (*        emit (Pcomiss_ff (a, c)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmovsd_ff (c, b)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else begin *)
+  (*        let lbl_tmp = new_label () in *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_tmp)); *)
+  (*        emit (Pmovsd_ff (res, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_tmp); *)
+  (*        emit (Pmovsd_ff (res, a)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (* | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    if a = res then begin *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmovsd_ff (a, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if b = res then begin *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmovsd_ff (b, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if c = res then begin *)
+  (*        emit (Pcomiss_ff (a, c)); *)
+  (*        emit (Pjcc (Cond_e, lbl_done)); *)
+  (*        emit (Pmovsd_ff (c, b)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else begin *)
+  (*        let lbl_tmp = new_label () in *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_e, lbl_tmp)); *)
+  (*        emit (Pmovsd_ff (res, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_tmp); *)
+  (*        emit (Pmovsd_ff (res, a)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+
+  (* Special case optimized TEST *)
+  | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     let lbl_done = new_label () in
+     let lbl_fix = new_label () in
+     if a = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmov_rr (a, c));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcmpl_rr (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else if b = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmov_rr (b, c));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcmpl_rr (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else if c = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmov_rr (c, b));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcmpl_rr (a, c));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else begin
+         let lbl_tmp = new_label () in
+         side_emit (Plabel lbl_fix);
+         side_emit (Pcmpl_rr (a, c));
+         side_emit (Pjcc (Cond_ne, lbl_tmp));
+         side_emit (Pmov_rr (res, a));
+         side_emit (Pjmp_l lbl_done);
+         side_emit (Plabel lbl_tmp);
+         side_emit (Pmov_rr (res, b));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcmpl_rr (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Pmov_rr (res, a));
+         emit (Plabel lbl_done)
+       end
+  | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     let lbl_done = new_label () in
+     let lbl_fix = new_label () in
+     if a = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmov_rr (a, c));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcmpl_rr (a, b));
+         emit (Pjcc (Cond_ne, lbl_done));
+         emit (Plabel lbl_done)
+       end
+     else if b = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmov_rr (b, c));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcmpl_rr (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else if c = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmov_rr (c, b));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcmpl_rr (a, c));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else begin
+         let lbl_tmp = new_label () in
+         side_emit (Plabel lbl_fix);
+         side_emit (Pcmpl_rr (a, c));
+         side_emit (Pjcc (Cond_ne, lbl_tmp));
+         side_emit (Pmov_rr (res, a));
+         side_emit (Pjmp_l lbl_done);
+         side_emit (Plabel lbl_tmp);
+         side_emit (Pmov_rr (res, b));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcmpl_rr (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Pmov_rr (res, a));
+         emit (Plabel lbl_done)
+       end
+  | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     let lbl_done = new_label () in
+     let lbl_fix = new_label () in
+     if a = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmovsd_ff (a, c));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcomiss_ff (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else if b = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmovsd_ff (b, c));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcomiss_ff (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else if c = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmovsd_ff (c, b));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcomiss_ff (a, c));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else begin
+         let lbl_tmp = new_label () in
+         side_emit (Plabel lbl_fix);
+         side_emit (Pcomiss_ff (a, c));
+         side_emit (Pjcc (Cond_ne, lbl_tmp));
+         side_emit (Pmovsd_ff (res, a));
+         side_emit (Pjmp_l lbl_done);
+         side_emit (Plabel lbl_tmp);
+         side_emit (Pmovsd_ff (res, b));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcomiss_ff (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Pmovsd_ff (res, a));
+         emit (Plabel lbl_done)
+       end
+  | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     let lbl_done = new_label () in
+     let lbl_fix = new_label () in
+     if a = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmovsd_ff (a, c));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcomiss_ff (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else if b = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmovsd_ff (b, c));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcomiss_ff (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else if c = res then begin
+         side_emit (Plabel lbl_fix);
+         side_emit (Pmovsd_ff (c, b));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcomiss_ff (a, c));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Plabel lbl_done)
+       end
+     else begin
+         let lbl_tmp = new_label () in
+         side_emit (Plabel lbl_fix);
+         side_emit (Pcomiss_ff (a, c));
+         side_emit (Pjcc (Cond_ne, lbl_tmp));
+         side_emit (Pmovsd_ff (res, a));
+         side_emit (Pjmp_l lbl_done);
+         side_emit (Plabel lbl_tmp);
+         side_emit (Pmovsd_ff (res, b));
+         side_emit (Pjmp_l lbl_done);
+         emit (Pcomiss_ff (a, b));
+         emit (Pjcc (Cond_ne, lbl_fix));
+         emit (Pmovsd_ff (res, a));
+         emit (Plabel lbl_done)
+       end
+
+  (* (\* General path only (je) *\) *)
+  (* | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    let lbl_tmp = new_label () in *)
+  (*    emit (Pcmpl_rr (a, b)); *)
+  (*    emit (Pjcc (Cond_e, lbl_tmp)); *)
+  (*    emit (Pmov_rr (res, c)); *)
+  (*    emit (Pjmp_l lbl_done); *)
+  (*    emit (Plabel lbl_tmp); *)
+  (*    emit (Pmov_rr (res, a)); *)
+  (*    emit (Plabel lbl_done) *)
+  (* | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    let lbl_tmp = new_label () in *)
+  (*    emit (Pcmpl_rr (a, b)); *)
+  (*    emit (Pjcc (Cond_e, lbl_tmp)); *)
+  (*    emit (Pmov_rr (res, c)); *)
+  (*    emit (Pjmp_l lbl_done); *)
+  (*    emit (Plabel lbl_tmp); *)
+  (*    emit (Pmov_rr (res, a)); *)
+  (*    emit (Plabel lbl_done) *)
+  (* | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    let lbl_tmp = new_label () in *)
+  (*    emit (Pcomiss_ff (a, b)); *)
+  (*    emit (Pjcc (Cond_e, lbl_tmp)); *)
+  (*    emit (Pmovsd_ff (res, c)); *)
+  (*    emit (Pjmp_l lbl_done); *)
+  (*    emit (Plabel lbl_tmp); *)
+  (*    emit (Pmovsd_ff (res, a)); *)
+  (*    emit (Plabel lbl_done) *)
+  (* | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    let lbl_tmp = new_label () in *)
+  (*    emit (Pcomiss_ff (a, b)); *)
+  (*    emit (Pjcc (Cond_e, lbl_tmp)); *)
+  (*    emit (Pmovsd_ff (res, c)); *)
+  (*    emit (Pjmp_l lbl_done); *)
+  (*    emit (Plabel lbl_tmp); *)
+  (*    emit (Pmovsd_ff (res, a)); *)
+  (*    emit (Plabel lbl_done) *)
+
+  (* (\* General path only (jne) *\) *)
+  (* | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    let lbl_tmp = new_label () in *)
+  (*    emit (Pcmpl_rr (a, b)); *)
+  (*    emit (Pjcc (Cond_ne, lbl_tmp)); *)
+  (*    emit (Pmov_rr (res, a)); *)
+  (*    emit (Pjmp_l lbl_done); *)
+  (*    emit (Plabel lbl_tmp); *)
+  (*    emit (Pmov_rr (res, c)); *)
+  (*    emit (Plabel lbl_done) *)
+  (* | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    let lbl_tmp = new_label () in *)
+  (*    emit (Pcmpl_rr (a, b)); *)
+  (*    emit (Pjcc (Cond_ne, lbl_tmp)); *)
+  (*    emit (Pmov_rr (res, a)); *)
+  (*    emit (Pjmp_l lbl_done); *)
+  (*    emit (Plabel lbl_tmp); *)
+  (*    emit (Pmov_rr (res, c)); *)
+  (*    emit (Plabel lbl_done) *)
+  (* | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    let lbl_tmp = new_label () in *)
+  (*    emit (Pcomiss_ff (a, b)); *)
+  (*    emit (Pjcc (Cond_ne, lbl_tmp)); *)
+  (*    emit (Pmovsd_ff (res, a)); *)
+  (*    emit (Pjmp_l lbl_done); *)
+  (*    emit (Plabel lbl_tmp); *)
+  (*    emit (Pmovsd_ff (res, c)); *)
+  (*    emit (Plabel lbl_done) *)
+  (* | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) -> *)
+  (*    let lbl_done = new_label () in *)
+  (*    let lbl_tmp = new_label () in *)
+  (*    emit (Pcomiss_ff (a, b)); *)
+  (*    emit (Pjcc (Cond_ne, lbl_tmp)); *)
+  (*    emit (Pmovsd_ff (res, a)); *)
+  (*    emit (Pjmp_l lbl_done); *)
+  (*    emit (Plabel lbl_tmp); *)
+  (*    emit (Pmovsd_ff (res, c)); *)
+  (*    emit (Plabel lbl_done) *)
+
+  (* | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) -> *)
+  (*    let lbl_start = new_label () in *)
+  (*    let lbl_fix = new_label () in *)
+  (*    let lbl_done = new_label () in *)
+  (*    if a = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmov_rr (a, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if b = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmov_rr (b, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if c = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmov_rr (c, b)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcmpl_rr (a, c)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else begin *)
+  (*        let lbl_tmp = new_label () in *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_tmp)); *)
+  (*        emit (Pmov_rr (res, a)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_tmp); *)
+  (*        emit (Pmov_rr (res, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (* | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) -> *)
+  (*    let lbl_start = new_label () in *)
+  (*    let lbl_fix = new_label () in *)
+  (*    let lbl_done = new_label () in *)
+  (*    if a = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmov_rr (a, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if b = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmov_rr (b, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if c = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmov_rr (c, b)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcmpl_rr (a, c)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else begin *)
+  (*        let lbl_tmp = new_label () in *)
+  (*        emit (Pcmpl_rr (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_tmp)); *)
+  (*        emit (Pmov_rr (res, a)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_tmp); *)
+  (*        emit (Pmov_rr (res, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (* | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) -> *)
+  (*    let lbl_start = new_label () in *)
+  (*    let lbl_fix = new_label () in *)
+  (*    let lbl_done = new_label () in *)
+  (*    if a = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmovsd_ff (a, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if b = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmovsd_ff (b, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if c = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmovsd_ff (c, b)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcomiss_ff (a, c)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else begin *)
+  (*        let lbl_tmp = new_label () in *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_tmp)); *)
+  (*        emit (Pmovsd_ff (res, a)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_tmp); *)
+  (*        emit (Pmovsd_ff (res, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (* | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) -> *)
+  (*    let lbl_start = new_label () in *)
+  (*    let lbl_fix = new_label () in *)
+  (*    let lbl_done = new_label () in *)
+  (*    if a = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmovsd_ff (a, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if b = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmovsd_ff (b, c)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else if c = res then begin *)
+  (*        emit (Pjmp_l lbl_start); *)
+  (*        emit (Plabel lbl_fix); *)
+  (*        emit (Pmovsd_ff (c, b)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_start); *)
+  (*        emit (Pcomiss_ff (a, c)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_fix)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+  (*    else begin *)
+  (*        let lbl_tmp = new_label () in *)
+  (*        emit (Pcomiss_ff (a, b)); *)
+  (*        emit (Pjcc (Cond_ne, lbl_tmp)); *)
+  (*        emit (Pmovsd_ff (res, a)); *)
+  (*        emit (Pjmp_l lbl_done); *)
+  (*        emit (Plabel lbl_tmp); *)
+  (*        emit (Pmovsd_ff (res, c)); *)
+  (*        emit (Plabel lbl_done) *)
+  (*      end *)
+
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))

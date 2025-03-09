@@ -549,6 +549,7 @@ Inductive external_function : Type :=
      (** Transport debugging information from the front-end to the generated
          assembly.  Takes zero, one or several arguments like [EF_annot].
          Unlike [EF_annot], produces no observable event. *)
+(* | EF_smove (arg: positive) (res: positive). *)
 
 (** The type signature of an external function. *)
 

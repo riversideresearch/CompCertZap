@@ -24,6 +24,7 @@
 
 Require Import
   AST
+  Builtins2
   Coqlib
   Errors
   Integers
@@ -37,12 +38,17 @@ Require Import
 .
 Import ListNotations.
 
+Local Open Scope string_scope.
+
 Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction :=
-  Ibuiltin (EF_builtin "__smove"
-              (mksignature
-                 ([inj_type ty]) (inj_type ty)
-                 (mkcallconv None false false)))
-    [BA src] (BR dst) succ.
+  let (nm, sig) := match ty with
+                   | Tint => ("__smove_int", replicate_builtin_sig BI_smove_int)
+                   | Tlong => ("__smove_long", replicate_builtin_sig BI_smove_long)
+                   | Tsingle => ("__smove_single", replicate_builtin_sig BI_smove_single)
+                   | Tfloat => ("__smove_float", replicate_builtin_sig BI_smove_float)
+                   | _ => ("__smove_unknown", replicate_builtin_sig BI_smove_int)
+            end in
+  Ibuiltin (EF_builtin nm sig) [BA src] (BR dst) succ.
 
 (** Emit instructions for majority voting registers [r1], [r2], and
     [r3], storing the result in [r1] and leaving the contents of [r2]
@@ -53,25 +59,45 @@ Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction :=
     begin. Reserves and returns the node at which subsequent
     instructions should continue.
 *)
+(* Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node) *)
+(*   : mon node := *)
+(*   do comp <- match re r1 with *)
+(*             | Tint => ret Ccompu *)
+(*             | Tlong => ret Ccomplu *)
+(*             | Tsingle => ret Ccompfs *)
+(*             | Tfloat => ret Ccompf *)
+(*             | Tany32 => error (MSG "unexpected Tany32 instruction at pc: " *)
+(*                                 :: POS pc :: nil) *)
+(*             | Tany64 => error (MSG "unexpected Tany64 instruction at pc: " *)
+(*                                 :: POS pc :: nil) *)
+(*             end; *)
+(*   do n <- reserve_instr; *)
+(*   (* do n2 <- reserve_instr; *) *)
+(*   do succ <- reserve_instr; *)
+(*   do _ <- update_instr pc (Icond (comp Cne) [r1; r2] n succ); *)
+(*   (* do _ <- update_instr n1 (Icond (comp Ceq) [r2; r3] n2 succ); *) *)
+(*   (* do _ <- update_instr n (Iop Omove [r3] r1 succ); *) *)
+(*   do _ <- update_instr n (smove (re r1) r3 r1 succ); *)
+(*   ret succ. *)
+
+(* TODO: maybe factor this into two parts: one that isn't in the monad
+and takes the fresh nodes and registers as arguments (similar to smove
+above), and a wrapper around it that generates them in the monad. *)
 Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
-  do comp <- match re r1 with
-            | Tint => ret Ccompu
-            | Tlong => ret Ccomplu
-            | Tsingle => ret Ccompfs
-            | Tfloat => ret Ccompf
-            | Tany32 => error (MSG "unexpected Tany32 instruction at pc: "
-                                :: POS pc :: nil)
-            | Tany64 => error (MSG "unexpected Tany64 instruction at pc: "
-                                :: POS pc :: nil)
-            end;
+  do (nm, sig) <- match re r1 with
+                 | Tint => ret ("__vote_int", replicate_builtin_sig BI_vote_int)
+                 | Tlong => ret ("__vote_long", replicate_builtin_sig BI_vote_long)
+                 | Tsingle => ret ("__vote_single", replicate_builtin_sig BI_vote_single)
+                 | Tfloat => ret ("__vote_float", replicate_builtin_sig BI_vote_float)
+                 | _ => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
+                 end;
   do n <- reserve_instr;
-  (* do n2 <- reserve_instr; *)
   do succ <- reserve_instr;
-  do _ <- update_instr pc (Icond (comp Cne) [r1; r2] n succ);
-  (* do _ <- update_instr n1 (Icond (comp Ceq) [r2; r3] n2 succ); *)
-  (* do _ <- update_instr n (Iop Omove [r3] r1 succ); *)
-  do _ <- update_instr n (smove (re r1) r3 r1 succ);
+  do res <- new_reg;
+  do _ <- update_instr pc
+           (Ibuiltin (EF_builtin nm sig) [BA r1; BA r2; BA r3] (BR res) succ);
+  do _ <- update_instr n (Iop Omove [res] r1 succ);
   ret succ.
 
 (** Emit code for majority voting the list of registers [reg]. [re] is
