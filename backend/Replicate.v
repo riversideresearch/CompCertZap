@@ -60,8 +60,9 @@ Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction :=
     instructions should continue.
 *)
 (* TODO: maybe factor this into two parts: one that isn't in the monad
-and takes the fresh nodes and registers as arguments (similar to smove
-above), and a wrapper around it that generates them in the monad. *)
+   and takes the fresh nodes and registers as arguments (similar to
+   smove above), and a wrapper around it that generates them in the
+   monad. *)
 Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
   do (nm, sig) <- match re r1 with
@@ -71,12 +72,9 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
                  | Tfloat => ret ("__vote_float", replicate_builtin_sig BI_vote_float)
                  | _ => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
                  end;
-  do n <- reserve_instr;
   do succ <- reserve_instr;
-  do res <- new_reg;
   do _ <- update_instr pc
-           (Ibuiltin (EF_builtin nm sig) [BA r1; BA r2; BA r3] (BR res) succ);
-  do _ <- update_instr n (Iop Omove [res] r1 succ);
+           (Ibuiltin (EF_builtin nm sig) [BA r1; BA r2; BA r3] (BR r1) succ);
   ret succ.
 
 (** Emit code for majority voting the list of registers [reg]. [re] is
@@ -240,24 +238,21 @@ Definition transf_instr
       do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | rs :: rss, Some succ =>
-          (* do m <- reserve_instr; *)
           do m <- copy_all_to_shadows rm re (rs :: rss) succ;
           update_instr n (change_succ instr m)
-      (* copy_to_shadows rm (re res) res m succ *)
-          (* copy_all_to_shadows rm re (rs :: rss) succ *)
       | _, _ => update_instr n instr
       end
   end.
 
-(* The following two functions are not tail-recursive (because they
-   would be harder to reason about by induction) which could
-   potentially be a problem for very large functions? Specifically,
-   since iterM is used in transf_code, it might overflow the call
-   stack when translating very large functions. One easy workaround
-   might be to do the proofs wrt. these versions of the functions but
-   in the implementation use tail-recursive versions on reversed
-   argument lists (using a tail-recursive rev function) and prove them
-   equivalent. *)
+(* The following two functions are not tail-recursive (because their
+   tail-recursive variants are harder to reason about by induction)
+   which could potentially be a problem when translating very large
+   functions (containing lots of instructions and/or temporaries).
+   Specifically, since iterM is used in transf_code, it might overflow
+   the call stack. One easy workaround might be to do the proofs
+   wrt. these versions of the functions but in the implementation use
+   tail-recursive versions on reversed argument lists (using a
+   tail-recursive rev function) and prove them equivalent. *)
 
 (** Monadic iteration. *)
 Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
