@@ -125,7 +125,7 @@ Fixpoint maj_vote_regs
   | [] => ret pc
   | r1 :: rs =>
       do succ <- maj_vote_regs re rm rs pc;
-      let (r2, r3) := PMap.get r1 rm in
+      let (r2, r3) := rm # r1 in
       maj_vote re r1 r2 r3 succ
   end.
 
@@ -161,21 +161,20 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   | Ireturn None => []
   end.
 
-(** TODO: make fixpoint to handle recursive case like for
-    builtin_args. *)
-Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
+Fixpoint regs_of_builtin_res (res : builtin_res reg) : list reg :=
   match res with
-  | BR r => Some r
-  | _ => None
+  | BR r => [r]
+  | BR_splitlong hi lo => regs_of_builtin_res hi ++ regs_of_builtin_res lo
+  | BR_none => []
   end.
 
-Definition res_of_instruction (instr : instruction) : option reg :=
+Definition res_of_instruction (instr : instruction) : list reg :=
   match instr with
-  | Iop _ _ dst _ => Some dst
-  | Iload _ _ _ dst _ => Some dst
-  | Icall _ _ _ dst _ => Some dst
-  | Ibuiltin _ _ res _ => reg_of_builtin_res res
-  | _ => None
+  | Iop _ _ dst _ => [dst]
+  | Iload _ _ _ dst _ => [dst]
+  | Icall _ _ _ dst _ => [dst]
+  | Ibuiltin _ _ res _ => regs_of_builtin_res res
+  | _ => []
   end.
 
 Definition succ_of_instruction (instr : instruction) : option node :=
@@ -206,12 +205,24 @@ Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
 Definition copy_to_shadows
   (rm : PMap.t (reg * reg)) (ty : typ) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
-  let (r2, r3) := PMap.get r1 rm in
+  let (r2, r3) := rm # r1 in
   do n <- reserve_instr;
   (* do _ <- update_instr pc (Iop Omove [r1] r2 n); *)
   (* update_instr n (Iop Omove [r1] r3 succ). *)
   do _ <- update_instr pc (smove ty r1 r2 n);
   update_instr n (smove ty r1 r3 succ).
+
+Fixpoint copy_all_to_shadows
+  (rm : PMap.t (reg * reg)) re (rs : list reg) (succ : node)
+  : mon node :=
+  match rs with
+  | [] => ret succ
+  | r :: rs' =>
+      do succ' <- copy_all_to_shadows rm re rs' succ;
+      do n <- reserve_instr;
+      do _ <- copy_to_shadows rm (re r) r n succ';
+      ret n
+  end.
 
 (** Generate fault-tolerant instruction sequence corresponding to the
     input instruction. [re] is the register typing context of the
@@ -231,13 +242,13 @@ Definition transf_instr
       do n2 <- reserve_instr;
       do _ <- update_instr pc
                (Iop op
-                  (List.map (fun arg => fst (PMap.get arg rm)) args)
-                  (fst (PMap.get dst rm))
+                  (List.map (fun arg => fst (rm # arg)) args)
+                  (fst (rm # dst))
                   n1);
       do _ <- update_instr n1
                (Iop op
-                  (List.map (fun arg => snd (PMap.get arg rm)) args)
-                  (snd (PMap.get dst rm))
+                  (List.map (fun arg => snd (rm # arg)) args)
+                  (snd (rm # dst))
                   n2);
       update_instr n2 instr
   | Iload chunk addr args dst _succ =>
@@ -245,13 +256,13 @@ Definition transf_instr
       do n2 <- reserve_instr;
       do _ <- update_instr pc
                (Iload chunk addr
-                  (List.map (fun arg => fst (PMap.get arg rm)) args)
-                  (fst (PMap.get dst rm))
+                  (List.map (fun arg => fst (rm # arg)) args)
+                  (fst (rm # dst))
                   n1);
       do _ <- update_instr n1
                (Iload chunk addr
-                  (List.map (fun arg => snd (PMap.get arg rm)) args)
-                  (snd (PMap.get dst rm))
+                  (List.map (fun arg => snd (rm # arg)) args)
+                  (snd (rm # dst))
                   n2);
       update_instr n2 instr
   (* For other instructions, majority vote the argument registers and
@@ -261,10 +272,12 @@ Definition transf_instr
   | _ =>
       do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
-      | Some res, Some succ =>
-          do m <- reserve_instr;
-          do _ <- update_instr n (change_succ instr m);
-          copy_to_shadows rm (re res) res m succ
+      | rs :: rss, Some succ =>
+          (* do m <- reserve_instr; *)
+          do m <- copy_all_to_shadows rm re (rs :: rss) succ;
+          update_instr n (change_succ instr m)
+      (* copy_to_shadows rm (re res) res m succ *)
+          (* copy_all_to_shadows rm re (rs :: rss) succ *)
       | _, _ => update_instr n instr
       end
   end.
@@ -335,7 +348,7 @@ Definition instr_regs (i : instruction) : PSet.t :=
   | Itailcall _ _ args => PSet_of_list args
   | Ibuiltin _ args res _ =>
       PSet.union (PSet_of_list (builtin_args_regs args))
-        (PSet_of_option (reg_of_builtin_res res))
+        (PSet_of_list (regs_of_builtin_res res))
   | Icond _ args _ _ => PSet_of_list args
   | Ijumptable arg _ => PSet.singleton arg
   | Ireturn (Some arg) => PSet.singleton arg

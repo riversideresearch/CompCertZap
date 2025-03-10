@@ -520,37 +520,38 @@ Proof.
       destruct (rm # r) eqn:Hrmr.
       unfold RTLgen.bind in H2.
       gen_case H0; inv H2.
-      gen_case H2; inv H0.
-      gen_case H0; inv H3.
-      gen_case H3; inv H0.
-      gen_case H0; inv H4.
-      assert (p < st_nextnode s'0).
-      { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
-      assert (Hn0: n0 < s'1.(st_nextnode)).
-      { eapply maj_vote_regs_succ_lt_nextnode.
-        2: { eauto. }
-        auto. }
-      apply maj_vote_regs_maj_vote_regsR in Hmaj.
-      2: { clear Hiter; inv s0; unfold Ple in *; lia. }
-      unfold update_instr in *.
-      lr_case; try congruence; lr_case; inv H0.
-      lr_case; try congruence; lr_case; inv H3.
-      lr_case; try congruence; lr_case; inv H1.
-      inv H2.
-      simpl in *.
-      inv s12; inv s11; inv s10; inv s9; inv s8; inv s7;
-        inv s6; inv s5; inv s4; inv s1; inv pf.
-      simpl in *; unfold Ple in *.
-      destruct s3.
-      { admit. }
-      { econstructor.
-        { eauto. }
-        4: { rewrite PTree.gss; reflexivity. }
-        * repeat apply maj_vote_regsR_ptree_set; eauto.
-      * rewrite 2!PTree.gso; try lia.
-        rewrite PTree.gss; eauto.
-      * rewrite PTree.gso; try lia.
-        rewrite PTree.gss; reflexivity. }
+      (* gen_case H2; inv H0. *)
+      (* gen_case H0; inv H3. *)
+      (* gen_case H3; inv H0. *)
+      (* gen_case H0; inv H4. *)
+      (* assert (p < st_nextnode s'0). *)
+      (* { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. } *)
+      (* assert (Hn0: n0 < s'1.(st_nextnode)). *)
+      (* { eapply maj_vote_regs_succ_lt_nextnode. *)
+      (*   2: { eauto. } *)
+      (*   auto. } *)
+      (* apply maj_vote_regs_maj_vote_regsR in Hmaj. *)
+      (* 2: { clear Hiter; inv s0; unfold Ple in *; lia. } *)
+      (* unfold update_instr in *. *)
+      (* lr_case; try congruence; lr_case; inv H0. *)
+      (* lr_case; try congruence; lr_case; inv H3. *)
+      (* lr_case; try congruence; lr_case; inv H1. *)
+      (* inv H2. *)
+      (* simpl in *. *)
+      (* inv s12; inv s11; inv s10; inv s9; inv s8; inv s7; *)
+      (*   inv s6; inv s5; inv s4; inv s1; inv pf. *)
+      (* simpl in *; unfold Ple in *. *)
+      (* destruct s3. *)
+      (* { admit. } *)
+      (* { econstructor. *)
+      (*   { eauto. } *)
+      (*   4: { rewrite PTree.gss; reflexivity. } *)
+      (*   * repeat apply maj_vote_regsR_ptree_set; eauto. *)
+      (* * rewrite 2!PTree.gso; try lia. *)
+      (*   rewrite PTree.gss; eauto. *)
+      (* * rewrite PTree.gso; try lia. *)
+    (*   rewrite PTree.gss; reflexivity. } *)
+      admit.
 
     + admit.
     + admit.
