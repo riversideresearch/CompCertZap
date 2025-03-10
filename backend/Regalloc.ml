@@ -733,92 +733,6 @@ let rec add_interfs_block g blk live =
       add_interfs_instr g instr live';
       live_before instr live'
 
-(* let vars_of_reg tyenv (r : Registers.reg) : var list = *)
-(*   if Archi.splitlong && tyenv r = Tlong then *)
-(*     [V (r, Tint); V (twin_reg r, Tint)] *)
-(*   else *)
-(*     [V (r, tyenv r)] *)
-
-(* let cartesian xs ys = *)
-(*   List.concat (List.map (fun x -> List.map (fun y -> (x, y)) ys) xs) *)
-
-(* (\** Add replication map interference edges preventing registers from *)
-(*     being coalesced with their shadow copies. *\) *)
-(* let add_rm_interfs g (rmo : (Registers.reg * Registers.reg) PMap.t option) *)
-(*       tyenv (maps : Solver.L.t Maps.PMap.t) = *)
-(*   match rmo with *)
-(*   | Some rm -> *)
-(*      (\* List.iter (fun (r1, (r2, r3)) -> *\) *)
-         
-(*      (\*     (\\* let r1_vars = vars_of_reg tyenv r1 in *\\) *\) *)
-(*      (\*     (\\* List.iter (fun (_, (r2', r3')) -> *\\) *\) *)
-(*      (\*     (\\*     let r2'_vars = vars_of_reg tyenv r2' in *\\) *\) *)
-(*      (\*     (\\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\\) *\) *)
-(*      (\*     (\\*       cartesian r1_vars r2'_vars; *\\) *\) *)
-(*      (\*     (\\*     let r3'_vars = vars_of_reg tyenv r3' in *\\) *\) *)
-(*      (\*     (\\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\\) *\) *)
-(*      (\*     (\\*       cartesian r1_vars r3'_vars; *\\) *\) *)
-(*      (\*     (\\*   ) @@ PTree.elements (snd rm); *\\) *\) *)
-(*      (\*     (\\* let r2_vars = vars_of_reg tyenv r2 in *\\) *\) *)
-(*      (\*     (\\* List.iter (fun (_, (_, r3')) -> *\\) *\) *)
-(*      (\*     (\\*     let r3'_vars = vars_of_reg tyenv r3' in *\\) *\) *)
-(*      (\*     (\\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\\) *\) *)
-(*      (\*     (\\*       cartesian r2_vars r3'_vars; *\\) *\) *)
-(*      (\*     (\\*   ) @@ PTree.elements (snd rm); *\\) *\) *)
-         
-(*      (\*     let r1_vars = vars_of_reg tyenv r1 in *\) *)
-(*      (\*     let r2_vars = vars_of_reg tyenv r2 in *\) *)
-(*      (\*     let r3_vars = vars_of_reg tyenv r3 in *\) *)
-(*      (\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\) *)
-(*      (\*       cartesian r1_vars r2_vars; *\) *)
-(*      (\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\) *)
-(*      (\*       cartesian r1_vars r3_vars; *\) *)
-(*      (\*     List.iter (fun (x, y) -> add_interf g x y) @@ *\) *)
-(*      (\*       cartesian r2_vars r3_vars *\) *)
-
-(*   (\*   ) @@ PTree.elements (snd rm) *\) *)
-
-(*      List.iter (fun (_pc, map) -> *)
-         
-(*          List.iter (fun (r1, (r2, r3)) -> *)
-(*              begin *)
-(*                match RMap.find_opt r1 map, RMap.find_opt r2 map with *)
-(*                | Some x, Some y -> *)
-(*                   let x_vars = vars_of_reg tyenv x.source in *)
-(*                   let y_vars = vars_of_reg tyenv y.source in *)
-(*                   List.iter (fun (a, b) -> *)
-(*                       add_interf g a b *)
-(*                     ) @@ cartesian x_vars y_vars *)
-(*                | _ -> () *)
-(*              end; *)
-
-(*              begin *)
-(*                match RMap.find_opt r1 map, RMap.find_opt r3 map with *)
-(*                | Some x, Some y -> *)
-(*                   let x_vars = vars_of_reg tyenv x.source in *)
-(*                   let y_vars = vars_of_reg tyenv y.source in *)
-(*                   List.iter (fun (a, b) -> *)
-(*                       add_interf g a b *)
-(*                     ) @@ cartesian x_vars y_vars *)
-(*                | _ -> () *)
-(*              end; *)
-
-(*              begin *)
-(*                match RMap.find_opt r2 map, RMap.find_opt r3 map with *)
-(*                | Some x, Some y -> *)
-(*                   let x_vars = vars_of_reg tyenv x.source in *)
-(*                   let y_vars = vars_of_reg tyenv y.source in *)
-(*                   List.iter (fun (a, b) -> *)
-(*                       add_interf g a b *)
-(*                     ) @@ cartesian x_vars y_vars *)
-(*                | _ -> () *)
-(*              end *)
-                    
-(*            ) @@ PTree.elements (snd rm) *)
-
-(*        ) @@ PTree.elements (snd maps) *)
-(* | None -> () *)
-
 let find_coloring f liveness tyenv maps =
   (*type_function f;  (* for debugging *)*)
 
@@ -829,7 +743,6 @@ let find_coloring f liveness tyenv maps =
   add_interfs_destroyed g
     (transfer_live f f.fn_entrypoint (PMap.get f.fn_entrypoint liveness))
     destroyed_at_function_entry;
-  (* add_rm_interfs g f.fn_rm tyenv maps; *)
   IRC.coloring g
 
 

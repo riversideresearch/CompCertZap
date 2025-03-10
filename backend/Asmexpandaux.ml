@@ -63,27 +63,6 @@ let is_current_function_variadic () =
 let get_current_function_sig () =
   (!current_function).fn_sig
 
-(* let get_current_function () =   *)
-(*   let c = List.rev !current_code in *)
-(*   let fn = !current_function in *)
-(*   set_current_function dummy_function; *)
-(*   {fn with fn_code = c } *)
-
-(* exception Error of string *)
-(* let get_current_function () = *)
-(*   let lbl_done = new_label () in *)
-(*   (\* emit (Pjmp_l lbl_done); *\) *)
-(*   side_emit (Pjmp_l lbl_done); *)
-(*   match !current_code with *)
-(*   | instr :: rest -> *)
-(*      let c = List.rev rest in *)
-(*      let side_c = List.rev !side_buf in *)
-(*      let fn = !current_function in *)
-(*      set_current_function dummy_function; *)
-(*      {fn with fn_code = c @ [Plabel lbl_done] @ instr :: side_c} *)
-(*   | _ ->  *)
-(*      raise (Error ("empty function")) *)
-
 let get_current_function () =
   let c = List.rev !current_code in
   let side_c = List.rev !side_buf in
