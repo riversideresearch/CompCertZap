@@ -59,27 +59,6 @@ Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction :=
     begin. Reserves and returns the node at which subsequent
     instructions should continue.
 *)
-(* Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node) *)
-(*   : mon node := *)
-(*   do comp <- match re r1 with *)
-(*             | Tint => ret Ccompu *)
-(*             | Tlong => ret Ccomplu *)
-(*             | Tsingle => ret Ccompfs *)
-(*             | Tfloat => ret Ccompf *)
-(*             | Tany32 => error (MSG "unexpected Tany32 instruction at pc: " *)
-(*                                 :: POS pc :: nil) *)
-(*             | Tany64 => error (MSG "unexpected Tany64 instruction at pc: " *)
-(*                                 :: POS pc :: nil) *)
-(*             end; *)
-(*   do n <- reserve_instr; *)
-(*   (* do n2 <- reserve_instr; *) *)
-(*   do succ <- reserve_instr; *)
-(*   do _ <- update_instr pc (Icond (comp Cne) [r1; r2] n succ); *)
-(*   (* do _ <- update_instr n1 (Icond (comp Ceq) [r2; r3] n2 succ); *) *)
-(*   (* do _ <- update_instr n (Iop Omove [r3] r1 succ); *) *)
-(*   do _ <- update_instr n (smove (re r1) r3 r1 succ); *)
-(*   ret succ. *)
-
 (* TODO: maybe factor this into two parts: one that isn't in the monad
 and takes the fresh nodes and registers as arguments (similar to smove
 above), and a wrapper around it that generates them in the monad. *)
@@ -106,18 +85,6 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
     registers. [pc] is the node at which the emitted instructions
     should begin. Reserves and returns the node at which subsequent
     instructions should continue. *)
-(* TODO: right-to-left version for sake of induction. *)
-(* Fixpoint maj_vote_regs *)
-(*   (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node) *)
-(*   : mon node := *)
-(*   match regs with *)
-(*   | [] => ret pc *)
-(*   | r1 :: rs => *)
-(*       let (r2, r3) := PMap.get r1 rm in *)
-(*       do succ <- maj_vote re r1 r2 r3 pc; *)
-(*       maj_vote_regs re rm rs succ *)
-(*   end. *)
-
 Fixpoint maj_vote_regs
   (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
   : mon node :=
@@ -423,11 +390,11 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
        instructions were inserted at the front).
 *)
 Definition transf_fun (re : regenv) (f : function)
-  : mon (node * PMap.t (reg * reg)) :=
+  : mon node :=
   do rm <- replication_map f;
   do entry_point <- copy_params re rm f.(fn_params) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
-  ret (entry_point, rm).
+  ret entry_point.
 
 (** Initialize the generator state with [st_nextreg] and [st_nextnode]
     greater than all of the registers and nodes appearing in the
@@ -445,12 +412,11 @@ Program Definition init_state (f : function) : state :=
 Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
   match transf_fun re f (init_state f) with
   | Error err => Errors.Error err
-  | OK (entrypoint, rm) s _ => Errors.OK {| fn_sig := f.(fn_sig);
-                                          fn_params := f.(fn_params);
-                                          fn_stacksize := f.(fn_stacksize);
-                                          fn_code := s.(st_code);
-                                          fn_entrypoint := entrypoint;
-                                          fn_rm := Some rm |}
+  | OK entrypoint s _ => Errors.OK {| fn_sig := f.(fn_sig);
+                                    fn_params := f.(fn_params);
+                                    fn_stacksize := f.(fn_stacksize);
+                                    fn_code := s.(st_code);
+                                    fn_entrypoint := entrypoint; |}
   end.
 
 (** Transform a function [f]:

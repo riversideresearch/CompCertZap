@@ -52,7 +52,6 @@ type xfunction = {
   fn_stacksize: Z.t;
   fn_code: code;
   fn_entrypoint: node;
-  fn_rm: (reg * reg) PMap.t option
 }
 
 (* Type of a variable *)

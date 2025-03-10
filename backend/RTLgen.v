@@ -686,8 +686,7 @@ Definition transl_function (f: CminorSel.function) : Errors.res RTL.function :=
                    rparams
                    f.(CminorSel.fn_stackspace)
                    s.(st_code)
-                   nentry
-                   None)
+                   nentry)
   end.
 
 Definition transl_fundef := transf_partial_fundef transl_function.

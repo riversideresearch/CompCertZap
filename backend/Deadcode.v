@@ -206,8 +206,7 @@ Definition transf_function (rm: romem) (f: function) : res function :=
             fn_params := f.(fn_params);
             fn_stacksize := f.(fn_stacksize);
             fn_code := PTree.map (transf_instr approx an) f.(fn_code);
-            fn_entrypoint := f.(fn_entrypoint);
-            fn_rm := None |}
+            fn_entrypoint := f.(fn_entrypoint) |}
   | None =>
       Error (msg "Neededness analysis failed")
   end.
@@ -217,4 +216,3 @@ Definition transf_fundef (rm: romem) (fd: fundef) : res fundef :=
 
 Definition transf_program (p: program) : res program :=
   transform_partial_program (transf_fundef (romem_for p)) p.
-

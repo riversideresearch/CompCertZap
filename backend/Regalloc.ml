@@ -326,8 +326,7 @@ let function_of_RTL_function f tyenv =
   { fn_sig = f.RTL.fn_sig;
     fn_stacksize = f.RTL.fn_stacksize;
     fn_entrypoint = pc_entrypoint;
-    fn_code = PTree.set pc_entrypoint b_entrypoint xc;
-    fn_rm = f.RTL.fn_rm }
+    fn_code = PTree.set pc_entrypoint b_entrypoint xc }
 
 
 (***************** Liveness analysis *****************)

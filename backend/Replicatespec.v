@@ -203,7 +203,7 @@ Inductive match_entrypoint (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
     match_entrypoint re rm c (param :: params) entrypoint p.
 
 Inductive match_function re rm : function -> function -> Prop :=
-| match_fun : forall old_rm sig params stacksize c c' entrypoint entrypoint',
+| match_fun : forall sig params stacksize c c' entrypoint entrypoint',
     (* rm_wf rm (PSet.elements (all_regs params c)) -> *)
     match_code re rm c c' ->
     match_entrypoint re rm c' params entrypoint' entrypoint ->
@@ -214,7 +214,6 @@ Inductive match_function re rm : function -> function -> Prop :=
         ; fn_stacksize := stacksize
         ; fn_code := c
         ; fn_entrypoint := entrypoint
-        ; fn_rm := old_rm
        |})
       ({|
           fn_sig := sig
@@ -222,7 +221,6 @@ Inductive match_function re rm : function -> function -> Prop :=
         ; fn_stacksize := stacksize
         ; fn_code := c'
         ; fn_entrypoint := entrypoint'
-        ; fn_rm := Some rm
         |}).
 
 Inductive match_fundef: fundef -> fundef -> Prop :=
@@ -628,14 +626,13 @@ Proof.
   specialize (HI p' i' H); lia.
 Qed.
 
-Lemma lt_nextnode_init_state p i sig params stacksize c entrypoint rm :
+Lemma lt_nextnode_init_state p i sig params stacksize c entrypoint :
   c ! p = Some i ->
   p < st_nextnode (init_state {| fn_sig := sig
                                ; fn_params := params
                                ; fn_stacksize := stacksize
                                ; fn_code := c
                                ; fn_entrypoint := entrypoint
-                               ; fn_rm := rm
                               |}).
 Proof. intro Hget; eapply lt_ptree_fold_max; eauto. Qed.
 
@@ -646,13 +643,11 @@ Proof. intro Hget; eapply lt_ptree_fold_max; eauto. Qed.
 
 Lemma transf_fun'_code_matches rm (f tf : function) (re : regenv) s pf :
   transf_fun' re f = OK tf ->
-  (* replication_map f (init_state f) = RTLgen.OK rm s pf -> *)
   replication_map f (init_state f) = RTLgen.OK rm s pf ->
   match_code re rm f.(fn_code) tf.(fn_code).
 Proof.
   unfold transf_fun'.
   destruct (transf_fun re f (init_state f)) eqn:Hf; intros H Hrm; inv H; simpl.
-  destruct p; inv H1.
   eapply transf_fun_code_matches; eauto.
   intros; eapply lt_nextnode_init_state'; eauto.
 Qed.

@@ -457,8 +457,7 @@ Definition transf_function (fenv: funenv) (f: function) : Errors.res function :=
                    (sregs ctx f.(fn_params))
                    s.(st_stksize)
                    s.(st_code)
-                   (spc ctx f.(fn_entrypoint))
-                   None)
+                   (spc ctx f.(fn_entrypoint)))
   else
     Error(msg "Inlining: stack too big").
 
@@ -468,4 +467,3 @@ Definition transf_fundef (fenv: funenv) (fd: fundef) : Errors.res fundef :=
 Definition transf_program (p: program): Errors.res program :=
   let fenv := funenv_program p in
   AST.transform_partial_program (transf_fundef fenv) p.
-

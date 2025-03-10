@@ -571,8 +571,7 @@ Definition transf_function (rm: romem) (f: function) : res function :=
            f.(fn_params)
            f.(fn_stacksize)
            (transf_code approxs f.(fn_code))
-           f.(fn_entrypoint)
-           f.(fn_rm))
+           f.(fn_entrypoint))
   end.
 
 Definition transf_fundef (rm: romem) (f: fundef) : res fundef :=
@@ -580,4 +579,3 @@ Definition transf_fundef (rm: romem) (f: fundef) : res fundef :=
 
 Definition transf_program (p: program) : res program :=
   transform_partial_program (transf_fundef (romem_for p)) p.
-
