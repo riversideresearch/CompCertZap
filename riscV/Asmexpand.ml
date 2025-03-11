@@ -559,6 +559,89 @@ let expand_ctz ~sixtyfour ~splitlong =
 
 (* Handling of compiler-inlined builtins *)
 
+(** Majority vote 32/64-bit integers *)
+let maj_vote_int (a : ireg) (b : ireg) (c : ireg) (res : ireg) : unit =
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  if a = res then begin
+      side_emit (Plabel lbl_fix);
+      side_emit (Pmv (a, c));
+      side_emit (Pj_l lbl_done);
+      emit (Pbnel (X a, X b, lbl_fix));
+      emit (Plabel lbl_done)
+    end
+  else if b = res then begin
+      side_emit (Plabel lbl_fix);
+      side_emit (Pmv (b, c));
+      side_emit (Pj_l lbl_done);
+      emit (Pbnel (X a, X b, lbl_fix));
+      emit (Plabel lbl_done)
+    end
+  else if c = res then begin
+      side_emit (Plabel lbl_fix);
+      side_emit (Pmv (c, b));
+      side_emit (Pj_l lbl_done);
+      emit (Pbnel (X a, X c, lbl_fix));
+      emit (Plabel lbl_done)
+    end
+  else begin
+      let lbl_tmp = new_label () in
+      side_emit (Plabel lbl_fix);
+      side_emit (Pbnel (X a, X c, lbl_tmp));
+      side_emit (Pmv (res, a));
+      side_emit (Pj_l lbl_done);
+      side_emit (Plabel lbl_tmp);
+      side_emit (Pmv (res, b));
+      side_emit (Pj_l lbl_done);
+      emit (Pbnel (X a, X b, lbl_fix));
+      emit (Pmv (res, a));
+      emit (Plabel lbl_done)
+    end
+
+(** Majority vote floats *)
+let maj_vote_float (a : freg) (b : freg) (c : freg) (res : freg) : unit =
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  if a = res then begin
+      side_emit (Plabel lbl_fix);
+      side_emit (Pfmv (a, c));
+      side_emit (Pj_l lbl_done);
+      emit (Pfeqs (X31, a, b));
+      emit (Pbnel (X0, X X31, lbl_fix));
+      emit (Plabel lbl_done)
+    end
+  else if b = res then begin
+      side_emit (Plabel lbl_fix);
+      side_emit (Pfmv (b, c));
+      side_emit (Pj_l lbl_done);
+      emit (Pfeqs (X31, a, b));
+      emit (Pbnel (X0, X X31, lbl_fix));
+      emit (Plabel lbl_done)
+    end
+  else if c = res then begin
+      side_emit (Plabel lbl_fix);
+      side_emit (Pfmv (c, b));
+      side_emit (Pj_l lbl_done);
+      emit (Pfeqs (X31, a, c));
+      emit (Pbnel (X0, X X31, lbl_fix));
+      emit (Plabel lbl_done)
+    end
+  else begin
+      let lbl_tmp = new_label () in
+      side_emit (Plabel lbl_fix);
+      emit (Pfeqs (X31, a, c));
+      emit (Pbnel (X0, X X31, lbl_tmp));
+      side_emit (Pfmv (res, a));
+      side_emit (Pj_l lbl_done);
+      side_emit (Plabel lbl_tmp);
+      side_emit (Pfmv (res, b));
+      side_emit (Pj_l lbl_done);
+      emit (Pfeqs (X31, a, b));
+      emit (Pbnel (X0, X X31, lbl_fix));
+      emit (Pfmv (res, a));
+      emit (Plabel lbl_done)
+    end
+
 let expand_builtin_inline name args res =
   match name, args, res with
   (* Synchronization *)
@@ -660,6 +743,31 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
+
+  (* Shadow moves *)
+  | "__smove_int", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmv (res, a))
+  | "__smove_long", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmv (res, a))
+  | "__smove_single", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmv (res, a))
+  | "__smove_float", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmv (res, a))
+
+  (* Majority vote *)
+  | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+  | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
