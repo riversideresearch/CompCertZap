@@ -102,14 +102,23 @@ Definition is_actual_type (ty : typ) : Prop :=
   | _ => True
   end.
 
+(* Inductive maj_voteR *)
+(*   (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop := *)
+(* | maj_vote_1 : *)
+(*   forall n, *)
+(*     is_actual_type ty -> *)
+(*     c ! pc = Some (Icond (comp_of_typ ty Cne) [r1; r2] n succ) -> *)
+(*     (* c ! n = Some (Iop Omove [r3] r1 succ) -> *) *)
+(*     c ! n = Some (smove ty r3 r1 succ) -> *)
+(*     maj_voteR c ty r1 r2 r3 pc succ. *)
+
 Inductive maj_voteR
   (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop :=
 | maj_vote_1 :
-  forall n,
+  forall vote,
     is_actual_type ty ->
-    c ! pc = Some (Icond (comp_of_typ ty Cne) [r1; r2] n succ) ->
-    (* c ! n = Some (Iop Omove [r3] r1 succ) -> *)
-    c ! n = Some (smove ty r3 r1 succ) ->
+    maj_vote_of_typ ty r1 r2 r3 = Some vote ->
+    c ! pc = Some (vote succ) ->
     maj_voteR c ty r1 r2 r3 pc succ.
 
 (* Fixpoint maj_vote_regs *)
@@ -248,10 +257,8 @@ Lemma state_incr_maj_voteR s s' ty r1 r2 r3 pc succ :
 Proof.
   intros Hty Hle Hmaj; inv Hmaj.
   destruct (Hle pc) as [?|Hpc]; try congruence.
-  destruct (Hle n) as [?|Hn]; try congruence.
-  econstructor; auto.
-  - rewrite Hpc; eauto.
-  - rewrite Hn; eauto.
+  econstructor; eauto.
+  rewrite Hpc; eauto.
 Qed.
 
 Lemma state_incr_maj_vote_regsR re rm p s s' rs n :
@@ -398,11 +405,10 @@ Lemma maj_voteR_ptree_set c ty r1 r2 r3 pc succ n i :
   maj_voteR (PTree.set n i c) ty r1 r2 r3 pc succ.
 Proof.
   intros Hc Hmaj; inv Hmaj.
-  econstructor; auto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc); subst; try congruence.
+  econstructor; eauto.
+  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+      subst; try congruence.
     rewrite PTree.gso; eauto.
-  - rewrite PTree.gso; eauto.
-    intro; subst; congruence.
 Qed.
 
 Lemma maj_vote_regsR_ptree_set c re rm rs pc succ n i :

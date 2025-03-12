@@ -164,10 +164,6 @@ Next Obligation.
   inv H2; auto.
 Qed.
 
-(* If we want to allow Vundef arguments without the output necessarily
-   being Vundef (e.g., x and y are equal Vints and z is Vundef) then
-   add has_type checks for x and y first and then a separate has_type
-   check for z in the case that its value matters. *)
 Definition vote_int (x y z : val) : val :=
   match (x, y, z) with
   | (Vint a, Vint b, Vint c) =>
@@ -176,6 +172,15 @@ Definition vote_int (x y z : val) : val :=
       else if Int.eq_dec b c
            then y
            else Vundef
+  | (Vptr a i, Vptr b j, Vptr c k) =>
+      if negb Archi.ptr64
+      then if (eq_block a b && Ptrofs.eq_dec i j) ||
+                (eq_block a c && Ptrofs.eq_dec i k)
+           then x
+           else if eq_block b c && Ptrofs.eq_dec j k
+                then y
+                else Vundef
+      else Vundef
   | _ => Vundef
   end.
 
@@ -184,9 +189,10 @@ Lemma vote_int_well_typed x y z :
 Proof.
   unfold Val.has_rettype, vote_int.
   destruct x, y, z; auto.
-  destruct (Int.eq_dec _ _); simpl; auto.
-  destruct (Int.eq_dec _ _); simpl; auto.
-  destruct (Int.eq_dec _ _); simpl; auto.
+  - repeat destruct (Int.eq_dec _ _); simpl; auto.
+  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
+    repeat ((try destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); simpl; auto)).
 Qed.
 
 Lemma vote_int_compat_inject j v1 v1' v2 v2' v3 v3' :
@@ -197,12 +203,13 @@ Lemma vote_int_compat_inject j v1 v1' v2 v2' v3 v3' :
 Proof.
   unfold vote_int.
   intros H0 H1 H2.
-  inv H0; simpl; auto.
-  inv H1; simpl; auto.
-  inv H2; simpl; auto.
-  destruct (Int.eq_dec _ _); simpl; auto.
-  destruct (Int.eq_dec _ _); simpl; auto.
-  destruct (Int.eq_dec _ _); simpl; auto.
+  inv H0; simpl; auto; inv H1; inv H2; simpl; auto.
+  - repeat destruct (Int.eq_dec _ _); subst; simpl; auto.
+  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
+    repeat ((try destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); subst; simpl);
+            (try solve [econstructor; eauto; congruence]);
+            (try congruence)).
 Qed.
 
 Definition vote_int_sem : builtin_sem Xint :=
@@ -216,6 +223,15 @@ Definition vote_long (x y z : val) : val :=
       else if Int64.eq_dec b c
            then y
            else Vundef
+  | (Vptr a i, Vptr b j, Vptr c k) =>
+      if Archi.ptr64
+      then if (eq_block a b && Ptrofs.eq_dec i j) ||
+                (eq_block a c && Ptrofs.eq_dec i k)
+           then x
+           else if eq_block b c && Ptrofs.eq_dec j k
+                then y
+                else Vundef
+      else Vundef
   | _ => Vundef
   end.
 
@@ -224,9 +240,10 @@ Lemma vote_long_well_typed x y z :
 Proof.
   unfold Val.has_rettype, vote_long.
   destruct x, y, z; auto.
-  destruct (Int64.eq_dec _ _); simpl; auto.
-  destruct (Int64.eq_dec _ _); simpl; auto.
-  destruct (Int64.eq_dec _ _); simpl; auto.
+  - repeat destruct (Int64.eq_dec _ _); simpl; auto.
+  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
+    repeat ((try destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); simpl; auto)).
 Qed.
 
 Lemma vote_long_compat_inject j v1 v1' v2 v2' v3 v3' :
@@ -237,12 +254,13 @@ Lemma vote_long_compat_inject j v1 v1' v2 v2' v3 v3' :
 Proof.
   unfold vote_long.
   intros H0 H1 H2.
-  inv H0; simpl; auto.
-  inv H1; simpl; auto.
-  inv H2; simpl; auto.
-  destruct (Int64.eq_dec _ _); simpl; auto.
-  destruct (Int64.eq_dec _ _); simpl; auto.
-  destruct (Int64.eq_dec _ _); simpl; auto.
+  inv H0; simpl; auto; inv H1; inv H2; simpl; auto.
+  - repeat destruct (Int64.eq_dec _ _); subst; simpl; auto.
+  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
+    repeat ((try destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); subst; simpl);
+            (try solve [econstructor; eauto; congruence]);
+            (try congruence)).
 Qed.
 
 Definition vote_long_sem : builtin_sem Xlong :=
@@ -264,9 +282,7 @@ Lemma vote_single_well_typed x y z :
 Proof.
   unfold Val.has_rettype, vote_single.
   destruct x, y, z; auto.
-  destruct (Float32.eq_dec _ _); simpl; auto.
-  destruct (Float32.eq_dec _ _); simpl; auto.
-  destruct (Float32.eq_dec _ _); simpl; auto.
+  repeat destruct (Float32.eq_dec _ _); simpl; auto.
 Qed.
 
 Lemma vote_single_compat_inject j v1 v1' v2 v2' v3 v3' :
@@ -280,9 +296,7 @@ Proof.
   inv H0; simpl; auto.
   inv H1; simpl; auto.
   inv H2; simpl; auto.
-  destruct (Float32.eq_dec _ _); simpl; auto.
-  destruct (Float32.eq_dec _ _); simpl; auto.
-  destruct (Float32.eq_dec _ _); simpl; auto.
+  repeat destruct (Float32.eq_dec _ _); simpl; auto.
 Qed.
 
 Definition vote_single_sem : builtin_sem Xsingle :=
@@ -304,9 +318,7 @@ Lemma vote_float_well_typed x y z :
 Proof.
   unfold Val.has_rettype, vote_float.
   destruct x, y, z; auto.
-  destruct (Float.eq_dec _ _); simpl; auto.
-  destruct (Float.eq_dec _ _); simpl; auto.
-  destruct (Float.eq_dec _ _); simpl; auto.
+  repeat destruct (Float.eq_dec _ _); simpl; auto.
 Qed.
 
 Lemma vote_float_compat_inject j v1 v1' v2 v2' v3 v3' :
@@ -320,9 +332,7 @@ Proof.
   inv H0; simpl; auto.
   inv H1; simpl; auto.
   inv H2; simpl; auto.
-  destruct (Float.eq_dec _ _); simpl; auto.
-  destruct (Float.eq_dec _ _); simpl; auto.
-  destruct (Float.eq_dec _ _); simpl; auto.
+  repeat destruct (Float.eq_dec _ _); simpl; auto.
 Qed.
 
 Definition vote_float_sem : builtin_sem Xfloat :=

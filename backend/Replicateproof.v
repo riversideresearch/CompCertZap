@@ -4,6 +4,7 @@ Require Import
   AST
   Coqlib
   Errors
+  Events
   Globalenvs
   Integers
   Linking
@@ -934,14 +935,10 @@ Section PRESERVATION.
   (* Proof. *)
   (*   apply PTree.extensionality. *)
 
-    Lemma maj_voteR_step
+  Lemma maj_voteR_step
     r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
     is_actual_type ty ->
     Val.has_type (rs # r1) ty ->
-    is_defined (rs # r1) ->
-    (forall b i, (rs # r1) = Vptr b i ->
-            Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) ||
-              Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true) ->
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
     maj_voteR c ty r1 r2 r3 pc succ ->
@@ -961,82 +958,137 @@ Section PRESERVATION.
                     ; fn_entrypoint := entrypoint |}
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
-    intros Hact Hty Hdef Hptr Hr2 Hr3 Hmaj; inv Hmaj.
-    assert (Hcond: forall cond, eval_condition (comp_of_typ ty cond) rs ## [r1; r1] m <> None).
-    { intros cond Hr12.
-      simpl in *.
-      destruct ty; simpl in *; try contradiction.
-      - destruct Archi.ptr64 eqn:Harchi.
-        + eapply int_canon_64 in Hty; eauto.
-          destruct Hty as [i Hi].
-          rewrite Hi in Hr12.
-          inv Hr12.
-        + eapply int_canon_32 in Hty; eauto.
-          destruct Hty as [[i Hi] | (b & i & Hi)].
-          * rewrite Hi in Hr12; inv Hr12.
-          * rewrite Hi in Hr12.
-            simpl in Hr12; rewrite Harchi in Hr12.
-            destruct (eq_block b b) eqn:Hblock; try congruence.
-            apply Hptr in Hi; rewrite Hi in Hr12; inv Hr12.
-      - eapply float_canon in Hty; eauto.
-        destruct Hty as [f Hf].
-        rewrite Hf in Hr12.
-        inv Hr12.
-      - destruct Archi.ptr64 eqn:Harchi.
-        + eapply long_canon_64 in Hty; eauto.
-          destruct Hty as [[i Hi] | (b & i & Hi)].
-          * rewrite Hi in Hr12; inv Hr12.
-          * rewrite Hi in Hr12; simpl in Hr12.
-            rewrite Harchi in Hr12; simpl in Hr12.
-            destruct (eq_block b b) eqn:Hblock; try congruence.
-            apply Hptr in Hi; rewrite Hi in Hr12; inv Hr12.
-        + eapply long_canon_32 in Hty; eauto.
-          destruct Hty as [i Hi].
-          rewrite Hi in Hr12.
-          inv Hr12.
-      - eapply single_canon in Hty; eauto.
-        destruct Hty as [f Hf].
-        rewrite Hf in Hr12.
-        inv Hr12. }
-    destruct (eval_condition (comp_of_typ ty Cne) rs ## [r1; r2] m) eqn:Hr12.
-    2: { simpl in Hr12.
-         rewrite <- Hr2 in Hr12.
-         apply Hcond in Hr12; contradiction. }
-    destruct b.
-    {
-      (* Maybe this whole case could follow from a simple lemma of
-         [eval_condition Cne r1 r1 = false]. *)
-      destruct Archi.ptr64 eqn:Harchi.
-      2: { admit. }
-      destruct ty; simpl in *; try contradiction.
-      - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence.
-        rewrite <- Hr2 in Hr12; inv Hr12.
-        rewrite Int.eq_true in H3; simpl in H3; congruence.
-      - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence.
-        rewrite <- Hr2 in Hr12; inv Hr12.
-        admit.
-      - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence.
-        + rewrite <- Hr2 in Hr12; inv Hr12.
-          rewrite Int64.eq_true in H3; simpl in H3; congruence.
-        + rewrite <- Hr2 in Hr12.
-          rewrite Harchi in Hr12.
-          simpl in Hr12.
-          destruct (eq_block b b) eqn:Hblock; try congruence.
-          destruct ((Memory.Mem.valid_pointer m b (Ptrofs.unsigned i)
-                     || Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1)) &&
-                      (Memory.Mem.valid_pointer m b (Ptrofs.unsigned i)
-                       || Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1))); inv Hr12.
-          rewrite Ptrofs.eq_true in H3; simpl in H3; congruence.
-      - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence.
-        rewrite <- Hr2 in Hr12; inv Hr12.
-        admit. }
-    { eexists; split.
+    intros Hact Hty Hr2 Hr3 Hmaj; inv Hmaj.
+    destruct ty; simpl in *; try contradiction; clear H.
+    { inv H0.
+      eexists; split.
       - econstructor.
-        { eapply exec_Icond; eauto. }
-        2: { reflexivity. }
-        apply star_refl.
-      - intro; reflexivity. }
-  Admitted.  
+        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+            eauto; repeat constructor.
+        + apply star_refl.
+        + reflexivity.
+      - intro r; simpl.
+        unfold Builtins2.vote_int.
+        rewrite <- Hr3, <- Hr2.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
+        2: { rewrite PMap.gso; auto. }
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hty].
+        * rewrite PMap.gss; reflexivity.
+        * destruct (Int.eq_dec i i); simpl; try congruence.
+          rewrite PMap.gss; reflexivity.
+        * destruct Archi.ptr64 eqn:Harchi; simpl.
+          { inv Hty; congruence. }
+          destruct (eq_block _ _); simpl; try congruence.
+          destruct (Ptrofs.eq_dec _ _); simpl; try congruence.
+          rewrite PMap.gss; reflexivity. }
+    { admit. }
+    { admit. }
+    { admit. }
+  Admitted.
+
+  (*   Lemma maj_voteR_step *)
+  (*   r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m : *)
+  (*   is_actual_type ty -> *)
+  (*   Val.has_type (rs # r1) ty -> *)
+  (*   is_defined (rs # r1) -> *)
+  (*   (forall b i, (rs # r1) = Vptr b i -> *)
+  (*           Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) || *)
+  (*             Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true) -> *)
+  (*   rs # r1 = rs # r2 -> *)
+  (*   rs # r2 = rs # r3 -> *)
+  (*   maj_voteR c ty r1 r2 r3 pc succ -> *)
+  (*   exists rs', plus step tge *)
+  (*            (State tstk *)
+  (*                   {| fn_sig := sig *)
+  (*                   ; fn_params := params *)
+  (*                   ; fn_stacksize := stacksize *)
+  (*                   ; fn_code := c *)
+  (*                   ; fn_entrypoint := entrypoint |} *)
+  (*                   sp pc rs m) [] *)
+  (*            (State tstk *)
+  (*                   {| fn_sig := sig *)
+  (*                   ; fn_params := params *)
+  (*                   ; fn_stacksize := stacksize *)
+  (*                   ; fn_code := c *)
+  (*                   ; fn_entrypoint := entrypoint |} *)
+  (*                   sp succ rs' m) /\ (forall r, rs # r = rs' # r). *)
+  (* Proof. *)
+  (*   intros Hact Hty Hdef Hptr Hr2 Hr3 Hmaj; inv Hmaj. *)
+  (*   assert (Hcond: forall cond, eval_condition (comp_of_typ ty cond) rs ## [r1; r1] m <> None). *)
+  (*   { intros cond Hr12. *)
+  (*     simpl in *. *)
+  (*     destruct ty; simpl in *; try contradiction. *)
+  (*     - destruct Archi.ptr64 eqn:Harchi. *)
+  (*       + eapply int_canon_64 in Hty; eauto. *)
+  (*         destruct Hty as [i Hi]. *)
+  (*         rewrite Hi in Hr12. *)
+  (*         inv Hr12. *)
+  (*       + eapply int_canon_32 in Hty; eauto. *)
+  (*         destruct Hty as [[i Hi] | (b & i & Hi)]. *)
+  (*         * rewrite Hi in Hr12; inv Hr12. *)
+  (*         * rewrite Hi in Hr12. *)
+  (*           simpl in Hr12; rewrite Harchi in Hr12. *)
+  (*           destruct (eq_block b b) eqn:Hblock; try congruence. *)
+  (*           apply Hptr in Hi; rewrite Hi in Hr12; inv Hr12. *)
+  (*     - eapply float_canon in Hty; eauto. *)
+  (*       destruct Hty as [f Hf]. *)
+  (*       rewrite Hf in Hr12. *)
+  (*       inv Hr12. *)
+  (*     - destruct Archi.ptr64 eqn:Harchi. *)
+  (*       + eapply long_canon_64 in Hty; eauto. *)
+  (*         destruct Hty as [[i Hi] | (b & i & Hi)]. *)
+  (*         * rewrite Hi in Hr12; inv Hr12. *)
+  (*         * rewrite Hi in Hr12; simpl in Hr12. *)
+  (*           rewrite Harchi in Hr12; simpl in Hr12. *)
+  (*           destruct (eq_block b b) eqn:Hblock; try congruence. *)
+  (*           apply Hptr in Hi; rewrite Hi in Hr12; inv Hr12. *)
+  (*       + eapply long_canon_32 in Hty; eauto. *)
+  (*         destruct Hty as [i Hi]. *)
+  (*         rewrite Hi in Hr12. *)
+  (*         inv Hr12. *)
+  (*     - eapply single_canon in Hty; eauto. *)
+  (*       destruct Hty as [f Hf]. *)
+  (*       rewrite Hf in Hr12. *)
+  (*       inv Hr12. } *)
+  (*   destruct (eval_condition (comp_of_typ ty Cne) rs ## [r1; r2] m) eqn:Hr12. *)
+  (*   2: { simpl in Hr12. *)
+  (*        rewrite <- Hr2 in Hr12. *)
+  (*        apply Hcond in Hr12; contradiction. } *)
+  (*   destruct b. *)
+  (*   { *)
+  (*     (* Maybe this whole case could follow from a simple lemma of *)
+  (*        [eval_condition Cne r1 r1 = false]. *) *)
+  (*     destruct Archi.ptr64 eqn:Harchi. *)
+  (*     2: { admit. } *)
+  (*     destruct ty; simpl in *; try contradiction. *)
+  (*     - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence. *)
+  (*       rewrite <- Hr2 in Hr12; inv Hr12. *)
+  (*       rewrite Int.eq_true in H3; simpl in H3; congruence. *)
+  (*     - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence. *)
+  (*       rewrite <- Hr2 in Hr12; inv Hr12. *)
+  (*       admit. *)
+  (*     - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence. *)
+  (*       + rewrite <- Hr2 in Hr12; inv Hr12. *)
+  (*         rewrite Int64.eq_true in H3; simpl in H3; congruence. *)
+  (*       + rewrite <- Hr2 in Hr12. *)
+  (*         rewrite Harchi in Hr12. *)
+  (*         simpl in Hr12. *)
+  (*         destruct (eq_block b b) eqn:Hblock; try congruence. *)
+  (*         destruct ((Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) *)
+  (*                    || Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1)) && *)
+  (*                     (Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) *)
+  (*                      || Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1))); inv Hr12. *)
+  (*         rewrite Ptrofs.eq_true in H3; simpl in H3; congruence. *)
+  (*     - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence. *)
+  (*       rewrite <- Hr2 in Hr12; inv Hr12. *)
+  (*       admit. } *)
+  (*   { eexists; split. *)
+  (*     - econstructor. *)
+  (*       { eapply exec_Icond; eauto. } *)
+  (*       2: { reflexivity. } *)
+  (*       apply star_refl. *)
+  (*     - intro; reflexivity. } *)
+  (* Admitted.   *)
 
   (* Lemma maj_voteR_step *)
   (*   r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m : *)
@@ -1141,10 +1193,10 @@ Section PRESERVATION.
     c re (rm : PMap.t (reg * reg))
     args pc n tstk sig params stacksize entrypoint sp rs m :
     Forall (fun r1 => Val.has_type (rs # r1) (re r1) /\
-                     is_defined (rs # r1) /\
-                     (forall b i, (rs # r1) = Vptr b i ->
-                             Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) ||
-                               Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true) /\
+                     (* is_defined (rs # r1) /\ *)
+                     (* (forall b i, (rs # r1) = Vptr b i -> *)
+                     (*         Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) || *)
+                     (*           Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true) /\ *)
                      forall r2 r3,
                        rm # r1 = (r2, r3) ->
                        rs # r1 = rs # r2 /\ rs # r2 = rs # r3) args ->
@@ -1171,7 +1223,7 @@ Section PRESERVATION.
       - apply star_refl.
       - intro; reflexivity. }
     inv Hall.
-    destruct H3 as (Hty & Hdef & Hptr & H3); specialize (H3 r2 r3).
+    destruct H3 as (Hty & H3); destruct (H3 r2 r3 H1) as [Hr2 Hr3].
     eapply IHargs in H4.
     2: { eauto. }
     destruct H4 as (rs' & H4 & Hrs').
@@ -1179,15 +1231,8 @@ Section PRESERVATION.
     eapply maj_voteR_step with (rs:=rs') in H5.
     2: { inv H5; auto. }
     2: { rewrite <- Ha; auto. }
-    2: { rewrite <- Ha; auto. }
-    2: { rewrite <- Ha; auto. }
-    2: { specialize (Hrs' r2).
-         rewrite <- Ha, <- Hrs'.
-         apply H3 in H1; intuition. }
-    2: { generalize (Hrs' r2); intro Hr2.
-         specialize (Hrs' r3).
-         rewrite <- Hr2, <- Hrs'.
-         apply H3 in H1; intuition. }
+    2: { rewrite <- 2!Hrs'; auto. }
+    2: { rewrite <- 2!Hrs'; auto. }
     destruct H5 as (rs'' & H5 & Hr'').
     eexists; split.
     { apply plus_star.
@@ -1713,20 +1758,23 @@ Section PRESERVATION.
            split.
            { apply WT_RS. }
            split.
-           { destruct (rs # r1) eqn:Hr1; try apply I.
-             eapply eval_addressing_in_args_vundef in H0; eauto; subst.
-             inv H1. }
-           split.
-           { intros b i Hr1.
-             (* TODO: add to invariant? that pointer values in
-                registers are valid pointers. *)
-             admit. }
-           intros r2 r3 Hr.
-           assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto; constructor; auto. }
-           specialize (RM r1 Hused); rewrite Hr in RM.
-           destruct RM as (_ & H2' & H3' & _).
-           rewrite <- H2', <- H3'; split; reflexivity. }
+           - admit.
+           - admit. }
+      
+           (* (* destruct (rs # r1) eqn:Hr1; try apply I. *) *)
+           (* (*   eapply eval_addressing_in_args_vundef in H0; eauto; subst. *) *)
+           (* (*   inv H1. } *) *)
+           (* split. *)
+           (* { intros b i Hr1. *)
+           (*   (* TODO: add to invariant? that pointer values in *)
+           (*      registers are valid pointers. *) *)
+           (*   admit. } *)
+           (* intros r2 r3 Hr. *)
+           (* assert (Hused: reg_used_in_code c r1). *)
+           (* { eexists; eexists; split; eauto; constructor; auto. } *)
+           (* specialize (RM r1 Hused); rewrite Hr in RM. *)
+           (* destruct RM as (_ & H2' & H3' & _). *)
+           (* rewrite <- H2', <- H3'; split; reflexivity. } *)
       destruct H10 as (rs'' & H10 & Hrs'').
       eexists; split.
       + eapply star_plus_trans.

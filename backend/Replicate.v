@@ -50,6 +50,24 @@ Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction :=
             end in
   Ibuiltin (EF_builtin nm sig) [BA src] (BR dst) succ.
 
+Definition maj_vote_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
+  match ty with
+  | Tint => Some ("__vote_int", BI_vote_int)
+  | Tlong => Some ("__vote_long", BI_vote_long)
+  | Tsingle => Some ("__vote_single", BI_vote_single)
+  | Tfloat => Some ("__vote_float", BI_vote_float)
+  | _ => None
+  end.
+
+Definition maj_vote_of_typ (ty : typ) (r1 r2 r3 : reg)
+  : option (node -> instruction) :=
+  match maj_vote_sig_of_typ ty with
+  | None => None
+  | Some (nm, kind) =>
+      Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
+              [BA r1; BA r2; BA r3] (BR r1))
+  end.
+
 (** Emit instructions for majority voting registers [r1], [r2], and
     [r3], storing the result in [r1] and leaving the contents of [r2]
     and [r3] unchanged.
@@ -63,19 +81,40 @@ Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction :=
    and takes the fresh nodes and registers as arguments (similar to
    smove above), and a wrapper around it that generates them in the
    monad. *)
+(* Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node) *)
+(*   : mon node := *)
+(*   do (nm, sig) <- match re r1 with *)
+(*                  | Tint => ret ("__vote_int", replicate_builtin_sig BI_vote_int) *)
+(*                  | Tlong => ret ("__vote_long", replicate_builtin_sig BI_vote_long) *)
+(*                  | Tsingle => ret ("__vote_single", replicate_builtin_sig BI_vote_single) *)
+(*                  | Tfloat => ret ("__vote_float", replicate_builtin_sig BI_vote_float) *)
+(*                  | _ => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil) *)
+(*                  end; *)
+(*   do succ <- reserve_instr; *)
+(*   do _ <- update_instr pc *)
+(*            (Ibuiltin (EF_builtin nm sig) [BA r1; BA r2; BA r3] (BR r1) succ); *)
+(*   ret succ. *)
+
+(* Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node) *)
+(*   : mon node := *)
+(*   match maj_vote_sig_of_typ (re r1) with *)
+(*   | None => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil) *)
+(*   | Some (nm, sig) => *)
+(*       do succ <- reserve_instr; *)
+(*       do _ <- update_instr pc *)
+(*                (Ibuiltin (EF_builtin nm (replicate_builtin_sig sig)) [BA r1; BA r2; BA r3] (BR r1) succ); *)
+(*       ret succ *)
+(*   end. *)
+
 Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
-  do (nm, sig) <- match re r1 with
-                 | Tint => ret ("__vote_int", replicate_builtin_sig BI_vote_int)
-                 | Tlong => ret ("__vote_long", replicate_builtin_sig BI_vote_long)
-                 | Tsingle => ret ("__vote_single", replicate_builtin_sig BI_vote_single)
-                 | Tfloat => ret ("__vote_float", replicate_builtin_sig BI_vote_float)
-                 | _ => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
-                 end;
-  do succ <- reserve_instr;
-  do _ <- update_instr pc
-           (Ibuiltin (EF_builtin nm sig) [BA r1; BA r2; BA r3] (BR r1) succ);
-  ret succ.
+  match maj_vote_of_typ (re r1) r1 r2 r3 with
+  | None => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
+  | Some vote =>
+      do succ <- reserve_instr;
+      do _ <- update_instr pc (vote succ);
+      ret succ
+  end.
 
 (** Emit code for majority voting the list of registers [reg]. [re] is
     the register typing context of the original function. [rm] (the
