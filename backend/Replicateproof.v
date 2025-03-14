@@ -1,10 +1,11 @@
-(** TODO: maybe copy monadInv tactic for use with RTLgen monad? *)
+(** Simulation diagram proof for TMR transformation pass. *)
 
 Require Import
   AST
   Coqlib
   Errors
   Events
+  Floats
   Globalenvs
   Integers
   Linking
@@ -177,7 +178,7 @@ Section PRESERVATION.
   (*   apply in_app_or in Hin; destruct Hin; contradiction. *)
   (* Qed. *)
 
-  Lemma asdf regs acc s rm s' pf :
+  Lemma replication_map_wf_aux regs acc s rm s' pf :
     Forall (fun r => r < s.(st_nextreg)) regs ->
     foldM
       (fun rm r1 => do r2 <- new_reg; do r3 <- new_reg; ret rm # r1 <- (r2, r3))
@@ -342,7 +343,7 @@ Section PRESERVATION.
     replication_map f (init_state f) = RTLgen.OK rm s pf ->
     rm_wf rm (fun_regs_list f).
   Proof.
-    intro H; eapply asdf; eauto.
+    intro H; eapply replication_map_wf_aux; eauto.
     apply Forall_forall; intros r Hin.
     apply in_lt_max_reg; auto.
   Qed.
@@ -386,6 +387,28 @@ Section PRESERVATION.
   Proof.
     intros Hinv Hused; apply Hinv in Hused.
     destruct (rm # r); intuition.
+  Qed.
+
+  Lemma rm_inv_get_2 c rm r1 r2 r3 rs rs' :
+    rm_inv c rm rs rs' ->
+    reg_used_in_code c r1 ->
+    rm # r1 = (r2, r3) ->
+    rs # r1 = rs' # r2.
+  Proof.
+    intros Hinv Hused Hr; apply Hinv in Hused.
+    destruct (rm # r1); inv Hr; intuition.
+  Qed.
+
+  Lemma rm_inv_get_3 c rm r1 r2 r3 rs rs' :
+    rm_inv c rm rs rs' ->
+    reg_used_in_code c r1 ->
+    rm # r1 = (r2, r3) ->
+    rs' # r2 = rs' # r3.
+  Proof.
+    intros Hinv Hused Hr; apply Hinv in Hused.
+    destruct (rm # r1); inv Hr.
+    destruct Hused as (H0 & H1 & H2 & H3).
+    rewrite <- H1, <- H2; reflexivity.
   Qed.
 
   Lemma rs_args_rs'_args c rm args rs rs' :
@@ -805,11 +828,11 @@ Section PRESERVATION.
 
   (* forall r, Val.has_type (rs#r) (env r). *)
 
-  Definition is_defined (v : val) : Prop :=
-    match v with
-    | Vundef => False
-    | _ => True
-    end.
+  (* Definition is_defined (v : val) : Prop := *)
+  (*   match v with *)
+  (*   | Vundef => False *)
+  (*   | _ => True *)
+  (*   end. *)
 
   (* Lemma int_canon v : *)
   (* Val.has_type v Tint -> *)
@@ -822,73 +845,73 @@ Section PRESERVATION.
   (*   - right; exists i, b; reflexivity. *)
   (* Qed. *)
 
-  Lemma int_canon_32 v :
-    Archi.ptr64 = false ->
-    Val.has_type v Tint ->
-    is_defined v ->
-    (exists i, v = Vint i) \/ (exists b i, v = Vptr b i).
-  Proof.
-    intros Harchi Hty Hdef.
-    destruct v; simpl in *; try contradiction.
-    - left; exists i; reflexivity.
-    - right; exists b, i; reflexivity.
-  Qed.
+  (* Lemma int_canon_32 v : *)
+  (*   Archi.ptr64 = false -> *)
+  (*   Val.has_type v Tint -> *)
+  (*   is_defined v -> *)
+  (*   (exists i, v = Vint i) \/ (exists b i, v = Vptr b i). *)
+  (* Proof. *)
+  (*   intros Harchi Hty Hdef. *)
+  (*   destruct v; simpl in *; try contradiction. *)
+  (*   - left; exists i; reflexivity. *)
+  (*   - right; exists b, i; reflexivity. *)
+  (* Qed. *)
 
-  Lemma int_canon_64 v :
-    Archi.ptr64 = true ->
-    Val.has_type v Tint ->
-    is_defined v ->
-    exists i, v = Vint i.
-  Proof.
-    intros Harchi Hty Hdef.
-    destruct v; simpl in *; try contradiction.
-    - exists i; reflexivity.
-    - congruence.
-  Qed.
+  (* Lemma int_canon_64 v : *)
+  (*   Archi.ptr64 = true -> *)
+  (*   Val.has_type v Tint -> *)
+  (*   is_defined v -> *)
+  (*   exists i, v = Vint i. *)
+  (* Proof. *)
+  (*   intros Harchi Hty Hdef. *)
+  (*   destruct v; simpl in *; try contradiction. *)
+  (*   - exists i; reflexivity. *)
+  (*   - congruence. *)
+  (* Qed. *)
 
-  Lemma long_canon_32 v :
-    Archi.ptr64 = false ->
-    Val.has_type v Tlong ->
-    is_defined v ->
-    exists i, v = Vlong i.
-  Proof.
-    intros Harchi Hty Hdef.
-    destruct v; simpl in *; try contradiction.
-    - exists i; reflexivity.
-    - congruence.
-  Qed.
+  (* Lemma long_canon_32 v : *)
+  (*   Archi.ptr64 = false -> *)
+  (*   Val.has_type v Tlong -> *)
+  (*   is_defined v -> *)
+  (*   exists i, v = Vlong i. *)
+  (* Proof. *)
+  (*   intros Harchi Hty Hdef. *)
+  (*   destruct v; simpl in *; try contradiction. *)
+  (*   - exists i; reflexivity. *)
+  (*   - congruence. *)
+  (* Qed. *)
 
-  Lemma long_canon_64 v :
-    Archi.ptr64 = true ->
-    Val.has_type v Tlong ->
-    is_defined v ->
-    (exists i, v = Vlong i) \/ (exists b i, v = Vptr b i).
-  Proof.
-    intros Harchi Hty Hdef.
-    destruct v; simpl in *; try contradiction.
-    - left; exists i; reflexivity.
-    - right; exists b, i; reflexivity.
-  Qed.
+  (* Lemma long_canon_64 v : *)
+  (*   Archi.ptr64 = true -> *)
+  (*   Val.has_type v Tlong -> *)
+  (*   is_defined v -> *)
+  (*   (exists i, v = Vlong i) \/ (exists b i, v = Vptr b i). *)
+  (* Proof. *)
+  (*   intros Harchi Hty Hdef. *)
+  (*   destruct v; simpl in *; try contradiction. *)
+  (*   - left; exists i; reflexivity. *)
+  (*   - right; exists b, i; reflexivity. *)
+  (* Qed. *)
 
-  Lemma single_canon v :
-    Val.has_type v Tsingle ->
-    is_defined v ->
-    exists f, v = Vsingle f.
-  Proof.
-    intros Hty Hdef.
-    destruct v; simpl in *; try contradiction.
-    exists f; reflexivity.
-  Qed.
+  (* Lemma single_canon v : *)
+  (*   Val.has_type v Tsingle -> *)
+  (*   is_defined v -> *)
+  (*   exists f, v = Vsingle f. *)
+  (* Proof. *)
+  (*   intros Hty Hdef. *)
+  (*   destruct v; simpl in *; try contradiction. *)
+  (*   exists f; reflexivity. *)
+  (* Qed. *)
 
-  Lemma float_canon v :
-    Val.has_type v Tfloat ->
-    is_defined v ->
-    exists f, v = Vfloat f.
-  Proof.
-    intros Hty Hdef.
-    destruct v; simpl in *; try contradiction.
-    exists f; reflexivity.
-  Qed.
+  (* Lemma float_canon v : *)
+  (*   Val.has_type v Tfloat -> *)
+  (*   is_defined v -> *)
+  (*   exists f, v = Vfloat f. *)
+  (* Proof. *)
+  (*   intros Hty Hdef. *)
+  (*   destruct v; simpl in *; try contradiction. *)
+  (*   exists f; reflexivity. *)
+  (* Qed. *)
 
   (* Lemma eval_condition_not_none ty cond rs r1 r2 m : *)
   (*   eval_condition (comp_of_typ ty cond) rs ## [r1; r2] m <> None. *)
@@ -930,11 +953,6 @@ Section PRESERVATION.
   (*          rewrite Hf in Hr12. *)
   (*          inv Hr12. } *)
 
-  (* Lemma duifg {A : Type} (rs : Regmap.t A) r : *)
-  (*   rs # r <- (rs # r) = rs. *)
-  (* Proof. *)
-  (*   apply PTree.extensionality. *)
-
   Lemma maj_voteR_step
     r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
     is_actual_type ty ->
@@ -959,6 +977,8 @@ Section PRESERVATION.
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
     intros Hact Hty Hr2 Hr3 Hmaj; inv Hmaj.
+    (* TODO: all four cases are very similar. combine them somehow or
+       factor out commonality? *)
     destruct ty; simpl in *; try contradiction; clear H.
     { inv H0.
       eexists; split.
@@ -981,222 +1001,65 @@ Section PRESERVATION.
           destruct (eq_block _ _); simpl; try congruence.
           destruct (Ptrofs.eq_dec _ _); simpl; try congruence.
           rewrite PMap.gss; reflexivity. }
-    { admit. }
-    { admit. }
-    { admit. }
-  Admitted.
-
-  (*   Lemma maj_voteR_step *)
-  (*   r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m : *)
-  (*   is_actual_type ty -> *)
-  (*   Val.has_type (rs # r1) ty -> *)
-  (*   is_defined (rs # r1) -> *)
-  (*   (forall b i, (rs # r1) = Vptr b i -> *)
-  (*           Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) || *)
-  (*             Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true) -> *)
-  (*   rs # r1 = rs # r2 -> *)
-  (*   rs # r2 = rs # r3 -> *)
-  (*   maj_voteR c ty r1 r2 r3 pc succ -> *)
-  (*   exists rs', plus step tge *)
-  (*            (State tstk *)
-  (*                   {| fn_sig := sig *)
-  (*                   ; fn_params := params *)
-  (*                   ; fn_stacksize := stacksize *)
-  (*                   ; fn_code := c *)
-  (*                   ; fn_entrypoint := entrypoint |} *)
-  (*                   sp pc rs m) [] *)
-  (*            (State tstk *)
-  (*                   {| fn_sig := sig *)
-  (*                   ; fn_params := params *)
-  (*                   ; fn_stacksize := stacksize *)
-  (*                   ; fn_code := c *)
-  (*                   ; fn_entrypoint := entrypoint |} *)
-  (*                   sp succ rs' m) /\ (forall r, rs # r = rs' # r). *)
-  (* Proof. *)
-  (*   intros Hact Hty Hdef Hptr Hr2 Hr3 Hmaj; inv Hmaj. *)
-  (*   assert (Hcond: forall cond, eval_condition (comp_of_typ ty cond) rs ## [r1; r1] m <> None). *)
-  (*   { intros cond Hr12. *)
-  (*     simpl in *. *)
-  (*     destruct ty; simpl in *; try contradiction. *)
-  (*     - destruct Archi.ptr64 eqn:Harchi. *)
-  (*       + eapply int_canon_64 in Hty; eauto. *)
-  (*         destruct Hty as [i Hi]. *)
-  (*         rewrite Hi in Hr12. *)
-  (*         inv Hr12. *)
-  (*       + eapply int_canon_32 in Hty; eauto. *)
-  (*         destruct Hty as [[i Hi] | (b & i & Hi)]. *)
-  (*         * rewrite Hi in Hr12; inv Hr12. *)
-  (*         * rewrite Hi in Hr12. *)
-  (*           simpl in Hr12; rewrite Harchi in Hr12. *)
-  (*           destruct (eq_block b b) eqn:Hblock; try congruence. *)
-  (*           apply Hptr in Hi; rewrite Hi in Hr12; inv Hr12. *)
-  (*     - eapply float_canon in Hty; eauto. *)
-  (*       destruct Hty as [f Hf]. *)
-  (*       rewrite Hf in Hr12. *)
-  (*       inv Hr12. *)
-  (*     - destruct Archi.ptr64 eqn:Harchi. *)
-  (*       + eapply long_canon_64 in Hty; eauto. *)
-  (*         destruct Hty as [[i Hi] | (b & i & Hi)]. *)
-  (*         * rewrite Hi in Hr12; inv Hr12. *)
-  (*         * rewrite Hi in Hr12; simpl in Hr12. *)
-  (*           rewrite Harchi in Hr12; simpl in Hr12. *)
-  (*           destruct (eq_block b b) eqn:Hblock; try congruence. *)
-  (*           apply Hptr in Hi; rewrite Hi in Hr12; inv Hr12. *)
-  (*       + eapply long_canon_32 in Hty; eauto. *)
-  (*         destruct Hty as [i Hi]. *)
-  (*         rewrite Hi in Hr12. *)
-  (*         inv Hr12. *)
-  (*     - eapply single_canon in Hty; eauto. *)
-  (*       destruct Hty as [f Hf]. *)
-  (*       rewrite Hf in Hr12. *)
-  (*       inv Hr12. } *)
-  (*   destruct (eval_condition (comp_of_typ ty Cne) rs ## [r1; r2] m) eqn:Hr12. *)
-  (*   2: { simpl in Hr12. *)
-  (*        rewrite <- Hr2 in Hr12. *)
-  (*        apply Hcond in Hr12; contradiction. } *)
-  (*   destruct b. *)
-  (*   { *)
-  (*     (* Maybe this whole case could follow from a simple lemma of *)
-  (*        [eval_condition Cne r1 r1 = false]. *) *)
-  (*     destruct Archi.ptr64 eqn:Harchi. *)
-  (*     2: { admit. } *)
-  (*     destruct ty; simpl in *; try contradiction. *)
-  (*     - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence. *)
-  (*       rewrite <- Hr2 in Hr12; inv Hr12. *)
-  (*       rewrite Int.eq_true in H3; simpl in H3; congruence. *)
-  (*     - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence. *)
-  (*       rewrite <- Hr2 in Hr12; inv Hr12. *)
-  (*       admit. *)
-  (*     - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence. *)
-  (*       + rewrite <- Hr2 in Hr12; inv Hr12. *)
-  (*         rewrite Int64.eq_true in H3; simpl in H3; congruence. *)
-  (*       + rewrite <- Hr2 in Hr12. *)
-  (*         rewrite Harchi in Hr12. *)
-  (*         simpl in Hr12. *)
-  (*         destruct (eq_block b b) eqn:Hblock; try congruence. *)
-  (*         destruct ((Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) *)
-  (*                    || Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1)) && *)
-  (*                     (Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) *)
-  (*                      || Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1))); inv Hr12. *)
-  (*         rewrite Ptrofs.eq_true in H3; simpl in H3; congruence. *)
-  (*     - destruct (rs # r1) eqn:Hr1; simpl in *; try contradiction; try congruence. *)
-  (*       rewrite <- Hr2 in Hr12; inv Hr12. *)
-  (*       admit. } *)
-  (*   { eexists; split. *)
-  (*     - econstructor. *)
-  (*       { eapply exec_Icond; eauto. } *)
-  (*       2: { reflexivity. } *)
-  (*       apply star_refl. *)
-  (*     - intro; reflexivity. } *)
-  (* Admitted.   *)
-
-  (* Lemma maj_voteR_step *)
-  (*   r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m : *)
-  (*   is_actual_type ty -> *)
-  (*   (* rm # r1 = (r2, r3) -> *) *)
-  (*   Val.has_type (rs # r1) ty -> *)
-  (*   is_defined (rs # r1) -> *)
-  (*   (forall b i, (rs # r1) = Vptr b i -> *)
-  (*           Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) || *)
-  (*             Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true) -> *)
-  (*   rs # r1 = rs # r2 -> *)
-  (*   rs # r2 = rs # r3 -> *)
-  (*   maj_voteR c ty r1 r2 r3 pc succ -> *)
-  (*   plus step tge *)
-  (*     (State tstk *)
-  (*            {| fn_sig := sig *)
-  (*            ; fn_params := params *)
-  (*            ; fn_stacksize := stacksize *)
-  (*            ; fn_code := c *)
-  (*            ; fn_entrypoint := entrypoint |} *)
-  (*            sp pc rs m) [] *)
-  (*     (State tstk *)
-  (*            {| fn_sig := sig *)
-  (*            ; fn_params := params *)
-  (*            ; fn_stacksize := stacksize *)
-  (*            ; fn_code := c *)
-  (*            ; fn_entrypoint := entrypoint |} *)
-  (*            sp succ (match (eval_condition (comp_of_typ ty Cne) rs ## [r1; r2] m, *)
-  (*                             eval_condition (comp_of_typ ty Ceq) rs ## [r2; r3] m) with *)
-  (*                     | (Some true, Some true) => rs # r1 <- (rs # r1) *)
-  (*                     | _ => rs *)
-  (*                     end) m). *)
-  (* Proof. *)
-  (*   intros Hact Hty Hdef Hptr Hr2 Hr3 Hmaj; inv Hmaj. *)
-
-  (*   assert (Hcond: forall cond, eval_condition (comp_of_typ ty cond) rs ## [r1; r1] m <> None). *)
-  (*   { intros cond Hr12. *)
-  (*     simpl in *. *)
-  (*     (* rewrite <- Hr2 in Hr12. *) *)
-  (*     destruct ty; simpl in *; try contradiction. *)
-  (*     - destruct Archi.ptr64 eqn:Harchi. *)
-  (*       + eapply int_canon_64 in Hty; eauto. *)
-  (*         destruct Hty as [i Hi]. *)
-  (*         rewrite Hi in Hr12. *)
-  (*         inv Hr12. *)
-  (*       + eapply int_canon_32 in Hty; eauto. *)
-  (*         destruct Hty as [[i Hi] | (b & i & Hi)]. *)
-  (*         * rewrite Hi in Hr12; inv Hr12. *)
-  (*         * rewrite Hi in Hr12. *)
-  (*           simpl in Hr12; rewrite Harchi in Hr12. *)
-  (*           destruct (eq_block b b) eqn:Hblock; try congruence. *)
-  (*           apply Hptr in Hi; rewrite Hi in Hr12; inv Hr12. *)
-  (*     - eapply float_canon in Hty; eauto. *)
-  (*       destruct Hty as [f Hf]. *)
-  (*       rewrite Hf in Hr12. *)
-  (*       inv Hr12. *)
-  (*     - destruct Archi.ptr64 eqn:Harchi. *)
-  (*       + eapply long_canon_64 in Hty; eauto. *)
-  (*         destruct Hty as [[i Hi] | (b & i & Hi)]. *)
-  (*         * rewrite Hi in Hr12; inv Hr12. *)
-  (*         * rewrite Hi in Hr12; simpl in Hr12. *)
-  (*           rewrite Harchi in Hr12; simpl in Hr12. *)
-  (*           destruct (eq_block b b) eqn:Hblock; try congruence. *)
-  (*           apply Hptr in Hi; rewrite Hi in Hr12; inv Hr12. *)
-  (*       + eapply long_canon_32 in Hty; eauto. *)
-  (*         destruct Hty as [i Hi]. *)
-  (*         rewrite Hi in Hr12. *)
-  (*         inv Hr12. *)
-  (*     - eapply single_canon in Hty; eauto. *)
-  (*       destruct Hty as [f Hf]. *)
-  (*       rewrite Hf in Hr12. *)
-  (*       inv Hr12. } *)
-
-  (*   destruct (eval_condition (comp_of_typ ty Cne) rs ## [r1; r2] m) eqn:Hr12. *)
-  (*   2: { simpl in Hr12. *)
-  (*        rewrite <- Hr2 in Hr12. *)
-  (*        apply Hcond in Hr12; contradiction. } *)
-  (*   destruct (eval_condition (comp_of_typ ty Ceq) rs ## [r2; r3] m) eqn:Hr23. *)
-  (*   2: { simpl in Hr23. *)
-  (*        rewrite <- Hr3 in Hr23. *)
-  (*        rewrite <- Hr2 in Hr23. *)
-  (*        apply Hcond in Hr23; contradiction. } *)
-  (*   econstructor. *)
-  (*   { eapply exec_Icond; eauto. } *)
-  (*   2: { reflexivity. } *)
-  (*   destruct b. *)
-  (*   - eapply star_step. *)
-  (*     { eapply exec_Icond; eauto. } *)
-  (*     2: { reflexivity. } *)
-  (*     destruct b0. *)
-  (*     + eapply star_step. *)
-  (*       { eapply exec_Iop. eauto. *)
-  (*         reflexivity. } *)
-  (*       2: { reflexivity. } *)
-  (*       rewrite <- Hr2. *)
-  (*       apply star_refl. *)
-  (*     + apply star_refl. *)
-  (*   - apply star_refl. *)
-  (* Qed. *)
+    { inv H0.
+      eexists; split.
+      - econstructor.
+        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+            eauto; repeat constructor.
+        + apply star_refl.
+        + reflexivity.
+      - intro r; simpl.
+        unfold Builtins2.vote_float.
+        rewrite <- Hr3, <- Hr2.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
+        2: { rewrite PMap.gso; auto. }
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hty].
+        * rewrite PMap.gss; reflexivity.
+        * destruct (Float.eq_dec f f); simpl; try congruence.
+          rewrite PMap.gss; reflexivity. }
+    { inv H0.
+      eexists; split.
+      - econstructor.
+        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+            eauto; repeat constructor.
+        + apply star_refl.
+        + reflexivity.
+      - intro r; simpl.
+        unfold Builtins2.vote_long.
+        rewrite <- Hr3, <- Hr2.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
+        2: { rewrite PMap.gso; auto. }
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hty].
+        * rewrite PMap.gss; reflexivity.
+        * destruct (Int64.eq_dec i i); simpl; try congruence.
+          rewrite PMap.gss; reflexivity.
+        * destruct Archi.ptr64 eqn:Harchi; simpl.
+          2: { inv Hty; congruence. }
+          destruct (eq_block _ _); simpl; try congruence.
+          destruct (Ptrofs.eq_dec _ _); simpl; try congruence.
+          rewrite PMap.gss; reflexivity. }
+    { inv H0.
+      eexists; split.
+      - econstructor.
+        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+            eauto; repeat constructor.
+        + apply star_refl.
+        + reflexivity.
+      - intro r; simpl.
+        unfold Builtins2.vote_single.
+        rewrite <- Hr3, <- Hr2.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
+        2: { rewrite PMap.gso; auto. }
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hty].
+        * rewrite PMap.gss; reflexivity.
+        * destruct (Float32.eq_dec f f); simpl; try congruence.
+          rewrite PMap.gss; reflexivity. }
+  Qed.
 
   Lemma maj_vote_regR_star_step
     c re (rm : PMap.t (reg * reg))
     args pc n tstk sig params stacksize entrypoint sp rs m :
     Forall (fun r1 => Val.has_type (rs # r1) (re r1) /\
-                     (* is_defined (rs # r1) /\ *)
-                     (* (forall b i, (rs # r1) = Vptr b i -> *)
-                     (*         Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) || *)
-                     (*           Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true) /\ *)
                      forall r2 r3,
                        rm # r1 = (r2, r3) ->
                        rs # r1 = rs # r2 /\ rs # r2 = rs # r3) args ->
@@ -1259,7 +1122,7 @@ Section PRESERVATION.
     econstructor; eauto.
   Qed.
 
-  Lemma kdfg (rs : Regmap.t val) args v r :
+  Lemma rs_in_singleton (rs : Regmap.t val) args v r :
     rs ## args = [v] ->
     In r args ->
     rs # r = v.
@@ -1271,7 +1134,7 @@ Section PRESERVATION.
       apply map_eq_nil in H2; subst; inv H.
   Qed.
 
-  Lemma kasddfg (rs : Regmap.t val) args v1 v2 r :
+  Lemma rs_in_l_2 (rs : Regmap.t val) args v1 v2 r :
     rs ## args = [v1; v2] ->
     In r args ->
     rs # r = v1 \/ rs # r = v2.
@@ -1280,77 +1143,20 @@ Section PRESERVATION.
     destruct args; inv Hin.
     - inv Hargs; auto.
     - inv Hargs.
-      right; eapply kdfg; eauto.
+      right; eapply rs_in_singleton; eauto.
   Qed.
 
-  Lemma eval_addressing_in_args_vundef sp addr rs a args r :
-    eval_addressing ge sp addr rs ## args = Some a ->
-    In r args ->
-    rs # r = Vundef ->
-    a = Vundef.
-  Proof.
-    intros Heval Hin Heq.
-    eapply eval_addressing_vundef; eauto.
-    apply in_map_iff.
-    eexists; split; eauto.
-  Qed.
-
-  (* Lemma fkjdfg sp chunk m m' addr rs a args src r b i : *)
+  (* Lemma eval_addressing_in_args_vundef sp addr rs a args r : *)
   (*   eval_addressing ge sp addr rs ## args = Some a -> *)
-  (*   Memory.Mem.storev chunk m a rs # src = Some m' -> *)
   (*   In r args -> *)
-  (*   rs # r = Vptr b i -> *)
-  (*   Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) || *)
-  (*     Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true. *)
+  (*   rs # r = Vundef -> *)
+  (*   a = Vundef. *)
   (* Proof. *)
-  (*   intros Heval Hstore Hin Hr. *)
-
-  (* Lemma fkjdfg sp chunk m m' addr a vs v b i : *)
-  (*   eval_addressing ge sp addr vs = Some a -> *)
-  (*   Memory.Mem.storev chunk m a v = Some m' -> *)
-  (*   In (Vptr b i) vs -> *)
-  (*   Memory.Mem.valid_pointer m b (Ptrofs.unsigned i) || *)
-  (*     Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1) = true. *)
-  (* Proof. *)
-  (*   intros Heval Hstore Hin. *)
-  (*   unfold eval_addressing in Heval. *)
-  (*   unfold eval_addressing64 in Heval. *)
-  (*   unfold eval_addressing32 in Heval. *)
-  (*   destruct Archi.ptr64 eqn:Harchi. *)
-  (*   - destruct vs as [|arg vs]. *)
-  (*     { inv Hin. } *)
-  (*     wt_state *)
-  (*     Val.addl *)
-  (*     inv Hin. *)
-  (*     + destruct addr eqn:Haddr; try congruence. *)
-  (*       * destruct vs; inv Heval. *)
-  (*         unfold Memory.Mem.storev in Hstore. *)
-  (*         rewrite Harchi in Hstore. *)
-
-  (*         apply Memory.Mem.store_valid_access_3 in Hstore. *)
-  (*         eapply Memory.Mem.valid_access_implies in Hstore. *)
-  (*         { eapply Memory.Mem.valid_access_perm in Hstore. *)
-  (*           apply Memory.Mem.valid_pointer_nonempty_perm in Hstore. *)
-
-
-  (*         unfold Memory.Mem.valid_pointer. *)
-  (*         destruct (Memory.Mem.perm_dec m b (Ptrofs.unsigned i) Memtype.Cur Memtype.Nonempty) eqn:H0; simpl. *)
-  (*         (* destruct (Memory.Mem.valid_pointer m b (Ptrofs.unsigned i)) eqn:H0; simpl. *) *)
-  (*         { reflexivity. } *)
-  (*         destruct (Memory.Mem.valid_pointer m b (Ptrofs.unsigned i - 1)) eqn:H1. *)
-  (*         { reflexivity. } *)
-  (*         apply Memory.Mem.valid_pointer_nonempty_perm. *)
-
-
-  (*         apply Memory.Mem.store_valid_access_3 in Hstore. *)
-  (*         unfold Memory.Mem.valid_access in Hstore. *)
-  (*         destruct Hstore. *)
-  (*         Memory.Mem.valid_pointer *)
-
-  (*         eapply Memory.Mem.valid_access_perm in Hstore. *)
-  (*         Memory.Mem.valid_pointer_nonempty_perm in Hstore. *)
-  (*         rewrite <- Memory.Mem.valid_pointer_valid_access in Hstore. *)
-  (*         Memory.Mem.valid_access *)
+  (*   intros Heval Hin Heq. *)
+  (*   eapply eval_addressing_vundef; eauto. *)
+  (*   apply in_map_iff. *)
+  (*   eexists; split; eauto. *)
+  (* Qed. *)
 
   Lemma rm_inv_ext_r rs0 rs1 rs2 c rm :
     (forall r, rs1 # r = rs2 # r) ->
@@ -1365,81 +1171,55 @@ Section PRESERVATION.
     repeat split; auto; rewrite <- Heq; auto.
   Qed.
 
-  (* Lemma asdfs sp op vs m b ofs : *)
-  (*   Forall (fun v => match v with *)
-  (*                 | Vptr b0 ofs0 => valid_pointer m b0 ofs0 *)
-  (*                 | _ => True *)
-  (*                 end) vs -> *)
-  (*   eval_operation ge sp op vs m = Some (Vptr b ofs) -> *)
-  (*   valid_pointer m b ofs. *)
+  (* Lemma find_funct_proper rs rs' r f : *)
+  (*   rs # r = rs' # r -> *)
+  (*   Genv.find_funct tge rs # r = Some f -> *)
+  (*   Genv.find_funct tge rs' # r = Some f. *)
   (* Proof. *)
-  (*   intro Hall. *)
-  (*   unfold eval_operation. *)
-  (*   destruct op; try solve [destruct vs; congruence]; *)
-  (*     (* try solve [destruct vs; try congruence; *) *)
-  (*     (*            destruct vs; try congruence; *) *)
-  (*     (*            intro H; inv H; unfold Val.sign_ext in H1; *) *)
-  (*     (*            destruct v; congruence]; *) *)
-  (*     try solve [destruct vs; try congruence; *)
-  (*                destruct vs; try congruence; *)
-  (*                inv Hall; intro H; inv H; *)
-  (*                destruct v; simpl in *; congruence]. *)
-  (*   - destruct vs; try congruence. *)
-  (*     inv Hall. *)
-  (*     destruct vs; try congruence. *)
-  (*     intro H; inv H; auto. *)
-  (*   - destruct vs; try congruence. *)
-  (*     intro H; inv H. *)
-  (*     unfold Genv.symbol_address in H1. *)
-  (*     (* destruct (Genv.find_symbol ge id) eqn:Hsym; try congruence. *) *)
-  (*     (* inv H1. *) *)
-  (*     (* unfold valid_pointer. *) *)
-  (*     (* rewrite Ptrofs.unsigned_zero. *) *)
-  (*     (* simpl. *) *)
-  (*     (* apply orb_true_iff; left. *) *)
-  (*     admit. *)
-  (*   - destruct vs; try congruence. *)
-  (*     inv Hall. *)
-  (*     destruct vs; try congruence. *)
-  (*     inv H2. *)
-  (*     destruct vs; try congruence. *)
-  (*     intro H; inv H. *)
-  (*     destruct v; simpl in *; try congruence. *)
-  (*     destruct v0; simpl in *; try congruence. *)
-  (*     destruct v0; simpl in *; try congruence. *)
-  (*     + destruct Archi.ptr64; try congruence. *)
-  (*       inv H2. *)
-  (*       auto. *)
-  (*       valid_pointer *)
-  (*     destruct v; try contradiction. *)
-  (*     Val.sub *)
-  (*   (* - destruct vs; try congruence. *) *)
-  (*   (*   destruct vs; try congruence. *) *)
-  (*   (*   intro H; inv H. *) *)
-  (*   (*   unfold Val.sign_ext in H1. *) *)
-  (*   (*   destruct v; congruence. *) *)
-  (*   - destruct vs; try congruence. *)
-  (*     destruct vs; try congruence. *)
-  (*     intro H; inv H. *)
-  (*     unfold Val.zero_ext in H1. *)
-  (*     destruct v; congruence. *)
-  (*   (* - destruct vs; try congruence. *) *)
-  (*   (*   destruct vs; try congruence. *) *)
-  (*   (*   intro H; inv H. *) *)
-  (*   (*   unfold Val.sign_ext in H1. *) *)
-  (*     (*   destruct v; congruence. *) *)
-  (*   - destruct vs; try congruence. *)
-  (*     destruct vs; try congruence. *)
-  (*     intro H; inv H. *)
-  (*     unfold Val.zero_ext in H1. *)
-  (*     destruct v; congruence. *)
-  (*   - destruct vs; try congruence. *)
-  (*     destruct vs; try congruence. *)
-  (*     inv Hall. *)
-  (*     intro H; inv H. *)
-  (*     destruct v; simpl in *; congruence. *)
-  (*     unfold Val.neg in H1. *)
+  (*   unfold Genv.find_funct. *)
+  (*   intros Heq Hfind. *)
+  (*   rewrite <- Heq. *)
+  (*   destruct (rs # r); congruence. *)
+  (* Qed. *)
 
+  (* Lemma find_funct_proper rs rs' r f : *)
+  (*   (forall r : positive, rs # r = rs' # r) -> *)
+  (*   Genv.find_funct tge rs # r = Some f -> *)
+  (*   Genv.find_funct tge rs' # r = Some f. *)
+  (* Proof. *)
+  (*   unfold Genv.find_funct. *)
+  (*   intros Heq Hfind. *)
+  (*   rewrite <- Heq. *)
+  (*   destruct (rs # r); congruence. *)
+  (* Qed. *)
+
+  Lemma find_function_proper rs rs' ros f :
+    (forall r, ros = inl r -> rs # r = rs' # r) ->
+    find_function tge ros rs = Some f ->
+    find_function tge ros rs' = Some f.
+  Proof.
+    unfold find_function.
+    intros Heq Hfind.
+    destruct ros.
+    - rewrite <- Heq; auto.
+      (* eapply find_funct_proper; eauto. *)
+    - destruct (Genv.find_symbol _ _); congruence.
+  Qed.
+
+  (* Lemma find_function_proper rs rs' ros f : *)
+  (*   (forall r : positive, rs # r = rs' # r) -> *)
+  (*   find_function tge ros rs = Some f -> *)
+  (*   find_function tge ros rs' = Some f. *)
+  (* Proof. *)
+  (*   unfold find_function. *)
+  (*   intros Heq Hfind. *)
+  (*   destruct ros. *)
+  (*   - eapply find_funct_proper; eauto. *)
+  (*   - destruct (Genv.find_symbol _ _); congruence. *)
+  (* Qed. *)
+
+  (* TODO: put lemmas that are used a lot in a hint database to clean
+     up this proof. *)
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
     forall ts1,
@@ -1596,14 +1376,6 @@ Section PRESERVATION.
               specialize (RM _ Hused); rewrite Hr in RM; intuition.
             - specialize (RM _ Hused); rewrite Hr in RM; intuition.
             - specialize (RM _ Hused); rewrite Hr in RM; intuition. }
-        (* * intros r Hused b ofs Heq. *)
-        (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec res r); subst. *)
-          (*   { (* rewrite PMap.gss in Heq; subst. *) *)
-          (*   (* eval_operation ge sp op rs ## args m = Some (Vptr b ofs) *) *)
-          (*   (*                                          valid_pointer m b ofs *) *)
-          (*   admit. } *)
-          (* rewrite PMap.gso in Heq; auto. *)
-          (* eapply PTR; eauto. *)
 
     - (* exec_Iload *)
       inv Hmatch.
@@ -1733,8 +1505,6 @@ Section PRESERVATION.
               specialize (RM _ Hused); rewrite Hr in RM; intuition.
             - specialize (RM _ Hused); rewrite Hr in RM; intuition.
             - specialize (RM _ Hused); rewrite Hr in RM; intuition. }
-        (* * intros r Hused b ofs Heq. *)
-        (*   admit. *)
 
     - (* exec_Istore *)
       inv Hmatch.
@@ -1758,23 +1528,10 @@ Section PRESERVATION.
            split.
            { apply WT_RS. }
            split.
-           - admit.
-           - admit. }
-      
-           (* (* destruct (rs # r1) eqn:Hr1; try apply I. *) *)
-           (* (*   eapply eval_addressing_in_args_vundef in H0; eauto; subst. *) *)
-           (* (*   inv H1. } *) *)
-           (* split. *)
-           (* { intros b i Hr1. *)
-           (*   (* TODO: add to invariant? that pointer values in *)
-           (*      registers are valid pointers. *) *)
-           (*   admit. } *)
-           (* intros r2 r3 Hr. *)
-           (* assert (Hused: reg_used_in_code c r1). *)
-           (* { eexists; eexists; split; eauto; constructor; auto. } *)
-           (* specialize (RM r1 Hused); rewrite Hr in RM. *)
-           (* destruct RM as (_ & H2' & H3' & _). *)
-           (* rewrite <- H2', <- H3'; split; reflexivity. } *)
+           - eapply rm_inv_get_2; eauto.
+             eexists; eexists; split; eauto; constructor; auto.
+           - eapply rm_inv_get_3; eauto.
+             eexists; eexists; split; eauto; constructor; auto. }
       destruct H10 as (rs'' & H10 & Hrs'').
       eexists; split.
       + eapply star_plus_trans.
@@ -1794,38 +1551,48 @@ Section PRESERVATION.
       + econstructor; eauto.
         * econstructor; eauto.
         * eapply rm_inv_ext_r; eauto.
-        (* * intros r Hused b ofs Heq. *)
-        (*   admit. *)
 
     - (* exec_Icall *)
 
-      (*       inv FUN; simpl in *. *)
-      (* set (f := {| fn_sig := sig *)
-      (*           ; fn_params := params *)
-      (*           ; fn_stacksize := stacksize *)
-      (*           ; fn_code := c *)
-      (*           ; fn_entrypoint := entrypoint |}). *)
-      (* pose proof H as Hcode. *)
-      (* specialize (H pc (Icall (funsig fd) ros args res pc') H7); inv H. *)
-      (* eapply maj_vote_regR_star_step with (m:=m) in H9; eauto. *)
-      (* 2: { apply Forall_forall; intros r1 Hin. *)
-      (*      assert (Hused: reg_used_in_code c r1). *)
-      (*      { eexists; eexists; split; eauto; constructor; assumption. } *)
-      (*      assert (Heq: rs' # r1 = rs # r1). *)
-      (*      { specialize (RM r1 Hused). *)
-      (*        destruct (rm # r1) eqn:Hr1. *)
-      (*        intuition. } *)
-      (*      rewrite Heq; clear Hused Heq. *)
-      (*      split. *)
-      (*      { apply WT_RS. } *)
-      (*      split. *)
-      (*      { destruct (rs # r1) eqn:Hr1; try apply I. *)
-      (*        eapply eval_addressing_in_args_vundef in H8; eauto; subst. *)
-      (*        inv H9. } *)
+      inv Hmatch.
+      pose proof FUN as Hmatch_function.
+      inv FUN; simpl in *.
+      set (f := {| fn_sig := sig
+                ; fn_params := params
+                ; fn_stacksize := stacksize
+                ; fn_code := c
+                ; fn_entrypoint := entrypoint |}).
+      pose proof H as Hcode.
+      specialize (H1 pc (Icall (funsig fd) ros args res pc') Hcode); inv H1.
+      inv H11.
+      eapply maj_vote_regR_star_step with (m:=m) in H9; eauto.
+      2: { apply Forall_forall; intros r1 Hin.
+           assert (Hused: reg_used_in_code c r1).
+           { eexists; eexists; split; eauto.
+             apply in_app_or in Hin; destruct Hin.
+             - destruct ros; simpl in *; inv H6; try contradiction.
+               constructor.
+             - constructor; auto. }
+             (* eexists; eexists; split; eauto; constructor; assumption. } *)
+           assert (Heq: rs' # r1 = rs # r1).
+           { specialize (RM r1 Hused).
+             destruct (rm # r1) eqn:Hr1.
+             intuition. }
+           rewrite Heq; clear Heq.
+           split.
+           { apply WT_RS. }
+           split.
+           { eapply rm_inv_get_2; eauto. }
+           { eapply rm_inv_get_3; eauto. } }
+             (* destruct (rs # r1) eqn:Hr1; try apply I. *)
+             (* erewrite <- rm_inv_get_2 *)
+             (* eapply eval_addressing_in_args_vundef in H8; eauto; subst. *)
+      (* inv H9. } *)
+      
       (*      split. *)
       (*      { intros b i Hr1. *)
-      (*        (* TODO: add to invariant? that pointer values in *)
-      (*           registers are valid pointers. *) *)
+      (*        (* TODO: add to invariant? that pointer values in *) *)
+      (* (*           registers are valid pointers. *) *)
       (*        admit. } *)
       (*      intros r2 r3 Hr. *)
       (*      assert (Hused: reg_used_in_code c r1). *)
@@ -1833,15 +1600,128 @@ Section PRESERVATION.
       (*      specialize (RM r1 Hused); rewrite Hr in RM. *)
       (*      destruct RM as (_ & H2 & H3 & _). *)
       (*      rewrite <- H2, <- H3; split; reflexivity. } *)
-      (* destruct H10 as (rs'' & H10 & Hrs''). *)
+      destruct H9 as (rs'' & H9 & Hrs'').
+
+      assert (Htf: exists tf, transf_fundef fd = OK tf /\
+                           find_function tge ros rs = Some tf).
+      { unfold find_function in *.
+        destruct ros.
+        - apply functions_translated in H0.
+          destruct H0 as (cu & tf & Hfind & Htrans & Hlink).
+          eexists; split; eauto.
+        - destruct (Genv.find_symbol ge i) eqn:Hsym; try congruence.
+          apply function_ptr_translated in H0.
+          destruct H0 as (cu & tf & Hfind & Htrans & Hlink).
+          eexists; split; eauto.
+          rewrite symbols_preserved, Hsym; auto. }
+      destruct Htf as (tf & Htransf_fundef & Hfind_tf).
+
+      (* destruct ros. *)
+      { (* pose proof H0 as H0'. *)
+        (* unfold find_function in H0'. *)
+        (* apply functions_translated in H0'. *)
+        (* destruct H0' as (cu & tf & Hfind & Htrans & Hlink). *)
+        eexists; split.
+        + eapply star_plus_trans.
+          { apply H9. }
+          2: { reflexivity. }
+          econstructor.
+          2: { apply star_refl. }
+          2: { rewrite Events.E0_right; reflexivity. }
+          eapply exec_Icall; simpl.
+          { eauto. }
+          {
+            
+            erewrite find_function_proper.
+            { eauto. }
+            { intros r ?; subst.
+              etransitivity.
+              2: { rewrite <- Hrs''; reflexivity. }
+              eapply rm_inv_get; eauto.
+              eexists; eexists; split; eauto; constructor. }
+            eauto. }
+          
+            (* erewrite find_function_proper; eauto. *)
+            (* unfold find_function in *. *)
+            (* destruct ros. *)
+            (* -  *)
+            (* 3: { eauto. } *)
+            (* eauto. *)
+            (* intro r; rewrite <- Hrs''. *)
+            (* eapply rm_inv_get; eauto. *)
+            
+            (* assert (Hrs': rs # r = rs' # r). *)
+            (* { eapply rm_inv_get; eauto. *)
+            (*   eexists; eexists; split; eauto; constructor. } *)
+            (* rewrite <- Hrs'', <- Hrs'. *)
+            (* rewrite Hfind; reflexivity. } *)
+          { apply sig_function_translated; auto. }
+        + erewrite rs_args_rs'_args; eauto.
+          2: { apply Forall_forall; intros r' Hr';
+               eexists; eexists; split; eauto; constructor; auto. }
+          erewrite rs_map_ext; eauto.
+          constructor; auto.
+          { econstructor; eauto.
+            inv WT_FN.
+            simpl in *.
+            apply wt_instrs in Hcode.
+            inv Hcode; auto. }
+          { destruct ros.
+            - apply Genv.find_funct_inversion in H0.
+              destruct H0 as [id H0].
+              eapply wt_program_prog; eauto.
+            - simpl in H0.
+              destruct (Genv.find_symbol ge i); try congruence.
+              apply Genv.find_funct_ptr_inversion in H0.
+              destruct H0 as [id H0].
+              eapply wt_program_prog; eauto. }
+          { constructor; auto.
+            econstructor; eauto.
+            eapply rm_inv_ext_r; eauto. }
+          { apply transf_function_match_fundef; auto. } }
+
+      (*       intros fd' Hfd'; subst. *)
+      (*       exists re. *)
+            
+      (*       wt_instr *)
+      (*       wt_function *)
+      (*     2: { inv WT_FN; simpl in *. *)
+               
+      (*     match_states *)
+      (*     admit. } *)
+      (* { admit. } *)
+        
+      (*       * erewrite <- rs_map_ext; eauto. *)
+      (*     eapply rm_inv_eval_addressing; eauto. *)
+      (*     apply Forall_forall; intros r Hr; eexists; eexists; split; eauto. *)
+      (*     constructor; auto. *)
+      (*   * rewrite <- Hrs''. *)
+      (*     eapply rm_inv_storev; eauto. *)
+      (*     eexists; eexists; split; eauto; solve [constructor]. *)
+      (* + econstructor; eauto. *)
+      (*   econstructor; eauto. *)
+      
       (* eexists; split. *)
       (* + eapply star_plus_trans. *)
-      (*   { apply H10. }         *)
+      (*   { apply H9. } *)
       (*   2: { reflexivity. } *)
       (*   econstructor. *)
       (*   2: { apply star_refl. } *)
       (*   2: { rewrite Events.E0_right; reflexivity. } *)
-      (*   eapply exec_Istore; simpl; eauto. *)
+
+      (*   unfold find_function in H0. *)
+      (*   destruct ros. *)
+      (*   { apply functions_translated in H0. *)
+      (*     destruct H0 as (cu & tf & Hfind & Htrans & Hlink). *)
+      (*   (* destruct fd. *) *)
+      (*   eapply exec_Icall; simpl. *)
+      (*   { eauto. } *)
+      (*   { simpl. *)
+      (*     assert (Hrs': rs # r = rs' # r). *)
+      (*     { eapply rm_inv_get; eauto. *)
+      (*       eexists; eexists; split; eauto; constructor. } *)
+      (*     rewrite <- Hrs'', <- Hrs'. *)
+      (*     rewrite Hfind; reflexivity. *)
       (*   * erewrite <- rs_map_ext; eauto. *)
       (*     eapply rm_inv_eval_addressing; eauto. *)
       (*     apply Forall_forall; intros r Hr; eexists; eexists; split; eauto. *)
@@ -1852,7 +1732,7 @@ Section PRESERVATION.
       (* + econstructor; eauto. *)
       (*   econstructor; eauto. *)
       (*   eapply rm_inv_ext_r; eauto. *)
-      admit.
+
 
     - (* exec_Itailcall *)
       admit.
@@ -1871,91 +1751,6 @@ Section PRESERVATION.
     - (* exec_return *)
       admit.
   Admitted.
-
-  Inductive copy_paramsR re rm c : list reg -> node -> node -> Prop :=
-  | copy_params_nil :
-    forall n,
-      copy_paramsR re rm c [] n n
-  | copy_params_cons :
-    forall param params succ n m p r2 r3,
-      rm # param = (r2, r3) ->
-      (* c ! n = Some (Iop Omove [param] r2 m) -> *)
-      (* c ! m = Some (Iop Omove [param] r3 p) -> *)
-      c ! n = Some (smove (re param) param r2 m) ->
-      c ! m = Some (smove (re param) param r3 p) ->
-      copy_paramsR re rm c params p succ ->
-      copy_paramsR re rm c (param :: params) n succ.
-
-  Lemma copy_params_copy_paramsR re rm params n succ s0 s1 pf c :
-    copy_params re rm params succ s0 = RTLgen.OK n s1 pf ->
-    (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) ->
-    copy_paramsR re rm c params n succ.
-  Proof.
-    revert pf.
-    revert s0 s1 n succ.
-    induction params; simpl; intros s0 s1 n succ pf Hcopy Hc; inv Hcopy.
-    { constructor. }
-    unfold RTLgen.bind in H0; simpl in H0.
-    gen_case H1; inv H0.
-    gen_case H3; inv H2.
-    gen_case H2; inv H3.
-    gen_case H3; inv H2.
-    unfold copy_to_shadows in H3.
-    destruct (rm # a) eqn:Ha.
-    unfold RTLgen.bind in H3; simpl in H3.
-    gen_case H4; inv H3.
-    gen_case H3; inv H4.
-    gen_case H4; inv H0.
-    unfold update_instr in *.
-    lr_case; try congruence.
-    lr_case; inv H4.
-    lr_case; try congruence.
-    lr_case; inv H3.
-    simpl in *.
-    inv s7; inv s5; inv s6; inv s3; inv s4; inv s2; inv pf.
-    simpl in *; unfold Ple in *.
-    econstructor.
-    { eauto. }
-    - apply Hc.
-      rewrite PTree.gso; try lia.
-      rewrite PTree.gss; eauto.
-    - apply Hc.
-      rewrite PTree.gss; eauto.
-    - eapply IHparams; eauto.
-      intros p' i Hget.
-      apply Hc.
-      specialize (H17 p'); destruct H17; congruence.
-  Qed.
-
-  Lemma copy_paramsR_match_entrypoint re rm params entrypoint n c :
-    copy_paramsR re rm c params n entrypoint ->
-    match_entrypoint re rm c params n entrypoint.
-  Proof.
-    revert entrypoint n.
-    induction params; simpl; intros entrypoint n Hcopy; inv Hcopy.
-    { constructor. }
-    econstructor; eauto.
-  Qed.
-
-  Lemma copy_params_match_entrypoint re rm params entrypoint s0 s1 pf1 n :
-    copy_params re rm params entrypoint s0 = RTLgen.OK n s1 pf1 ->
-    match_entrypoint re rm s1.(st_code) params n entrypoint.
-  Proof.
-    intros Hcopy.
-    apply copy_paramsR_match_entrypoint.
-    eapply copy_params_copy_paramsR; eauto.
-  Qed.
-
-  Lemma match_entrypoint_monotone re rm c1 c2 params n entrypoint :
-    match_entrypoint re rm c1 params n entrypoint ->
-    (forall p i, c1 ! p = Some i -> c2 ! p = Some i) ->
-    match_entrypoint re rm c2 params n entrypoint.
-  Proof.
-    revert n entrypoint; induction params;
-      simpl; intros n entrypoint Hmatch Hle; inv Hmatch.
-    { constructor. }
-    econstructor; eauto.
-  Qed.
 
   Lemma transf_initial_states st1 :
     initial_state prog st1 ->
@@ -1983,6 +1778,7 @@ Section PRESERVATION.
     (* split. *)
     (* { eapply wt_initial_state with (p:=prog); auto. *)
     (*   apply wt_program_prog. } *)
+    generalize (transf_function_match_fundef _ _ B); intro Hmatch_fundef.
     destruct f.
     simpl in *.
     - unfold bind in B.
@@ -1992,44 +1788,49 @@ Section PRESERVATION.
       destruct (type_function f) eqn:Htype; try congruence.
       unfold transf_fun' in Hf.
       gen_case Htransf; inv Hf.
+      pose proof Htransf as Htransf_fun.
       unfold transf_fun in Htransf.
       unfold RTLgen.bind in Htransf.
       simpl in *.
-      gen_case Hrm; inv Htransf.
-      gen_case Hcopytransf; inv H5.
-      gen_case Hcopy; inv Hcopytransf.
-      gen_case Htransf; inv H5.
-      gen_case Htransf'; inv Htransf.
+      gen_case Hrm.
+      gen_case Hcopytransf.
+      gen_case Hcopy.
+      gen_case Htransf.
+      gen_case Htransf'.
       rename t into rm.
-      apply match_call_states.
+      apply match_call_states; auto.
       { constructor; simpl; rewrite H3; reflexivity. }
       { econstructor; apply type_function_correct; eauto. }
-      { simpl; rewrite H3; apply I. }
+      (* { simpl; rewrite H3; apply I. } *)
       { constructor. }
-      apply match_internal with (re:=r) (rm:=rm).
-      destruct f; simpl in *.
-      constructor.
-      + destruct u.
-        eapply transf_code_code_matches; eauto.
-        intros p i Hget.
-        clear Hrm.
-        clear Hcopy.
-        inv s; inv s0; inv s1; inv s2; inv s3; simpl in *; unfold Ple in *.
-        apply lt_nextnode_init_state with (sig := signature_main)
-                                          (params := fn_params)
-                                          (stacksize := fn_stacksize)
-                                          (c := fn_code)
-                                          (entrypoint := fn_entrypoint)
-          in Hget.
-        simpl in *; lia.
-      + eapply copy_params_match_entrypoint in Hcopy.
-        eapply match_entrypoint_monotone; eauto.
-        intros p i Hget.
-        clear Htransf'; inv s4.
-        destruct (H6 p); congruence.
+      (* auto. *)
+      (* apply transf_function_match_fundef; auto. *)
+      (* econstructor. *)
+      
+      (* apply match_internal with (re:=r) (rm:=rm). *)
+      (* destruct f; simpl in *. *)
+      (* constructor. *)
+      (* + destruct u. *)
+      (*   eapply transf_code_code_matches; eauto. *)
+      (*   intros p i Hget. *)
+      (*   clear Hrm. *)
+      (*   clear Hcopy. *)
+      (*   inv s; inv s0; inv s1; inv s2; inv s3; simpl in *; unfold Ple in *. *)
+      (*   apply lt_nextnode_init_state with (sig := signature_main) *)
+      (*                                     (params := fn_params) *)
+      (*                                     (stacksize := fn_stacksize) *)
+      (*                                     (c := fn_code) *)
+      (*                                     (entrypoint := fn_entrypoint) *)
+      (*     in Hget. *)
+      (*   simpl in *; lia. *)
+      (* + eapply copy_params_match_entrypoint in Hcopy. *)
+      (*   eapply match_entrypoint_monotone; eauto. *)
+      (*   intros p i Hget. *)
+      (*   clear Htransf'; inv s4. *)
+      (*   destruct (H6 p); congruence. *)
     - inv B; constructor; try solve[constructor].
       + constructor; rewrite H3; reflexivity.
-      + rewrite H3; apply I.
+      (* + rewrite H3; apply I. *)
   Qed.
 
   Lemma transf_final_states st1 st2 r :
@@ -2046,7 +1847,7 @@ Section PRESERVATION.
     intros.
     apply forward_simulation_plus with
       (* (match_states := fun s1 s2 => wt_state s1 /\ match_states s1 s2). *)
-            (match_states := fun s1 s2 => match_states s1 s2).
+      (match_states := fun s1 s2 => match_states s1 s2).
     - apply senv_preserved.
     - simpl; intros. exploit transf_initial_states; eauto.
     (* intros [st2 [A B]]. *)

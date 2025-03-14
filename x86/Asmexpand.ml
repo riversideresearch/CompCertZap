@@ -566,7 +566,7 @@ let expand_builtin_inline name args res =
   | "__builtin_unreachable", [], _ ->
      ()
 
-  (* Shadow moves *)
+  (* Shadow move *)
   | "__smove_int", [BA(IR a)], BR(IR res) ->
      if a <> res then
        emit (Pmov_rr (res, a))

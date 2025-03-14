@@ -1,4 +1,4 @@
-(** TODO: maybe copy monadInv tactic for use with RTLgen monad. *)
+(** Relational specificaton of the TMR transformation. *)
 
 Require Import
   AST
@@ -24,13 +24,28 @@ Import ListNotations.
 
 Local Open Scope positive_scope.
 
+Ltac gen_contra :=
+  try match goal with
+  | [H: RTLgen.Error _ = RTLgen.OK _ _ _ |- _ ] => inv H
+  | [H: RTLgen.OK _ _ _ = RTLgen.Error _ |- _ ] => inv H
+  end.
+
+Ltac gen_inv :=
+  match goal with
+  | [H: RTLgen.OK _ _ _ = RTLgen.OK _ _ _ |- _ ] => inv H
+  end.
+
 Ltac gen_case H :=
   match goal with
   | [ _: match ?X with
          | RTLgen.Error _ => _
          | RTLgen.OK _ _ _ => _ end = _ |- _ ] =>
       destruct X eqn:H
-  end.
+  end; gen_contra; try gen_inv.
+
+Ltac egen_case :=
+  let H := fresh "H" in
+  gen_case H.
 
 Ltac lr_case :=
   match goal with
@@ -38,6 +53,16 @@ Ltac lr_case :=
          | left _ => _
          | right _ => _ end = _ |- _ ] =>
       destruct X
+  end; gen_contra; try gen_inv.
+
+Ltac reserve_instr_inv :=
+  match goal with
+  | [ H: reserve_instr ?s = RTLgen.OK ?n ?s' ?pf |- _ ] => inv H
+  end.
+
+Ltac state_incr_inv :=
+  match goal with
+  | [ H: state_incr ?s1 ?s2 |- _ ] => inv H
   end.
 
 Definition rm_wf (rm : PMap.t (reg * reg)) (l : list positive) : Prop :=
@@ -59,33 +84,6 @@ Inductive match_regs (rm : PMap.t (reg * reg))
     match_regs rm rs1 rs2 rs3 ->
     match_regs rm (r1 :: rs1) (r2 :: rs2) (r3 :: rs3).
 
-(* Inductive maj_voteR (c : code) (r1 r2 r3 : reg) (pc succ : node) : typ -> Prop := *)
-(* | maj_vote_int : *)
-(*   forall n1 n2, *)
-(*     c ! pc = Some (Icond (Ccomp Cne) [r1; r2] n1 succ) -> *)
-(*     c ! n1 = Some (Icond (Ccomp Ceq) [r2; r3] n2 succ) -> *)
-(*     c ! n2 = Some (Iop Omove [r2] r1 succ) -> *)
-(*     maj_voteR c r1 r2 r3 pc succ Tint *)
-(* | maj_vote_long : *)
-(*   forall n1 n2, *)
-(*     c ! pc = Some (Icond (Ccompl Cne) [r1; r2] n1 succ) -> *)
-(*     c ! n1 = Some (Icond (Ccompl Ceq) [r2; r3] n2 succ) -> *)
-(*     c ! n2 = Some (Iop Omove [r2] r1 succ) -> *)
-(*     maj_voteR c r1 r2 r3 pc succ Tlong *)
-(* | maj_vote_single : *)
-(*   forall n1 n2, *)
-(*     c ! pc = Some (Icond (Ccompfs Cne) [r1; r2] n1 succ) -> *)
-(*     c ! n1 = Some (Icond (Ccompfs Ceq) [r2; r3] n2 succ) -> *)
-(*     c ! n2 = Some (Iop Omove [r2] r1 succ) -> *)
-(*     maj_voteR c r1 r2 r3 pc succ Tsingle *)
-(* | maj_vote_float : *)
-(*   forall n1 n2, *)
-(*     c ! pc = Some (Icond (Ccompf Cne) [r1; r2] n1 succ) -> *)
-(*     c ! n1 = Some (Icond (Ccompf Ceq) [r2; r3] n2 succ) -> *)
-(*     c ! n2 = Some (Iop Omove [r2] r1 succ) -> *)
-(*     maj_voteR c r1 r2 r3 pc succ Tfloat *)
-(* . *)
-
 Definition comp_of_typ (ty : typ) : comparison -> condition :=
   match ty with
   | Tint => Ccompu
@@ -102,16 +100,6 @@ Definition is_actual_type (ty : typ) : Prop :=
   | _ => True
   end.
 
-(* Inductive maj_voteR *)
-(*   (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop := *)
-(* | maj_vote_1 : *)
-(*   forall n, *)
-(*     is_actual_type ty -> *)
-(*     c ! pc = Some (Icond (comp_of_typ ty Cne) [r1; r2] n succ) -> *)
-(*     (* c ! n = Some (Iop Omove [r3] r1 succ) -> *) *)
-(*     c ! n = Some (smove ty r3 r1 succ) -> *)
-(*     maj_voteR c ty r1 r2 r3 pc succ. *)
-
 Inductive maj_voteR
   (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop :=
 | maj_vote_1 :
@@ -120,17 +108,6 @@ Inductive maj_voteR
     maj_vote_of_typ ty r1 r2 r3 = Some vote ->
     c ! pc = Some (vote succ) ->
     maj_voteR c ty r1 r2 r3 pc succ.
-
-(* Fixpoint maj_vote_regs *)
-(*   (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node) *)
-(*   : mon node := *)
-(*   match regs with *)
-(*   | [] => ret pc *)
-(*   | r1 :: rs => *)
-(*       do succ <- maj_vote_regs re rm rs pc; *)
-(*       let (r2, r3) := PMap.get r1 rm in *)
-(*       maj_vote re r1 r2 r3 succ *)
-(*   end. *)
 
 Inductive maj_vote_regsR c re rm : list reg -> node -> node -> Prop :=
 | maj_vote_regs_nil :
@@ -141,8 +118,17 @@ Inductive maj_vote_regsR c re rm : list reg -> node -> node -> Prop :=
     rm # r1 = (r2, r3) ->
     maj_vote_regsR c re rm args pc n ->
     maj_voteR c (re r1) r1 r2 r3 n succ ->
-    maj_vote_regsR c re rm (r1 :: args) pc succ
-.
+    maj_vote_regsR c re rm (r1 :: args) pc succ.
+
+Inductive smoveR
+  (c : code) (ty : typ) (src dst1 dst2 : reg) (pc succ : node): Prop :=
+| smove_1 :
+  forall n mov1 mov2,
+    smove ty src dst1 = Some mov1 ->
+    smove ty src dst2 = Some mov2 ->
+    c ! pc = Some (mov1 n) ->
+    c ! n = Some (mov2 succ) ->
+    smoveR c ty src dst1 dst2 pc succ.
 
 Inductive match_instr
   (re : regenv) (rm : PMap.t (reg * reg)) (pc : positive) (c : code)
@@ -174,15 +160,12 @@ Inductive match_instr
     c ! n = Some (Istore chunk addr args src1 succ) ->
     match_instr re rm pc c (Istore chunk addr args src1 succ)
 | match_icall :
-  forall sig fn args dst1 dst2 dst3 succ n1 n2 n3,
-    rm !! dst1 = (dst2, dst3) ->
-    maj_vote_regsR c re rm args pc n1 ->
-    c ! n1 = Some (Icall sig fn args dst1 n2) ->
-    (* c ! n2 = Some (Iop Omove [dst1] dst2 n3) -> *)
-    (* c ! n3 = Some (Iop Omove [dst1] dst3 succ) -> *)
-    c ! n2 = Some (smove (re dst1) dst1 dst2 n3) ->
-    c ! n3 = Some (smove (re dst1) dst1 dst3 succ) ->
-    match_instr re rm pc c (Icall sig fn args dst1 succ)
+  forall sig fn args res1 res2 res3 succ n1 n2,
+    rm !! res1 = (res2, res3) ->
+    maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1 ->
+    c ! n1 = Some (Icall sig fn args res1 n2) ->
+    smoveR c (re res1) res1 res2 res3 n2 succ ->
+    match_instr re rm pc c (Icall sig fn args res1 succ)
 .
 
 (* Inductive maj_vote_regsR c re rm : list reg -> node -> node -> Prop := *)
@@ -202,13 +185,10 @@ Inductive match_entrypoint (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
   forall entrypoint,
     match_entrypoint re rm c [] entrypoint entrypoint
 | match_entrypoint_cons :
-  forall param params entrypoint n m p r2 r3,
+  forall param params entrypoint n p r2 r3,
     rm !! param = (r2, r3) ->
-    (* c ! entrypoint = Some (Iop Omove [param] r2 n) -> *)
-    (* c ! n = Some (Iop Omove [param] r3 m) -> *)
-    c ! entrypoint = Some (smove (re param) param r2 n) ->
-    c ! n = Some (smove (re param) param r3 m) ->
-    match_entrypoint re rm c params m p ->
+    smoveR c (re param) param r2 r3 entrypoint n ->
+    match_entrypoint re rm c params n p ->
     match_entrypoint re rm c (param :: params) entrypoint p.
 
 Inductive match_function re rm : function -> function -> Prop :=
@@ -302,14 +282,24 @@ Proof.
     econstructor; eauto.
     2: { rewrite Hs'; auto. }
     eapply state_incr_maj_vote_regsR; eauto.
-  - destruct (H1 n1) as [?|Hn1]; try congruence.
+  - inv H5.
+    destruct (H1 n) as [?|Hn]; try congruence.
+    destruct (H1 n1) as [?|Hn1]; try congruence.
     destruct (H1 n2) as [?|Hn2]; try congruence.
-    destruct (H1 n3) as [?|Hn3]; try congruence.
+    (* destruct (H1 n3) as [?|Hn3]; try congruence. *)
     econstructor; eauto.
     + eapply state_incr_maj_vote_regsR; eauto.
     + rewrite Hn1; eauto.
-    + rewrite Hn2; eauto.
-    + rewrite Hn3; auto.
+    + econstructor; eauto.
+      * rewrite Hn2; eauto.
+      * rewrite Hn; auto.
+Qed.
+
+Lemma maj_vote_of_typ_is_actual_type ty r1 r2 r3 i :
+  maj_vote_of_typ ty r1 r2 r3 = Some i ->
+  is_actual_type ty.
+Proof.
+  destruct ty; simpl; intro Hmaj; auto; inv Hmaj.
 Qed.
 
 Lemma maj_vote_maj_voteR re r1 r2 r3 pc succ s s' pf :
@@ -317,50 +307,31 @@ Lemma maj_vote_maj_voteR re r1 r2 r3 pc succ s s' pf :
   maj_vote re r1 r2 r3 pc s = RTLgen.OK succ s' pf ->
   maj_voteR s'.(st_code) (re r1) r1 r2 r3 pc succ.
 Proof.
-(*   unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj. *)
-(*   gen_case H0; inv Hmaj. *)
-(*   gen_case H2; inv H1. *)
-(*   gen_case H1; inv H2. *)
-(*   gen_case H2; inv H1. *)
-(*   gen_case H1; inv H2. *)
-(*   gen_case H2; inv H3. *)
-(*   gen_case H3; inv H2. *)
-(*   unfold update_instr in *. *)
-(*   lr_case; try congruence; lr_case; inv H3. *)
-(*   lr_case; try congruence; lr_case; inv H1. *)
-(*   simpl in *. *)
-(*   inv s6; inv s5; inv s4; inv s3; inv s2; inv s1; inv pf. *)
-(*   simpl in *; unfold Ple in *. *)
-(*   assert (s.(st_nextnode) <= s'0.(st_nextnode)). *)
-(*   { clear H0; inv s0; auto. } *)
-(*   eapply maj_vote_1 with (n:=st_nextnode s'0). *)
-(*   - destruct (re r1); inv H0; apply I. *)
-(*   - rewrite PTree.gso; try lia. *)
-(*     rewrite PTree.gss. *)
-(*     destruct (re r1); inv H0; reflexivity. *)
-(*   - rewrite PTree.gss; reflexivity. *)
-  (* Qed. *)
-Admitted.
+  unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj.
+  destruct (maj_vote_of_typ (re r1) r1 r2 r3) eqn:Hty.
+  2: { inv Hmaj. }
+  repeat egen_case.
+  unfold update_instr in *; simpl in *.
+  lr_case; try congruence; lr_case.
+  simpl in *.
+  econstructor; eauto.
+  2: { rewrite PTree.gss; reflexivity. }
+  eapply maj_vote_of_typ_is_actual_type; eauto.
+Qed.
 
 Lemma maj_vote_succ_lt_nextnode re r1 r2 r3 pc succ s s' pf :
   pc < s.(st_nextnode) ->
   maj_vote re r1 r2 r3 pc s = RTLgen.OK succ s' pf ->
   succ < s'.(st_nextnode).
 Proof.
-(*   unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj. *)
-(*   gen_case H0; inv Hmaj. *)
-(*   gen_case H2; inv H1. *)
-(*   gen_case H1; inv H2. *)
-(*   gen_case H2; inv H1. *)
-(*   gen_case H1; inv H2. *)
-(*   gen_case H2; inv H3. *)
-(*   gen_case H3; inv H2. *)
-(*   unfold update_instr in *. *)
-(*   lr_case; try congruence; lr_case; inv H3. *)
-(*   lr_case; try congruence; lr_case; inv H1. *)
-(*   simpl in *; lia. *)
-  (* Qed. *)
-Admitted.
+  unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj.
+  destruct (maj_vote_of_typ (re r1) r1 r2 r3) eqn:Hty.
+  2: { inv Hmaj. }
+  repeat egen_case.
+  unfold update_instr in *; simpl in *.
+  lr_case; try congruence; lr_case.
+  simpl in *; lia.
+Qed.
 
 Lemma maj_vote_regs_succ_lt_nextnode re rm regs pc succ s s' pf :
   pc < s.(st_nextnode) ->
@@ -370,9 +341,9 @@ Proof.
   revert pc succ s s' pf.
   induction regs; intros pc n s s' pf Hlt Hmaj; inv Hmaj; auto.
   unfold RTLgen.bind in H0.
-  gen_case Hmaj; inv H0.
+  gen_case Hmaj.
   destruct (rm # a) eqn:Ha.
-  gen_case H0; inv H1.
+  egen_case.
   apply IHregs in Hmaj; auto.
   eapply maj_vote_succ_lt_nextnode; eauto.
 Qed.
@@ -386,16 +357,16 @@ Proof.
   induction regs; simpl; intros pc succ s s' pf Hlt Hmaj.
   { inv Hmaj; constructor. }
   unfold RTLgen.bind in Hmaj.
-  gen_case H0; inv Hmaj.
+  gen_case H0.
   destruct (rm # a) eqn:Ha.
-  gen_case Hmaj; inv H1.
+  destruct (maj_vote re a r r0 n s'0) eqn:Hm; gen_contra; gen_inv.
   pose proof H0 as H0'.
   apply maj_vote_regs_succ_lt_nextnode in H0'; auto.
   apply IHregs in H0; auto.
   econstructor; eauto.
   - eapply state_incr_maj_vote_regsR.
     2: { eauto. }
-    clear Hmaj; inv s1; auto.
+    clear Hm; inv s1; auto.
   - eapply maj_vote_maj_voteR; eauto.
 Qed.
 
@@ -425,40 +396,32 @@ Qed.
 
 (** The translation algorithm meets its relational specification. *)
 Lemma iterM_match_instr
-  p i (l : list (positive * instruction)) re rm s s' pf :
+  p i (l : list (positive * instruction)) re rm s s' pf u :
   p < s.(st_nextnode) ->
   In (p, i) l ->
-  iterM (transf_instr re rm) l s = RTLgen.OK tt s' pf ->
+  iterM (transf_instr re rm) l s = RTLgen.OK u s' pf ->
   match_instr re rm p (st_code s') i.
 Proof.
   revert s s' pf; induction l; simpl; intros s s' pf Hlt Hin Htransf.
   { contradiction. }
   unfold RTLgen.bind in Htransf.
-  gen_case Hiter; inv Htransf.
-  gen_case Htransf; inv H0.
+  gen_case Hiter.
+  gen_case Htransf'.
   destruct Hin as [?|Hin]; subst.
-  - simpl in Htransf.
+  - simpl in Htransf'.
     destruct i.
     
     (* Inop *)
-    + unfold update_instr in Htransf.
-      lr_case; try congruence; lr_case; inv Htransf.
+    + unfold update_instr in Htransf'.
+      repeat lr_case.
       simpl; constructor; rewrite PTree.gss; reflexivity.
 
     (* Iop *)
-    + unfold RTLgen.bind in Htransf.
-      gen_case Hreserve0; inv Htransf.
-      gen_case H1; inv H0.
-      gen_case H2; inv H1.
-      gen_case Hupdp; inv H2.
-      gen_case H3; inv H0.
-      gen_case Hupdn0; inv H3.
-      gen_case Hupd'; inv H0.
+    + unfold RTLgen.bind in Htransf'.
+      repeat egen_case.
       unfold update_instr in *.
-      lr_case; try congruence; lr_case; inv Hupd'.
-      lr_case; try congruence; lr_case; inv Hupdn0.
-      lr_case; try congruence; lr_case; inv Hupdp.
-      inv Hreserve0.
+      repeat lr_case.
+      inv H; inv H1.
       destruct (rm # r) eqn:Hrmr; simpl in *.
       assert (p < st_nextnode s'0).
       { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
@@ -473,17 +436,10 @@ Proof.
       * rewrite PTree.gss; reflexivity.
 
     (* Iload *)
-    + unfold RTLgen.bind in Htransf; simpl in Htransf.
-      gen_case H0; inv Htransf.
-      gen_case H1; inv H0.
-      gen_case Hupdp; inv H1.
-      gen_case H1; inv H0.
-      gen_case Hupd'; inv H1.
-      gen_case Hupd''; inv H0.
+    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+      repeat egen_case.
       unfold update_instr in *.
-      lr_case; try congruence; lr_case; inv Hupd''.
-      lr_case; try congruence; lr_case; inv Hupd'.
-      lr_case; try congruence; lr_case; inv Hupdp.
+      repeat lr_case.
       destruct (rm # r) eqn:Hrmr; simpl in *.
       assert (p < st_nextnode s'0).
       { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
@@ -498,14 +454,13 @@ Proof.
       * rewrite PTree.gss; reflexivity.
 
     (* Istore *)
-    + unfold RTLgen.bind in Htransf; simpl in Htransf.
-      gen_case Hmaj; inv Htransf.
-      gen_case Hupd; inv H0.
+    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+      gen_case Hmaj.
+      gen_case Hupd.
       apply maj_vote_regs_maj_vote_regsR in Hmaj.
       2: { clear Hiter; inv s0; unfold Ple in *; lia. }
       unfold update_instr in Hupd.
-      lr_case; try congruence.
-      lr_case; inv Hupd.
+      repeat lr_case.
       simpl in *.
       inv s1; inv s3; inv pf; simpl in *; unfold Ple in *.
       destruct (rm # r) eqn:Hrmr; simpl in *.
@@ -515,63 +470,53 @@ Proof.
       apply maj_vote_regsR_ptree_set; auto.
 
     (* Icall *)
-    + unfold RTLgen.bind in Htransf; simpl in Htransf.
-      gen_case Hmaj; inv Htransf.
-      gen_case H1; inv H0.
-      gen_case H0; inv H1.
-      gen_case H1; inv H0.
-      unfold copy_to_shadows in H2.
+    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+      repeat egen_case.
+      unfold copy_to_shadows in H0.
       destruct (rm # r) eqn:Hrmr.
-      unfold RTLgen.bind in H2.
-      gen_case H0; inv H2.
-      (* gen_case H2; inv H0. *)
-      (* gen_case H0; inv H3. *)
-      (* gen_case H3; inv H0. *)
-      (* gen_case H0; inv H4. *)
-      (* assert (p < st_nextnode s'0). *)
-      (* { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. } *)
-      (* assert (Hn0: n0 < s'1.(st_nextnode)). *)
-      (* { eapply maj_vote_regs_succ_lt_nextnode. *)
-      (*   2: { eauto. } *)
-      (*   auto. } *)
-      (* apply maj_vote_regs_maj_vote_regsR in Hmaj. *)
-      (* 2: { clear Hiter; inv s0; unfold Ple in *; lia. } *)
-      (* unfold update_instr in *. *)
-      (* lr_case; try congruence; lr_case; inv H0. *)
-      (* lr_case; try congruence; lr_case; inv H3. *)
-      (* lr_case; try congruence; lr_case; inv H1. *)
-      (* inv H2. *)
-      (* simpl in *. *)
-      (* inv s12; inv s11; inv s10; inv s9; inv s8; inv s7; *)
-      (*   inv s6; inv s5; inv s4; inv s1; inv pf. *)
-      (* simpl in *; unfold Ple in *. *)
-      (* destruct s3. *)
-      (* { admit. } *)
-      (* { econstructor. *)
-      (*   { eauto. } *)
-      (*   4: { rewrite PTree.gss; reflexivity. } *)
-      (*   * repeat apply maj_vote_regsR_ptree_set; eauto. *)
-      (* * rewrite 2!PTree.gso; try lia. *)
-      (*   rewrite PTree.gss; eauto. *)
-      (* * rewrite PTree.gso; try lia. *)
-    (*   rewrite PTree.gss; reflexivity. } *)
-      admit.
-
+      unfold RTLgen.bind in H0.
+      unfold error in *.
+      destruct (smove (re r) r r0) eqn:Hmov1; gen_contra.
+      destruct (smove (re r) r r1) eqn:Hmov2; gen_contra.
+      repeat egen_case.
+      unfold update_instr in *.
+      repeat lr_case.
+      simpl in *.
+      assert (p < st_nextnode s'0).
+      { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
+      assert (Hn0: n0 < s'1.(st_nextnode)).
+      { eapply maj_vote_regs_succ_lt_nextnode.
+        2: { eauto. }
+        auto. }
+      apply maj_vote_regs_maj_vote_regsR in H.
+      2: { clear Hiter; inv s0; unfold Ple in *; lia. }
+      reserve_instr_inv.
+      simpl in *.
+      repeat state_incr_inv.
+      simpl in *; unfold Ple in *.
+      econstructor; eauto.
+      * repeat apply maj_vote_regsR_ptree_set; eauto.
+      * rewrite PTree.gss; reflexivity.
+      * econstructor; eauto.
+        { rewrite 2!PTree.gso; try lia.
+          rewrite PTree.gss; reflexivity. }
+        { rewrite PTree.gso; try lia.
+          rewrite PTree.gss; reflexivity. }
     + admit.
     + admit.
     + admit.
     + admit.
     + admit.
-  - unfold RTLgen.bind in Htransf.
-    destruct u.
+  - unfold RTLgen.bind in Htransf'.
+    destruct u, u0.
     assert (H: match_instr re rm p (st_code s'0) i).
     { eapply IHl; eauto. }
     eapply state_incr_match_instr; eauto.
 Admitted.
 
-Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf :
+Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
   (forall p i, c ! p = Some i -> p < st_nextnode s) ->
-  transf_code re rm c s = RTLgen.OK tt s' pf ->
+  transf_code re rm c s = RTLgen.OK u s' pf ->
   match_code re rm c s'.(st_code).
 Proof.
   intros Hlt Hc p i Hi.
@@ -668,6 +613,139 @@ Proof.
   exists x; eapply transf_fun'_code_matches; eauto.
 Qed.
 
+Inductive copy_paramsR re rm c : list reg -> node -> node -> Prop :=
+| copy_params_nil :
+  forall n,
+    copy_paramsR re rm c [] n n
+| copy_params_cons :
+  forall param params succ n p r2 r3,
+    rm # param = (r2, r3) ->
+    (* c ! n = Some (Iop Omove [param] r2 m) -> *)
+    (* c ! m = Some (Iop Omove [param] r3 p) -> *)
+    (* c ! n = Some (smove (re param) param r2 m) -> *)
+    (* c ! m = Some (smove (re param) param r3 p) -> *)
+    smoveR c (re param) param r2 r3 n p ->
+    copy_paramsR re rm c params p succ ->
+    copy_paramsR re rm c (param :: params) n succ.
+
+Lemma copy_params_copy_paramsR re rm params n succ s0 s1 pf c :
+  copy_params re rm params succ s0 = RTLgen.OK n s1 pf ->
+  (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) ->
+  copy_paramsR re rm c params n succ.
+Proof.
+  revert pf.
+  revert s0 s1 n succ.
+  induction params; simpl; intros s0 s1 n succ pf Hcopy Hc; inv Hcopy.
+  { constructor. }
+  unfold RTLgen.bind in H0; simpl in H0.
+  repeat egen_case.
+  (* gen_case H1; inv H0. *)
+  (* gen_case H3; inv H2. *)
+  (* gen_case H2; inv H3. *)
+  (* gen_case H3; inv H2. *)
+  unfold copy_to_shadows in H1.
+  destruct (rm # a) eqn:Ha.
+  unfold RTLgen.bind in H1; simpl in H1.
+  unfold error in H1.
+  destruct (smove (re a) a r) eqn:Hmov1; gen_contra.
+  destruct (smove (re a) a r0) eqn:Hmov2; gen_contra.
+  repeat egen_case.
+  (* gen_case H4; inv H3. *)
+  (* gen_case H3; inv H4. *)
+  (* gen_case H4; inv H0. *)
+  unfold update_instr in *.
+  (* simpl in *. *)
+  repeat lr_case.
+  (* lr_case; try congruence. *)
+  (* lr_case; inv H4. *)
+  (* lr_case; try congruence. *)
+  (* lr_case; inv H3. *)
+  simpl in *.
+  repeat state_incr_inv.
+  (* inv s7; inv s5; inv s6; inv s3; inv s4; inv s2; inv pf. *)
+  simpl in *; unfold Ple in *.
+  econstructor; eauto.
+  - econstructor; eauto; apply Hc.
+    + rewrite PTree.gso; try lia.
+      rewrite PTree.gss; eauto.
+    + rewrite PTree.gss; eauto.
+  - eapply IHparams; eauto.
+    intros p' instr Hget.
+    apply Hc.
+    specialize (H17 p'); destruct H17; congruence.
+Qed.
+
+Lemma copy_paramsR_match_entrypoint re rm params entrypoint n c :
+  copy_paramsR re rm c params n entrypoint ->
+  match_entrypoint re rm c params n entrypoint.
+Proof.
+  revert entrypoint n.
+  induction params; simpl; intros entrypoint n Hcopy; inv Hcopy.
+  { constructor. }
+  econstructor; eauto.
+Qed.
+
+Lemma copy_params_match_entrypoint re rm params entrypoint s0 s1 pf1 n :
+  copy_params re rm params entrypoint s0 = RTLgen.OK n s1 pf1 ->
+  match_entrypoint re rm s1.(st_code) params n entrypoint.
+Proof.
+  intros Hcopy.
+  apply copy_paramsR_match_entrypoint.
+  eapply copy_params_copy_paramsR; eauto.
+Qed.
+
+Lemma match_entrypoint_monotone re rm c1 c2 params n entrypoint :
+  match_entrypoint re rm c1 params n entrypoint ->
+  (forall p i, c1 ! p = Some i -> c2 ! p = Some i) ->
+  match_entrypoint re rm c2 params n entrypoint.
+Proof.
+  revert n entrypoint; induction params;
+    simpl; intros n entrypoint Hmatch Hle; inv Hmatch.
+  { constructor. }
+  econstructor; eauto.
+  inv H2; econstructor; eauto.
+Qed.
+
+Lemma transf_function_match_fundef (f tf : fundef) :
+  transf_fundef f = OK tf ->
+  match_fundef f tf.
+Proof.
+  intro Htransf.
+  destruct f; simpl in Htransf.
+  - monadInv Htransf.
+    monadInv EQ.
+    rename x0 into re.
+    unfold transf_fun' in EQ1.
+    egen_case; try congruence.
+    inv EQ1.
+    unfold transf_fun in H.
+    unfold RTLgen.bind in H.
+    repeat egen_case.
+    apply transf_code_code_matches in H1.
+    inv H3.
+    2: {
+      intros p i Hpi.
+      apply lt_nextnode_init_state' in Hpi.
+      clear H0 H H1.
+      repeat state_incr_inv.
+      unfold Ple in *.
+      simpl in *.
+      lia. }
+    destruct f.
+    simpl in *.
+    econstructor.
+    constructor; eauto.
+    apply copy_params_match_entrypoint in H.
+    eapply match_entrypoint_monotone; eauto.
+    clear H0 H H1.
+    repeat state_incr_inv.
+    unfold Ple in *.
+    simpl in *.
+    intros p i Hpi.
+    destruct (H7 p); congruence.
+  - inv Htransf; constructor.
+Qed.
+
 Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
 | reg_used_iop_args : forall op args res succ,
     In r args ->
@@ -715,14 +793,21 @@ Definition rm_inv
           ~ reg_used_in_code c r2 /\
           ~ reg_used_in_code c r3.
 
+(* Inductive match_stackframe (prog : program) : stackframe -> stackframe -> Prop := *)
 Inductive match_stackframe : stackframe -> stackframe -> Prop :=
 | match_frame :
-  forall re rm res f tf sp pc rs trs n1 n2 res2 res3
+  forall re rm res f tf sp pc rs trs n1 n2 res2 res3 mov1 mov2
+    (* (GENV: exists (v : val), Genv.find_funct (Genv.globalenv prog) v = Some (Internal f)) *)
+    (* (GENV: exists i, In (i, Gfun (Internal f)) (prog_defs prog)) *)
     (FUN : match_function re rm f tf)
     (INV : rm_inv f.(fn_code) rm rs trs)
-    (RM: rm # res = (res2, res3))
-    (Hn1: tf.(fn_code) ! n1 = Some (Iop Omove [res] res2 n2))
-    (Hn2: tf.(fn_code) ! n2 = Some (Iop Omove [res] res3 pc)),
+    (RM: rm # res = (res2, res3)),
+    (* (Hn1: tf.(fn_code) ! n1 = Some (Iop Omove [res] res2 n2)) *)
+    (* (Hn2: tf.(fn_code) ! n2 = Some (Iop Omove [res] res3 pc)), *)
+    smove (re res) res res2 = Some mov1 ->
+    smove (re res) res res3 = Some mov2 ->
+    tf.(fn_code) ! n1 = Some (mov1 n2) ->
+    tf.(fn_code) ! n2 = Some (mov2 pc) ->
     match_stackframe
       (Stackframe res f sp pc rs)
       (Stackframe res tf sp n1 trs).
@@ -746,10 +831,14 @@ Inductive match_stackframe : stackframe -> stackframe -> Prop :=
 (*       Val.has_type v (proj_sig_res sg) -> *)
 (*       wt_state (Returnstate s v m). *)
 
-Definition valid_pointer m b ofs : Prop :=
-  Mem.valid_pointer m b (Ptrofs.unsigned ofs)
-  || Mem.valid_pointer m b (Ptrofs.unsigned ofs - 1) = true.
+(* Definition valid_pointer m b ofs : Prop := *)
+(*   Mem.valid_pointer m b (Ptrofs.unsigned ofs) *)
+(*   || Mem.valid_pointer m b (Ptrofs.unsigned ofs - 1) = true. *)
 
+(* TODO: add invariant that all functions in the global environment
+   (for the source program) are well-typed. Shouldn't need to do type
+   preservation stuff if we just do that. *)
+(* Inductive match_states (prog : program) : state -> state -> Prop := *)
 Inductive match_states : state -> state -> Prop :=
 | match_regular_states :
   forall stk tstk f tf sp pc rs rs' m re rm
@@ -758,6 +847,8 @@ Inductive match_states : state -> state -> Prop :=
     (WT_FN: wt_function f re)
     (WT_RS: wt_regset re rs)
     (* Match *)
+    (* (GENV: exists (v : val), Genv.find_funct (Genv.globalenv prog) v = Some (Internal f)) *)
+    (* (GENV: exists i, In (i, Gfun (Internal f)) (prog_defs prog)) *)
     (STACKS : list_forall2 match_stackframe stk tstk)
     (* (LINK: linkorder cu prog) *)
     (* (FUN: transf_function f = OK tf), *)
@@ -775,13 +866,16 @@ Inductive match_states : state -> state -> Prop :=
     (* Well-typed *)
     (WT_STK : wt_stackframes stk (funsig f))
     (WT_FN : wt_fundef f)
-    (WT_ARGS : Val.has_type_list args (proj_sig_args (funsig f)))
+    (* (WT_FN : forall fd, f = Internal fd -> exists re, wt_function fd re) *)
+    (* (WT_ARGS : Val.has_type_list args (proj_sig_args (funsig f))) *)
     (* Match *)
+    (* (GENV: exists (v : val), Genv.find_funct (Genv.globalenv prog) v = Some f) *)
+    (* (GENV: exists i, In (i, Gfun f) (prog_defs prog)) *)
     (STACKS : list_forall2 match_stackframe stk tstk)
     (FUN : match_fundef f tf),
     match_states (Callstate stk f args m) (Callstate tstk tf args m)
 | match_return_states :
-  forall stk tstk sig v m
+  forall sig stk tstk v m
     (* Well-typed *)
     (WT_STK : wt_stackframes stk sig)
     (WT_RES : Val.has_type v (proj_sig_res sig))

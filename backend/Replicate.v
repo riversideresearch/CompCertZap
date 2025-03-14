@@ -1,4 +1,4 @@
-(** * Add redundancy to RTL *)
+(** * Add triple-modular redundancy to RTL *)
 
 (** In a nutshell, per function:
 
@@ -40,15 +40,33 @@ Import ListNotations.
 
 Local Open Scope string_scope.
 
-Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction :=
-  let (nm, sig) := match ty with
-                   | Tint => ("__smove_int", replicate_builtin_sig BI_smove_int)
-                   | Tlong => ("__smove_long", replicate_builtin_sig BI_smove_long)
-                   | Tsingle => ("__smove_single", replicate_builtin_sig BI_smove_single)
-                   | Tfloat => ("__smove_float", replicate_builtin_sig BI_smove_float)
-                   | _ => ("__smove_unknown", replicate_builtin_sig BI_smove_int)
-            end in
-  Ibuiltin (EF_builtin nm sig) [BA src] (BR dst) succ.
+(* Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction := *)
+(*   let (nm, sig) := match ty with *)
+(*                    | Tint => ("__smove_int", replicate_builtin_sig BI_smove_int) *)
+(*                    | Tlong => ("__smove_long", replicate_builtin_sig BI_smove_long) *)
+(*                    | Tsingle => ("__smove_single", replicate_builtin_sig BI_smove_single) *)
+(*                    | Tfloat => ("__smove_float", replicate_builtin_sig BI_smove_float) *)
+(*                    | _ => ("__smove_unknown", replicate_builtin_sig BI_smove_int) *)
+(*             end in *)
+(*   Ibuiltin (EF_builtin nm sig) [BA src] (BR dst) succ. *)
+
+Definition smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
+  match ty with
+  | Tint => Some ("__smove_int", BI_smove_int)
+  | Tlong => Some ("__smove_long", BI_smove_long)
+  | Tsingle => Some ("__smove_single", BI_smove_single)
+  | Tfloat => Some ("__smove_float", BI_smove_float)
+  | _ => None
+  end.
+
+Definition smove (ty : typ) (src dst : reg)
+  : option (node -> instruction) :=
+  match smove_sig_of_typ ty with
+  | None => None
+  | Some (nm, kind) =>
+      Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
+              [BA src] (BR dst))
+  end.
 
 Definition maj_vote_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
@@ -148,16 +166,20 @@ Fixpoint builtin_args_regs (args : list (builtin_arg reg)) : list reg :=
   | ba :: rest => builtin_arg_regs ba ++ builtin_args_regs rest
   end.
 
+Definition regs_of_fn (fn : reg + ident) : list reg :=
+  match fn with
+  | inl r => [r]
+  | inr _ => []
+  end.
+
 Definition args_of_instruction (instr : instruction) : list reg :=
   match instr with
   | Inop _ => []
   | Iop _ args _ _ => args
   | Iload _  _ args _ _ => args
   | Istore _ _ args _ _ => args
-  | Icall _ (inl r) args _ _ => r :: args
-  | Icall _ _ args _ _ => args
-  | Itailcall _ (inl r) args => r :: args
-  | Itailcall _ _ args => args
+  | Icall _ fn args _ _ => regs_of_fn fn ++ args
+  | Itailcall _ fn args => regs_of_fn fn ++ args
   | Ibuiltin _ args _ _ => builtin_args_regs args
   | Icond _ args _ _ => args
   | Ijumptable arg _ => [arg]
@@ -210,11 +232,18 @@ Definition copy_to_shadows
   (rm : PMap.t (reg * reg)) (ty : typ) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
   let (r2, r3) := rm # r1 in
-  do n <- reserve_instr;
-  (* do _ <- update_instr pc (Iop Omove [r1] r2 n); *)
-  (* update_instr n (Iop Omove [r1] r3 succ). *)
-  do _ <- update_instr pc (smove ty r1 r2 n);
-  update_instr n (smove ty r1 r3 succ).
+  match (smove ty r1 r2, smove ty r1 r3) with
+  | (Some mov1, Some mov2) =>
+      do n <- reserve_instr;
+      (* do _ <- update_instr pc (Iop Omove [r1] r2 n); *)
+      (* update_instr n (Iop Omove [r1] r3 succ). *)
+      (* do _ <- update_instr pc (smove ty r1 r2 n); *)
+      (* update_instr n (smove ty r1 r3 succ) *)
+      do _ <- update_instr pc (mov1 n);
+      update_instr n (mov2 succ)
+  | _ =>
+      error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
+  end.
 
 Fixpoint copy_all_to_shadows
   (rm : PMap.t (reg * reg)) re (rs : list reg) (succ : node)
