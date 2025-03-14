@@ -130,6 +130,56 @@ Inductive smoveR
     c ! n = Some (mov2 succ) ->
     smoveR c ty src dst1 dst2 pc succ.
 
+Ltac smoveR_inv :=
+  try match goal with
+  | [H: smoveR _ _ _ _ _ _ _ |- _ ] => inv H
+  end.
+
+Inductive copy_allR re rm c : list reg -> node -> node -> Prop :=
+| copy_params_nil :
+  forall n,
+    copy_allR re rm c [] n n
+| copy_params_cons :
+  forall param params succ n p r2 r3,
+    rm # param = (r2, r3) ->
+    smoveR c (re param) param r2 r3 n p ->
+    copy_allR re rm c params p succ ->
+    copy_allR re rm c (param :: params) n succ.
+
+Lemma copy_all_to_shadows_copy_allR re rm params n succ s0 s1 pf c :
+  copy_all_to_shadows re rm params succ s0 = RTLgen.OK n s1 pf ->
+  (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) ->
+  copy_allR re rm c params n succ.
+Proof.
+  revert pf.
+  revert s0 s1 n succ.
+  induction params; simpl; intros s0 s1 n succ pf Hcopy Hc; inv Hcopy.
+  { constructor. }
+  unfold RTLgen.bind in H0; simpl in H0.
+  repeat egen_case.
+  unfold copy_to_shadows in H1.
+  destruct (rm # a) eqn:Ha.
+  unfold RTLgen.bind in H1; simpl in H1.
+  unfold error in H1.
+  destruct (smove (re a) a r) eqn:Hmov1; gen_contra.
+  destruct (smove (re a) a r0) eqn:Hmov2; gen_contra.
+  repeat egen_case.
+  unfold update_instr in *.
+  repeat lr_case.
+  simpl in *.
+  repeat state_incr_inv.
+  simpl in *; unfold Ple in *.
+  econstructor; eauto.
+  - econstructor; eauto; apply Hc.
+    + rewrite PTree.gso; try lia.
+      rewrite PTree.gss; eauto.
+    + rewrite PTree.gss; eauto.
+  - eapply IHparams; eauto.
+    intros p' instr Hget.
+    apply Hc.
+    specialize (H17 p'); destruct H17; congruence.
+Qed.
+
 Inductive match_instr
   (re : regenv) (rm : PMap.t (reg * reg)) (pc : positive) (c : code)
   : instruction -> Prop :=
@@ -166,12 +216,21 @@ Inductive match_instr
     c ! n1 = Some (Icall sig fn args res1 n2) ->
     smoveR c (re res1) res1 res2 res3 n2 succ ->
     match_instr re rm pc c (Icall sig fn args res1 succ)
+| match_itailcall :
+  forall sig fn args n,
+    maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n ->
+    c ! n = Some (Itailcall sig fn args) ->
+    match_instr re rm pc c (Itailcall sig fn args)
+| match_ibuiltin :
+  forall ef bargs bres n1 n2 succ,
+    maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1 ->
+    c ! n1 = Some (Ibuiltin ef bargs bres n2) ->
+    copy_allR re rm c (regs_of_builtin_res bres) n2 succ ->
+    match_instr re rm pc c (Ibuiltin ef bargs bres succ)
 .
 
 (* Inductive maj_vote_regsR c re rm : list reg -> node -> node -> Prop := *)
 
-  (* | Itailcall: signature -> reg + ident -> list reg -> instruction *)
-  (* | Ibuiltin: external_function -> list (builtin_arg reg) -> builtin_res reg -> node -> instruction *)
   (* | Icond: condition -> list reg -> node -> node -> instruction *)
   (* | Ijumptable: reg -> list node -> instruction *)
   (* | Ireturn: option reg -> instruction. *)
@@ -229,13 +288,12 @@ Proof.
 Qed.
 
 Lemma state_incr_maj_voteR s s' ty r1 r2 r3 pc succ :
-  is_actual_type ty ->
   (forall pc : positive, (st_code s) ! pc = None \/
                       (st_code s') ! pc = (st_code s) ! pc) ->
   maj_voteR (st_code s) ty r1 r2 r3 pc succ ->
   maj_voteR (st_code s') ty r1 r2 r3 pc succ.
 Proof.
-  intros Hty Hle Hmaj; inv Hmaj.
+  intros Hle Hmaj; inv Hmaj.
   destruct (Hle pc) as [?|Hpc]; try congruence.
   econstructor; eauto.
   rewrite Hpc; eauto.
@@ -252,7 +310,33 @@ Proof.
   { constructor. }
   econstructor; eauto.
   eapply state_incr_maj_voteR; eauto.
-  inv H5; auto.
+Qed.
+
+Lemma state_incr_smoveR s s' ty r1 r2 r3 pc succ :
+  (forall pc : positive, (st_code s) ! pc = None \/
+                      (st_code s') ! pc = (st_code s) ! pc) ->
+  smoveR (st_code s) ty r1 r2 r3 pc succ ->
+  smoveR (st_code s') ty r1 r2 r3 pc succ.
+Proof.
+  intros Hle Hmaj; inv Hmaj.
+  destruct (Hle pc) as [?|Hpc]; try congruence.
+  destruct (Hle n) as [?|Hn]; try congruence.
+  econstructor; eauto.
+  - rewrite Hpc; eauto.
+  - rewrite Hn; eauto.
+Qed.
+
+Lemma state_incr_copy_allR re rm p s s' rs n :
+  (forall pc : positive, (st_code s) ! pc = None \/
+                      (st_code s') ! pc = (st_code s) ! pc) ->
+  copy_allR re rm (st_code s) rs p n ->
+  copy_allR re rm (st_code s') rs p n.
+Proof.
+  revert p n s s'.
+  induction rs; intros p n s s' Hle Hcopy; inv Hcopy.
+  { constructor. }
+  econstructor; eauto.
+  eapply state_incr_smoveR; eauto.
 Qed.
 
 Lemma state_incr_match_instr re rm p i s s' :
@@ -286,13 +370,21 @@ Proof.
     destruct (H1 n) as [?|Hn]; try congruence.
     destruct (H1 n1) as [?|Hn1]; try congruence.
     destruct (H1 n2) as [?|Hn2]; try congruence.
-    (* destruct (H1 n3) as [?|Hn3]; try congruence. *)
     econstructor; eauto.
     + eapply state_incr_maj_vote_regsR; eauto.
     + rewrite Hn1; eauto.
     + econstructor; eauto.
       * rewrite Hn2; eauto.
       * rewrite Hn; auto.
+  - destruct (H1 n) as [?|Hn]; try congruence.
+    econstructor; eauto.
+    + eapply state_incr_maj_vote_regsR; eauto.
+    + rewrite Hn; eauto.
+  - destruct (H1 n1) as [?|Hn1]; try congruence.
+    econstructor.
+    2: { rewrite Hn1; eauto. }
+    + eapply state_incr_maj_vote_regsR; eauto.
+    + eapply state_incr_copy_allR; eauto.
 Qed.
 
 Lemma maj_vote_of_typ_is_actual_type ty r1 r2 r3 i :
@@ -613,70 +705,8 @@ Proof.
   exists x; eapply transf_fun'_code_matches; eauto.
 Qed.
 
-Inductive copy_paramsR re rm c : list reg -> node -> node -> Prop :=
-| copy_params_nil :
-  forall n,
-    copy_paramsR re rm c [] n n
-| copy_params_cons :
-  forall param params succ n p r2 r3,
-    rm # param = (r2, r3) ->
-    (* c ! n = Some (Iop Omove [param] r2 m) -> *)
-    (* c ! m = Some (Iop Omove [param] r3 p) -> *)
-    (* c ! n = Some (smove (re param) param r2 m) -> *)
-    (* c ! m = Some (smove (re param) param r3 p) -> *)
-    smoveR c (re param) param r2 r3 n p ->
-    copy_paramsR re rm c params p succ ->
-    copy_paramsR re rm c (param :: params) n succ.
-
-Lemma copy_params_copy_paramsR re rm params n succ s0 s1 pf c :
-  copy_params re rm params succ s0 = RTLgen.OK n s1 pf ->
-  (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) ->
-  copy_paramsR re rm c params n succ.
-Proof.
-  revert pf.
-  revert s0 s1 n succ.
-  induction params; simpl; intros s0 s1 n succ pf Hcopy Hc; inv Hcopy.
-  { constructor. }
-  unfold RTLgen.bind in H0; simpl in H0.
-  repeat egen_case.
-  (* gen_case H1; inv H0. *)
-  (* gen_case H3; inv H2. *)
-  (* gen_case H2; inv H3. *)
-  (* gen_case H3; inv H2. *)
-  unfold copy_to_shadows in H1.
-  destruct (rm # a) eqn:Ha.
-  unfold RTLgen.bind in H1; simpl in H1.
-  unfold error in H1.
-  destruct (smove (re a) a r) eqn:Hmov1; gen_contra.
-  destruct (smove (re a) a r0) eqn:Hmov2; gen_contra.
-  repeat egen_case.
-  (* gen_case H4; inv H3. *)
-  (* gen_case H3; inv H4. *)
-  (* gen_case H4; inv H0. *)
-  unfold update_instr in *.
-  (* simpl in *. *)
-  repeat lr_case.
-  (* lr_case; try congruence. *)
-  (* lr_case; inv H4. *)
-  (* lr_case; try congruence. *)
-  (* lr_case; inv H3. *)
-  simpl in *.
-  repeat state_incr_inv.
-  (* inv s7; inv s5; inv s6; inv s3; inv s4; inv s2; inv pf. *)
-  simpl in *; unfold Ple in *.
-  econstructor; eauto.
-  - econstructor; eauto; apply Hc.
-    + rewrite PTree.gso; try lia.
-      rewrite PTree.gss; eauto.
-    + rewrite PTree.gss; eauto.
-  - eapply IHparams; eauto.
-    intros p' instr Hget.
-    apply Hc.
-    specialize (H17 p'); destruct H17; congruence.
-Qed.
-
-Lemma copy_paramsR_match_entrypoint re rm params entrypoint n c :
-  copy_paramsR re rm c params n entrypoint ->
+Lemma copy_allR_match_entrypoint re rm params entrypoint n c :
+  copy_allR re rm c params n entrypoint ->
   match_entrypoint re rm c params n entrypoint.
 Proof.
   revert entrypoint n.
@@ -685,13 +715,13 @@ Proof.
   econstructor; eauto.
 Qed.
 
-Lemma copy_params_match_entrypoint re rm params entrypoint s0 s1 pf1 n :
-  copy_params re rm params entrypoint s0 = RTLgen.OK n s1 pf1 ->
+Lemma copy_all_to_shadows_match_entrypoint re rm params entrypoint s0 s1 pf1 n :
+  copy_all_to_shadows re rm params entrypoint s0 = RTLgen.OK n s1 pf1 ->
   match_entrypoint re rm s1.(st_code) params n entrypoint.
 Proof.
   intros Hcopy.
-  apply copy_paramsR_match_entrypoint.
-  eapply copy_params_copy_paramsR; eauto.
+  apply copy_allR_match_entrypoint.
+  eapply copy_all_to_shadows_copy_allR; eauto.
 Qed.
 
 Lemma match_entrypoint_monotone re rm c1 c2 params n entrypoint :
@@ -735,7 +765,7 @@ Proof.
     simpl in *.
     econstructor.
     constructor; eauto.
-    apply copy_params_match_entrypoint in H.
+    apply copy_all_to_shadows_match_entrypoint in H.
     eapply match_entrypoint_monotone; eauto.
     clear H0 H H1.
     repeat state_incr_inv.
@@ -769,15 +799,23 @@ Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
     reg_used_in_instr r (Icall sig fn args dst succ)
 | reg_used_icall_dst : forall sig fn args succ,
     reg_used_in_instr r (Icall sig fn args r succ)
+| reg_used_itailcall_fn : forall sig args,
+    reg_used_in_instr r (Itailcall sig (inl r) args)
+| reg_used_itailcall_args : forall sig fn args,
+    In r args ->
+    reg_used_in_instr r (Itailcall sig fn args)
+| reg_used_ibuiltin_args : forall ef bargs bres succ,
+    In r (regs_of_builtin_args bargs) ->
+    reg_used_in_instr r (Ibuiltin ef bargs bres succ)
+| reg_used_ibuiltin_res : forall ef bargs bres succ,
+    In r (regs_of_builtin_res bres) ->
+    reg_used_in_instr r (Ibuiltin ef bargs bres succ)
 (* TODO: rest of instructions *)
 .
 
-  (* | Icall: signature -> reg + ident -> list reg -> reg -> node -> instruction *)
-  (*     (** [Icall sig fn args dest succ] invokes the function determined by *)
-  (*         [fn] (either a function pointer found in a register or a *)
-  (*         function name), giving it the values of registers [args] *)
-  (*         as arguments.  It stores the return value in [dest] and branches *)
-  (*         to [succ]. *) *)
+  (* | Icond: condition -> list reg -> node -> node -> instruction *)
+  (* | Ijumptable: reg -> list node -> instruction *)
+  (* | Ireturn: option reg -> instruction. *)
 
 Definition reg_used_in_code (c : code) (r : reg) : Prop :=
   exists pc instr,

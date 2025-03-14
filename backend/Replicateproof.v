@@ -684,11 +684,15 @@ Section PRESERVATION.
     revert p i r.
     induction l; simpl; intros p i r Hin Hused; try contradiction.
     destruct Hin as [? | Hin]; subst.
-    - inv Hused; simpl; try destruct fn;
-        try solve [apply PSet.union_3, PSet.union_3, PSet.singleton_2; reflexivity];
-        try solve [apply PSet.union_3, PSet.union_2, in_pset_of_list; auto].
-      + apply PSet.union_3; apply PSet.union_2; apply PSet.add_1; reflexivity.
-      + apply PSet.union_3, PSet.union_2,  PSet.add_2, in_pset_of_list; assumption.
+    - inv Hused; simpl; try destruct fn; apply PSet.union_3;
+        try solve [apply PSet.union_3, PSet.singleton_2; reflexivity];
+        try solve [apply PSet.union_2, in_pset_of_list; auto].
+      + apply PSet.union_2, PSet.add_1; reflexivity.
+      + apply PSet.union_2, PSet.add_2, in_pset_of_list; assumption.
+      + apply PSet.add_1; reflexivity.
+      + apply PSet.add_2, in_pset_of_list; assumption.
+      + apply in_pset_of_list; assumption.
+      + apply PSet.union_3, in_pset_of_list; assumption.
     - inv Hused; simpl;
         solve [apply PSet.union_2; eapply IHl; eauto; constructor; auto].
   Qed.
@@ -1146,6 +1150,18 @@ Section PRESERVATION.
       right; eapply rs_in_singleton; eauto.
   Qed.
 
+  Lemma wt_stackframes_sig_proper s sig1 sig2 :
+    sig_res sig1 = sig_res sig2 ->
+    wt_stackframes s sig1 ->
+    wt_stackframes s sig2.
+  Proof.
+    intros Hres Hwt.
+    inv Hwt.
+    - constructor; rewrite <- Hres; assumption.
+    - econstructor; eauto.
+      unfold proj_sig_res; rewrite <- Hres; assumption.
+  Qed.
+
   (* Lemma eval_addressing_in_args_vundef sp addr rs a args r : *)
   (*   eval_addressing ge sp addr rs ## args = Some a -> *)
   (*   In r args -> *)
@@ -1553,7 +1569,6 @@ Section PRESERVATION.
         * eapply rm_inv_ext_r; eauto.
 
     - (* exec_Icall *)
-
       inv Hmatch.
       pose proof FUN as Hmatch_function.
       inv FUN; simpl in *.
@@ -1564,7 +1579,7 @@ Section PRESERVATION.
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
       specialize (H1 pc (Icall (funsig fd) ros args res pc') Hcode); inv H1.
-      inv H11.
+      smoveR_inv.
       eapply maj_vote_regR_star_step with (m:=m) in H9; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
@@ -1573,7 +1588,6 @@ Section PRESERVATION.
              - destruct ros; simpl in *; inv H6; try contradiction.
                constructor.
              - constructor; auto. }
-             (* eexists; eexists; split; eauto; constructor; assumption. } *)
            assert (Heq: rs' # r1 = rs # r1).
            { specialize (RM r1 Hused).
              destruct (rm # r1) eqn:Hr1.
@@ -1584,24 +1598,7 @@ Section PRESERVATION.
            split.
            { eapply rm_inv_get_2; eauto. }
            { eapply rm_inv_get_3; eauto. } }
-             (* destruct (rs # r1) eqn:Hr1; try apply I. *)
-             (* erewrite <- rm_inv_get_2 *)
-             (* eapply eval_addressing_in_args_vundef in H8; eauto; subst. *)
-      (* inv H9. } *)
-      
-      (*      split. *)
-      (*      { intros b i Hr1. *)
-      (*        (* TODO: add to invariant? that pointer values in *) *)
-      (* (*           registers are valid pointers. *) *)
-      (*        admit. } *)
-      (*      intros r2 r3 Hr. *)
-      (*      assert (Hused: reg_used_in_code c r1). *)
-      (*      { eexists; eexists; split; eauto; constructor; auto. } *)
-      (*      specialize (RM r1 Hused); rewrite Hr in RM. *)
-      (*      destruct RM as (_ & H2 & H3 & _). *)
-      (*      rewrite <- H2, <- H3; split; reflexivity. } *)
       destruct H9 as (rs'' & H9 & Hrs'').
-
       assert (Htf: exists tf, transf_fundef fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
@@ -1615,129 +1612,239 @@ Section PRESERVATION.
           eexists; split; eauto.
           rewrite symbols_preserved, Hsym; auto. }
       destruct Htf as (tf & Htransf_fundef & Hfind_tf).
-
-      (* destruct ros. *)
-      { (* pose proof H0 as H0'. *)
-        (* unfold find_function in H0'. *)
-        (* apply functions_translated in H0'. *)
-        (* destruct H0' as (cu & tf & Hfind & Htrans & Hlink). *)
-        eexists; split.
-        + eapply star_plus_trans.
-          { apply H9. }
-          2: { reflexivity. }
-          econstructor.
-          2: { apply star_refl. }
-          2: { rewrite Events.E0_right; reflexivity. }
-          eapply exec_Icall; simpl.
+      eexists; split.
+      + eapply star_plus_trans.
+        { apply H9. }
+        2: { reflexivity. }
+        econstructor.
+        2: { apply star_refl. }
+        2: { rewrite Events.E0_right; reflexivity. }
+        eapply exec_Icall; simpl.
+        { eauto. }
+        { erewrite find_function_proper.
           { eauto. }
-          {
-            
-            erewrite find_function_proper.
-            { eauto. }
-            { intros r ?; subst.
-              etransitivity.
-              2: { rewrite <- Hrs''; reflexivity. }
-              eapply rm_inv_get; eauto.
-              eexists; eexists; split; eauto; constructor. }
-            eauto. }
-          
-            (* erewrite find_function_proper; eauto. *)
-            (* unfold find_function in *. *)
-            (* destruct ros. *)
-            (* -  *)
-            (* 3: { eauto. } *)
-            (* eauto. *)
-            (* intro r; rewrite <- Hrs''. *)
-            (* eapply rm_inv_get; eauto. *)
-            
-            (* assert (Hrs': rs # r = rs' # r). *)
-            (* { eapply rm_inv_get; eauto. *)
-            (*   eexists; eexists; split; eauto; constructor. } *)
-            (* rewrite <- Hrs'', <- Hrs'. *)
-            (* rewrite Hfind; reflexivity. } *)
-          { apply sig_function_translated; auto. }
-        + erewrite rs_args_rs'_args; eauto.
-          2: { apply Forall_forall; intros r' Hr';
-               eexists; eexists; split; eauto; constructor; auto. }
-          erewrite rs_map_ext; eauto.
-          constructor; auto.
-          { econstructor; eauto.
-            inv WT_FN.
-            simpl in *.
-            apply wt_instrs in Hcode.
-            inv Hcode; auto. }
-          { destruct ros.
-            - apply Genv.find_funct_inversion in H0.
-              destruct H0 as [id H0].
-              eapply wt_program_prog; eauto.
-            - simpl in H0.
-              destruct (Genv.find_symbol ge i); try congruence.
-              apply Genv.find_funct_ptr_inversion in H0.
-              destruct H0 as [id H0].
-              eapply wt_program_prog; eauto. }
-          { constructor; auto.
-            econstructor; eauto.
-            eapply rm_inv_ext_r; eauto. }
-          { apply transf_function_match_fundef; auto. } }
-
-      (*       intros fd' Hfd'; subst. *)
-      (*       exists re. *)
-            
-      (*       wt_instr *)
-      (*       wt_function *)
-      (*     2: { inv WT_FN; simpl in *. *)
-               
-      (*     match_states *)
-      (*     admit. } *)
-      (* { admit. } *)
-        
-      (*       * erewrite <- rs_map_ext; eauto. *)
-      (*     eapply rm_inv_eval_addressing; eauto. *)
-      (*     apply Forall_forall; intros r Hr; eexists; eexists; split; eauto. *)
-      (*     constructor; auto. *)
-      (*   * rewrite <- Hrs''. *)
-      (*     eapply rm_inv_storev; eauto. *)
-      (*     eexists; eexists; split; eauto; solve [constructor]. *)
-      (* + econstructor; eauto. *)
-      (*   econstructor; eauto. *)
-      
-      (* eexists; split. *)
-      (* + eapply star_plus_trans. *)
-      (*   { apply H9. } *)
-      (*   2: { reflexivity. } *)
-      (*   econstructor. *)
-      (*   2: { apply star_refl. } *)
-      (*   2: { rewrite Events.E0_right; reflexivity. } *)
-
-      (*   unfold find_function in H0. *)
-      (*   destruct ros. *)
-      (*   { apply functions_translated in H0. *)
-      (*     destruct H0 as (cu & tf & Hfind & Htrans & Hlink). *)
-      (*   (* destruct fd. *) *)
-      (*   eapply exec_Icall; simpl. *)
-      (*   { eauto. } *)
-      (*   { simpl. *)
-      (*     assert (Hrs': rs # r = rs' # r). *)
-      (*     { eapply rm_inv_get; eauto. *)
-      (*       eexists; eexists; split; eauto; constructor. } *)
-      (*     rewrite <- Hrs'', <- Hrs'. *)
-      (*     rewrite Hfind; reflexivity. *)
-      (*   * erewrite <- rs_map_ext; eauto. *)
-      (*     eapply rm_inv_eval_addressing; eauto. *)
-      (*     apply Forall_forall; intros r Hr; eexists; eexists; split; eauto. *)
-      (*     constructor; auto. *)
-      (*   * rewrite <- Hrs''. *)
-      (*     eapply rm_inv_storev; eauto. *)
-      (*     eexists; eexists; split; eauto; solve [constructor]. *)
-      (* + econstructor; eauto. *)
-      (*   econstructor; eauto. *)
-      (*   eapply rm_inv_ext_r; eauto. *)
-
+          { intros r ?; subst.
+            etransitivity.
+            2: { rewrite <- Hrs''; reflexivity. }
+            eapply rm_inv_get; eauto.
+            eexists; eexists; split; eauto; constructor. }
+          eauto. }
+        { apply sig_function_translated; auto. }
+      + erewrite rs_args_rs'_args; eauto.
+        2: { apply Forall_forall; intros r' Hr';
+             eexists; eexists; split; eauto; constructor; auto. }
+        erewrite rs_map_ext; eauto.
+        constructor; auto.
+        { econstructor; eauto.
+          inv WT_FN.
+          simpl in *.
+          apply wt_instrs in Hcode.
+          inv Hcode; auto. }
+        { destruct ros.
+          - apply Genv.find_funct_inversion in H0.
+            destruct H0 as [id H0].
+            eapply wt_program_prog; eauto.
+          - simpl in H0.
+            destruct (Genv.find_symbol ge i); try congruence.
+            apply Genv.find_funct_ptr_inversion in H0.
+            destruct H0 as [id H0].
+            eapply wt_program_prog; eauto. }
+        { constructor; auto.
+          econstructor; eauto.
+          eapply rm_inv_ext_r; eauto. }
+        { apply transf_function_match_fundef; auto. }
 
     - (* exec_Itailcall *)
-      admit.
-    - (* exec_Ibuiltin *)
-      admit.
+      inv Hmatch.
+      pose proof FUN as Hmatch_function.
+      inv FUN; simpl in *.
+      set (f := {| fn_sig := sig
+                ; fn_params := params
+                ; fn_stacksize := stacksize
+                ; fn_code := c
+                ; fn_entrypoint := entrypoint |}).
+      pose proof H as Hcode.
+      specialize (H1 pc (Itailcall (funsig fd) ros args) Hcode); inv H1.
+      (* inv H6. *)
+      eapply maj_vote_regR_star_step with (m:=m) in H6; eauto.
+      2: { apply Forall_forall; intros r1 Hin.
+           assert (Hused: reg_used_in_code c r1).
+           { eexists; eexists; split; eauto.
+             apply in_app_or in Hin; destruct Hin.
+             - destruct ros; simpl in *; inv H1; try contradiction.
+               constructor.
+             - constructor; auto. }
+           assert (Heq: rs' # r1 = rs # r1).
+           { specialize (RM r1 Hused).
+             destruct (rm # r1) eqn:Hr1.
+             intuition. }
+           rewrite Heq; clear Heq.
+           split.
+           { apply WT_RS. }
+           split.
+           { eapply rm_inv_get_2; eauto. }
+           { eapply rm_inv_get_3; eauto. } }
+      destruct H6 as (rs'' & H6 & Hrs'').
+      assert (Htf: exists tf, transf_fundef fd = OK tf /\
+                           find_function tge ros rs = Some tf).
+      { unfold find_function in *.
+        destruct ros.
+        - apply functions_translated in H0.
+          destruct H0 as (cu & tf & Hfind & Htrans & Hlink).
+          eexists; split; eauto.
+        - destruct (Genv.find_symbol ge i) eqn:Hsym; try congruence.
+          apply function_ptr_translated in H0.
+          destruct H0 as (cu & tf & Hfind & Htrans & Hlink).
+          eexists; split; eauto.
+          rewrite symbols_preserved, Hsym; auto. }
+      destruct Htf as (tf & Htransf_fundef & Hfind_tf).
+      eexists; split.
+      + eapply star_plus_trans.
+        { apply H6. }
+        2: { reflexivity. }
+        econstructor.
+        2: { apply star_refl. }
+        2: { rewrite Events.E0_right; reflexivity. }
+        eapply exec_Itailcall; simpl.
+        { eauto. }
+        { erewrite find_function_proper.
+          { eauto. }
+          { intros r ?; subst.
+            etransitivity.
+            2: { rewrite <- Hrs''; reflexivity. }
+            eapply rm_inv_get; eauto.
+            eexists; eexists; split; eauto; constructor. }
+          eauto. }
+        { apply sig_function_translated; auto. }
+        { eauto. }
+      + erewrite rs_args_rs'_args; eauto.
+        2: { apply Forall_forall; intros r' Hr';
+             eexists; eexists; split; eauto; constructor; auto. }
+        erewrite rs_map_ext; eauto.
+        constructor; auto.
+        { inv WT_FN. simpl in *.
+          specialize (wt_instrs pc _ Hcode).
+          inv wt_instrs.
+          simpl in *.
+          eapply wt_stackframes_sig_proper.
+          { rewrite <- H10; reflexivity. }
+          auto. }
+        { destruct ros.
+          - apply Genv.find_funct_inversion in H0.
+            destruct H0 as [id H0].
+            eapply wt_program_prog; eauto.
+          - simpl in H0.
+            destruct (Genv.find_symbol ge i); try congruence.
+            apply Genv.find_funct_ptr_inversion in H0.
+            destruct H0 as [id H0].
+            eapply wt_program_prog; eauto. }
+        { apply transf_function_match_fundef; auto. }
+
+    - (* exec_Ibuiltin *)      
+      inv Hmatch.
+      pose proof FUN as Hmatch_function.
+      inv FUN; simpl in *.
+      set (f := {| fn_sig := sig
+                ; fn_params := params
+                ; fn_stacksize := stacksize
+                ; fn_code := c
+                ; fn_entrypoint := entrypoint |}).
+      pose proof H as Hcode.
+      specialize (H2 pc (Ibuiltin ef args res pc') Hcode); inv H2.
+      smoveR_inv.
+      eapply maj_vote_regR_star_step with (m:=m) in H7; eauto.
+      2: { apply Forall_forall; intros r1 Hin.
+           assert (Hused: reg_used_in_code c r1).
+           { eexists; eexists; split; eauto; constructor; auto. }
+             (* reg_used_in_instr *)
+             (* apply in_app_or in Hin; destruct Hin. *)
+             (* - destruct ros; simpl in *; inv H6; try contradiction. *)
+             (*   constructor. *)
+             (* - constructor; auto. } *)
+           assert (Heq: rs' # r1 = rs # r1).
+           { specialize (RM r1 Hused).
+             destruct (rm # r1) eqn:Hr1.
+             intuition. }
+           rewrite Heq; clear Heq.
+           split.
+           { apply WT_RS. }
+           split.
+           { eapply rm_inv_get_2; eauto. }
+           { eapply rm_inv_get_3; eauto. } }
+      destruct H7 as (rs'' & H7 & Hrs'').
+      (* assert (Htf: exists tf, transf_fundef fd = OK tf /\ *)
+      (*                      find_function tge ros rs = Some tf). *)
+      (* { unfold find_function in *. *)
+      (*   destruct ros. *)
+      (*   - apply functions_translated in H0. *)
+      (*     destruct H0 as (cu & tf & Hfind & Htrans & Hlink). *)
+      (*     eexists; split; eauto. *)
+      (*   - destruct (Genv.find_symbol ge i) eqn:Hsym; try congruence. *)
+      (*     apply function_ptr_translated in H0. *)
+      (*     destruct H0 as (cu & tf & Hfind & Htrans & Hlink). *)
+      (*     eexists; split; eauto. *)
+      (*     rewrite symbols_preserved, Hsym; auto. } *)
+      eexists; split.
+      + eapply star_plus_trans.
+        { apply H7. }
+        2: { reflexivity. }
+        econstructor.
+        2: { apply star_refl. }
+        2: { rewrite Events.E0_right; reflexivity. }
+        eapply exec_Ibuiltin; simpl.
+        { eauto. }
+        { eapply eval_builtin_args_preserved.
+          2: { (* TODO: eval_builtin_args proper wrt. rs that agree on
+                  all args. Then goal immediate by H0. *)
+            (* H0 : eval_builtin_args ge (fun r : positive => rs # r) sp m args vargs *)
+            admit. }
+          intros id; apply symbols_preserved. }
+        { eapply external_call_symbols_preserved; eauto.
+          apply senv_preserved. }
+      +
+        (* TODO: copying res to shadow regs. *)
+
+        (* TODO: regmap_setres is equal on both sides. *)
+        (* assert (Heq: regmap_setres res vres rs = regmap_setres res vres rs''). *)
+        (* { admit. } *)
+        (* rewrite Heq. *)
+        (* admit. *)
+
+        admit.
+
+        (* { erewrite find_function_proper. *)
+        (*   { eauto. } *)
+        (*   { intros r ?; subst. *)
+        (*       etransitivity. *)
+        (*       2: { rewrite <- Hrs''; reflexivity. } *)
+        (*       eapply rm_inv_get; eauto. *)
+        (*       eexists; eexists; split; eauto; constructor. } *)
+        (*     eauto. } *)
+        (*   { apply sig_function_translated; auto. } *)
+        (* + erewrite rs_args_rs'_args; eauto. *)
+        (*   2: { apply Forall_forall; intros r' Hr'; *)
+        (*        eexists; eexists; split; eauto; constructor; auto. } *)
+        (*   erewrite rs_map_ext; eauto. *)
+        (*   constructor; auto. *)
+        (*   { econstructor; eauto. *)
+        (*     inv WT_FN. *)
+        (*     simpl in *. *)
+        (*     apply wt_instrs in Hcode. *)
+        (*     inv Hcode; auto. } *)
+        (*   { destruct ros. *)
+        (*     - apply Genv.find_funct_inversion in H0. *)
+        (*       destruct H0 as [id H0]. *)
+        (*       eapply wt_program_prog; eauto. *)
+        (*     - simpl in H0. *)
+        (*       destruct (Genv.find_symbol ge i); try congruence. *)
+        (*       apply Genv.find_funct_ptr_inversion in H0. *)
+        (*       destruct H0 as [id H0]. *)
+        (*       eapply wt_program_prog; eauto. } *)
+        (*   { constructor; auto. *)
+        (*     econstructor; eauto. *)
+        (*     eapply rm_inv_ext_r; eauto. } *)
+        (*   { apply transf_function_match_fundef; auto. } } *)
+
     - (* exec_Icond *)
       admit.
     - (* exec_Ijumptable *)
@@ -1754,20 +1861,11 @@ Section PRESERVATION.
 
   Lemma transf_initial_states st1 :
     initial_state prog st1 ->
-    (* exists st2, initial_state tprog st2 /\ wt_state st1 /\ match_states st1 st2. *)
     exists st2, initial_state tprog st2 /\ match_states st1 st2.
   Proof.
     intros. inversion H.
     exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
     subst.
-    (* assert (Hinit: initial_state tprog (Callstate nil tf nil m0)). *)
-    (* { econstructor; eauto. *)
-    (*   - eapply (Genv.init_mem_match TRANSF); eauto. *)
-    (*   - replace (prog_main tprog) with (prog_main prog). *)
-    (*     rewrite symbols_preserved. eauto. *)
-    (*     symmetry; eapply match_program_main; eauto. *)
-    (*   - rewrite <- H3. eapply sig_function_translated; eauto. } *)
-
     exists (Callstate nil tf nil m0); split.
     { econstructor; eauto.
       - eapply (Genv.init_mem_match TRANSF); eauto.
@@ -1775,9 +1873,6 @@ Section PRESERVATION.
         rewrite symbols_preserved. eauto.
         symmetry; eapply match_program_main; eauto.
       - rewrite <- H3. eapply sig_function_translated; eauto. }
-    (* split. *)
-    (* { eapply wt_initial_state with (p:=prog); auto. *)
-    (*   apply wt_program_prog. } *)
     generalize (transf_function_match_fundef _ _ B); intro Hmatch_fundef.
     destruct f.
     simpl in *.
@@ -1801,36 +1896,9 @@ Section PRESERVATION.
       apply match_call_states; auto.
       { constructor; simpl; rewrite H3; reflexivity. }
       { econstructor; apply type_function_correct; eauto. }
-      (* { simpl; rewrite H3; apply I. } *)
       { constructor. }
-      (* auto. *)
-      (* apply transf_function_match_fundef; auto. *)
-      (* econstructor. *)
-      
-      (* apply match_internal with (re:=r) (rm:=rm). *)
-      (* destruct f; simpl in *. *)
-      (* constructor. *)
-      (* + destruct u. *)
-      (*   eapply transf_code_code_matches; eauto. *)
-      (*   intros p i Hget. *)
-      (*   clear Hrm. *)
-      (*   clear Hcopy. *)
-      (*   inv s; inv s0; inv s1; inv s2; inv s3; simpl in *; unfold Ple in *. *)
-      (*   apply lt_nextnode_init_state with (sig := signature_main) *)
-      (*                                     (params := fn_params) *)
-      (*                                     (stacksize := fn_stacksize) *)
-      (*                                     (c := fn_code) *)
-      (*                                     (entrypoint := fn_entrypoint) *)
-      (*     in Hget. *)
-      (*   simpl in *; lia. *)
-      (* + eapply copy_params_match_entrypoint in Hcopy. *)
-      (*   eapply match_entrypoint_monotone; eauto. *)
-      (*   intros p i Hget. *)
-      (*   clear Htransf'; inv s4. *)
-      (*   destruct (H6 p); congruence. *)
     - inv B; constructor; try solve[constructor].
       + constructor; rewrite H3; reflexivity.
-      (* + rewrite H3; apply I. *)
   Qed.
 
   Lemma transf_final_states st1 st2 r :
@@ -1846,7 +1914,6 @@ Section PRESERVATION.
   Proof.
     intros.
     apply forward_simulation_plus with
-      (* (match_states := fun s1 s2 => wt_state s1 /\ match_states s1 s2). *)
       (match_states := fun s1 s2 => match_states s1 s2).
     - apply senv_preserved.
     - simpl; intros. exploit transf_initial_states; eauto.

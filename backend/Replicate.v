@@ -151,19 +151,19 @@ Fixpoint maj_vote_regs
       maj_vote re r1 r2 r3 succ
   end.
 
-Fixpoint builtin_arg_regs (arg : builtin_arg reg) : list reg :=
+Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
   match arg with
   | BA r => [r]
-  | BA_splitlong hi lo => builtin_arg_regs hi ++ builtin_arg_regs lo
-  | BA_addptr a1 a2 => builtin_arg_regs a1 ++ builtin_arg_regs a2
+  | BA_splitlong hi lo => regs_of_builtin_arg hi ++ regs_of_builtin_arg lo
+  | BA_addptr a1 a2 => regs_of_builtin_arg a1 ++ regs_of_builtin_arg a2
   | _ => []
   end.
 
 (** Pull out registers from builtin_args. *)
-Fixpoint builtin_args_regs (args : list (builtin_arg reg)) : list reg :=
+Fixpoint regs_of_builtin_args (args : list (builtin_arg reg)) : list reg :=
   match args with
   | [] => []
-  | ba :: rest => builtin_arg_regs ba ++ builtin_args_regs rest
+  | ba :: rest => regs_of_builtin_arg ba ++ regs_of_builtin_args rest
   end.
 
 Definition regs_of_fn (fn : reg + ident) : list reg :=
@@ -180,7 +180,7 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   | Istore _ _ args _ _ => args
   | Icall _ fn args _ _ => regs_of_fn fn ++ args
   | Itailcall _ fn args => regs_of_fn fn ++ args
-  | Ibuiltin _ args _ _ => builtin_args_regs args
+  | Ibuiltin _ args _ _ => regs_of_builtin_args args
   | Icond _ args _ _ => args
   | Ijumptable arg _ => [arg]
   | Ireturn (Some r) => [r]
@@ -235,10 +235,6 @@ Definition copy_to_shadows
   match (smove ty r1 r2, smove ty r1 r3) with
   | (Some mov1, Some mov2) =>
       do n <- reserve_instr;
-      (* do _ <- update_instr pc (Iop Omove [r1] r2 n); *)
-      (* update_instr n (Iop Omove [r1] r3 succ). *)
-      (* do _ <- update_instr pc (smove ty r1 r2 n); *)
-      (* update_instr n (smove ty r1 r3 succ) *)
       do _ <- update_instr pc (mov1 n);
       update_instr n (mov2 succ)
   | _ =>
@@ -246,12 +242,12 @@ Definition copy_to_shadows
   end.
 
 Fixpoint copy_all_to_shadows
-  (rm : PMap.t (reg * reg)) re (rs : list reg) (succ : node)
+  (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node)
   : mon node :=
   match rs with
   | [] => ret succ
   | r :: rs' =>
-      do succ' <- copy_all_to_shadows rm re rs' succ;
+      do succ' <- copy_all_to_shadows re rm rs' succ;
       do n <- reserve_instr;
       do _ <- copy_to_shadows rm (re r) r n succ';
       ret n
@@ -306,7 +302,7 @@ Definition transf_instr
       do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | rs :: rss, Some succ =>
-          do m <- copy_all_to_shadows rm re (rs :: rss) succ;
+          do m <- copy_all_to_shadows re rm (rs :: rss) succ;
           update_instr n (change_succ instr m)
       | _, _ => update_instr n instr
       end
@@ -377,7 +373,7 @@ Definition instr_regs (i : instruction) : PSet.t :=
   | Itailcall _ (inl r) args => PSet_of_list (r :: args)
   | Itailcall _ _ args => PSet_of_list args
   | Ibuiltin _ args res _ =>
-      PSet.union (PSet_of_list (builtin_args_regs args))
+      PSet.union (PSet_of_list (regs_of_builtin_args args))
         (PSet_of_list (regs_of_builtin_res res))
   | Icond _ args _ _ => PSet_of_list args
   | Ijumptable arg _ => PSet.singleton arg
@@ -413,17 +409,17 @@ Definition fun_regs_list (f : function) : list positive :=
 (*       copy_params rm rs n *)
 (*   end. *)
 
-Fixpoint copy_params (re : regenv)
-  (rm : PMap.t (reg * reg)) (params : list reg) (succ : node)
-  : mon node :=
-  match params with
-  | [] => ret succ
-  | r :: rs =>
-      do n <- copy_params re rm rs succ;
-      do m <- reserve_instr;
-      do _ <- copy_to_shadows rm (re r) r m n;
-      ret m
-  end.
+(* Fixpoint copy_params (re : regenv) *)
+(*   (rm : PMap.t (reg * reg)) (params : list reg) (succ : node) *)
+(*   : mon node := *)
+(*   match params with *)
+(*   | [] => ret succ *)
+(*   | r :: rs => *)
+(*       do n <- copy_params re rm rs succ; *)
+(*       do m <- reserve_instr; *)
+(*       do _ <- copy_to_shadows rm (re r) r m n; *)
+(*       ret m *)
+(*   end. *)
 
 Definition max_reg (regs : PSet.t) :=
   match PSet.max_elt regs with
@@ -455,7 +451,7 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
 Definition transf_fun (re : regenv) (f : function)
   : mon node :=
   do rm <- replication_map f;
-  do entry_point <- copy_params re rm f.(fn_params) f.(fn_entrypoint);
+  do entry_point <- copy_all_to_shadows re rm f.(fn_params) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
 
