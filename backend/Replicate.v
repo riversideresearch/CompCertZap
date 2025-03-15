@@ -241,16 +241,27 @@ Definition copy_to_shadows
       error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
   end.
 
+(* Fixpoint copy_all_to_shadows *)
+(*   (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node) *)
+(*   : mon node := *)
+(*   match rs with *)
+(*   | [] => ret succ *)
+(*   | r :: rs' => *)
+(*       do succ' <- copy_all_to_shadows re rm rs' succ; *)
+(*       do n <- reserve_instr; *)
+(*       do _ <- copy_to_shadows rm (re r) r n succ'; *)
+(*       ret n *)
+(*   end. *)
+
 Fixpoint copy_all_to_shadows
   (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node)
   : mon node :=
   match rs with
   | [] => ret succ
   | r :: rs' =>
-      do succ' <- copy_all_to_shadows re rm rs' succ;
       do n <- reserve_instr;
-      do _ <- copy_to_shadows rm (re r) r n succ';
-      ret n
+      do _ <- copy_to_shadows rm (re r) r n succ;
+      copy_all_to_shadows re rm rs' n
   end.
 
 (** Generate fault-tolerant instruction sequence corresponding to the

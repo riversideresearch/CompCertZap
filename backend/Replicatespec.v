@@ -135,6 +135,17 @@ Ltac smoveR_inv :=
   | [H: smoveR _ _ _ _ _ _ _ |- _ ] => inv H
   end.
 
+(* Inductive copy_allR re rm c : list reg -> node -> node -> Prop := *)
+(* | copy_params_nil : *)
+(*   forall n, *)
+(*     copy_allR re rm c [] n n *)
+(* | copy_params_cons : *)
+(*   forall param params succ n p r2 r3, *)
+(*     rm # param = (r2, r3) -> *)
+(*     smoveR c (re param) param r2 r3 n p -> *)
+(*     copy_allR re rm c params p succ -> *)
+(*     copy_allR re rm c (param :: params) n succ. *)
+
 Inductive copy_allR re rm c : list reg -> node -> node -> Prop :=
 | copy_params_nil :
   forall n,
@@ -142,8 +153,8 @@ Inductive copy_allR re rm c : list reg -> node -> node -> Prop :=
 | copy_params_cons :
   forall param params succ n p r2 r3,
     rm # param = (r2, r3) ->
-    smoveR c (re param) param r2 r3 n p ->
-    copy_allR re rm c params p succ ->
+    copy_allR re rm c params n p ->
+    smoveR c (re param) param r2 r3 p succ ->
     copy_allR re rm c (param :: params) n succ.
 
 Lemma copy_all_to_shadows_copy_allR re rm params n succ s0 s1 pf c :
@@ -151,34 +162,35 @@ Lemma copy_all_to_shadows_copy_allR re rm params n succ s0 s1 pf c :
   (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) ->
   copy_allR re rm c params n succ.
 Proof.
-  revert pf.
-  revert s0 s1 n succ.
-  induction params; simpl; intros s0 s1 n succ pf Hcopy Hc; inv Hcopy.
-  { constructor. }
-  unfold RTLgen.bind in H0; simpl in H0.
-  repeat egen_case.
-  unfold copy_to_shadows in H1.
-  destruct (rm # a) eqn:Ha.
-  unfold RTLgen.bind in H1; simpl in H1.
-  unfold error in H1.
-  destruct (smove (re a) a r) eqn:Hmov1; gen_contra.
-  destruct (smove (re a) a r0) eqn:Hmov2; gen_contra.
-  repeat egen_case.
-  unfold update_instr in *.
-  repeat lr_case.
-  simpl in *.
-  repeat state_incr_inv.
-  simpl in *; unfold Ple in *.
-  econstructor; eauto.
-  - econstructor; eauto; apply Hc.
-    + rewrite PTree.gso; try lia.
-      rewrite PTree.gss; eauto.
-    + rewrite PTree.gss; eauto.
-  - eapply IHparams; eauto.
-    intros p' instr Hget.
-    apply Hc.
-    specialize (H17 p'); destruct H17; congruence.
-Qed.
+(*   revert pf. *)
+(*   revert s0 s1 n succ. *)
+(*   induction params; simpl; intros s0 s1 n succ pf Hcopy Hc; inv Hcopy. *)
+(*   { constructor. } *)
+(*   unfold RTLgen.bind in H0; simpl in H0. *)
+(*   repeat egen_case. *)
+(*   unfold copy_to_shadows in H1. *)
+(*   destruct (rm # a) eqn:Ha. *)
+(*   unfold RTLgen.bind in H1; simpl in H1. *)
+(*   unfold error in H1. *)
+(*   destruct (smove (re a) a r) eqn:Hmov1; gen_contra. *)
+(*   destruct (smove (re a) a r0) eqn:Hmov2; gen_contra. *)
+(*   repeat egen_case. *)
+(*   unfold update_instr in *. *)
+(*   repeat lr_case. *)
+(*   simpl in *. *)
+(*   repeat state_incr_inv. *)
+(*   simpl in *; unfold Ple in *. *)
+(*   econstructor; eauto. *)
+(*   - econstructor; eauto; apply Hc. *)
+(*     + rewrite PTree.gso; try lia. *)
+(*       rewrite PTree.gss; eauto. *)
+(*     + rewrite PTree.gss; eauto. *)
+(*   - eapply IHparams; eauto. *)
+(*     intros p' instr Hget. *)
+(*     apply Hc. *)
+(*     specialize (H17 p'); destruct H17; congruence. *)
+  (* Qed. *)
+Admitted.
 
 Inductive match_instr
   (re : regenv) (rm : PMap.t (reg * reg)) (pc : positive) (c : code)
@@ -238,6 +250,8 @@ Inductive match_instr
 Definition match_code (re : regenv) (rm : PMap.t (reg * reg)) (c c': code) : Prop :=
   forall p i, c ! p = Some i -> match_instr re rm p c' i.
 
+(* TODO: change to reflect change to copy_all_to_shadows and copy_allR
+   (inductive case comes first in program order). *)
 Inductive match_entrypoint (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
   : list reg -> node -> node -> Prop :=
 | match_entrypoint_nil :
@@ -564,36 +578,37 @@ Proof.
     (* Icall *)
     + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
       repeat egen_case.
-      unfold copy_to_shadows in H0.
-      destruct (rm # r) eqn:Hrmr.
-      unfold RTLgen.bind in H0.
-      unfold error in *.
-      destruct (smove (re r) r r0) eqn:Hmov1; gen_contra.
-      destruct (smove (re r) r r1) eqn:Hmov2; gen_contra.
-      repeat egen_case.
-      unfold update_instr in *.
-      repeat lr_case.
-      simpl in *.
-      assert (p < st_nextnode s'0).
-      { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
-      assert (Hn0: n0 < s'1.(st_nextnode)).
-      { eapply maj_vote_regs_succ_lt_nextnode.
-        2: { eauto. }
-        auto. }
-      apply maj_vote_regs_maj_vote_regsR in H.
-      2: { clear Hiter; inv s0; unfold Ple in *; lia. }
-      reserve_instr_inv.
-      simpl in *.
-      repeat state_incr_inv.
-      simpl in *; unfold Ple in *.
-      econstructor; eauto.
-      * repeat apply maj_vote_regsR_ptree_set; eauto.
-      * rewrite PTree.gss; reflexivity.
-      * econstructor; eauto.
-        { rewrite 2!PTree.gso; try lia.
-          rewrite PTree.gss; reflexivity. }
-        { rewrite PTree.gso; try lia.
-          rewrite PTree.gss; reflexivity. }
+      (* unfold copy_to_shadows in H0. *)
+      (* destruct (rm # r) eqn:Hrmr. *)
+      (* unfold RTLgen.bind in H0. *)
+      (* unfold error in *. *)
+      (* destruct (smove (re r) r r0) eqn:Hmov1; gen_contra. *)
+      (* destruct (smove (re r) r r1) eqn:Hmov2; gen_contra. *)
+      (* repeat egen_case. *)
+      (* unfold update_instr in *. *)
+      (* repeat lr_case. *)
+      (* simpl in *. *)
+      (* assert (p < st_nextnode s'0). *)
+      (* { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. } *)
+      (* assert (Hn0: n0 < s'1.(st_nextnode)). *)
+      (* { eapply maj_vote_regs_succ_lt_nextnode. *)
+      (*   2: { eauto. } *)
+      (*   auto. } *)
+      (* apply maj_vote_regs_maj_vote_regsR in H. *)
+      (* 2: { clear Hiter; inv s0; unfold Ple in *; lia. } *)
+      (* reserve_instr_inv. *)
+      (* simpl in *. *)
+      (* repeat state_incr_inv. *)
+      (* simpl in *; unfold Ple in *. *)
+      (* econstructor; eauto. *)
+      (* * repeat apply maj_vote_regsR_ptree_set; eauto. *)
+      (* * rewrite PTree.gss; reflexivity. *)
+      (* * econstructor; eauto. *)
+      (*   { rewrite 2!PTree.gso; try lia. *)
+      (*     rewrite PTree.gss; reflexivity. } *)
+      (*   { rewrite PTree.gso; try lia. *)
+    (*     rewrite PTree.gss; reflexivity. } *)
+      admit.
     + admit.
     + admit.
     + admit.
@@ -709,11 +724,12 @@ Lemma copy_allR_match_entrypoint re rm params entrypoint n c :
   copy_allR re rm c params n entrypoint ->
   match_entrypoint re rm c params n entrypoint.
 Proof.
-  revert entrypoint n.
-  induction params; simpl; intros entrypoint n Hcopy; inv Hcopy.
-  { constructor. }
-  econstructor; eauto.
-Qed.
+(*   revert entrypoint n. *)
+(*   induction params; simpl; intros entrypoint n Hcopy; inv Hcopy. *)
+(*   { constructor. } *)
+(*   econstructor; eauto. *)
+  (* Qed. *)
+Admitted.
 
 Lemma copy_all_to_shadows_match_entrypoint re rm params entrypoint s0 s1 pf1 n :
   copy_all_to_shadows re rm params entrypoint s0 = RTLgen.OK n s1 pf1 ->
@@ -776,6 +792,47 @@ Proof.
   - inv Htransf; constructor.
 Qed.
 
+Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
+| in_builtin_arg_BA : in_builtin_arg a (BA a)
+| in_builtin_arg_splitlong_hi : forall hi lo,
+    in_builtin_arg a hi ->
+    in_builtin_arg a (BA_splitlong hi lo)
+| in_builtin_arg_splitlong_lo : forall hi lo,
+    in_builtin_arg a lo ->
+    in_builtin_arg a (BA_splitlong hi lo)
+| in_builtin_arg_addptr_a1 : forall a1 a2,
+    in_builtin_arg a a1 ->
+    in_builtin_arg a (BA_addptr a1 a2)
+| in_builtin_arg_addptr_a2 : forall a1 a2,
+    in_builtin_arg a a2 ->
+    in_builtin_arg a (BA_addptr a1 a2).
+
+Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
+  In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.
+Proof.
+  split.
+  - induction barg; simpl; intro Hin; try contradiction;
+      try (destruct Hin; subst; try contradiction; constructor);
+      apply in_app_or in Hin; destruct Hin as [Hin | Hin];
+      solve [constructor; auto].
+  - induction barg; simpl; intro Hin; inv Hin; auto; apply in_or_app; auto.
+Qed.
+
+Lemma in_regs_of_builtin_args_exists_in_builtin_arg r bargs :
+  In r (regs_of_builtin_args bargs) <-> Exists (in_builtin_arg r) bargs.
+Proof.
+  split.
+  - induction bargs; simpl; intro Hin; try contradiction.
+    apply in_app_or in Hin.
+    destruct Hin as [Hin | Hin].
+    + constructor; apply in_regs_of_builtin_arg_in_builtin_arg; auto.
+    + right; auto.
+  - induction bargs; simpl; intro Hin; inv Hin.
+    + apply in_or_app; left.
+      apply in_regs_of_builtin_arg_in_builtin_arg; auto.
+    + apply in_or_app; right; auto.
+Qed.
+
 Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
 | reg_used_iop_args : forall op args res succ,
     In r args ->
@@ -806,6 +863,7 @@ Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
     reg_used_in_instr r (Itailcall sig fn args)
 | reg_used_ibuiltin_args : forall ef bargs bres succ,
     In r (regs_of_builtin_args bargs) ->
+    (* Exists (in_builtin_arg r) bargs -> *)
     reg_used_in_instr r (Ibuiltin ef bargs bres succ)
 | reg_used_ibuiltin_res : forall ef bargs bres succ,
     In r (regs_of_builtin_res bres) ->

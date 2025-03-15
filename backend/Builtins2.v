@@ -1,6 +1,5 @@
 Require Import String Coqlib.
 Require Import AST Floats Integers Values.
-(* Integers Floats Values Memdata. *)
 Require Import Builtins0.
 Import ListNotations.
 
