@@ -40,16 +40,6 @@ Import ListNotations.
 
 Local Open Scope string_scope.
 
-(* Definition smove (ty : typ) (src dst : reg) (succ : node) : instruction := *)
-(*   let (nm, sig) := match ty with *)
-(*                    | Tint => ("__smove_int", replicate_builtin_sig BI_smove_int) *)
-(*                    | Tlong => ("__smove_long", replicate_builtin_sig BI_smove_long) *)
-(*                    | Tsingle => ("__smove_single", replicate_builtin_sig BI_smove_single) *)
-(*                    | Tfloat => ("__smove_float", replicate_builtin_sig BI_smove_float) *)
-(*                    | _ => ("__smove_unknown", replicate_builtin_sig BI_smove_int) *)
-(*             end in *)
-(*   Ibuiltin (EF_builtin nm sig) [BA src] (BR dst) succ. *)
-
 Definition smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
   | Tint => Some ("__smove_int", BI_smove_int)
@@ -95,35 +85,6 @@ Definition maj_vote_of_typ (ty : typ) (r1 r2 r3 : reg)
     begin. Reserves and returns the node at which subsequent
     instructions should continue.
 *)
-(* TODO: maybe factor this into two parts: one that isn't in the monad
-   and takes the fresh nodes and registers as arguments (similar to
-   smove above), and a wrapper around it that generates them in the
-   monad. *)
-(* Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node) *)
-(*   : mon node := *)
-(*   do (nm, sig) <- match re r1 with *)
-(*                  | Tint => ret ("__vote_int", replicate_builtin_sig BI_vote_int) *)
-(*                  | Tlong => ret ("__vote_long", replicate_builtin_sig BI_vote_long) *)
-(*                  | Tsingle => ret ("__vote_single", replicate_builtin_sig BI_vote_single) *)
-(*                  | Tfloat => ret ("__vote_float", replicate_builtin_sig BI_vote_float) *)
-(*                  | _ => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil) *)
-(*                  end; *)
-(*   do succ <- reserve_instr; *)
-(*   do _ <- update_instr pc *)
-(*            (Ibuiltin (EF_builtin nm sig) [BA r1; BA r2; BA r3] (BR r1) succ); *)
-(*   ret succ. *)
-
-(* Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node) *)
-(*   : mon node := *)
-(*   match maj_vote_sig_of_typ (re r1) with *)
-(*   | None => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil) *)
-(*   | Some (nm, sig) => *)
-(*       do succ <- reserve_instr; *)
-(*       do _ <- update_instr pc *)
-(*                (Ibuiltin (EF_builtin nm (replicate_builtin_sig sig)) [BA r1; BA r2; BA r3] (BR r1) succ); *)
-(*       ret succ *)
-(*   end. *)
-
 Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
   match maj_vote_of_typ (re r1) r1 r2 r3 with
@@ -187,20 +148,22 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   | Ireturn None => []
   end.
 
-Fixpoint regs_of_builtin_res (res : builtin_res reg) : list reg :=
+(** This ignores the recursive cases because according to
+    [exec_Ibuiltin] (specifically [regmap_setres]) the result is used
+    only in the [BR] case.  *)
+Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
   match res with
-  | BR r => [r]
-  | BR_splitlong hi lo => regs_of_builtin_res hi ++ regs_of_builtin_res lo
-  | BR_none => []
+  | BR r => Some r
+  | _ => None
   end.
 
-Definition res_of_instruction (instr : instruction) : list reg :=
+Definition res_of_instruction (instr : instruction) : option reg :=
   match instr with
-  | Iop _ _ dst _ => [dst]
-  | Iload _ _ _ dst _ => [dst]
-  | Icall _ _ _ dst _ => [dst]
-  | Ibuiltin _ _ res _ => regs_of_builtin_res res
-  | _ => []
+  | Iop _ _ res _ => Some res
+  | Iload _ _ _ res _ => Some res
+  | Icall _ _ _ res _ => Some res
+  | Ibuiltin _ _ res _ => reg_of_builtin_res res
+  | _ => None
   end.
 
 Definition succ_of_instruction (instr : instruction) : option node :=
@@ -227,7 +190,7 @@ Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
   end.
 
 (** Insert instructions at [pc] to move contents of [r] to its shadow
-    copies and then jump to [succ].  *)
+    copies and then jump to [succ]. *)
 Definition copy_to_shadows
   (rm : PMap.t (reg * reg)) (ty : typ) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
@@ -240,18 +203,6 @@ Definition copy_to_shadows
   | _ =>
       error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
   end.
-
-(* Fixpoint copy_all_to_shadows *)
-(*   (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node) *)
-(*   : mon node := *)
-(*   match rs with *)
-(*   | [] => ret succ *)
-(*   | r :: rs' => *)
-(*       do succ' <- copy_all_to_shadows re rm rs' succ; *)
-(*       do n <- reserve_instr; *)
-(*       do _ <- copy_to_shadows rm (re r) r n succ'; *)
-(*       ret n *)
-(*   end. *)
 
 Fixpoint copy_all_to_shadows
   (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node)
@@ -312,8 +263,9 @@ Definition transf_instr
   | _ =>
       do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
-      | rs :: rss, Some succ =>
-          do m <- copy_all_to_shadows re rm (rs :: rss) succ;
+      | Some res, Some succ =>
+          do m <- reserve_instr;
+          do _ <- copy_to_shadows rm (re res) res m succ;
           update_instr n (change_succ instr m)
       | _, _ => update_instr n instr
       end
@@ -385,7 +337,7 @@ Definition instr_regs (i : instruction) : PSet.t :=
   | Itailcall _ _ args => PSet_of_list args
   | Ibuiltin _ args res _ =>
       PSet.union (PSet_of_list (regs_of_builtin_args args))
-        (PSet_of_list (regs_of_builtin_res res))
+        (PSet_of_option (reg_of_builtin_res res))
   | Icond _ args _ _ => PSet_of_list args
   | Ijumptable arg _ => PSet.singleton arg
   | Ireturn (Some arg) => PSet.singleton arg
@@ -404,33 +356,6 @@ Definition fun_regs (f : function) : PSet.t :=
 
 Definition fun_regs_list (f : function) : list positive :=
   PSet.elements (fun_regs f).
-
-(** Generate instructions to copy contents of registers [params] to
-    their corresponding shadow registers. [succ] is the node to jump
-    to after copying. Reserves and returns the node at which copying
-    starts (to become the new entry point of the function). *)
-(* Fixpoint copy_params *)
-(*   (rm : PMap.t (reg * reg)) (params : list reg) (succ : node) *)
-(*   : mon node := *)
-(*   match params with *)
-(*   | [] => ret succ *)
-(*   | r :: rs => *)
-(*       do n <- reserve_instr; *)
-(*       do _ <- copy_to_shadows rm r n succ; *)
-(*       copy_params rm rs n *)
-(*   end. *)
-
-(* Fixpoint copy_params (re : regenv) *)
-(*   (rm : PMap.t (reg * reg)) (params : list reg) (succ : node) *)
-(*   : mon node := *)
-(*   match params with *)
-(*   | [] => ret succ *)
-(*   | r :: rs => *)
-(*       do n <- copy_params re rm rs succ; *)
-(*       do m <- reserve_instr; *)
-(*       do _ <- copy_to_shadows rm (re r) r m n; *)
-(*       ret m *)
-(*   end. *)
 
 Definition max_reg (regs : PSet.t) :=
   match PSet.max_elt regs with

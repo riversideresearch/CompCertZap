@@ -381,12 +381,7 @@ Inductive standard_builtin : Type :=
   | BI_i64_stod
   | BI_i64_utod
   | BI_i64_stof
-  | BI_i64_utof
-  | BI_smove_int
-(*   | BI_smove_long *)
-(*   | BI_smove_single *)
-(* | BI_smove_float *)
-.
+  | BI_i64_utof.
 
 Local Open Scope string_scope.
 
@@ -423,10 +418,6 @@ Definition standard_builtin_table : list (string * standard_builtin) :=
  :: ("__compcert_i64_utod", BI_i64_utod)
  :: ("__compcert_i64_stof", BI_i64_stof)
  :: ("__compcert_i64_utof", BI_i64_utof)
- :: ("__smove_int", BI_smove_int)
- (* :: ("__smove_long", BI_smove_long)  *)
- (* :: ("__smove_single", BI_smove_single) *)
- (* :: ("__smove_float", BI_smove_float) *)
  :: nil.
 
 Definition standard_builtin_sig (b: standard_builtin) : signature :=
@@ -460,14 +451,6 @@ Definition standard_builtin_sig (b: standard_builtin) : signature :=
                     [Xlong ---> Xfloat]
   | BI_i64_stof | BI_i64_utof =>
                     [Xlong ---> Xsingle]
-  | BI_smove_int =>
-      [Xint ---> Xint]
-  (* | BI_smove_long => *)
-  (*     [Xlong ---> Xlong] *)
-  (* | BI_smove_single => *)
-  (*     [Xsingle ---> Xsingle] *)
-  (* | BI_smove_float => *)
-  (*     [Xfloat ---> Xfloat] *)
   end.
 
 Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (sig_res (standard_builtin_sig b)) :=
@@ -510,10 +493,6 @@ Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (sig
   | BI_i64_utod => mkbuiltin_n1t Tlong Xfloat Float.of_longu
   | BI_i64_stof => mkbuiltin_n1t Tlong Xsingle Float32.of_long
   | BI_i64_utof => mkbuiltin_n1t Tlong Xsingle Float32.of_longu
-  | BI_smove_int => mkbuiltin_n1t Tint Xint (@id int)
-  (* | BI_smove_long => mkbuiltin_n1t Tlong Tlong (@id val) *)
-  (* | BI_smove_single => mkbuiltin_n1t Tsingle Tsingle (@id val) *)
-  (* | BI_smove_float => mkbuiltin_n1t Tfloat Tfloat (@id val) *)
   end.
 Next Obligation. 
   red. destruct vl; auto. destruct v; auto. 
