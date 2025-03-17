@@ -1372,10 +1372,13 @@ Inductive match_states : state -> state -> Prop :=
     (* (WT_FN : wt_fundef f) *)
     (* (WT_FN : forall fd, f = Internal fd -> exists re, wt_function fd re) *)
     (* (WT_ARGS : Val.has_type_list args (proj_sig_args (funsig f))) *)
+    (* (WT_ARGS: Val.has_type_list args (map re f.(fn_params))) *)
     (* Match *)
     (* (GENV: exists (v : val), Genv.find_funct (Genv.globalenv prog) v = Some f) *)
     (* (GENV: exists i, In (i, Gfun f) (prog_defs prog)) *)
     (* (STACKS : list_forall2 match_stackframe stk tstk) *)
+    (* (WT_ARGS: map re args = proj_sig_args (funsig f)) *)
+    (WT_ARGS: Val.has_type_list args (proj_sig_args (funsig f)))
     (STACKS: match_stackframes stk tstk (funsig f))
     (FUN : match_fundef f tf),
     match_states (Callstate stk f args m) (Callstate tstk tf args m)

@@ -1901,48 +1901,166 @@ Section PRESERVATION.
   (*   -  *)
 
   Lemma not_in_update_regset rm rs a params v :
+    Forall (fun r => forall r1 r2 r3, In r1 params ->
+                              rm # r1 = (r2, r3) ->
+                              a <> r2 /\ a <> r3) params ->
     rm_wf rm params ->
     ~ In a params ->
     (update_regset rm rs # a <- v params) # a = v.
   Proof.
-    induction params; simpl; intros Hwf Hnotin.
+    induction params; simpl; intros Hneq Hwf Hnotin.
     { rewrite PMap.gss; reflexivity. }
+    inv Hneq.
     destruct (rm # a0) eqn:Ha0.
     destruct (DecidableTypeEx.Positive_as_DT.eq_dec a0 a); subst.
     { intuition. }
     rewrite 2!PMap.gso; auto.
     - apply IHparams; auto.
-      eapply rm_wf_cons; eauto.
-    - (* TODO: assume these inequalities somehow for this
-      lemma. rm_inv good enough? *)
-  Admitted.
+      + eapply Forall_impl; eauto.
+      + eapply rm_wf_cons; eauto.
+    - apply H1 in Ha0; intuition.
+    - apply H1 in Ha0; intuition.
+  Qed.
 
-  Lemma update_regset_init_regs rm args params :
+  (* Lemma update_regset_init_regs rm args params : *)
+  (*   rm_wf rm params -> *)
+  (*   NoDup params -> *)
+  (*   (length params < length args)%nat -> *)
+  (*   update_regset rm (init_regs args params) params = init_regs' rm args params. *)
+  (* Proof. *)
+  (*   revert args; induction params; intros args Hwf Hnodup Hlen; simpl; auto. *)
+  (*   destruct (rm # a) eqn:Ha. *)
+  (*   destruct args; simpl in *; try lia. *)
+  (*   inv Hnodup. *)
+  (*   assert (Hall: Forall *)
+  (*                   (fun _ : positive => *)
+  (*                      forall (r1 : positive) (r2 r3 : reg), *)
+  (*                        In r1 params -> *)
+  (*                        rm # r1 = (r2, r3) -> *)
+  (*                        a <> r2 /\ a <> r3) *)
+  (*                   params). *)
+  (*   { apply Forall_forall; intros b Hb r1 r2 r3 Hr1; split. *)
+  (*     + symmetry. *)
+  (*       eapply rm_wf_neq_2_1'; eauto. *)
+  (*       * left; reflexivity. *)
+  (*       * right; assumption. *)
+  (*     + symmetry. *)
+  (*       eapply rm_wf_neq_3_1'; eauto. *)
+  (*       * left; reflexivity. *)
+  (*       * right; assumption. } *)
+  (*   pose proof (rm_wf_cons _ _ _ Hwf) as Hwf'.     *)
+  (*   f_equal. *)
+  (*   - apply not_in_update_regset; auto. *)
+  (*   - rewrite <- IHparams; simpl in *; auto; try lia. *)
+  (*     rewrite not_in_update_regset; auto. *)
+  (*     f_equal. *)
+  (*     admit. *)
+  (* Admitted.       *)
+
+  Lemma update_regset_init_regs rm args params r :
     rm_wf rm params ->
     NoDup params ->
     (length params < length args)%nat ->
-    update_regset rm (init_regs args params) params = init_regs' rm args params.
+    In r params ->
+    (update_regset rm (init_regs args params) params) # r =
+      (init_regs' rm args params) # r.
   Proof.
-    revert args; induction params; intros args Hwf Hnodup Hlen; simpl; auto.
-    destruct (rm # a) eqn:Ha.
+    revert r args; induction params; intros r args Hwf Hnodup Hlen Hin; simpl; auto.
+    destruct (rm # a) as [b c] eqn:Ha.
     destruct args; simpl in *; try lia.
     inv Hnodup.
-    (* rewrite <- IHparams; try lia. *)
-    apply rm_wf_cons in Hwf.
-    f_equal.
-    - apply not_in_update_regset; auto.
-    - rewrite <- IHparams; simpl in *; auto; try lia.
-      rewrite not_in_update_regset; auto.
-      f_equal.
-      admit.
-  Admitted.      
+    assert (Hall: Forall
+                    (fun _ : positive =>
+                       forall (r1 : positive) (r2 r3 : reg),
+                         In r1 params ->
+                         rm # r1 = (r2, r3) ->
+                         a <> r2 /\ a <> r3)
+                    params).
+    { apply Forall_forall; intros x Hx r1 r2 r3 Hr1; split.
+      + symmetry.
+        eapply rm_wf_neq_2_1'.
+        { eauto. }
+        { left; reflexivity. }
+        { right; eauto. }
+        { eauto. }
+        { eauto. }
+      + symmetry.
+        eapply rm_wf_neq_3_1'.
+        { eauto. }
+        { left; reflexivity. }
+        { right; eauto. }
+        { eauto. }
+        { eauto. } }
+    pose proof (rm_wf_cons _ _ _ Hwf) as Hwf'.
+    rewrite not_in_update_regset; auto.
+    admit.
+  Admitted.
+  (*   - rewrite <- IHparams; simpl in *; auto; try lia. *)
+  (*     rewrite not_in_update_regset; auto. *)
+  (*     f_equal. *)
+  (*     admit. *)
+  (* Admitted.       *)
 
   Lemma rm_inv_init_regs c rm args params :
     rm_inv c rm (init_regs args params)
       (update_regset rm (init_regs args params) params).
   Proof.
-    rewrite update_regset_init_regs.
+    (* rewrite update_regset_init_regs. *)
   Admitted.
+
+  (* Lemma has_argtype_has_type a xty : *)
+  (*   xty <> Xvoid -> *)
+  (*   Val.has_argtype a xty -> *)
+  (*   Val.has_type a (proj_xtype xty). *)
+  (* Proof. *)
+  (*   unfold Val.has_argtype. *)
+  (*   unfold Val.has_type. *)
+  (*   intro Hvoid. *)
+  (*   destruct xty, a; simpl; auto; try contradiction; *)
+  (*     try solve [intro H; compute; rewrite H; auto]. *)
+  (*   compute; destruct Archi.ptr64; auto. *)
+  (* Qed. *)
+
+  (* Lemma has_argtype_list_has_type_list args xtys : *)
+  (*   Forall (fun xty => xty <> Xvoid) xtys -> *)
+  (*   Val.has_argtype_list args xtys -> *)
+  (*   Val.has_type_list args (map proj_xtype xtys). *)
+  (* Proof. *)
+  (*   revert xtys. *)
+  (*   induction args; intros xtys Hvoid Hargs; inv Hargs; simpl; auto. *)
+  (*   inv Hvoid. *)
+  (*   split; auto. *)
+  (*   apply has_argtype_has_type; auto. *)
+  (* Qed. *)
+
+  Lemma copy_allR_params_used_in_code re rm c params pc succ :
+    copy_allR re rm c params pc succ ->
+    Forall (reg_used_in_code c) params.
+  Proof.
+    induction 1.
+    { constructor. }
+    constructor; auto.
+    inv H1.
+    unfold smove in *.
+    destruct (re r1) eqn:Hr1; inv H2; inv H3;
+      eexists; eexists; split; eauto; constructor; simpl; auto.
+  Qed.
+
+  Lemma wt_regset_init_regs re params args :
+    list_norepet params ->
+    Val.has_type_list args (map re params) ->
+    wt_regset re (init_regs args params).
+  Proof.
+    revert args; induction params; simpl; intros args Hnodup Hty.
+    { constructor. }
+    inv Hnodup.
+    destruct args; inv Hty.
+    intro r.
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec r a); subst.
+    { rewrite PMap.gss; auto. }
+    rewrite PMap.gso; auto.
+    apply IHparams; auto.
+  Qed.
 
   (* TODO: put lemmas that are used a lot in a hint database to clean
      up this proof. *)
@@ -2345,6 +2463,14 @@ Section PRESERVATION.
         (*     apply Genv.find_funct_ptr_inversion in H0. *)
         (*     destruct H0 as [id H0]. *)
         (*     eapply wt_program_prog; eauto. } *)
+        { inv WT_FN; simpl in *.
+          apply wt_instrs in Hcode; inv Hcode.
+          rewrite <- H16.
+          erewrite <- rs_map_ext; eauto.
+          erewrite <- rs_args_rs'_args; eauto.
+          2: { apply Forall_forall; intros x Hx.
+               eexists; eexists; split; eauto; constructor; auto. }
+          apply wt_regset_list; auto. }
         { econstructor; eauto.
           - inv WT_FN.
             simpl in *.
@@ -2435,6 +2561,28 @@ Section PRESERVATION.
         (*     apply Genv.find_funct_ptr_inversion in H0. *)
         (*     destruct H0 as [id H0]. *)
         (*     eapply wt_program_prog; eauto. } *)
+        { inv WT_FN; simpl in *.
+          apply wt_instrs in Hcode; inv Hcode.
+          rewrite <- H10.
+          erewrite <- rs_map_ext; eauto.
+          erewrite <- rs_args_rs'_args; eauto.
+          2: { apply Forall_forall; intros x Hx.
+               eexists; eexists; split; eauto; constructor; auto. }
+          apply wt_regset_list; auto. }
+        (* { econstructor; eauto. *)
+        (*   - inv WT_FN. *)
+        (*     simpl in *. *)
+        (*     apply wt_instrs in Hcode. *)
+        (*     inv Hcode; auto. *)
+        (*   - eapply rm_inv_ext_r; eauto. *)
+        (*   - eexists; eexists; split; eauto; solve [constructor; auto]. *)
+        (*   - econstructor. *)
+        (*     + apply H2. *)
+        (*     + eauto. *)
+        (*     + eauto. *)
+        (*     + eauto. } *)
+        (* { apply transf_function_match_fundef; auto. } *)
+        (* { admit. } *)
         { eapply match_stackframes_sig_proper.
           2: { eauto. }
           inv WT_FN.
@@ -2687,25 +2835,27 @@ Section PRESERVATION.
       inv Hmatch.
       inv FUN; simpl in *.
       inv FUN0; simpl in *.
-      (* inv H2. *)
       eexists; split.
       + econstructor.
         * apply exec_function_internal; eauto.
         * simpl.
           eapply copy_allR_star_step.
           5: { eauto. }
-          { admit. }
+          { inv WT; subst; simpl in *.
+            rewrite <- wt_params in WT_ARGS.
+            apply wt_regset_init_regs; auto. }
           { eapply rm_wf_monotone.
             2: { eauto. }
             intros r Hin; apply param_in_all_regs_list; auto. }
           { admit. }
-          { admit. }
+          { eapply copy_allR_params_used_in_code; eauto. }
         * reflexivity.
       + econstructor; eauto.
-        * admit.
+        * apply wt_init_regs.
+          inv WT; simpl in *.
+          rewrite wt_params; auto.
         * constructor; eauto.
-        * simpl.
-          admit.
+        * apply rm_inv_init_regs.
 
     - (* exec_function_external *)
       inv Hmatch.
@@ -2775,8 +2925,10 @@ Section PRESERVATION.
       rename t into rm.
       apply match_call_states; auto.
       (* { econstructor; apply type_function_correct; eauto. } *)
+      { simpl; rewrite H3; apply I. }
       { econstructor; simpl; rewrite H3; reflexivity. }
     - inv B; constructor; try solve[constructor].
+      + simpl in *; rewrite H3; apply I.
       + constructor; rewrite H3; reflexivity.
   Qed.
 
