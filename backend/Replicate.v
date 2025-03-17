@@ -349,13 +349,19 @@ Definition instr_regs (i : instruction) : PSet.t :=
 Definition code_regs (c : code) : PSet.t :=
   PTree.fold (fun rs _ instr => PSet.union rs (instr_regs instr)) c PSet.empty.
 
+Definition all_regs (params : list reg) (c : code) : PSet.t :=
+  PSet.union (PSet_of_list params) (code_regs c).
+
+Definition all_regs_list (params : list reg) (c : code) : list reg :=
+  PSet.elements (all_regs params c).
+
 (** All registers that appear in the given function (params + regs
     used in instructions). *)
 Definition fun_regs (f : function) : PSet.t :=
-  PSet.union (PSet_of_list f.(fn_params)) (code_regs (f.(fn_code))).
+  all_regs f.(fn_params) f.(fn_code).
 
 Definition fun_regs_list (f : function) : list positive :=
-  PSet.elements (fun_regs f).
+  all_regs_list f.(fn_params) f.(fn_code).
 
 Definition max_reg (regs : PSet.t) :=
   match PSet.max_elt regs with
