@@ -214,11 +214,11 @@ Qed.
 Inductive match_instr
   (re : regenv) (rm : PMap.t (reg * reg)) (pc : positive) (c : code)
   : instruction -> Prop :=
-| match_inop :
+| match_Inop :
   forall n,
     PTree.get pc c = Some (Inop n) ->
     match_instr re rm pc c (Inop n)
-| match_iop :
+| match_Iop :
   forall op args1 args2 args3 res1 res2 res3 n1 n2 succ,
     match_regs rm args1 args2 args3 ->
     rm !! res1 = (res2, res3) ->
@@ -226,7 +226,7 @@ Inductive match_instr
     c ! n1 = Some (Iop op args3 res3 n2) ->
     c ! n2 = Some (Iop op args1 res1 succ) ->
     match_instr re rm pc c (Iop op args1 res1 succ)
-| match_iload :
+| match_Iload :
   forall chunk addr args1 args2 args3 res1 res2 res3 n1 n2 succ,
     match_regs rm args1 args2 args3 ->
     rm !! res1 = (res2, res3) ->
@@ -234,44 +234,61 @@ Inductive match_instr
     c ! n1 = Some (Iload chunk addr args3 res3 n2) ->
     c ! n2 = Some (Iload chunk addr args1 res1 succ) ->
     match_instr re rm pc c (Iload chunk addr args1 res1 succ)
-| match_istore :
+| match_Istore :
   forall chunk addr args src1 src2 src3 n succ,
     rm !! src1 = (src2, src3) ->
     maj_vote_regsR c re rm args pc n ->
     c ! n = Some (Istore chunk addr args src1 succ) ->
     match_instr re rm pc c (Istore chunk addr args src1 succ)
-| match_icall :
+| match_Icall :
   forall sig fn args res1 res2 res3 succ n1 n2,
     maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1 ->
     c ! n1 = Some (Icall sig fn args res1 n2) ->
     rm !! res1 = (res2, res3) ->
     smoveR c (re res1) res1 res2 res3 n2 succ ->
     match_instr re rm pc c (Icall sig fn args res1 succ)
-| match_itailcall :
+| match_Itailcall :
   forall sig fn args n,
     maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n ->
     c ! n = Some (Itailcall sig fn args) ->
     match_instr re rm pc c (Itailcall sig fn args)
-| match_ibuiltin_1 :
+| match_Ibuiltin_1 :
   forall ef bargs bres n succ,
     ~ is_BR bres -> (* no result register *)
     maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n ->
     c ! n = Some (Ibuiltin ef bargs bres succ) ->
     (* copy_allR re rm c (reg_of_builtin_res bres) n2 succ -> *)
     match_instr re rm pc c (Ibuiltin ef bargs bres succ)
-| match_ibuiltin_2 :
+| match_Ibuiltin_2 :
   forall ef bargs res1 res2 res3 n1 n2 succ,
     maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1 ->
     c ! n1 = Some (Ibuiltin ef bargs (BR res1) n2) ->
     rm # res1 = (res2, res3) ->
     smoveR c (re res1) res1 res2 res3 n2 succ ->
     match_instr re rm pc c (Ibuiltin ef bargs (BR res1) succ)
-.
+| match_Icond :
+  forall cond args ifso ifnot n,
+    maj_vote_regsR c re rm args pc n ->
+    c ! n = Some (Icond cond args ifso ifnot) ->
+    match_instr re rm pc c (Icond cond args ifso ifnot)
+| match_Ijumptable :
+  forall arg1 arg2 arg3 tbl n,
+    rm # arg1 = (arg2, arg3) ->
+    maj_voteR c (re arg1) arg1 arg2 arg3 pc n ->
+    c ! n = Some (Ijumptable arg1 tbl) ->
+    match_instr re rm pc c (Ijumptable arg1 tbl)
+| match_Ireturn_1 :
+  c ! pc = Some (Ireturn None) ->
+  match_instr re rm pc c (Ireturn None)
+| match_Ireturn_2 :
+  forall arg1 arg2 arg3 n,
+    rm # arg1 = (arg2, arg3) ->
+    maj_voteR c (re arg1) arg1 arg2 arg3 pc n ->
+    c ! n = Some (Ireturn (Some arg1)) ->
+    match_instr re rm pc c (Ireturn (Some arg1)).
 
 (* Inductive maj_vote_regsR c re rm : list reg -> node -> node -> Prop := *)
 
-  (* | Icond: condition -> list reg -> node -> node -> instruction *)
-  (* | Ijumptable: reg -> list node -> instruction *)
   (* | Ireturn: option reg -> instruction. *)
 
 Definition match_code (re : regenv) (rm : PMap.t (reg * reg)) (c c': code) : Prop :=
@@ -423,11 +440,25 @@ Proof.
     + eapply state_incr_maj_vote_regsR; eauto.
     + destruct (H1 n); congruence.
   - destruct (H1 n1) as [?|Hn1]; try congruence.
-    eapply match_ibuiltin_2.
+    eapply match_Ibuiltin_2.
     + eapply state_incr_maj_vote_regsR; eauto.
     + rewrite  Hn1; eauto.
     + eauto.
     + eapply state_incr_smoveR; eauto.
+  - destruct (H1 n) as [?|Hn]; try congruence.
+    econstructor; eauto.
+    + eapply state_incr_maj_vote_regsR; eauto.
+    + rewrite Hn; eauto.
+  - destruct (H1 n) as [?|Hn]; try congruence.
+    econstructor; eauto.
+    + eapply state_incr_maj_voteR; eauto.
+    + rewrite Hn; eauto.
+  - destruct (H1 p) as [?|Hp]; try congruence.
+    constructor; rewrite Hp; auto.
+  - destruct (H1 n) as [?|Hn]; try congruence.
+    econstructor; eauto.
+    + eapply state_incr_maj_voteR; eauto.
+    + rewrite Hn; auto.
 Qed.
 
 Lemma maj_vote_of_typ_is_actual_type ty r1 r2 r3 i :
@@ -585,7 +616,7 @@ Proof.
       destruct (rm # r) eqn:Hrmr; simpl in *.
       assert (p < st_nextnode s'0).
       { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
-      eapply match_iop with (pc := p)
+      eapply match_Iop with (pc := p)
                             (n1 := s'0.(st_nextnode))
                             (n2 := Pos.succ (s'0.(st_nextnode))); eauto.
       { apply match_regs_map_rm. }
@@ -603,7 +634,7 @@ Proof.
       destruct (rm # r) eqn:Hrmr; simpl in *.
       assert (p < st_nextnode s'0).
       { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
-      eapply match_iload with (pc := p)
+      eapply match_Iload with (pc := p)
                               (n1 := s'0.(st_nextnode))
                               (n2 := Pos.succ (s'0.(st_nextnode))); eauto.
       { apply match_regs_map_rm. }
@@ -649,8 +680,7 @@ Proof.
       { eapply maj_vote_regs_succ_lt_nextnode.
         2: { eauto. }
         auto. }
-      apply maj_vote_regs_maj_vote_regsR in H.
-      2: { clear Hiter; inv s0; unfold Ple in *; lia. }
+      apply maj_vote_regs_maj_vote_regsR in H; auto.
       reserve_instr_inv.
       simpl in *.
       repeat state_incr_inv.
@@ -670,8 +700,6 @@ Proof.
       unfold update_instr in *.
       repeat lr_case.
       simpl in *.
-      assert (p < st_nextnode s'0).
-      { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
       apply maj_vote_regs_maj_vote_regsR in H.
       2: { clear Hiter; inv s0; unfold Ple in *; lia. }
       repeat state_incr_inv.
@@ -688,7 +716,7 @@ Proof.
         repeat lr_case; simpl.
         destruct b; simpl in Hb; inv Hb.
         destruct (rm # r) eqn:Hr.
-        eapply match_ibuiltin_2.
+        eapply match_Ibuiltin_2.
         { eapply maj_vote_regsR_ptree_set; auto.
           eapply state_incr_maj_vote_regsR.
           2: { eapply maj_vote_regs_maj_vote_regsR.
@@ -705,7 +733,7 @@ Proof.
       * repeat egen_case.
         unfold update_instr in H0.
         repeat lr_case; simpl.
-        eapply match_ibuiltin_1.
+        eapply match_Ibuiltin_1.
         { intro HC; inv HC; inv Hb. }
         { eapply maj_vote_regsR_ptree_set; auto.
           eapply state_incr_maj_vote_regsR.
@@ -716,16 +744,66 @@ Proof.
           specialize (H2 pc); specialize (H5 pc).
           destruct H2 as [H2 | H2]; auto. }
         rewrite PTree.gss; reflexivity.
-      
-    + admit.
-    + admit.
-    + admit.
+
+    (* Icond *)
+    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+      repeat egen_case.
+      unfold update_instr in *.
+      repeat lr_case.
+      simpl in *.
+      apply maj_vote_regs_maj_vote_regsR in H.
+      2: { clear Hiter; inv s0; unfold Ple in *; lia. }
+      repeat state_incr_inv.
+      simpl in *; unfold Ple in *.
+      econstructor; eauto.
+      * repeat apply maj_vote_regsR_ptree_set; eauto.
+      * rewrite PTree.gss; reflexivity.
+
+    (* Ijumptable *)
+    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+      destruct (rm # r) as [r2 r3] eqn:Hr.
+      unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+      repeat egen_case.
+      unfold update_instr in *.
+      repeat lr_case.
+      simpl in *.
+      eapply maj_vote_maj_voteR in H1; eauto.
+      2: { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
+      repeat state_incr_inv.
+      simpl in *; unfold Ple in *.
+      econstructor; eauto.
+      * repeat apply maj_voteR_ptree_set; eauto.
+      * rewrite PTree.gss; reflexivity.
+
+    (* Ireturn *)
+    + destruct o; simpl in *.
+      * unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+        destruct (rm # r) as [r2 r3] eqn:Hr.
+        unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+        repeat egen_case.
+        unfold update_instr in *.
+        repeat lr_case.
+        simpl in *.
+        eapply maj_vote_maj_voteR in H1; eauto.
+        2: { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
+        repeat state_incr_inv.
+        simpl in *; unfold Ple in *.
+        econstructor; eauto.
+        { repeat apply maj_voteR_ptree_set; eauto. }
+        { rewrite PTree.gss; reflexivity. }
+      * unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+        repeat egen_case.
+        unfold update_instr in *.
+        repeat lr_case; simpl.
+        econstructor.
+        rewrite PTree.gss; reflexivity.
+
   - unfold RTLgen.bind in Htransf'.
     destruct u, u0.
     assert (H: match_instr re rm p (st_code s'0) i).
     { eapply IHl; eauto. }
     eapply state_incr_match_instr; eauto.
-Admitted.
+Qed.
 
 Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
   (forall p i, c ! p = Some i -> p < st_nextnode s) ->
@@ -939,45 +1017,45 @@ Proof.
 Qed.
 
 Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
-| reg_used_iop_args : forall op args res succ,
+| reg_used_Iop_args : forall op args res succ,
     In r args ->
     reg_used_in_instr r (Iop op args res succ)
-| reg_used_iop_res : forall op args succ,
+| reg_used_Iop_res : forall op args succ,
     reg_used_in_instr r (Iop op args r succ)
-| reg_used_iload_args : forall chunk addr args res succ,
+| reg_used_Iload_args : forall chunk addr args res succ,
     In r args ->
     reg_used_in_instr r (Iload chunk addr args res succ)
-| reg_used_iload_res : forall chunk addr args succ,
+| reg_used_Iload_res : forall chunk addr args succ,
     reg_used_in_instr r (Iload chunk addr args r succ)
-| reg_used_istore_args : forall chunk addr args src succ,
+| reg_used_Istore_args : forall chunk addr args src succ,
     In r args ->
     reg_used_in_instr r (Istore chunk addr args src succ)
-| reg_used_istore_src : forall chunk addr args succ,
+| reg_used_Istore_src : forall chunk addr args succ,
     reg_used_in_instr r (Istore chunk addr args r succ)
-| reg_used_icall_fn : forall sig args dst succ,
+| reg_used_Icall_fn : forall sig args dst succ,
     reg_used_in_instr r (Icall sig (inl r) args dst succ)
-| reg_used_icall_args : forall sig fn args dst succ,
+| reg_used_Icall_args : forall sig fn args dst succ,
     In r args ->
     reg_used_in_instr r (Icall sig fn args dst succ)
-| reg_used_icall_dst : forall sig fn args succ,
+| reg_used_Icall_dst : forall sig fn args succ,
     reg_used_in_instr r (Icall sig fn args r succ)
-| reg_used_itailcall_fn : forall sig args,
+| reg_used_Itailcall_fn : forall sig args,
     reg_used_in_instr r (Itailcall sig (inl r) args)
-| reg_used_itailcall_args : forall sig fn args,
+| reg_used_Itailcall_args : forall sig fn args,
     In r args ->
     reg_used_in_instr r (Itailcall sig fn args)
-| reg_used_ibuiltin_args : forall ef bargs bres succ,
+| reg_used_Ibuiltin_args : forall ef bargs bres succ,
     In r (regs_of_builtin_args bargs) ->
-    (* Exists (in_builtin_arg r) bargs -> *)
     reg_used_in_instr r (Ibuiltin ef bargs bres succ)
-| reg_used_ibuiltin_res : forall ef bargs succ,
+| reg_used_Ibuiltin_res : forall ef bargs succ,
     reg_used_in_instr r (Ibuiltin ef bargs (BR r) succ)
-(* TODO: rest of instructions *)
-.
-
-  (* | Icond: condition -> list reg -> node -> node -> instruction *)
-  (* | Ijumptable: reg -> list node -> instruction *)
-  (* | Ireturn: option reg -> instruction. *)
+| reg_used_Icond : forall cond args ifso ifnot,
+    In r args ->
+    reg_used_in_instr r (Icond cond args ifso ifnot)
+| reg_used_Ijumptable : forall tbl,
+    reg_used_in_instr r (Ijumptable r tbl)
+| reg_used_Ireturn :
+  reg_used_in_instr r (Ireturn (Some r)).
 
 Definition reg_used_in_code (c : code) (r : reg) : Prop :=
   exists pc instr,
@@ -993,24 +1071,43 @@ Definition rm_inv
           ~ reg_used_in_code c r2 /\
           ~ reg_used_in_code c r3.
 
-(* Inductive match_stackframe (prog : program) : stackframe -> stackframe -> Prop := *)
-Inductive match_stackframe : stackframe -> stackframe -> Prop :=
-| match_frame :
-  forall re rm res f tf sp pc rs trs n1 n2 res2 res3 mov1 mov2
-    (* (GENV: exists (v : val), Genv.find_funct (Genv.globalenv prog) v = Some (Internal f)) *)
-    (* (GENV: exists i, In (i, Gfun (Internal f)) (prog_defs prog)) *)
+(* (* Inductive match_stackframe (prog : program) : stackframe -> stackframe -> Prop := *) *)
+(* Inductive match_stackframe : stackframe -> stackframe -> Prop := *)
+(* | match_frame : *)
+(*   forall re rm res f tf sp pc rs trs res2 res3 n *)
+(*     (* Well-typed *) *)
+(*     (WT_FN : wt_function f re) *)
+(*     (WT_RS : wt_regset re rs) *)
+(*     (* (WT_RES : re res = proj_sig_res sig) *) *)
+(*     (* Match *) *)
+(*     (FUN : match_function re rm f tf) *)
+(*     (INV : rm_inv f.(fn_code) rm rs trs), *)
+(*     smoveR tf.(fn_code) (re res) res res2 res3 n pc -> *)
+(*     match_stackframe *)
+(*       (Stackframe res f sp pc rs) *)
+(*       (Stackframe res tf sp n trs). *)
+
+Inductive match_stackframes : list stackframe -> list stackframe -> signature -> Prop :=
+| match_stackframes_nil : forall sig,
+    sig.(sig_res) = Xint ->
+    match_stackframes [] [] sig
+| match_stackframes_cons :
+  forall stk tstk sig re rm res1 f tf sp pc rs trs res2 res3 n
+    (* Well-typed *)
+    (WT_FN : wt_function f re)
+    (WT_RS : wt_regset re rs)
+    (WT_RES : re res1 = proj_sig_res sig)
+    (* Match *)
     (FUN : match_function re rm f tf)
     (INV : rm_inv f.(fn_code) rm rs trs)
-    (RM: rm # res = (res2, res3)),
-    (* (Hn1: tf.(fn_code) ! n1 = Some (Iop Omove [res] res2 n2)) *)
-    (* (Hn2: tf.(fn_code) ! n2 = Some (Iop Omove [res] res3 pc)), *)
-    smove (re res) res res2 = Some mov1 ->
-    smove (re res) res res3 = Some mov2 ->
-    tf.(fn_code) ! n1 = Some (mov1 n2) ->
-    tf.(fn_code) ! n2 = Some (mov2 pc) ->
-    match_stackframe
-      (Stackframe res f sp pc rs)
-      (Stackframe res tf sp n1 trs).
+    (RM_WF : rm_wf rm (fun_regs_list f)),
+    reg_used_in_code f.(fn_code) res1 ->
+    rm # res1 = (res2, res3) ->
+    smoveR tf.(fn_code) (re res1) res1 res2 res3 n pc ->
+    match_stackframes stk tstk (fn_sig f) ->
+    match_stackframes
+      (Stackframe res1 f sp pc rs :: stk)
+      (Stackframe res1 tf sp n trs :: tstk) sig.
 
 (* Inductive wt_state: state -> Prop := *)
 (*   | wt_state_intro: *)
@@ -1043,13 +1140,14 @@ Inductive match_states : state -> state -> Prop :=
 | match_regular_states :
   forall stk tstk f tf sp pc rs rs' m re rm
     (* Well-typed *)
-    (WT_STK: wt_stackframes stk (fn_sig f))
+    (* (WT_STK: wt_stackframes stk (fn_sig f)) *)
     (WT_FN: wt_function f re)
     (WT_RS: wt_regset re rs)
     (* Match *)
     (* (GENV: exists (v : val), Genv.find_funct (Genv.globalenv prog) v = Some (Internal f)) *)
     (* (GENV: exists i, In (i, Gfun (Internal f)) (prog_defs prog)) *)
-    (STACKS : list_forall2 match_stackframe stk tstk)
+    (* (STACKS : list_forall2 match_stackframe stk tstk) *)
+    (STACKS: match_stackframes stk tstk (fn_sig f))
     (* (LINK: linkorder cu prog) *)
     (* (FUN: transf_function f = OK tf), *)
     (FUN : match_function re rm f tf)
@@ -1064,65 +1162,23 @@ Inductive match_states : state -> state -> Prop :=
 | match_call_states :
   forall stk tstk f tf args m
     (* Well-typed *)
-    (WT_STK : wt_stackframes stk (funsig f))
+    (* (WT_STK : wt_stackframes stk (funsig f)) *)
     (WT_FN : wt_fundef f)
     (* (WT_FN : forall fd, f = Internal fd -> exists re, wt_function fd re) *)
     (* (WT_ARGS : Val.has_type_list args (proj_sig_args (funsig f))) *)
     (* Match *)
     (* (GENV: exists (v : val), Genv.find_funct (Genv.globalenv prog) v = Some f) *)
     (* (GENV: exists i, In (i, Gfun f) (prog_defs prog)) *)
-    (STACKS : list_forall2 match_stackframe stk tstk)
+    (* (STACKS : list_forall2 match_stackframe stk tstk) *)
+    (STACKS: match_stackframes stk tstk (funsig f))
     (FUN : match_fundef f tf),
     match_states (Callstate stk f args m) (Callstate tstk tf args m)
 | match_return_states :
   forall sig stk tstk v m
     (* Well-typed *)
-    (WT_STK : wt_stackframes stk sig)
+    (* (WT_STK : wt_stackframes stk sig) *)
     (WT_RES : Val.has_type v (proj_sig_res sig))
     (* Match *)
-    (STACKS : list_forall2 match_stackframe stk tstk),
-    match_states (Returnstate stk v m) (Returnstate tstk v m)
-.
-
-(* Lemma match_states_wt_state (s ts : state) : *)
-(*   match_states s ts -> *)
-(*   wt_state s. *)
-(* Proof. intro Hmatch; inv Hmatch; econstructor; eauto. Qed. *)
-
-(* Lemma wt_match_stackframe s tstk re rm f tf : *)
-(*   list_forall2 match_stackframe s tstk -> *)
-(*   wt_stackframes s (fn_sig f) -> *)
-(*   match_function re rm f tf -> *)
-(*   wt_stackframes tstk (fn_sig tf). *)
-(* Proof. *)
-  
-(* Admitted. *)
-
-(* Definition rm_re (rm : PMap.t (reg * reg)) (re : regenv) : regenv := *)
-(*   re. *)
-
-(* Lemma wt_match_function re rm f tf : *)
-(*   wt_function f re -> *)
-(*   match_function re rm f tf -> *)
-(*   wt_function tf (rm_re rm re). *)
-(* Proof. *)
-  
-(* Admitted. *)
-
-(* Lemma wt_match s ts : *)
-(*   (* wt_state s -> *) *)
-(*   match_states s ts -> *)
-(*   wt_state ts. *)
-(* Proof. *)
-(*   intros Hmatch; inv Hmatch. *)
-(*   - assert (Hwt: wt_function f re). *)
-(*     { admit. } *)
-(*     apply wt_state_intro with (env:=rm_re rm re). *)
-(*     + eapply wt_match_stackframe; eauto. *)
-(*     + (* eapply wt_match_function. *) *)
-(*       admit. *)
-      
-(*     + admit. *)
-(*   - admit. *)
-(*   - admit. *)
-(* Admitted. *)
+    (* (STACKS : list_forall2 match_stackframe stk tstk), *)
+    (STACKS: match_stackframes stk tstk sig),
+    match_states (Returnstate stk v m) (Returnstate tstk v m).

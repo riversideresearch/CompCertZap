@@ -83,15 +83,15 @@ Qed.
 
 Program Definition smove_long_sem : builtin_sem Xlong :=
   {| bs_sem := fun vs => match vs with
-                         | [x] => match x with
-                                  | Vlong i => Some (Vlong i)
-                                  | Vptr b ofs => if Archi.ptr64
-                                                  then Some (Vptr b ofs)
-                                                  else Some Vundef
-                                  | _ => Some Vundef
-                                  end
-                         | _ => None
-                         end
+                      | [x] => match x with
+                              | Vlong i => Some (Vlong i)
+                              | Vptr b ofs => if Archi.ptr64
+                                             then Some (Vptr b ofs)
+                                             else Some Vundef
+                              | _ => Some Vundef
+                              end
+                      | _ => None
+                      end
   |}.
 Solve Obligations with try solve [split; congruence].
 Next Obligation. Qed.
@@ -117,12 +117,12 @@ Qed.
 
 Program Definition smove_single_sem : builtin_sem Xsingle :=
   {| bs_sem := fun vs => match vs with
-                         | [x] => match x with
-                                  | Vsingle f => Some (Vsingle f)
-                                  | _ => Some Vundef
-                                  end
-                         | _ => None
-                         end
+                      | [x] => match x with
+                              | Vsingle f => Some (Vsingle f)
+                              | _ => Some Vundef
+                              end
+                      | _ => None
+                      end
   |}.
 Solve Obligations with try solve [split; congruence].
 Next Obligation.
@@ -141,12 +141,12 @@ Qed.
 
 Program Definition smove_float_sem : builtin_sem Xfloat :=
   {| bs_sem := fun vs => match vs with
-                         | [x] => match x with
-                                  | Vfloat f => Some (Vfloat f)
-                                  | _ => Some Vundef
-                                  end
-                         | _ => None
-                         end
+                      | [x] => match x with
+                              | Vfloat f => Some (Vfloat f)
+                              | _ => Some Vundef
+                              end
+                      | _ => None
+                      end
   |}.
 Solve Obligations with try solve [split; congruence].
 Next Obligation.
