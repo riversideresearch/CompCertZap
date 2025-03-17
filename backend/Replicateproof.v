@@ -1387,7 +1387,7 @@ Section PRESERVATION.
   Qed.
 
   Lemma wt_rs_update_regset c re rs rm args r :
-    rm_inv' c rm rs ->
+    rm_inv' c rm ->
     Forall (reg_used_in_code c) args ->
     reg_used_in_code c r ->
     wt_regset re rs ->
@@ -1405,7 +1405,7 @@ Section PRESERVATION.
     args pc succ tstk sig params stacksize entrypoint sp rs m :
     wt_regset re rs ->
     rm_wf rm args ->
-    rm_inv' c rm rs ->
+    rm_inv' c rm ->
     Forall (reg_used_in_code c) args ->
     copy_allR re rm c args pc succ ->
     star step tge
@@ -2079,8 +2079,8 @@ Section PRESERVATION.
       eexists; split.
       + econstructor.
         * apply exec_Inop; simpl.
-          specialize (H1 pc (Inop pc') H).
-          inv H1; eauto.
+          specialize (CODE pc (Inop pc') H).
+          inv CODE; eauto.
         * apply star_refl.
         * reflexivity.
       + econstructor; eauto.
@@ -2094,8 +2094,8 @@ Section PRESERVATION.
                 ; fn_stacksize := stacksize
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
-      pose proof H2 as Hcode.
-      specialize (H2 pc (Iop op args res pc') H); inv H2.
+      pose proof CODE as Hcode.
+      specialize (CODE pc (Iop op args res pc') H); inv CODE.
       assert (Hargs: Forall (reg_used_in_code c) args).
       { apply Forall_forall; intros x Hx;
           eexists; eexists; split; eauto; constructor; auto. }
@@ -2148,7 +2148,7 @@ Section PRESERVATION.
         * intros r Hused.
           destruct (rm # r) eqn:Hr.
           destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res); subst.
-          { rewrite H9 in Hr; inv Hr.
+          { rewrite RM_RES1 in Hr; inv Hr.
             repeat split.
             - rewrite 2!PMap.gss; reflexivity.
             - rewrite PMap.gss, PMap.gso.
@@ -2165,19 +2165,19 @@ Section PRESERVATION.
                    eapply reg_used_in_code_in_all_regs_list.
                    eexists; eexists; split; eauto; solve [constructor]. }
               rewrite PMap.gss; reflexivity.
-            - specialize (RM _ Hused); rewrite H9 in RM; intuition.
-            - specialize (RM _ Hused); rewrite H9 in RM; intuition. }
+            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition.
+            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition. }
           { assert (Hresused: reg_used_in_code c res).
             { eexists; eexists; split; eauto; apply reg_used_Iop_res. }
             repeat split.
             - rewrite 3!PMap.gso; auto.
               2: { intro HC; subst.
                    specialize (RM _ Hresused).
-                   rewrite H9 in RM; intuition. }
+                   rewrite RM_RES1 in RM; intuition. }
               rewrite PMap.gso.
               2: { intro HC; subst.
                    specialize (RM _ Hresused).
-                   rewrite H9 in RM; intuition. }
+                   rewrite RM_RES1 in RM; intuition. }
               specialize (RM r Hused).
               rewrite Hr in RM; intuition.
             - rewrite 2!PMap.gso; auto.
@@ -2220,8 +2220,8 @@ Section PRESERVATION.
                 ; fn_stacksize := stacksize
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
-      pose proof H3 as Hcode.
-      specialize (H3 pc (Iload chunk addr args dst pc') H); inv H3.
+      pose proof CODE as Hcode.
+      specialize (CODE pc (Iload chunk addr args dst pc') H); inv CODE.
       assert (Hargs: Forall (reg_used_in_code c) args).
       { apply Forall_forall; intros x Hx;
           eexists; eexists; split; eauto; constructor; auto. }
@@ -2276,7 +2276,7 @@ Section PRESERVATION.
         * intros r Hused.
           destruct (rm # r) eqn:Hr.
           destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst); subst.
-          { rewrite H11 in Hr; inv Hr.
+          { rewrite RM_RES1 in Hr; inv Hr.
             repeat split.
             - rewrite 2!PMap.gss; reflexivity.
             - rewrite PMap.gss, PMap.gso.
@@ -2293,19 +2293,19 @@ Section PRESERVATION.
                    - eapply reg_used_in_code_in_all_regs_list.
                      eexists; eexists; split; eauto; solve [constructor]. }
               rewrite PMap.gss; reflexivity.
-            - specialize (RM _ Hused); rewrite H11 in RM; intuition.
-            - specialize (RM _ Hused); rewrite H11 in RM; intuition. }
+            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition.
+            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition. }
           { assert (Hdstused: reg_used_in_code c dst).
             { eexists; eexists; split; eauto; apply reg_used_Iload_res. }
             repeat split.
             - rewrite 3!PMap.gso; auto.
               2: { intro HC; subst.
                    specialize (RM _ Hdstused).
-                   rewrite H11 in RM; intuition. }
+                   rewrite RM_RES1 in RM; intuition. }
               rewrite PMap.gso.
               2: { intro HC; subst.
                    specialize (RM _ Hdstused).
-                   rewrite H11 in RM; intuition. }
+                   rewrite RM_RES1 in RM; intuition. }
               specialize (RM r Hused).
               rewrite Hr in RM; intuition.
             - rewrite 2!PMap.gso; auto.
@@ -2349,9 +2349,9 @@ Section PRESERVATION.
                  ; fn_stacksize := stacksize
                  ; fn_code := c
                  ; fn_entrypoint := entrypoint |}).
-      pose proof H3 as Hcode.
-      specialize (H3 pc (Istore chunk addr args src pc') H); inv H3.
-      eapply maj_vote_regR_star_step with (m:=m) in H11; eauto.
+      pose proof CODE as Hcode.
+      specialize (CODE pc (Istore chunk addr args src pc') H); inv CODE.
+      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto; constructor; assumption. }
@@ -2367,10 +2367,10 @@ Section PRESERVATION.
              eexists; eexists; split; eauto; constructor; auto.
            - eapply rm_inv_get_3'; eauto.
              eexists; eexists; split; eauto; constructor; auto. }
-      destruct H11 as (rs'' & H11 & Hrs'').
+      destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
       eexists; split.
       + eapply star_plus_trans.
-        { apply H11. }
+        { apply Hvote. }
         2: { reflexivity. }
         econstructor.
         2: { apply star_refl. }
@@ -2397,14 +2397,14 @@ Section PRESERVATION.
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
-      specialize (H2 pc (Icall (funsig fd) ros args res pc') Hcode); inv H2.
+      specialize (CODE pc (Icall (funsig fd) ros args res pc') Hcode); inv CODE.
       smoveR_inv.
-      eapply maj_vote_regR_star_step with (m:=m) in H8; eauto.
+      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
-             apply in_app_or in Hin; destruct Hin.
-             - destruct ros; simpl in *; inv H7; try contradiction.
+             apply in_app_or in Hin; destruct Hin as [Hin|Hin].
+             - destruct ros; simpl in *; inv Hin; try contradiction.
                constructor.
              - constructor; auto. }
            assert (Heq: rs' # r1 = rs # r1).
@@ -2417,7 +2417,7 @@ Section PRESERVATION.
            split.
            { eapply rm_inv_get_2; eauto. }
            { eapply rm_inv_get_3'; eauto. } }
-      destruct H8 as (rs'' & H8 & Hrs'').
+      destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
       assert (Htf: exists tf, transf_fundef fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
@@ -2433,7 +2433,7 @@ Section PRESERVATION.
       destruct Htf as (tf & Htransf_fundef & Hfind_tf).
       eexists; split.
       + eapply star_plus_trans.
-        { apply H8. }
+        { apply Hvote. }
         2: { reflexivity. }
         econstructor.
         2: { apply star_refl. }
@@ -2465,7 +2465,7 @@ Section PRESERVATION.
         (*     eapply wt_program_prog; eauto. } *)
         { inv WT_FN; simpl in *.
           apply wt_instrs in Hcode; inv Hcode.
-          rewrite <- H16.
+          rewrite <- H11.
           erewrite <- rs_map_ext; eauto.
           erewrite <- rs_args_rs'_args; eauto.
           2: { apply Forall_forall; intros x Hx.
@@ -2478,11 +2478,7 @@ Section PRESERVATION.
             inv Hcode; auto.
           - eapply rm_inv_ext_r; eauto.
           - eexists; eexists; split; eauto; solve [constructor; auto].
-          - econstructor.
-            + apply H2.
-            + eauto.
-            + eauto.
-            + eauto. }
+          - econstructor; eauto. }
         { apply transf_function_match_fundef; auto. }
 
     - (* exec_Itailcall *)
@@ -2495,13 +2491,13 @@ Section PRESERVATION.
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
-      specialize (H3 pc (Itailcall (funsig fd) ros args) Hcode); inv H3.
-      eapply maj_vote_regR_star_step with (m:=m) in H7; eauto.
+      specialize (CODE pc (Itailcall (funsig fd) ros args) Hcode); inv CODE.
+      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
-             apply in_app_or in Hin; destruct Hin.
-             - destruct ros; simpl in *; inv H3; try contradiction.
+             apply in_app_or in Hin; destruct Hin as [Hin|Hin].
+             - destruct ros; simpl in *; inv Hin; try contradiction.
                constructor.
              - constructor; auto. }
            assert (Heq: rs' # r1 = rs # r1).
@@ -2514,7 +2510,7 @@ Section PRESERVATION.
            split.
            { eapply rm_inv_get_2; eauto. }
            { eapply rm_inv_get_3'; eauto. } }
-      destruct H7 as (rs'' & H7 & Hrs'').
+      destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
       assert (Htf: exists tf, transf_fundef fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
@@ -2530,7 +2526,7 @@ Section PRESERVATION.
       destruct Htf as (tf & Htransf_fundef & Hfind_tf).
       eexists; split.
       + eapply star_plus_trans.
-        { apply H7. }
+        { apply Hvote. }
         2: { reflexivity. }
         econstructor.
         2: { apply star_refl. }
@@ -2563,7 +2559,7 @@ Section PRESERVATION.
         (*     eapply wt_program_prog; eauto. } *)
         { inv WT_FN; simpl in *.
           apply wt_instrs in Hcode; inv Hcode.
-          rewrite <- H10.
+          rewrite <- H6.
           erewrite <- rs_map_ext; eauto.
           erewrite <- rs_args_rs'_args; eauto.
           2: { apply Forall_forall; intros x Hx.
@@ -2601,9 +2597,9 @@ Section PRESERVATION.
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
-      specialize (H3 pc (Ibuiltin ef args res pc') Hcode); inv H3.
+      specialize (CODE pc (Ibuiltin ef args res pc') Hcode); inv CODE.
       { (* No result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in H10; eauto.
+        eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto; constructor; auto. }
@@ -2617,10 +2613,10 @@ Section PRESERVATION.
              split.
              { eapply rm_inv_get_2; eauto. }
              { eapply rm_inv_get_3'; eauto. } }
-        destruct H10 as (rs'' & H10 & Hrs'').
+        destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
         eexists; split.
         + eapply star_plus_trans.
-          { apply H10. }
+          { apply Hvote. }
           2: { reflexivity. }
           econstructor.
           3: { rewrite Events.E0_right; reflexivity. }
@@ -2646,7 +2642,7 @@ Section PRESERVATION.
           econstructor; eauto.
           eapply rm_inv_ext_r; eauto. }
       { (* With result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in H9; eauto.
+        eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto; constructor; auto. }
@@ -2660,18 +2656,18 @@ Section PRESERVATION.
              split.
              { eapply rm_inv_get_2; eauto. }
              { eapply rm_inv_get_3'; eauto. } }
-        destruct H9 as (rs'' & H9 & Hrs'').
+        destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
         assert (Hty: Val.has_type vres (re res1)).
         { inv WT_FN.
           simpl in *.
           specialize (wt_instrs _ _ Hcode).
           inv wt_instrs.
           simpl in *.
-          rewrite H13.
+          rewrite H7.
           eapply external_call_well_typed; eauto. }        
         eexists; split.
         + eapply star_plus_trans.
-          { apply H9. }
+          { apply Hvote. }
           2: { reflexivity. }
           econstructor.
           3: { rewrite Events.E0_right; reflexivity. }
@@ -2691,7 +2687,7 @@ Section PRESERVATION.
                 eexists; split; eauto. }
             { eapply external_call_symbols_preserved; eauto.
               apply senv_preserved. } }
-          eapply smoveR_step in H12; eauto.
+          eapply smoveR_step in MOVE; eauto.
           simpl.
           rewrite PMap.gss; auto.
         + simpl.
@@ -2717,8 +2713,8 @@ Section PRESERVATION.
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
-      specialize (H2 pc (Icond cond args ifso ifnot) Hcode); inv H2.
-      eapply maj_vote_regR_star_step with (m:=m) in H6; eauto.
+      specialize (CODE pc (Icond cond args ifso ifnot) Hcode); inv CODE.
+      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto; constructor; auto. }
@@ -2732,10 +2728,10 @@ Section PRESERVATION.
            split.
            { eapply rm_inv_get_2; eauto. }
            { eapply rm_inv_get_3'; eauto. } }
-      destruct H6 as (rs'' & H6 & Hrs'').
+      destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
       eexists; split.
       + eapply star_plus_trans.
-        { apply H6. }
+        { apply Hvote. }
         2: { reflexivity. }
         econstructor.
         3: { rewrite Events.E0_right; reflexivity. }
@@ -2764,18 +2760,18 @@ Section PRESERVATION.
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
-      specialize (H3 pc (Ijumptable arg tbl) Hcode); inv H3.
+      specialize (CODE pc (Ijumptable arg tbl) Hcode); inv CODE.
       assert (Hused: reg_used_in_code c arg).
       { eexists; eexists; split; eauto; constructor. }
-      eapply maj_voteR_step with (rs := rs') in H8.
+      eapply maj_voteR_step with (rs := rs') in VOTE.
       2: { erewrite <- rm_inv_get; eauto. }
       2: { erewrite <- rm_inv_get; eauto.
            eapply rm_inv_get_2; eauto. }
       2: { eapply rm_inv_get_3'; eauto. }
-      destruct H8 as (rs'' & H8 & Hrs'').
+      destruct VOTE as (rs'' & Hvote & Hrs'').
       eexists; split.
       + eapply plus_trans.
-        { apply H8. }
+        { apply Hvote. }
         2: { reflexivity. }
         econstructor.
         3: { rewrite Events.E0_right; reflexivity. }
@@ -2796,7 +2792,7 @@ Section PRESERVATION.
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
-      specialize (H2 pc (Ireturn or) Hcode); inv H2.
+      specialize (CODE pc (Ireturn or) Hcode); inv CODE.
       + (* Without return value *)
         eexists; split.
         * econstructor.
@@ -2809,15 +2805,15 @@ Section PRESERVATION.
       + (* With return value *)
         assert (Hused: reg_used_in_code c arg1).
         { eexists; eexists; split; eauto; constructor. }
-        eapply maj_voteR_step with (rs := rs') in H6.
+        eapply maj_voteR_step with (rs := rs') in VOTE.
         2: { erewrite <- rm_inv_get; eauto. }
         2: { erewrite <- rm_inv_get; eauto.
              eapply rm_inv_get_2; eauto. }
         2: { eapply rm_inv_get_3'; eauto. }
-        destruct H6 as (rs'' & H6 & Hrs'').
+        destruct VOTE as (rs'' & Hvote & Hrs'').
         eexists; split.
         * eapply plus_trans.
-          { apply H6. }
+          { apply Hvote. }
           2: { reflexivity. }
           econstructor.
           3: { rewrite Events.E0_right; reflexivity. }
@@ -2828,7 +2824,7 @@ Section PRESERVATION.
           econstructor; eauto.
           inv WT_FN; simpl in *.
           apply wt_instrs in Hcode; inv Hcode.
-          simpl in H8; rewrite <- H8.
+          simpl in H3; rewrite <- H3.
           erewrite <- rm_inv_get; eauto.
 
     - (* exec_function_internal *)
@@ -2847,7 +2843,9 @@ Section PRESERVATION.
           { eapply rm_wf_monotone.
             2: { eauto. }
             intros r Hin; apply param_in_all_regs_list; auto. }
-          { admit. }
+          { unfold rm_inv'.
+            
+            admit. }
           { eapply copy_allR_params_used_in_code; eauto. }
         * reflexivity.
       + econstructor; eauto.

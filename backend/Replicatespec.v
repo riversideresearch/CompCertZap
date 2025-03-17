@@ -219,72 +219,71 @@ Inductive match_instr
     PTree.get pc c = Some (Inop n) ->
     match_instr re rm pc c (Inop n)
 | match_Iop :
-  forall op args1 args2 args3 res1 res2 res3 n1 n2 succ,
-    match_regs rm args1 args2 args3 ->
-    rm !! res1 = (res2, res3) ->
-    c ! pc = Some (Iop op args2 res2 n1) ->
-    c ! n1 = Some (Iop op args3 res3 n2) ->
-    c ! n2 = Some (Iop op args1 res1 succ) ->
+  forall op args1 args2 args3 res1 res2 res3 n1 n2 succ
+    (REGS : match_regs rm args1 args2 args3)
+    (RM_RES1 : rm !! res1 = (res2, res3))
+    (PC : c ! pc = Some (Iop op args2 res2 n1))
+    (N1 : c ! n1 = Some (Iop op args3 res3 n2))
+    (N2 : c ! n2 = Some (Iop op args1 res1 succ)),
     match_instr re rm pc c (Iop op args1 res1 succ)
 | match_Iload :
-  forall chunk addr args1 args2 args3 res1 res2 res3 n1 n2 succ,
-    match_regs rm args1 args2 args3 ->
-    rm !! res1 = (res2, res3) ->
-    c ! pc = Some (Iload chunk addr args2 res2 n1) ->
-    c ! n1 = Some (Iload chunk addr args3 res3 n2) ->
-    c ! n2 = Some (Iload chunk addr args1 res1 succ) ->
+  forall chunk addr args1 args2 args3 res1 res2 res3 n1 n2 succ
+    (REGS : match_regs rm args1 args2 args3)
+    (RM_RES1 : rm !! res1 = (res2, res3))
+    (PC : c ! pc = Some (Iload chunk addr args2 res2 n1))
+    (N1 : c ! n1 = Some (Iload chunk addr args3 res3 n2))
+    (N2 : c ! n2 = Some (Iload chunk addr args1 res1 succ)),
     match_instr re rm pc c (Iload chunk addr args1 res1 succ)
 | match_Istore :
-  forall chunk addr args src1 src2 src3 n succ,
-    rm !! src1 = (src2, src3) ->
-    maj_vote_regsR c re rm args pc n ->
-    c ! n = Some (Istore chunk addr args src1 succ) ->
+  forall chunk addr args src1 src2 src3 n succ
+    (RM_SRC1 : rm !! src1 = (src2, src3))
+    (VOTE_REGS : maj_vote_regsR c re rm args pc n)
+    (N : c ! n = Some (Istore chunk addr args src1 succ)),
     match_instr re rm pc c (Istore chunk addr args src1 succ)
 | match_Icall :
-  forall sig fn args res1 res2 res3 succ n1 n2,
-    maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1 ->
-    c ! n1 = Some (Icall sig fn args res1 n2) ->
-    rm !! res1 = (res2, res3) ->
-    smoveR c (re res1) res1 res2 res3 n2 succ ->
+  forall sig fn args res1 res2 res3 succ n1 n2
+    (VOTE_REGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1)
+    (N1 : c ! n1 = Some (Icall sig fn args res1 n2))
+    (RM_RES1 : rm !! res1 = (res2, res3))
+    (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm pc c (Icall sig fn args res1 succ)
 | match_Itailcall :
-  forall sig fn args n,
-    maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n ->
-    c ! n = Some (Itailcall sig fn args) ->
+  forall sig fn args n
+    (VOTE_REGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n)
+    (N : c ! n = Some (Itailcall sig fn args)),
     match_instr re rm pc c (Itailcall sig fn args)
 | match_Ibuiltin_1 :
-  forall ef bargs bres n succ,
-    ~ is_BR bres -> (* no result register *)
-    maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n ->
-    c ! n = Some (Ibuiltin ef bargs bres succ) ->
-    (* copy_allR re rm c (reg_of_builtin_res bres) n2 succ -> *)
+  forall ef bargs bres n succ
+    (NORES : ~ is_BR bres) (* no result register *)
+    (VOTE_REGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n)
+    (N : c ! n = Some (Ibuiltin ef bargs bres succ)),
     match_instr re rm pc c (Ibuiltin ef bargs bres succ)
 | match_Ibuiltin_2 :
-  forall ef bargs res1 res2 res3 n1 n2 succ,
-    maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1 ->
-    c ! n1 = Some (Ibuiltin ef bargs (BR res1) n2) ->
-    rm # res1 = (res2, res3) ->
-    smoveR c (re res1) res1 res2 res3 n2 succ ->
+  forall ef bargs res1 res2 res3 n1 n2 succ
+    (VOTE_REGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1)
+    (N1 : c ! n1 = Some (Ibuiltin ef bargs (BR res1) n2))
+    (RM_RES1 : rm # res1 = (res2, res3))
+    (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm pc c (Ibuiltin ef bargs (BR res1) succ)
 | match_Icond :
-  forall cond args ifso ifnot n,
-    maj_vote_regsR c re rm args pc n ->
-    c ! n = Some (Icond cond args ifso ifnot) ->
+  forall cond args ifso ifnot n
+    (VOTE_REGS : maj_vote_regsR c re rm args pc n)
+    (N : c ! n = Some (Icond cond args ifso ifnot)),
     match_instr re rm pc c (Icond cond args ifso ifnot)
 | match_Ijumptable :
-  forall arg1 arg2 arg3 tbl n,
-    rm # arg1 = (arg2, arg3) ->
-    maj_voteR c (re arg1) arg1 arg2 arg3 pc n ->
-    c ! n = Some (Ijumptable arg1 tbl) ->
+  forall arg1 arg2 arg3 tbl n
+    (RM_ARG1 : rm # arg1 = (arg2, arg3))
+    (VOTE : maj_voteR c (re arg1) arg1 arg2 arg3 pc n)
+    (N : c ! n = Some (Ijumptable arg1 tbl)),
     match_instr re rm pc c (Ijumptable arg1 tbl)
 | match_Ireturn_1 :
-  c ! pc = Some (Ireturn None) ->
+  forall (PC : c ! pc = Some (Ireturn None)),
   match_instr re rm pc c (Ireturn None)
 | match_Ireturn_2 :
-  forall arg1 arg2 arg3 n,
-    rm # arg1 = (arg2, arg3) ->
-    maj_voteR c (re arg1) arg1 arg2 arg3 pc n ->
-    c ! n = Some (Ireturn (Some arg1)) ->
+  forall arg1 arg2 arg3 n
+    (RM_ARG1 : rm # arg1 = (arg2, arg3))
+    (VOTE : maj_voteR c (re arg1) arg1 arg2 arg3 pc n)
+    (N : c ! n = Some (Ireturn (Some arg1))),
     match_instr re rm pc c (Ireturn (Some arg1)).
 
 (* Inductive maj_vote_regsR c re rm : list reg -> node -> node -> Prop := *)
@@ -294,11 +293,75 @@ Inductive match_instr
 Definition match_code (re : regenv) (rm : PMap.t (reg * reg)) (c c': code) : Prop :=
   forall p i, c ! p = Some i -> match_instr re rm p c' i.
 
+Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
+| reg_used_Iop_args : forall op args res succ,
+    In r args ->
+    reg_used_in_instr r (Iop op args res succ)
+| reg_used_Iop_res : forall op args succ,
+    reg_used_in_instr r (Iop op args r succ)
+| reg_used_Iload_args : forall chunk addr args res succ,
+    In r args ->
+    reg_used_in_instr r (Iload chunk addr args res succ)
+| reg_used_Iload_res : forall chunk addr args succ,
+    reg_used_in_instr r (Iload chunk addr args r succ)
+| reg_used_Istore_args : forall chunk addr args src succ,
+    In r args ->
+    reg_used_in_instr r (Istore chunk addr args src succ)
+| reg_used_Istore_src : forall chunk addr args succ,
+    reg_used_in_instr r (Istore chunk addr args r succ)
+| reg_used_Icall_fn : forall sig args dst succ,
+    reg_used_in_instr r (Icall sig (inl r) args dst succ)
+| reg_used_Icall_args : forall sig fn args dst succ,
+    In r args ->
+    reg_used_in_instr r (Icall sig fn args dst succ)
+| reg_used_Icall_dst : forall sig fn args succ,
+    reg_used_in_instr r (Icall sig fn args r succ)
+| reg_used_Itailcall_fn : forall sig args,
+    reg_used_in_instr r (Itailcall sig (inl r) args)
+| reg_used_Itailcall_args : forall sig fn args,
+    In r args ->
+    reg_used_in_instr r (Itailcall sig fn args)
+| reg_used_Ibuiltin_args : forall ef bargs bres succ,
+    In r (regs_of_builtin_args bargs) ->
+    reg_used_in_instr r (Ibuiltin ef bargs bres succ)
+| reg_used_Ibuiltin_res : forall ef bargs succ,
+    reg_used_in_instr r (Ibuiltin ef bargs (BR r) succ)
+| reg_used_Icond : forall cond args ifso ifnot,
+    In r args ->
+    reg_used_in_instr r (Icond cond args ifso ifnot)
+| reg_used_Ijumptable : forall tbl,
+    reg_used_in_instr r (Ijumptable r tbl)
+| reg_used_Ireturn :
+  reg_used_in_instr r (Ireturn (Some r)).
+
+Definition reg_used_in_code (c : code) (r : reg) : Prop :=
+  exists pc instr,
+    c! pc = Some instr /\ reg_used_in_instr r instr.
+
+Definition rm_inv
+  (c : code) (rm : PMap.t (reg * reg)) (rs rs' : regset) : Prop :=
+  forall r1, reg_used_in_code c r1 ->
+        let (r2, r3) := rm # r1 in
+        rs # r1 = rs' # r1 /\
+          rs # r1 = rs' # r2 /\
+          rs # r1 = rs' # r3 /\
+          ~ reg_used_in_code c r2 /\
+          ~ reg_used_in_code c r3.
+
+(* Weaker, only cares about [c] and [rm]. *)
+Definition rm_inv'
+  (c : code) (rm : PMap.t (reg * reg)) : Prop :=
+  forall r1, reg_used_in_code c r1 ->
+        let (r2, r3) := rm # r1 in
+          ~ reg_used_in_code c r2 /\
+          ~ reg_used_in_code c r3.
+
 Inductive match_function re rm : function -> function -> Prop :=
-| match_fun : forall sig params stacksize c c' entrypoint entrypoint',
-    rm_wf rm (all_regs_list params c) ->
-    match_code re rm c c' ->
-    copy_allR re rm c' params entrypoint' entrypoint ->
+| match_fun : forall sig params stacksize c c' entrypoint entrypoint'
+                (RM_WF : rm_wf rm (all_regs_list params c))
+                (RM_INV : rm_inv' c' rm)
+                (CODE : match_code re rm c c')
+                (COPY : copy_allR re rm c' params entrypoint' entrypoint),
     match_function re rm
       ({|
           fn_sig := sig
@@ -411,7 +474,7 @@ Proof.
     econstructor; eauto.
     2: { rewrite Hs'; auto. }
     eapply state_incr_maj_vote_regsR; eauto.
-  - inv H5.
+  - inv MOVE.
     destruct (H1 n) as [?|Hn]; try congruence.
     destruct (H1 n1) as [?|Hn1]; try congruence.
     destruct (H1 n2) as [?|Hn2]; try congruence.
@@ -1110,6 +1173,12 @@ Proof.
   apply in_lt_max_reg; auto.
 Qed.
 
+Lemma replication_map_inv f rm s pf :
+  replication_map f (init_state f) = RTLgen.OK rm s pf ->
+  rm_inv' s.(st_code) rm.
+Proof.
+Admitted.
+
 Lemma rm_wf_monotone rm rs1 rs2 :
   (forall r, In r rs2 -> In r rs1) ->
   rm_wf rm rs1 ->
@@ -1118,6 +1187,21 @@ Proof.
   intros Hle Hwf r1 r2 r3 Hin Hr1.
   specialize (Hwf r1 r2 r3 (Hle _ Hin) Hr1); intuition.
 Qed.
+
+Lemma rm_inv'_monotone rm c c' :
+  (forall pc i, c' ! pc = Some i -> c ! pc = Some i) ->
+  rm_inv' c rm ->
+  rm_inv' c' rm.
+Proof.
+  intros Hle Hrm r1 Hused.
+  destruct (rm # r1) eqn:Hr1.
+  destruct Hused as (pc & i & Hpc & Hused).
+  apply Hle in Hpc.
+  unfold rm_inv' in Hrm.
+  specialize (Hrm r1).
+  rewrite Hr1 in Hrm.
+  admit.
+Admitted.
 
 Lemma in_pset_of_list p l :
   In p l ->
@@ -1162,6 +1246,16 @@ Proof.
     { eapply rm_wf_monotone.
       2: { eapply replication_map_wf; eauto. }
       auto. }
+    {
+      (* eapply rm_inv'_monotone. *)
+      (* 2: { eapply replication_map_inv; eauto. } *)
+      (* intros pc i Hpc. *)
+      (* clear H. *)
+      (* inv s2; simpl in *. *)
+      (* inv s3; simpl in *. *)
+      (* destruct  *)
+      admit. }
+      
     eapply copy_allR_monotone.
     { eapply copy_all_to_shadows_copy_allR; eauto. }
     clear H0 H H1.
@@ -1171,7 +1265,8 @@ Proof.
     intros p i Hpi.
     destruct (H7 p); congruence.
   - inv Htransf; constructor.
-Qed.
+    (* Qed. *)
+Admitted.
 
 Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
 | in_builtin_arg_BA : in_builtin_arg a (BA a)
@@ -1213,69 +1308,6 @@ Proof.
       apply in_regs_of_builtin_arg_in_builtin_arg; auto.
     + apply in_or_app; right; auto.
 Qed.
-
-Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
-| reg_used_Iop_args : forall op args res succ,
-    In r args ->
-    reg_used_in_instr r (Iop op args res succ)
-| reg_used_Iop_res : forall op args succ,
-    reg_used_in_instr r (Iop op args r succ)
-| reg_used_Iload_args : forall chunk addr args res succ,
-    In r args ->
-    reg_used_in_instr r (Iload chunk addr args res succ)
-| reg_used_Iload_res : forall chunk addr args succ,
-    reg_used_in_instr r (Iload chunk addr args r succ)
-| reg_used_Istore_args : forall chunk addr args src succ,
-    In r args ->
-    reg_used_in_instr r (Istore chunk addr args src succ)
-| reg_used_Istore_src : forall chunk addr args succ,
-    reg_used_in_instr r (Istore chunk addr args r succ)
-| reg_used_Icall_fn : forall sig args dst succ,
-    reg_used_in_instr r (Icall sig (inl r) args dst succ)
-| reg_used_Icall_args : forall sig fn args dst succ,
-    In r args ->
-    reg_used_in_instr r (Icall sig fn args dst succ)
-| reg_used_Icall_dst : forall sig fn args succ,
-    reg_used_in_instr r (Icall sig fn args r succ)
-| reg_used_Itailcall_fn : forall sig args,
-    reg_used_in_instr r (Itailcall sig (inl r) args)
-| reg_used_Itailcall_args : forall sig fn args,
-    In r args ->
-    reg_used_in_instr r (Itailcall sig fn args)
-| reg_used_Ibuiltin_args : forall ef bargs bres succ,
-    In r (regs_of_builtin_args bargs) ->
-    reg_used_in_instr r (Ibuiltin ef bargs bres succ)
-| reg_used_Ibuiltin_res : forall ef bargs succ,
-    reg_used_in_instr r (Ibuiltin ef bargs (BR r) succ)
-| reg_used_Icond : forall cond args ifso ifnot,
-    In r args ->
-    reg_used_in_instr r (Icond cond args ifso ifnot)
-| reg_used_Ijumptable : forall tbl,
-    reg_used_in_instr r (Ijumptable r tbl)
-| reg_used_Ireturn :
-  reg_used_in_instr r (Ireturn (Some r)).
-
-Definition reg_used_in_code (c : code) (r : reg) : Prop :=
-  exists pc instr,
-    c! pc = Some instr /\ reg_used_in_instr r instr.
-
-Definition rm_inv
-  (c : code) (rm : PMap.t (reg * reg)) (rs rs' : regset) : Prop :=
-  forall r1, reg_used_in_code c r1 ->
-        let (r2, r3) := rm # r1 in
-        rs # r1 = rs' # r1 /\
-          rs # r1 = rs' # r2 /\
-          rs # r1 = rs' # r3 /\
-          ~ reg_used_in_code c r2 /\
-          ~ reg_used_in_code c r3.
-
-(* Weaker, only cares about [rs]. *)
-Definition rm_inv'
-  (c : code) (rm : PMap.t (reg * reg)) (rs : regset) : Prop :=
-  forall r1, reg_used_in_code c r1 ->
-        let (r2, r3) := rm # r1 in
-          ~ reg_used_in_code c r2 /\
-          ~ reg_used_in_code c r3.
 
 (* (* Inductive match_stackframe (prog : program) : stackframe -> stackframe -> Prop := *) *)
 (* Inductive match_stackframe : stackframe -> stackframe -> Prop := *)
