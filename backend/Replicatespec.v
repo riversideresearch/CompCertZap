@@ -338,30 +338,60 @@ Definition reg_used_in_code (c : code) (r : reg) : Prop :=
   exists pc instr,
     c! pc = Some instr /\ reg_used_in_instr r instr.
 
+(* Definition reg_used (f : function) (r : reg) : Prop := *)
+(*   In r f.(fn_params) \/ reg_used_in_code f.(fn_code) r *)
+
+Definition reg_used (params : list reg) (c : code) (r : reg) : Prop :=
+  In r params \/ reg_used_in_code c r.
+
 Definition rm_inv
-  (c : code) (rm : PMap.t (reg * reg)) (rs rs' : regset) : Prop :=
-  forall r1, reg_used_in_code c r1 ->
+  (params : list reg) (c : code) (rm : PMap.t (reg * reg)) (rs rs' : regset) : Prop :=
+  forall r1, reg_used params c r1 ->
         let (r2, r3) := rm # r1 in
         rs # r1 = rs' # r1 /\
           rs # r1 = rs' # r2 /\
           rs # r1 = rs' # r3 /\
+          ~ In r2 params /\
+          ~ In r3 params /\
           ~ reg_used_in_code c r2 /\
           ~ reg_used_in_code c r3.
 
-(* Weaker, only cares about [c] and [rm]. *)
+(* Weaker, only cares about [params], [c], and [rm]. *)
 Definition rm_inv'
-  (c : code) (rm : PMap.t (reg * reg)) : Prop :=
-  forall r1, reg_used_in_code c r1 ->
+  (params : list reg) (c : code) (rm : PMap.t (reg * reg)) : Prop :=
+  forall r1, reg_used params c r1 ->
         let (r2, r3) := rm # r1 in
+        ~ In r2 params /\
+          ~ In r3 params /\
           ~ reg_used_in_code c r2 /\
           ~ reg_used_in_code c r3.
+
+Lemma reg_used_cons p params c r :
+  reg_used params c r ->
+  reg_used (p :: params) c r.
+Proof.
+  intros [Hin | Hused].
+  - left; right; auto.
+  - right; auto.
+Qed.
+
+Lemma rm_inv'_cons p params c rm :
+  rm_inv' (p :: params) c rm ->
+  rm_inv' params c rm.
+Proof.
+  unfold rm_inv'.
+  intros Hrm r1 Hused.
+  destruct (rm # r1) eqn:Hr1.
+  specialize (Hrm r1 (reg_used_cons _ _ _ _ Hused)).
+  rewrite Hr1 in Hrm; firstorder.
+Qed.
 
 Inductive match_function re rm : function -> function -> Prop :=
 | match_fun : forall sig params stacksize c c' entrypoint entrypoint'
-                (RM_WF : rm_wf rm (all_regs_list params c))
-                (RM_INV : rm_inv' c' rm)
-                (CODE : match_code re rm c c')
-                (COPY : copy_allR re rm c' params entrypoint' entrypoint),
+                (RM_WF: rm_wf rm (all_regs_list params c))
+                (RM_INV: rm_inv' params c rm)
+                (CODE: match_code re rm c c')
+                (COPY: copy_allR re rm c' params entrypoint' entrypoint),
     match_function re rm
       ({|
           fn_sig := sig
@@ -1173,44 +1203,361 @@ Proof.
   apply in_lt_max_reg; auto.
 Qed.
 
-Lemma replication_map_inv f rm s pf :
-  replication_map f (init_state f) = RTLgen.OK rm s pf ->
-  rm_inv' s.(st_code) rm.
-Proof.
-Admitted.
+(* Lemma replication_map_inv f rm s pf : *)
+(*   replication_map f (init_state f) = RTLgen.OK rm s pf -> *)
+(*   rm_inv' s.(st_code) rm. *)
+(* Proof. *)
+(* Admitted. *)
 
-Lemma rm_wf_monotone rm rs1 rs2 :
-  (forall r, In r rs2 -> In r rs1) ->
+Lemma rm_wf_antimonotone rm rs1 rs2 :
   rm_wf rm rs1 ->
+  (forall r, In r rs2 -> In r rs1) ->
   rm_wf rm rs2.
 Proof.
-  intros Hle Hwf r1 r2 r3 Hin Hr1.
+  intros Hwf Hle r1 r2 r3 Hin Hr1.
   specialize (Hwf r1 r2 r3 (Hle _ Hin) Hr1); intuition.
 Qed.
 
-Lemma rm_inv'_monotone rm c c' :
-  (forall pc i, c' ! pc = Some i -> c ! pc = Some i) ->
-  rm_inv' c rm ->
-  rm_inv' c' rm.
-Proof.
-  intros Hle Hrm r1 Hused.
-  destruct (rm # r1) eqn:Hr1.
-  destruct Hused as (pc & i & Hpc & Hused).
-  apply Hle in Hpc.
-  unfold rm_inv' in Hrm.
-  specialize (Hrm r1).
-  rewrite Hr1 in Hrm.
-  admit.
-Admitted.
+(* Lemma rm_inv'_monotone rm c c' : *)
+(*   (forall pc i, c' ! pc = Some i -> c ! pc = Some i) -> *)
+(*   rm_inv' c rm -> *)
+(*   rm_inv' c' rm. *)
+(* Proof. *)
+(*   intros Hle Hrm r1 Hused. *)
+(*   destruct (rm # r1) eqn:Hr1. *)
+(*   destruct Hused as (pc & i & Hpc & Hused). *)
+(*   apply Hle in Hpc. *)
+(*   unfold rm_inv' in Hrm. *)
+(*   specialize (Hrm r1). *)
+(*   rewrite Hr1 in Hrm. *)
+(*   admit. *)
+(* Admitted. *)
+
+(* Lemma in_pset_of_list p l : *)
+(*   In p l -> *)
+(*   PSet.In p (PSet_of_list l). *)
+(* Proof. *)
+(*   revert p; induction l; simpl; intros p Hin; try contradiction. *)
+(*   destruct Hin as [? | Hin]; subst. *)
+(*   - apply PSet.add_1; reflexivity. *)
+(*   - apply PSet.add_2, IHl, Hin. *)
+(* Qed. *)
 
 Lemma in_pset_of_list p l :
-  In p l ->
-  PSet.In p (PSet_of_list l).
+  In p l <-> PSet.In p (PSet_of_list l).
 Proof.
-  revert p; induction l; simpl; intros p Hin; try contradiction.
+  split.
+  - revert p; induction l; simpl; intros p Hin; try contradiction.
+    destruct Hin as [? | Hin]; subst.
+    + apply PSet.add_1; reflexivity.
+    + apply PSet.add_2, IHl, Hin.
+  - revert p; induction l; simpl; intros p Hin.
+    { inv Hin. }
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst; auto.
+    right; apply PSet.add_3 in Hin; auto.
+Qed.
+
+(* Lemma transf_instr_rm_inv' re rm ni s s' pf u :
+  rm_inv' s.(st_code) rm ->
+  transf_instr re rm ni s = RTLgen.OK u s' pf ->
+  rm_inv' s'.(st_code) rm. *)
+(* Proof. *)
+(*   intro Hrm. *)
+(*   unfold transf_instr. *)
+(*   destruct ni. *)
+(*   unfold update_instr. *)
+(*   intro Htransf. *)
+(*   destruct i. *)
+(*   - repeat lr_case; simpl. *)
+(*     intros r Hused. *)
+(*     destruct (rm # r) eqn:Hr. *)
+(*     unfold reg_used_in_code in Hused. *)
+(*     destruct Hused as (pc & instr & Hpc & Hused). *)
+(*     split. *)
+(*     + intro HC. *)
+(*       specialize (Hrm r). Hused). *)
+
+(* Lemma transf_instrs_rm_inv' re rm instrs s s' pf u : *)
+(*   rm_inv' s.(st_code) rm -> *)
+(*   iterM (transf_instr re rm) instrs s = RTLgen.OK u s' pf  -> *)
+(*   rm_inv' s'.(st_code) rm. *)
+(* Proof. *)
+(*   revert pf; revert s s' u. *)
+(*   induction instrs; simpl; intros s s' u pf Hrm Hiter. *)
+(*   { inv Hiter; auto. } *)
+(*   unfold RTLgen.bind in Hiter. *)
+(*   repeat egen_case. *)
+(*   apply IHinstrs in H; auto. *)
+  
+(* Admitted. *)
+
+(* Lemma transf_code_rm_inv' re rm c s s' pf u : *)
+(*   transf_code re rm c s = RTLgen.OK u s' pf -> *)
+(*   rm_inv' s'.(st_code) rm. *)
+(* Proof. apply transf_instrs_rm_inv'. Qed. *)
+
+(* Definition rm_inv_list (regs : list reg) (rm : PMap.t (reg * reg)) : Prop := *)
+(*   forall r1, In r1 regs -> *)
+(*         let (r2, r3) := rm # r1 in *)
+(*         ~ In r2 regs /\ *)
+(*           ~ In r3 regs. *)
+
+Definition rm_inv_list n (regs : list reg) (rm : PMap.t (reg * reg)) : Prop :=
+  forall r1, In r1 regs ->
+        let (r2, r3) := rm # r1 in
+        n <= r2 /\ n <= r3.
+
+(* Fixpoint max_p (l : list positive) : positive := *)
+(*   fold_right Pos.max 1 l. *)
+
+(* Definition max_p (l : list positive) : positive := *)
+(*   max_reg (PSet_of_list l). *)
+
+Lemma reg_used_fold_right p i l r :
+  In (p, i) l ->
+  reg_used_in_instr r i ->
+  PSet.In r
+    (fold_right (fun (y : positive * instruction) (x : PSet.t) =>
+                   PSet.union x (instr_regs (snd y))) PSet.empty
+       l).
+Proof.
+  revert p i r.
+  induction l; simpl; intros p i r Hin Hused; try contradiction.
   destruct Hin as [? | Hin]; subst.
-  - apply PSet.add_1; reflexivity.
-  - apply PSet.add_2, IHl, Hin.
+  - inv Hused; simpl; try destruct fn; apply PSet.union_3;
+      try solve [apply PSet.union_3, PSet.singleton_2; reflexivity];
+      try solve [apply PSet.union_2, in_pset_of_list; auto];
+      try solve [apply in_pset_of_list; assumption];
+      try solve [apply PSet.singleton_2; reflexivity].
+    + apply PSet.union_2, PSet.add_1; reflexivity.
+    + apply PSet.union_2, PSet.add_2, in_pset_of_list; assumption.
+    + apply PSet.add_1; reflexivity.
+    + apply PSet.add_2, in_pset_of_list; assumption.
+  - inv Hused; simpl;
+      solve [apply PSet.union_2; eapply IHl; eauto; constructor; auto].
+Qed.
+
+Lemma reg_used_pset_in_all_regs params c r :
+  reg_used params c r ->
+  PSet.In r (all_regs params c).
+Proof.
+  intros [Hin | (p & i & Hget & Hused)].
+  - apply PSet.union_2, in_pset_of_list; auto.
+  - apply PSet.union_3.
+    apply PTree.elements_correct in Hget.
+    unfold code_regs.
+    rewrite PTree.fold_spec.
+    rewrite <- fold_left_rev_right.
+    apply in_rev in Hget.
+    eapply reg_used_fold_right; eauto.
+Qed.
+
+Lemma reg_used_in_all_regs_list params c r :
+  reg_used params c r ->
+  In r (all_regs_list params c).
+Proof.
+  intro Hused.
+  apply in_elements.
+  apply reg_used_pset_in_all_regs; auto.
+Qed.
+
+Lemma reg_used_in_code_pset_in_code_regs c r :
+  reg_used_in_code c r ->
+  PSet.In r (code_regs c).
+Proof.
+  intros (p & i & Hget & Hused).
+  apply PTree.elements_correct in Hget.
+  unfold code_regs.
+  rewrite PTree.fold_spec.
+  rewrite <- fold_left_rev_right.
+  apply in_rev in Hget.
+  eapply reg_used_fold_right; eauto.
+Qed.
+
+(* Lemma pset_of_list_elements ps : *)
+(*   ps = PSet_of_list (PSet.elements ps). *)
+(* Proof. *)
+(*   unfold PSet_of_list. *)
+
+(* Lemma max_reg_max_p regs : *)
+(*   max_reg regs = max_p (PSet.elements regs). *)
+(* Proof. *)
+(*   unfold max_p. *)
+(*   f_equal. *)
+  
+(*   unfold max_reg. *)
+(*   destruct (PSet.max_elt regs) eqn:Hmax. *)
+  
+(*   induction regs; simpl. *)
+  
+(* Admitted. *)
+
+(* Lemma max_reg_all_regs_max_p params c : *)
+(*   max_reg (all_regs params c) + 1 = max_p (all_regs_list params c) + 1. *)
+(* Proof. *)
+(*   unfold all_regs, all_regs_list, all_regs. *)
+(*   rewrite max_reg_max_p; reflexivity. *)
+(* Qed. *)
+
+(* Lemma rm_inv_list_rm_inv' params c rm : *)
+(*   rm_inv_list (max_p (all_regs_list params c) + 1) (all_regs_list params c) rm -> *)
+(*   rm_inv' params c rm. *)
+(* Proof. *)
+(*   intros Hrm r Hused. *)
+(*   specialize (Hrm r (reg_used_in_all_regs_list _ _ _ Hused)). *)
+(*   destruct (rm # r) eqn:Hr. *)
+(*   destruct Hrm as [Hr0 Hr1]. *)
+(*   rewrite <- max_reg_all_regs_max_p in Hr0. *)
+(*   rewrite <- max_reg_all_regs_max_p in Hr1. *)
+(*   repeat split. *)
+(*   - intro Hin. *)
+(*     assert (r0 < max_reg (all_regs params c) + 1). *)
+(*     { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. } *)
+(*     lia. *)
+(*   - intro Hin. *)
+(*     assert (r1 < max_reg (all_regs params c) + 1). *)
+(*     { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. } *)
+(*     lia. *)
+(*   - intro Hin. *)
+(*     assert (r0 < max_reg (all_regs params c) + 1). *)
+(*     { apply in_lt_max_reg, in_elements, PSet.union_3. *)
+(*       apply reg_used_in_code_pset_in_code_regs; auto. } *)
+(*     lia. *)
+(*   - intro Hin. *)
+(*     assert (r1 < max_reg (all_regs params c) + 1). *)
+(*     { apply in_lt_max_reg, in_elements, PSet.union_3. *)
+(*       apply reg_used_in_code_pset_in_code_regs; auto. } *)
+(*     lia. *)
+(* Qed. *)
+
+Lemma rm_inv_list_rm_inv' params c rm :
+  rm_inv_list (max_reg (all_regs params c) + 1) (all_regs_list params c) rm ->
+  rm_inv' params c rm.
+Proof.
+  intros Hrm r Hused.
+  specialize (Hrm r (reg_used_in_all_regs_list _ _ _ Hused)).
+  destruct (rm # r) eqn:Hr.
+  destruct Hrm as [Hr0 Hr1].
+  (* rewrite <- max_reg_all_regs_max_p in Hr0. *)
+  (* rewrite <- max_reg_all_regs_max_p in Hr1. *)
+  repeat split.
+  - intro Hin.
+    assert (r0 < max_reg (all_regs params c) + 1).
+    { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
+    lia.
+  - intro Hin.
+    assert (r1 < max_reg (all_regs params c) + 1).
+    { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
+    lia.
+  - intro Hin.
+    assert (r0 < max_reg (all_regs params c) + 1).
+    { apply in_lt_max_reg, in_elements, PSet.union_3.
+      apply reg_used_in_code_pset_in_code_regs; auto. }
+    lia.
+  - intro Hin.
+    assert (r1 < max_reg (all_regs params c) + 1).
+    { apply in_lt_max_reg, in_elements, PSet.union_3.
+      apply reg_used_in_code_pset_in_code_regs; auto. }
+    lia.
+Qed.
+
+Lemma sdfisd regs s s' pf rm0 rm :
+  (* rm_inv_list regs rm0 -> *)
+  (* NoDup regs -> *)
+  Forall (fun r => r < s.(st_nextreg)) regs ->
+  foldM
+    (fun rm1 r1 =>
+       do r2 <- new_reg; do r3 <- new_reg; ret rm1 # r1 <- (r2, r3))
+    regs rm0 s = RTLgen.OK rm s' pf ->
+  rm_inv_list s.(st_nextreg) regs rm.
+Proof.
+  revert pf.
+  revert s s' rm0 rm.
+  induction regs; simpl; intros s s' rm0 rm pf Hlt Hfold.
+  { intros _ []. }
+  inv Hlt.
+  unfold RTLgen.bind in Hfold.
+  (* simpl in *.' *)
+  repeat egen_case.
+  eapply IHregs in H; auto.
+  inv H3.
+  inv H5; inv H0.
+  repeat state_incr_inv.
+  unfold Ple in *; simpl in *.
+  intro x.
+  destruct (DecidableTypeEx.Positive_as_DT.eq_dec a x); subst.
+  (* [? | Hin]; subst. *)
+  - intros _; rewrite PMap.gss; split; lia.
+    (* + intros [? | Hin]; subst; try lia. *)
+    (*   rewrite Forall_forall in H2. *)
+    (*   specialize (H2 _ Hin); lia. *)
+    (* + intros [? | Hin]; subst; try lia. *)
+    (*   rewrite Forall_forall in H2. *)
+    (*   specialize (H2 _ Hin); lia. *)
+  - intros [?|Hin]; subst; try congruence.
+    rewrite PMap.gso; auto.
+    specialize (H x Hin).
+    destruct (t # x) eqn:Hx.
+    lia.
+Qed.
+
+(*   - inv H5. *)
+(*     split. *)
+(*     + intros [? | Hin']; subst; auto. *)
+      
+(*     specialize (H x Hin). *)
+(*     + intros [ *)
+(*   admit. *)
+(* Admitted. *)
+
+Lemma sdkjgdfg sig params stacksize c entrypoint s pf rm :
+  replication_map
+    {|
+      fn_sig := sig;
+      fn_params := params;
+      fn_stacksize := stacksize;
+      fn_code := c;
+      fn_entrypoint := entrypoint
+    |}
+    (init_state
+       {|
+         fn_sig := sig;
+         fn_params := params;
+         fn_stacksize := stacksize;
+         fn_code := c;
+         fn_entrypoint := entrypoint
+       |}) = RTLgen.OK rm s pf ->
+  rm_inv' params c rm.
+Proof.
+  unfold replication_map.
+  intro Hfold.
+  apply rm_inv_list_rm_inv'.
+  set (s0 := init_state
+         {|
+           fn_sig := sig;
+           fn_params := params;
+           fn_stacksize := stacksize;
+           fn_code := c;
+           fn_entrypoint := entrypoint
+         |}).
+  (* assert (Hnextreg: s0.(st_nextreg) = max_p (all_regs_list params c) + 1). *)
+  (* { simpl; unfold fun_regs; simpl. *)
+  (*   rewrite max_reg_all_regs_max_p; reflexivity. } *)
+  assert (Hnextreg: s0.(st_nextreg) = max_reg (all_regs params c) + 1).
+  { reflexivity. }
+  (*   rewrite max_reg_all_regs_max_p; reflexivity. } *)
+  (* unfold fun_regs_list in Hfold. *)
+  (* simpl in *. *)
+  (* unfold init_state in Hfold. *)
+  rewrite <- Hnextreg.
+  eapply sdfisd; eauto.
+  apply Forall_forall; intros x Hin.
+  apply in_elements in Hin.
+  rewrite Hnextreg.
+  unfold all_regs_list.
+  (* rewrite <- max_reg_max_p. *)
+  apply in_lt_max_reg.
+  apply in_elements; auto.
 Qed.
 
 Lemma transf_function_match_fundef (f tf : fundef) :
@@ -1243,18 +1590,25 @@ Proof.
     econstructor.
     { apply type_function_correct; eauto. }
     constructor; eauto.
-    { eapply rm_wf_monotone.
-      2: { eapply replication_map_wf; eauto. }
+    { eapply rm_wf_antimonotone.
+      { eapply replication_map_wf; eauto. }
       auto. }
-    {
-      (* eapply rm_inv'_monotone. *)
-      (* 2: { eapply replication_map_inv; eauto. } *)
-      (* intros pc i Hpc. *)
-      (* clear H. *)
-      (* inv s2; simpl in *. *)
-      (* inv s3; simpl in *. *)
-      (* destruct  *)
-      admit. }
+    
+    (* { *)
+    (*   (* eapply rm_inv'_monotone. *) *)
+    (*   (* 2: { eapply replication_map_inv; eauto. } *) *)
+    (*   (* intros pc i Hpc. *) *)
+    (*   (* clear H. *) *)
+    (*   (* inv s2; simpl in *. *) *)
+    (*   (* inv s3; simpl in *. *) *)
+    (*   (* destruct  *) *)
+    (*   rename t into rm. *)
+    (*   (* apply replication_map_inv in H0. *) *)
+    (*   intros r Hin. *)
+    (*   destruct (rm # r) eqn:Hr. *)
+    (*   specialize (H0 r). *)
+    (*   admit. } *)
+    { eapply sdkjgdfg; eauto. }
       
     eapply copy_allR_monotone.
     { eapply copy_all_to_shadows_copy_allR; eauto. }
@@ -1265,8 +1619,7 @@ Proof.
     intros p i Hpi.
     destruct (H7 p); congruence.
   - inv Htransf; constructor.
-    (* Qed. *)
-Admitted.
+Qed.
 
 Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
 | in_builtin_arg_BA : in_builtin_arg a (BA a)
@@ -1337,7 +1690,7 @@ Inductive match_stackframes : list stackframe -> list stackframe -> signature ->
     (WT_RES : re res1 = proj_sig_res sig)
     (* Match *)
     (FUN : match_function re rm f tf)
-    (INV : rm_inv f.(fn_code) rm rs trs)
+    (INV : rm_inv f.(fn_params) f.(fn_code) rm rs trs)
     (RM_WF : rm_wf rm (fun_regs_list f)),
     reg_used_in_code f.(fn_code) res1 ->
     rm # res1 = (res2, res3) ->
@@ -1389,7 +1742,7 @@ Inductive match_states : state -> state -> Prop :=
     (* (LINK: linkorder cu prog) *)
     (* (FUN: transf_function f = OK tf), *)
     (FUN : match_function re rm f tf)
-    (RM : rm_inv f.(fn_code) rm rs rs'),
+    (RM : rm_inv f.(fn_params) f.(fn_code) rm rs rs'),
     (* (RM_WF : rm_wf rm (fun_regs_list f)), *)
     (* (PTR: forall r, reg_used_in_code f.(fn_code) r -> *)
     (*            forall b ofs, rs # r = Vptr b ofs -> *)
