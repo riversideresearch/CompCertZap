@@ -1726,7 +1726,7 @@ Section PRESERVATION.
         * intros r Hused.
           destruct (rm # r) eqn:Hr.
           destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res); subst.
-          { rewrite RM_RES1 in Hr; inv Hr.
+          { rewrite RM_RES in Hr; inv Hr.
             repeat split.
             - rewrite 2!PMap.gss; reflexivity.
             - rewrite PMap.gss, PMap.gso.
@@ -1743,21 +1743,21 @@ Section PRESERVATION.
                    eapply reg_used_in_code_in_all_regs_list.
                    eexists; eexists; split; eauto; solve [constructor]. }
               rewrite PMap.gss; reflexivity.
-            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition.
-            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition.
-            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition.
-            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition. }
+            - specialize (RM _ Hused); rewrite RM_RES in RM; intuition.
+            - specialize (RM _ Hused); rewrite RM_RES in RM; intuition.
+            - specialize (RM _ Hused); rewrite RM_RES in RM; intuition.
+            - specialize (RM _ Hused); rewrite RM_RES in RM; intuition. }
           { assert (Hresused: reg_used_in_code c res).
             { eexists; eexists; split; eauto; apply reg_used_Iop_res. }
             repeat split.
             - rewrite 3!PMap.gso; auto.
               2: { intro HC; subst.
                    specialize (RM _ (or_intror Hresused)).
-                   rewrite RM_RES1 in RM; destruct Hused; intuition. }
+                   rewrite RM_RES in RM; destruct Hused; intuition. }
               rewrite PMap.gso.
               2: { intro HC; subst.
                    specialize (RM _ (or_intror Hresused)).
-                   rewrite RM_RES1 in RM; destruct Hused; intuition. }
+                   rewrite RM_RES in RM; destruct Hused; intuition. }
               specialize (RM r Hused).
               rewrite Hr in RM; intuition.
             - rewrite 2!PMap.gso; auto.
@@ -1859,7 +1859,7 @@ Section PRESERVATION.
         * intros r Hused.
           destruct (rm # r) eqn:Hr.
           destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst); subst.
-          { rewrite RM_RES1 in Hr; inv Hr.
+          { rewrite RM_RES in Hr; inv Hr.
             repeat split.
             - rewrite 2!PMap.gss; reflexivity.
             - rewrite PMap.gss, PMap.gso.
@@ -1876,21 +1876,21 @@ Section PRESERVATION.
                    - eapply reg_used_in_code_in_all_regs_list.
                      eexists; eexists; split; eauto; solve [constructor]. }
               rewrite PMap.gss; reflexivity.
-            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition.
-            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition.
-            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition.
-            - specialize (RM _ Hused); rewrite RM_RES1 in RM; intuition. }
+            - specialize (RM _ Hused); rewrite RM_RES in RM; intuition.
+            - specialize (RM _ Hused); rewrite RM_RES in RM; intuition.
+            - specialize (RM _ Hused); rewrite RM_RES in RM; intuition.
+            - specialize (RM _ Hused); rewrite RM_RES in RM; intuition. }
           { assert (Hdstused: reg_used_in_code c dst).
             { eexists; eexists; split; eauto; apply reg_used_Iload_res. }
             repeat split.
             - rewrite 3!PMap.gso; auto.
               2: { intro HC; subst.
                    specialize (RM _ (or_intror Hdstused)).
-                   rewrite RM_RES1 in RM; destruct Hused; intuition. }
+                   rewrite RM_RES in RM; destruct Hused; intuition. }
               rewrite PMap.gso.
               2: { intro HC; subst.
                    specialize (RM _ (or_intror Hdstused)).
-                   rewrite RM_RES1 in RM; destruct Hused; intuition. }
+                   rewrite RM_RES in RM; destruct Hused; intuition. }
               specialize (RM r Hused).
               rewrite Hr in RM; intuition.
             - rewrite 2!PMap.gso; auto.
@@ -1986,7 +1986,7 @@ Section PRESERVATION.
       pose proof H as Hcode.
       specialize (CODE pc (Icall (funsig fd) ros args res pc') Hcode); inv CODE.
       smoveR_inv.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
+      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
@@ -2004,7 +2004,7 @@ Section PRESERVATION.
            split.
            { eapply rm_inv_get_2; eauto; right; auto. }
            { eapply rm_inv_get_3'; eauto. } }
-      destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
+      destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
       assert (Htf: exists tf, transf_fundef fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
@@ -2070,7 +2070,7 @@ Section PRESERVATION.
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
       specialize (CODE pc (Itailcall (funsig fd) ros args) Hcode); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
+      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
@@ -2088,7 +2088,7 @@ Section PRESERVATION.
            split.
            { eapply rm_inv_get_2; eauto; right; auto. }
            { eapply rm_inv_get_3'; eauto. } }
-      destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
+      destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
       assert (Htf: exists tf, transf_fundef fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
@@ -2154,7 +2154,7 @@ Section PRESERVATION.
       pose proof H as Hcode.
       specialize (CODE pc (Ibuiltin ef args res pc') Hcode); inv CODE.
       { (* No result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
+        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto; constructor; auto. }
@@ -2168,7 +2168,7 @@ Section PRESERVATION.
              split.
              { eapply rm_inv_get_2; eauto; right; auto. }
              { eapply rm_inv_get_3'; eauto. } }
-        destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
+        destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
         eexists; split.
         + eapply star_plus_trans.
           { apply Hvote. }
@@ -2197,7 +2197,7 @@ Section PRESERVATION.
           econstructor; eauto.
           eapply rm_inv_ext_r; eauto. }
       { (* With result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
+        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto; constructor; auto. }
@@ -2211,7 +2211,7 @@ Section PRESERVATION.
              split.
              { eapply rm_inv_get_2; eauto; right; auto. }
              { eapply rm_inv_get_3'; eauto. } }
-        destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
+        destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
         assert (Hty: Val.has_type vres (re res1)).
         { inv WT_FN.
           simpl in *.
@@ -2265,7 +2265,7 @@ Section PRESERVATION.
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
       specialize (CODE pc (Icond cond args ifso ifnot) Hcode); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
+      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto; constructor; auto. }
@@ -2279,7 +2279,7 @@ Section PRESERVATION.
            split.
            { eapply rm_inv_get_2; eauto; right; auto. }
            { eapply rm_inv_get_3'; eauto. } }
-      destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
+      destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
       eexists; split.
       + eapply star_plus_trans.
         { apply Hvote. }

@@ -220,59 +220,59 @@ Inductive match_instr
     match_instr re rm pc c (Inop n)
 | match_Iop :
   forall op args1 args2 args3 res1 res2 res3 n1 n2 succ
-    (REGS : match_regs rm args1 args2 args3)
-    (RM_RES1 : rm !! res1 = (res2, res3))
+    (ARGS : match_regs rm args1 args2 args3)
+    (RM_RES : rm !! res1 = (res2, res3))
     (PC : c ! pc = Some (Iop op args2 res2 n1))
     (N1 : c ! n1 = Some (Iop op args3 res3 n2))
     (N2 : c ! n2 = Some (Iop op args1 res1 succ)),
     match_instr re rm pc c (Iop op args1 res1 succ)
 | match_Iload :
   forall chunk addr args1 args2 args3 res1 res2 res3 n1 n2 succ
-    (REGS : match_regs rm args1 args2 args3)
-    (RM_RES1 : rm !! res1 = (res2, res3))
+    (ARGS : match_regs rm args1 args2 args3)
+    (RM_RES : rm !! res1 = (res2, res3))
     (PC : c ! pc = Some (Iload chunk addr args2 res2 n1))
     (N1 : c ! n1 = Some (Iload chunk addr args3 res3 n2))
     (N2 : c ! n2 = Some (Iload chunk addr args1 res1 succ)),
     match_instr re rm pc c (Iload chunk addr args1 res1 succ)
 | match_Istore :
   forall chunk addr args src1 src2 src3 n succ
-    (RM_SRC1 : rm !! src1 = (src2, src3))
+    (RM_SRC : rm !! src1 = (src2, src3))
     (VOTE_REGS : maj_vote_regsR c re rm args pc n)
     (N : c ! n = Some (Istore chunk addr args src1 succ)),
     match_instr re rm pc c (Istore chunk addr args src1 succ)
 | match_Icall :
   forall sig fn args res1 res2 res3 succ n1 n2
-    (VOTE_REGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1)
     (N1 : c ! n1 = Some (Icall sig fn args res1 n2))
-    (RM_RES1 : rm !! res1 = (res2, res3))
+    (RM_RES : rm !! res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm pc c (Icall sig fn args res1 succ)
 | match_Itailcall :
   forall sig fn args n
-    (VOTE_REGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n)
     (N : c ! n = Some (Itailcall sig fn args)),
     match_instr re rm pc c (Itailcall sig fn args)
 | match_Ibuiltin_1 :
   forall ef bargs bres n succ
     (NORES : ~ is_BR bres) (* no result register *)
-    (VOTE_REGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n)
     (N : c ! n = Some (Ibuiltin ef bargs bres succ)),
     match_instr re rm pc c (Ibuiltin ef bargs bres succ)
 | match_Ibuiltin_2 :
   forall ef bargs res1 res2 res3 n1 n2 succ
-    (VOTE_REGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1)
     (N1 : c ! n1 = Some (Ibuiltin ef bargs (BR res1) n2))
-    (RM_RES1 : rm # res1 = (res2, res3))
+    (RM_RES : rm # res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm pc c (Ibuiltin ef bargs (BR res1) succ)
 | match_Icond :
   forall cond args ifso ifnot n
-    (VOTE_REGS : maj_vote_regsR c re rm args pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm args pc n)
     (N : c ! n = Some (Icond cond args ifso ifnot)),
     match_instr re rm pc c (Icond cond args ifso ifnot)
 | match_Ijumptable :
   forall arg1 arg2 arg3 tbl n
-    (RM_ARG1 : rm # arg1 = (arg2, arg3))
+    (RM_ARG : rm # arg1 = (arg2, arg3))
     (VOTE : maj_voteR c (re arg1) arg1 arg2 arg3 pc n)
     (N : c ! n = Some (Ijumptable arg1 tbl)),
     match_instr re rm pc c (Ijumptable arg1 tbl)
@@ -281,7 +281,7 @@ Inductive match_instr
   match_instr re rm pc c (Ireturn None)
 | match_Ireturn_2 :
   forall arg1 arg2 arg3 n
-    (RM_ARG1 : rm # arg1 = (arg2, arg3))
+    (RM_ARG : rm # arg1 = (arg2, arg3))
     (VOTE : maj_voteR c (re arg1) arg1 arg2 arg3 pc n)
     (N : c ! n = Some (Ireturn (Some arg1))),
     match_instr re rm pc c (Ireturn (Some arg1)).
