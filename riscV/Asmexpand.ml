@@ -559,88 +559,38 @@ let expand_ctz ~sixtyfour ~splitlong =
 
 (* Handling of compiler-inlined builtins *)
 
-(** Majority vote 32/64-bit integers *)
-let maj_vote_int (a : ireg) (b : ireg) (c : ireg) (res : ireg) : unit =
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
+      (cmp_j : 'a -> 'a -> label -> instruction list)
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
   let lbl_done = new_label () in
   let lbl_fix = new_label () in
-  if a = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (Pmv (a, c));
-      side_emit (Pj_l lbl_done);
-      emit (Pbnel (X a, X b, lbl_fix));
-      emit (Plabel lbl_done)
-    end
-  else if b = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (Pmv (b, c));
-      side_emit (Pj_l lbl_done);
-      emit (Pbnel (X a, X b, lbl_fix));
-      emit (Plabel lbl_done)
+  side_emit (Plabel lbl_fix);
+  side_emit (mov res c);
+  side_emit (Pj_l lbl_done);
+  if a = res || b = res then begin
+      List.iter emit (cmp_j a b lbl_fix);
     end
   else if c = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (Pmv (c, b));
-      side_emit (Pj_l lbl_done);
-      emit (Pbnel (X a, X c, lbl_fix));
-      emit (Plabel lbl_done)
+      List.iter emit (cmp_j a c lbl_fix);
     end
   else begin
-      let lbl_tmp = new_label () in
-      side_emit (Plabel lbl_fix);
-      side_emit (Pbnel (X a, X c, lbl_tmp));
-      side_emit (Pmv (res, a));
-      side_emit (Pj_l lbl_done);
-      side_emit (Plabel lbl_tmp);
-      side_emit (Pmv (res, b));
-      side_emit (Pj_l lbl_done);
-      emit (Pbnel (X a, X b, lbl_fix));
-      emit (Pmv (res, a));
-      emit (Plabel lbl_done)
-    end
+      List.iter emit (cmp_j a b lbl_fix);
+      emit (mov res a);
+    end;
+  emit (Plabel lbl_done)
 
-(** Majority vote floats *)
-let maj_vote_float (a : freg) (b : freg) (c : freg) (res : freg) : unit =
-  let lbl_done = new_label () in
-  let lbl_fix = new_label () in
-  if a = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (Pfmv (a, c));
-      side_emit (Pj_l lbl_done);
-      emit (Pfeqs (X31, a, b));
-      emit (Pbnel (X0, X X31, lbl_fix));
-      emit (Plabel lbl_done)
-    end
-  else if b = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (Pfmv (b, c));
-      side_emit (Pj_l lbl_done);
-      emit (Pfeqs (X31, a, b));
-      emit (Pbnel (X0, X X31, lbl_fix));
-      emit (Plabel lbl_done)
-    end
-  else if c = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (Pfmv (c, b));
-      side_emit (Pj_l lbl_done);
-      emit (Pfeqs (X31, a, c));
-      emit (Pbnel (X0, X X31, lbl_fix));
-      emit (Plabel lbl_done)
-    end
-  else begin
-      let lbl_tmp = new_label () in
-      side_emit (Plabel lbl_fix);
-      emit (Pfeqs (X31, a, c));
-      emit (Pbnel (X0, X X31, lbl_tmp));
-      side_emit (Pfmv (res, a));
-      side_emit (Pj_l lbl_done);
-      side_emit (Plabel lbl_tmp);
-      side_emit (Pfmv (res, b));
-      side_emit (Pj_l lbl_done);
-      emit (Pfeqs (X31, a, b));
-      emit (Pbnel (X0, X X31, lbl_fix));
-      emit (Pfmv (res, a));
-      emit (Plabel lbl_done)
-    end
+(** Majority vote integers. *)
+let maj_vote_int = maj_vote
+                     (fun x y -> Pmv (x, y))
+                     (fun x y lbl -> [Pbnel (X x, X y, lbl)])
+
+(** Majority vote floats. *)
+let maj_vote_float = maj_vote
+                       (fun x y -> Pfmv (x, y))
+                       (fun x y lbl -> [Pfeqs (X31, x, y);
+                                        Pbnel (X0, X X31, lbl)])
 
 let expand_builtin_inline name args res =
   match name, args, res with

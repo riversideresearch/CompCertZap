@@ -5,6 +5,9 @@ Import ListNotations.
 
 Local Open Scope asttyp_scope.
 
+(* Definition ptr64 := Archi.ptr64. *)
+(* Global Opaque ptr64. *)
+
 Inductive replicate_builtin : Type :=
 | BI_smove_int
 | BI_smove_long
@@ -193,7 +196,23 @@ Proof.
     repeat ((try destruct (eq_block _ _); subst; simpl);
             (try destruct (Ptrofs.eq_dec _ _); simpl; auto)).
 Qed.
-
+  
+(* Lemma vote_int_compat_inject j v1 v1' v2 v2' v3 v3' : *)
+(*   Val.inject j v1 v1' -> *)
+(*   Val.inject j v2 v2' -> *)
+(*   Val.inject j v3 v3' -> *)
+(*   Val.inject j (vote_int v1 v2 v3) (vote_int v1' v2' v3'). *)
+(* Proof. *)
+(*   unfold vote_int. *)
+(*   intros H0 H1 H2. *)
+(*   inv H0; simpl; auto; inv H1; inv H2; simpl; auto. *)
+(*   - repeat destruct (Int.eq_dec _ _); subst; simpl; auto. *)
+(*   (* - destruct Archi.ptr64 eqn:Harchi; simpl; auto. *) *)
+(*   (*   repeat ((try destruct (eq_block _ _); subst; simpl); *) *)
+(*   (*           (try destruct (Ptrofs.eq_dec _ _); subst; simpl); *) *)
+(*   (*           (try solve [econstructor; eauto; congruence]); *) *)
+(*   (*           (try congruence)). *) *)
+(* Qed. *)
 Lemma vote_int_compat_inject j v1 v1' v2 v2' v3 v3' :
   Val.inject j v1 v1' ->
   Val.inject j v2 v2' ->
@@ -202,13 +221,14 @@ Lemma vote_int_compat_inject j v1 v1' v2 v2' v3 v3' :
 Proof.
   unfold vote_int.
   intros H0 H1 H2.
-  inv H0; simpl; auto; inv H1; inv H2; simpl; auto.
-  - repeat destruct (Int.eq_dec _ _); subst; simpl; auto.
-  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
-    repeat ((try destruct (eq_block _ _); subst; simpl);
-            (try destruct (Ptrofs.eq_dec _ _); subst; simpl);
-            (try solve [econstructor; eauto; congruence]);
-            (try congruence)).
+  inv H0; simpl; auto; inv H1; inv H2; simpl; auto;
+    (* This is necessary for riscv but not x86_64. Why? *)
+    try solve [destruct Archi.ptr64 eqn:Harchi; simpl; auto;
+               repeat ((try destruct (eq_block _ _); subst; simpl);
+                       (try destruct (Ptrofs.eq_dec _ _); subst; simpl);
+                       (try solve [econstructor; eauto; congruence]);
+                       (try congruence))].
+  repeat destruct (Int.eq_dec _ _); subst; simpl; auto.
 Qed.
 
 Definition vote_int_sem : builtin_sem Xint :=

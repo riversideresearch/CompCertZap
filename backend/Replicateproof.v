@@ -704,14 +704,14 @@ Section PRESERVATION.
         rewrite <- Hr3, <- Hr2.
         destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
         2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
+          (* This is necessary for riscv but not x86_64. Why? *)
+          try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
+                     destruct (eq_block _ _); simpl; try congruence;
+                     destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
+                     rewrite PMap.gss; reflexivity].
         * rewrite PMap.gss; reflexivity.
         * destruct (Int.eq_dec i i); simpl; try congruence.
-          rewrite PMap.gss; reflexivity.
-        * destruct Archi.ptr64 eqn:Harchi; simpl.
-          { simpl in Hact; congruence. }
-          destruct (eq_block _ _); simpl; try congruence.
-          destruct (Ptrofs.eq_dec _ _); simpl; try congruence.
           rewrite PMap.gss; reflexivity. }
     { inv H0.
       eexists; split.
@@ -858,8 +858,8 @@ Section PRESERVATION.
     - eapply exec_Ibuiltin; eauto.
       + repeat constructor.
       + constructor; simpl.
-        destruct (rs # src); auto; simpl in Hty; try contradiction.
-        rewrite Hty; reflexivity.
+        destruct (rs # src); auto; simpl in Hty; try contradiction;
+          try rewrite Hty; reflexivity.
     - eapply exec_Ibuiltin; eauto.
       + repeat constructor.
       + constructor.
@@ -2409,7 +2409,7 @@ Section PRESERVATION.
           { inv WT; simpl in *.
             apply has_type_list_length in WT_ARGS.
             rewrite <- wt_params in WT_ARGS.
-            rewrite length_map in WT_ARGS.
+            rewrite list_length_map in WT_ARGS.
             rewrite WT_ARGS; reflexivity. }
 
     - (* exec_function_external *)

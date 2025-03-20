@@ -1473,7 +1473,9 @@ Inductive match_states : state -> state -> Prop :=
     match_states (State stk f sp pc rs m) (State tstk tf sp pc rs' m)
 | match_call_states :
   forall stk tstk f tf args m
+    (* Well-typed *)
     (WT_ARGS: Val.has_type_list args (proj_sig_args (funsig f)))
+    (* Match *)
     (STACKS: match_stackframes stk tstk (funsig f))
     (FUN : match_fundef f tf),
     match_states (Callstate stk f args m) (Callstate tstk tf args m)

@@ -339,85 +339,40 @@ let expand_fma args res i132 i213 i231 =
 
 (* Handling of compiler-inlined builtins *)
 
-(* (\** No side buffer *\) *)
-(* let maj_vote (a : 'a) (b : 'a) (c : 'a) (res : 'a) *)
-(*       (cmp : 'a -> 'a -> instruction) *)
-(*       (mov : 'a -> 'a -> instruction) : unit = *)
-(*   let lbl_done = new_label () in *)
-(*   if a = res then begin *)
-(*       emit (cmp a b); *)
-(*       emit (Pjcc (Cond_e, lbl_done)); *)
-(*       emit (mov a c); *)
-(*       emit (Plabel lbl_done) *)
-(*     end *)
-(*   else if b = res then begin *)
-(*       emit (cmp a b); *)
-(*       emit (Pjcc (Cond_e, lbl_done)); *)
-(*       emit (mov b c); *)
-(*       emit (Plabel lbl_done) *)
-(*     end *)
-(*   else if c = res then begin *)
-(*       emit (cmp a c); *)
-(*       emit (Pjcc (Cond_e, lbl_done)); *)
-(*       emit (mov c b); *)
-(*       emit (Plabel lbl_done) *)
-(*     end *)
-(*   else begin *)
-(*       let lbl_tmp = new_label () in *)
-(*       emit (cmp a b); *)
-(*       emit (Pjcc (Cond_e, lbl_tmp)); *)
-(*       emit (mov res c); *)
-(*       emit (Pjmp_l lbl_done); *)
-(*       emit (Plabel lbl_tmp); *)
-(*       emit (mov res a); *)
-(*       emit (Plabel lbl_done) *)
-(*     end *)
-
-(** With side buffer *)
-let maj_vote (a : 'a) (b : 'a) (c : 'a) (res : 'a)
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
       (cmp : 'a -> 'a -> instruction)
-      (mov : 'a -> 'a -> instruction) : unit =
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
   let lbl_done = new_label () in
   let lbl_fix = new_label () in
-  if a = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (mov a c);
-      side_emit (Pjmp_l lbl_done);
+  side_emit (Plabel lbl_fix);
+  side_emit (mov res c);
+  side_emit (Pjmp_l lbl_done);
+  if a = res || b = res then begin
       emit (cmp a b);
       emit (Pjcc (Cond_ne, lbl_fix));
-      emit (Plabel lbl_done)
-    end
-  else if b = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (mov b c);
-      side_emit (Pjmp_l lbl_done);
-      emit (cmp a b);
-      emit (Pjcc (Cond_ne, lbl_fix));
-      emit (Plabel lbl_done)
     end
   else if c = res then begin
-      side_emit (Plabel lbl_fix);
-      side_emit (mov c b);
-      side_emit (Pjmp_l lbl_done);
       emit (cmp a c);
       emit (Pjcc (Cond_ne, lbl_fix));
-      emit (Plabel lbl_done)
     end
   else begin
-      let lbl_tmp = new_label () in
-      side_emit (Plabel lbl_fix);
-      side_emit (cmp a c);
-      side_emit (Pjcc (Cond_ne, lbl_tmp));
-      side_emit (mov res a);
-      side_emit (Pjmp_l lbl_done);
-      side_emit (Plabel lbl_tmp);
-      side_emit (mov res b);
-      side_emit (Pjmp_l lbl_done);
       emit (cmp a b);
       emit (Pjcc (Cond_ne, lbl_fix));
       emit (mov res a);
-      emit (Plabel lbl_done)
-    end
+    end;
+  emit (Plabel lbl_done)
+
+(** Majority vote integers. *)
+let maj_vote_int = maj_vote
+                     (fun x y -> Pmov_rr (x, y))
+                     (fun x y -> Pcmpl_rr (x, y))
+
+(** Majority vote floats. *)
+let maj_vote_float = maj_vote
+                       (fun x y -> Pmovsd_ff (x, y))
+                       (fun x y -> Pcomiss_ff (x, y))
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -582,21 +537,13 @@ let expand_builtin_inline name args res =
 
   (* Majority vote *)
   | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote a b c res
-       (fun x y -> Pcmpl_rr (x, y))
-       (fun x y -> Pmov_rr (x, y))
+     maj_vote_int a b c res
   | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote a b c res
-       (fun x y -> Pcmpl_rr (x, y))
-       (fun x y -> Pmov_rr (x, y))
+     maj_vote_int a b c res
   | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote a b c res
-       (fun x y -> Pcomiss_ff (x, y))
-       (fun x y -> Pmovsd_ff (x, y))
+     maj_vote_float a b c res
   | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote a b c res
-       (fun x y -> Pcomiss_ff (x, y))
-       (fun x y -> Pmovsd_ff (x, y))
+     maj_vote_float a b c res
 
   (* Catch-all *)
   | _ ->
