@@ -26,7 +26,7 @@ opam switch create 4.14.2+<tag> ocaml-variants.4.14.2+options ocaml-option-bytec
 
 ### Configure
 ```bash
-./configure CC=ccomp --enable-imprecise-c99-float-ops --build=x86_64-pc-linux --host=i686-linux
+./configure CC=ccomp --enable-imprecise-c99-float-ops --build=x86_64-pc-linux --host=i686-linux --enable-shared=no
 
 ./configure --build=x86_64-pc-linux --host=i386-linux CC=ccomp AS='as --32' ASPP='ccomp -c' PARTIALLD='ld -r -melf_i386' --disable-ocamldoc --enable-imprecise-c99-float-ops
 

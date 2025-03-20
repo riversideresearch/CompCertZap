@@ -425,14 +425,14 @@ Definition standard_builtin_sig (b: standard_builtin) : signature :=
   | BI_select t =>
       let t := inj_type t in [Xint; t; t ---> t]
   | BI_fabs | BI_fsqrt =>
-      [Xfloat ---> Xfloat]
+                [Xfloat ---> Xfloat]
   | BI_fabsf =>
       [Xsingle ---> Xsingle]
   | BI_negl =>
       [Xlong ---> Xlong]
   | BI_addl | BI_subl | BI_i64_umulh| BI_i64_smulh 
   | BI_i64_sdiv | BI_i64_udiv | BI_i64_smod | BI_i64_umod =>
-      [Xlong; Xlong ---> Xlong]
+                                                [Xlong; Xlong ---> Xlong]
   | BI_mull =>
       [Xint; Xint ---> Xlong]
   | BI_i32_bswap =>
@@ -444,13 +444,13 @@ Definition standard_builtin_sig (b: standard_builtin) : signature :=
   | BI_unreachable =>
       mksignature nil Xvoid cc_default
   | BI_i64_shl  | BI_i64_shr | BI_i64_sar =>
-      [Xlong; Xint ---> Xlong]
+                                 [Xlong; Xint ---> Xlong]
   | BI_i64_dtos | BI_i64_dtou =>
-      [Xfloat ---> Xlong]
+                    [Xfloat ---> Xlong]
   | BI_i64_stod | BI_i64_utod =>
-      [Xlong ---> Xfloat]
+                    [Xlong ---> Xfloat]
   | BI_i64_stof | BI_i64_utof =>
-      [Xlong ---> Xsingle]
+                    [Xlong ---> Xsingle]
   end.
 
 Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (sig_res (standard_builtin_sig b)) :=
@@ -564,4 +564,3 @@ Qed.
 Next Obligation.
   inv H; simpl; auto. inv H0; auto. destruct Int.ltu; auto.
 Qed.
-

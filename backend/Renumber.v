@@ -71,8 +71,7 @@ Definition transf_function (f: function) : function :=
     f.(fn_params)
     f.(fn_stacksize)
     (renum_cfg pnum f.(fn_code))
-    (renum_pc pnum f.(fn_entrypoint))
-    None.
+    (renum_pc pnum f.(fn_entrypoint)).
 
 Definition transf_fundef (fd: fundef) : fundef :=
   AST.transf_fundef transf_function fd.

@@ -559,6 +559,39 @@ let expand_ctz ~sixtyfour ~splitlong =
 
 (* Handling of compiler-inlined builtins *)
 
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
+      (cmp_j : 'a -> 'a -> label -> instruction list)
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  side_emit (Plabel lbl_fix);
+  side_emit (mov res c);
+  side_emit (Pj_l lbl_done);
+  if a = res || b = res then begin
+      List.iter emit (cmp_j a b lbl_fix);
+    end
+  else if c = res then begin
+      List.iter emit (cmp_j a c lbl_fix);
+    end
+  else begin
+      List.iter emit (cmp_j a b lbl_fix);
+      emit (mov res a);
+    end;
+  emit (Plabel lbl_done)
+
+(** Majority vote integers. *)
+let maj_vote_int = maj_vote
+                     (fun x y -> Pmv (x, y))
+                     (fun x y lbl -> [Pbnel (X x, X y, lbl)])
+
+(** Majority vote floats. *)
+let maj_vote_float = maj_vote
+                       (fun x y -> Pfmv (x, y))
+                       (fun x y lbl -> [Pfeqs (X31, x, y);
+                                        Pbnel (X0, X X31, lbl)])
+
 let expand_builtin_inline name args res =
   match name, args, res with
   (* Synchronization *)
@@ -660,6 +693,31 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
+
+  (* Shadow move *)
+  | "__smove_int", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmv (res, a))
+  | "__smove_long", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmv (res, a))
+  | "__smove_single", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmv (res, a))
+  | "__smove_float", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmv (res, a))
+
+  (* Majority vote *)
+  | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+  | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))

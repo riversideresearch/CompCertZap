@@ -1,0 +1,42 @@
+TODO: try with riscv64-unknown-linux-gnu
+
+## riscv-gnu-toolchain
+
+```bash
+sudo mkdir /opt/riscv
+sudo chown alex:alex /opt/riscv
+```
+
+## compcert
+
+```bash
+./configure -toolprefix /opt/riscv/bin/riscv64-unknown-elf- riscv64-linux
+./configure -toolprefix riscv64-linux-gnu- riscv64-linux
+```
+
+## riscv-pk
+
+```bash
+../configure --prefix=/opt/riscv --host=riscv64-unknown-elf
+```
+
+Replace
+```
+CC            := gcc
+READELF       := readelf
+OBJCOPY       := objcopy
+```
+with
+```
+host          := riscv64-unknown-elf
+CC            := $(prefix)/bin/$(host)-gcc
+READELF       := $(prefix)/bin/$(host)-readelf
+OBJCOPY       := $(prefix)/bin/$(host)-objcopy
+```
+
+## spike
+
+```bash
+../configure --prefix=/opt/riscv
+sudo make install
+```

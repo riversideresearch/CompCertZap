@@ -681,8 +681,7 @@ let coalesce g =
     DLinkMove.insert m g.constrainedMoves;
     addWorkList g u;
     addWorkList g v
-      end else if false && canCoalesce g u v then begin
-    (* end else if canCoalesce g u v then begin *)
+    end else if canCoalesce g u v then begin
     DLinkMove.insert m g.coalescedMoves;
     combine g u v;
     addWorkList g u
