@@ -61,7 +61,7 @@ Definition unreplicated_regs : list preg :=
   IR X2 ::	(* SP *)
   IR X3 ::	(* global pointer *)
   IR X4 ::	(* thread pointer *)
-  IR X30 ::	(* FP? *)
+  IR X30 ::	(* FP *)
   IR X31 ::	(* temporary used by [Asmgen], [exec_instr] *)
   nil.
 
@@ -85,17 +85,14 @@ intolerant expansions.)
 
 TODO:
 
-- All non-volatile stores probably tolerate faults. We presently
-regard stores as intolerant. This seems fishy given (1) the special
-treatment of volatile loads and stores and (2) the fact that
-[Asm.exec_instr] handles most store instructions (with out emitting an
-event in the trace). It would certainly be simpler to regard all
-non-volatile stores as fault tolerant.
-
 - Stores to stack slots that arise from spilling a temporary probably
 tolerate faults. They don't show up in the trace. Modulo assumptions
 about coalescing stack slots, they are unique per redundant
 computation.
+
+- For non-volatile stores, we could presumably define and use a
+"triple-based" representation of structures and unions in order to
+tolerate more faults. We presently regard stores as intolerant.
 
 - For calls to internal functions, we could presumably define and use
 a "triple-based" calling convention. Calls to such functions could
@@ -103,7 +100,17 @@ tolerate faults, and such functions would not need to set up and tear
 down redundant computations.
 *)
 
-Inductive tolerance: Type := Tolerant | Intolerant.
+Inductive tolerance: Type :=
+| Tolerant
+| Intolerant
+| IntolerantOn (_ : list preg).
+
+Definition may_fault (r: preg) (t: tolerance): Prop :=
+  match t with
+  | Tolerant => True
+  | Intolerant => False
+  | IntolerantOn rs => ~ In r rs
+  end.
 
 (*
 Builtins use [known_builtin_sem] and don't impact the trace.
@@ -126,19 +133,18 @@ Definition platform_builtin_tolerance (f: platform_builtin) : tolerance :=
   match f with
   end.
 
-Definition smove_tolerance (r: preg)
-    (args: list (builtin_arg preg))
+Definition smove_tolerance (args: list (builtin_arg preg))
     (res: builtin_res preg) :  tolerance :=
   (*
   Moves like <<green <- red>>, <<blue <- red>> for setting up
   redundant computations cannot tolerate faults in red.
   *)
   match args , res with
-  | (BA src :: nil) , BR _ => if preg_eq r src then Intolerant else Tolerant
+  | BA src :: nil , BR _ => IntolerantOn (src :: nil)
   | _ , _ => Intolerant	(* should not happen *)
   end.
 
-Definition replicate_builtin_tolerance (r: preg) (f: replicate_builtin)
+Definition replicate_builtin_tolerance (f: replicate_builtin)
     (args: list (builtin_arg preg))
     (res: builtin_res preg) :  tolerance :=
   match f with
@@ -147,7 +153,7 @@ Definition replicate_builtin_tolerance (r: preg) (f: replicate_builtin)
   | BI_smove_long
   | BI_smove_single
   | BI_smove_float
-    => smove_tolerance r args res
+    => smove_tolerance args res
 
   (*
   Voting can tolerate faults (despite the conditional branch) since we
@@ -162,16 +168,16 @@ Definition replicate_builtin_tolerance (r: preg) (f: replicate_builtin)
 
   end.
 
-Definition builtin_function_tolerance (r: preg) (f: builtin_function)
+Definition builtin_function_tolerance (f: builtin_function)
     (args: list (builtin_arg preg))
     (res: builtin_res preg) :  tolerance :=
   match f with
   | BI_standard f => standard_builtin_tolerance f
   | BI_platform f => platform_builtin_tolerance f
-  | BI_replicate f => replicate_builtin_tolerance r f args res
+  | BI_replicate f => replicate_builtin_tolerance f args res
   end.
 
-Definition external_function_tolerance (r: preg) (f: external_function)
+Definition external_function_tolerance (f: external_function)
     (args: list (builtin_arg preg))
     (res: builtin_res preg) :  tolerance :=
   match f with
@@ -180,7 +186,7 @@ Definition external_function_tolerance (r: preg) (f: external_function)
   | EF_builtin name sg
   | EF_runtime name sg =>
     match lookup_builtin_function name sg with
-    | Some f => builtin_function_tolerance r f args res
+    | Some f => builtin_function_tolerance f args res
     | None => Intolerant
     end
 
@@ -215,14 +221,15 @@ Definition external_function_tolerance (r: preg) (f: external_function)
   end.
 
 Definition conditional_branch_tolerance (r1 r2 : ireg0) : tolerance :=
-  (*
-  We could go further by accounting for [unreplicated_regs]. A branch
-  based on comparing two registers we never fault, for example, (or
-  one such register and X0) tolerates faults.
-  *)
-  if ireg0_eq r1 r2 then Tolerant else Intolerant.
+  match r1 , r2 with
+  | X0 , X0 => Tolerant
+  | X0 , X r | X r , X0 => IntolerantOn (IR r :: nil)
+  | X r1 , X r2 =>
+    if ireg_eq r1 r2 then Tolerant
+    else IntolerantOn (IR r1 :: IR r2 :: nil)
+  end.
 
-Definition instruction_tolerance (r: preg) (i: instruction) : tolerance :=
+Definition instruction_tolerance (i: instruction) : tolerance :=
   match i with
   | Pmv _ _ => Tolerant
 
@@ -299,7 +306,6 @@ Definition instruction_tolerance (r: preg) (i: instruction) : tolerance :=
     => Tolerant
 
 (* Unconditional jumps.  Links are always to X1/RA. *)
-
   | Pj_l _
   | Pj_s _ _
   | Pjal_s _ _
@@ -309,9 +315,9 @@ Definition instruction_tolerance (r: preg) (i: instruction) : tolerance :=
   We cannot tolerate faults in indirect jumps.
   *)
 
-  | Pj_r _ _
-  | Pjal_r _ _
-    => Intolerant
+  | Pj_r r _
+  | Pjal_r r _
+    => IntolerantOn (IR r :: nil)
 
 (* Conditional branches, 32-bit comparisons *)
   | Pbeqw r1 r2 _
@@ -343,13 +349,13 @@ Definition instruction_tolerance (r: preg) (i: instruction) : tolerance :=
     => Tolerant
 
 (* Stores *)
-  | Psb _ _ _
-  | Psh _ _ _
-  | Psw _ _ _
-  | Psw_a _ _ _
-  | Psd _ _ _
-  | Psd_a _ _ _
-    => Intolerant
+  | Psb s a _
+  | Psh s a _
+  | Psw s a _
+  | Psw_a s a _
+  | Psd s a _
+  | Psd_a s a _
+    => IntolerantOn (IR s :: IR a :: nil)
 
 (* Synchronization *)
   | Pfence
@@ -365,7 +371,7 @@ Definition instruction_tolerance (r: preg) (i: instruction) : tolerance :=
 
 (* 32-bit (single-precision) floating point *)
   | Pfls _ _ _ => Tolerant	(* load *)
-  | Pfss _ _ _ => Intolerant	(* store *)
+  | Pfss s a _ => IntolerantOn (FR s :: IR a :: nil)	(* store *)
   | Pfnegs _ _
   | Pfabss _ _
   | Pfadds _ _ _
@@ -394,7 +400,7 @@ Definition instruction_tolerance (r: preg) (i: instruction) : tolerance :=
 
 (* 64-bit (double-precision) floating point *)
   | Pfld _ _ _ | Pfld_a _ _ _ => Tolerant	(* loads *)
-  | Pfsd _ _ _ | Pfsd_a _ _ _ => Intolerant	(* stores *)
+  | Pfsd d a _ | Pfsd_a d a _ => IntolerantOn (FR d :: IR a :: nil)	(* stores *)
   | Pfnegd _ _
   | Pfabsd _ _
   | Pfaddd _ _ _
@@ -426,9 +432,25 @@ Definition instruction_tolerance (r: preg) (i: instruction) : tolerance :=
 (* Pseudo-instructions *)
 
   (*
-  We never fault X30, X2.
+  This is conservative: With varargs, a subset of the integer
+  parameter registers are saved to the stack. We could be more
+  precise, examining the given size, the given offset, and (with a bit
+  of setup) the ambient function's signature in order to make case
+  distinctions analogous to those in <<expand_instruction>>.
+
+  We never fault SP, FP, and X31.
   *)
-  | Pallocframe _ _ | Pfreeframe _ _ => Tolerant
+  | Pallocframe _ _ =>
+    IntolerantOn (
+      (* integer parameter registers (cf Asmexpand.int_param_regs) *)
+      IR X10 :: IR X11 :: IR X12 :: IR X13 :: IR X14 :: IR X15 :: IR X16 :: IR X17 ::
+      nil
+    )
+
+  (*
+  We never fault SP, X31.
+  *)
+  | Pfreeframe _ _ => Tolerant
 
   (*
   A directive, not code.
@@ -449,11 +471,11 @@ Definition instruction_tolerance (r: preg) (i: instruction) : tolerance :=
 
   (*
   X5 (the branch target after expansion) is a single point of failure,
-  and we can fault it.
+  and we can fault it. We never fault X31.
   *)
-  | Pbtbl _ _ => Intolerant
+  | Pbtbl r _ => IntolerantOn (IR r :: IR X5 :: nil)
 
-  | Pbuiltin f args dest => external_function_tolerance r f args dest
+  | Pbuiltin f args dest => external_function_tolerance f args dest
 
   | Pnop => Tolerant
 
@@ -499,17 +521,18 @@ Definition internal_instruction (rs: regset) (m: mem) : option instruction :=
   | _ => None
   end.
 
-Definition internal_instruction_tolance (rs: regset) (m: mem) (r: preg) : tolerance :=
+Definition internal_instruction_tolance (rs: regset) (m: mem) : tolerance :=
   match internal_instruction rs m with
-  | Some i => instruction_tolerance r i
+  | Some i => instruction_tolerance i
   | None => Intolerant
   end.
 
 Inductive maybe_fault: budgets -> count -> regset -> mem -> budgets -> count -> regset -> Prop :=
 | maybe_fault_refl bs c rs m: maybe_fault bs c rs m bs c rs
-| maybe_fault_reg n bs c rs m r v:
+| maybe_fault_reg n bs c rs m r tol v:
   ~ In r unreplicated_regs ->
-  internal_instruction_tolance rs m r = Tolerant ->
+  internal_instruction_tolance rs m = tol ->
+  may_fault r tol ->
   fault_val (rs r) v ->
   maybe_fault (Datatypes.S n :: bs) c rs m (n :: bs) (Datatypes.S c) (rs # r <- v).
 
