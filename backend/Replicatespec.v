@@ -1,4 +1,4 @@
-(** Relational specificaton of the TMR transformation. *)
+(** * Relational specificaton of the TMR transformation. *)
 
 Require Import
   AST
@@ -76,13 +76,13 @@ Definition rm_wf (rm : PMap.t (reg * reg)) (l : list positive) : Prop :=
         PMap.get r1' rm = (r2', r3') ->
         NoDup [r1; r2; r3; r1'; r2'; r3'].
 
-Inductive match_regs (rm : PMap.t (reg * reg))
+Inductive rm_l (rm : PMap.t (reg * reg))
   : list reg -> list reg -> list reg -> Prop :=
-| match_nil : match_regs rm [] [] []
+| match_nil : rm_l rm [] [] []
 | match_cons : forall r1 r2 r3 rs1 rs2 rs3,
     rm !! r1 = (r2, r3) ->
-    match_regs rm rs1 rs2 rs3 ->
-    match_regs rm (r1 :: rs1) (r2 :: rs2) (r3 :: rs3).
+    rm_l rm rs1 rs2 rs3 ->
+    rm_l rm (r1 :: rs1) (r2 :: rs2) (r3 :: rs3).
 
 Definition comp_of_typ (ty : typ) : comparison -> condition :=
   match ty with
@@ -211,83 +211,90 @@ Proof.
   - right; intro H; inv H.
 Qed.
 
+(** [match_instr re rm c pc i] means that the translated code [c]
+    contains instructions starting at pc] that correspond to
+    instruction [i] in the original program, wrt. register environment
+    [regenv] and replication map [rm]. *)
 Inductive match_instr
-  (re : regenv) (rm : PMap.t (reg * reg)) (pc : positive) (c : code)
+  (re : regenv) (rm : PMap.t (reg * reg)) (c : code) (pc : positive)
   : instruction -> Prop :=
 | match_Inop :
   forall n,
     PTree.get pc c = Some (Inop n) ->
-    match_instr re rm pc c (Inop n)
+    match_instr re rm c pc (Inop n)
 | match_Iop :
   forall op args1 args2 args3 res1 res2 res3 n1 n2 succ
-    (ARGS : match_regs rm args1 args2 args3)
+    (ARGS : rm_l rm args1 args2 args3)
     (RM_RES : rm !! res1 = (res2, res3))
     (PC : c ! pc = Some (Iop op args2 res2 n1))
     (N1 : c ! n1 = Some (Iop op args3 res3 n2))
     (N2 : c ! n2 = Some (Iop op args1 res1 succ)),
-    match_instr re rm pc c (Iop op args1 res1 succ)
+    match_instr re rm c pc (Iop op args1 res1 succ)
 | match_Iload :
   forall chunk addr args1 args2 args3 res1 res2 res3 n1 n2 succ
-    (ARGS : match_regs rm args1 args2 args3)
+    (ARGS : rm_l rm args1 args2 args3)
     (RM_RES : rm !! res1 = (res2, res3))
     (PC : c ! pc = Some (Iload chunk addr args2 res2 n1))
     (N1 : c ! n1 = Some (Iload chunk addr args3 res3 n2))
     (N2 : c ! n2 = Some (Iload chunk addr args1 res1 succ)),
-    match_instr re rm pc c (Iload chunk addr args1 res1 succ)
+    match_instr re rm c pc (Iload chunk addr args1 res1 succ)
 | match_Istore :
   forall chunk addr args src1 src2 src3 n succ
     (RM_SRC : rm !! src1 = (src2, src3))
     (VOTE_REGS : maj_vote_regsR c re rm args pc n)
     (N : c ! n = Some (Istore chunk addr args src1 succ)),
-    match_instr re rm pc c (Istore chunk addr args src1 succ)
+    match_instr re rm c pc (Istore chunk addr args src1 succ)
 | match_Icall :
   forall sig fn args res1 res2 res3 succ n1 n2
     (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1)
     (N1 : c ! n1 = Some (Icall sig fn args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
-    match_instr re rm pc c (Icall sig fn args res1 succ)
+    match_instr re rm c pc (Icall sig fn args res1 succ)
 | match_Itailcall :
   forall sig fn args n
     (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n)
     (N : c ! n = Some (Itailcall sig fn args)),
-    match_instr re rm pc c (Itailcall sig fn args)
+    match_instr re rm c pc (Itailcall sig fn args)
 | match_Ibuiltin_1 :
   forall ef bargs bres n succ
     (NORES : ~ is_BR bres) (* no result register *)
     (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n)
     (N : c ! n = Some (Ibuiltin ef bargs bres succ)),
-    match_instr re rm pc c (Ibuiltin ef bargs bres succ)
+    match_instr re rm c pc (Ibuiltin ef bargs bres succ)
 | match_Ibuiltin_2 :
   forall ef bargs res1 res2 res3 n1 n2 succ
     (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1)
     (N1 : c ! n1 = Some (Ibuiltin ef bargs (BR res1) n2))
     (RM_RES : rm # res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
-    match_instr re rm pc c (Ibuiltin ef bargs (BR res1) succ)
+    match_instr re rm c pc (Ibuiltin ef bargs (BR res1) succ)
 | match_Icond :
   forall cond args ifso ifnot n
     (VOTE_ARGS : maj_vote_regsR c re rm args pc n)
     (N : c ! n = Some (Icond cond args ifso ifnot)),
-    match_instr re rm pc c (Icond cond args ifso ifnot)
+    match_instr re rm c pc (Icond cond args ifso ifnot)
 | match_Ijumptable :
   forall arg1 arg2 arg3 tbl n
     (RM_ARG : rm # arg1 = (arg2, arg3))
     (VOTE : maj_voteR c (re arg1) arg1 arg2 arg3 pc n)
     (N : c ! n = Some (Ijumptable arg1 tbl)),
-    match_instr re rm pc c (Ijumptable arg1 tbl)
+    match_instr re rm c pc (Ijumptable arg1 tbl)
 | match_Ireturn_1 :
   forall (PC : c ! pc = Some (Ireturn None)),
-  match_instr re rm pc c (Ireturn None)
+  match_instr re rm c pc (Ireturn None)
 | match_Ireturn_2 :
   forall arg1 arg2 arg3 n
     (RM_ARG : rm # arg1 = (arg2, arg3))
     (VOTE : maj_voteR c (re arg1) arg1 arg2 arg3 pc n)
     (N : c ! n = Some (Ireturn (Some arg1))),
-    match_instr re rm pc c (Ireturn (Some arg1)).
+    match_instr re rm c pc (Ireturn (Some arg1)).
 
+(** [match_code re rm c c'] when for every instruction [i] at location
+    [pc] in the original code [c], there is a matching code sequence
+    at [pc] in the translated code [c'].*)
 Definition match_code (re : regenv) (rm : PMap.t (reg * reg)) (c c': code) : Prop :=
-  forall p i, c ! p = Some i -> match_instr re rm p c' i.
+  forall p i, c ! p = Some i -> match_instr re rm c' p i.
 
 Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
 | reg_used_Iop_args : forall op args res succ,
@@ -334,30 +341,23 @@ Definition reg_used_in_code (c : code) (r : reg) : Prop :=
   exists pc instr,
     c! pc = Some instr /\ reg_used_in_instr r instr.
 
+(** A register is 'used' in a function whenever it either appears in
+    the function's parameter list or is used somewhere in its code. *)
 Definition reg_used (params : list reg) (c : code) (r : reg) : Prop :=
   In r params \/ reg_used_in_code c r.
 
+(** Replication map invariant. Asserts that shadow registers in the
+    translated function do not appear in the parameters or code of the
+    original function. *)
 Definition rm_inv
-  (params : list reg) (c : code) (rm : PMap.t (reg * reg)) (rs rs' : regset) : Prop :=
-  forall r1, reg_used params c r1 ->
-        let (r2, r3) := rm # r1 in
-        rs # r1 = rs' # r1 /\
-          rs # r1 = rs' # r2 /\
-          rs # r1 = rs' # r3 /\
-          ~ In r2 params /\
-          ~ In r3 params /\
-          ~ reg_used_in_code c r2 /\
-          ~ reg_used_in_code c r3.
-
-(* Weaker, only cares about [params], [c], and [rm]. *)
-Definition rm_inv'
   (params : list reg) (c : code) (rm : PMap.t (reg * reg)) : Prop :=
-  forall r1, reg_used params c r1 ->
-        let (r2, r3) := rm # r1 in
-        ~ In r2 params /\
-          ~ In r3 params /\
-          ~ reg_used_in_code c r2 /\
-          ~ reg_used_in_code c r3.
+  forall (r1 r2 r3 : reg),
+    rm # r1 = (r2, r3) ->
+    reg_used params c r1 ->
+    ~ In r2 params /\
+      ~ In r3 params /\
+      ~ reg_used_in_code c r2 /\
+      ~ reg_used_in_code c r3.
 
 Lemma reg_used_cons p params c r :
   reg_used params c r ->
@@ -368,21 +368,20 @@ Proof.
   - right; auto.
 Qed.
 
-Lemma rm_inv'_cons p params c rm :
-  rm_inv' (p :: params) c rm ->
-  rm_inv' params c rm.
+Lemma rm_inv_cons p params c rm :
+  rm_inv (p :: params) c rm ->
+  rm_inv params c rm.
 Proof.
-  unfold rm_inv'.
-  intros Hrm r1 Hused.
-  destruct (rm # r1) eqn:Hr1.
-  specialize (Hrm r1 (reg_used_cons _ _ _ _ Hused)).
-  rewrite Hr1 in Hrm; firstorder.
+  unfold rm_inv.
+  intros Hrm r1 r2 r3 Hr1 Hused.
+  specialize (Hrm r1 r2 r3 Hr1 (reg_used_cons _ _ _ _ Hused)).
+  firstorder.
 Qed.
 
 Inductive match_function re rm : function -> function -> Prop :=
 | match_fun : forall sig params stacksize c c' entrypoint entrypoint'
                 (RM_WF: rm_wf rm (all_regs_list params c))
-                (RM_INV: rm_inv' params c rm)
+                (RM_INV: rm_inv params c rm)
                 (CODE: match_code re rm c c')
                 (COPY: copy_allR re rm c' params entrypoint' entrypoint),
     match_function re rm
@@ -411,8 +410,8 @@ Inductive match_fundef: fundef -> fundef -> Prop :=
   forall f,
     match_fundef (External f) (External f).
 
-Lemma match_regs_map_rm rm l :
-  match_regs rm l (map (fun r => fst rm # r) l) (map (fun r => snd rm # r) l).
+Lemma rm_l_map_rm rm l :
+  rm_l rm l (map (fun r => fst rm # r) l) (map (fun r => snd rm # r) l).
 Proof.
   induction l; constructor; auto.
   destruct (rm # a); reflexivity.
@@ -472,8 +471,8 @@ Qed.
 
 Lemma state_incr_match_instr re rm p i s s' :
   state_incr s s' ->
-  match_instr re rm p (st_code s) i ->
-  match_instr re rm p (st_code s') i.
+  match_instr re rm (st_code s) p i ->
+  match_instr re rm (st_code s') p i.
 Proof.
   intros Hs Hmatch.
   inv Hs.
@@ -666,7 +665,7 @@ Lemma iterM_match_instr
   p < s.(st_nextnode) ->
   In (p, i) l ->
   iterM (transf_instr re rm) l s = RTLgen.OK u s' pf ->
-  match_instr re rm p (st_code s') i.
+  match_instr re rm (st_code s') p i.
 Proof.
   revert s s' pf; induction l; simpl; intros s s' pf Hlt Hin Htransf.
   { contradiction. }
@@ -676,7 +675,7 @@ Proof.
   destruct Hin as [?|Hin]; subst.
   - simpl in Htransf'.
     destruct i.
-    
+
     (* Inop *)
     + unfold update_instr in Htransf'.
       repeat lr_case.
@@ -694,7 +693,7 @@ Proof.
       eapply match_Iop with (pc := p)
                             (n1 := s'0.(st_nextnode))
                             (n2 := Pos.succ (s'0.(st_nextnode))); eauto.
-      { apply match_regs_map_rm. }
+      { apply rm_l_map_rm. }
       * rewrite 2!PTree.gso; try lia.
         rewrite PTree.gss; reflexivity.
       * rewrite PTree.gso; try lia.
@@ -712,7 +711,7 @@ Proof.
       eapply match_Iload with (pc := p)
                               (n1 := s'0.(st_nextnode))
                               (n2 := Pos.succ (s'0.(st_nextnode))); eauto.
-      { apply match_regs_map_rm. }
+      { apply rm_l_map_rm. }
       * rewrite 2!PTree.gso; try lia.
         rewrite PTree.gss; reflexivity.
       * rewrite PTree.gso; try lia.
@@ -875,7 +874,7 @@ Proof.
 
   - unfold RTLgen.bind in Htransf'.
     destruct u, u0.
-    assert (H: match_instr re rm p (st_code s'0) i).
+    assert (H: match_instr re rm (st_code s'0) p i).
     { eapply IHl; eauto. }
     eapply state_incr_match_instr; eauto.
 Qed.
@@ -1188,9 +1187,10 @@ Proof.
 Qed.
 
 Definition rm_inv_list n (regs : list reg) (rm : PMap.t (reg * reg)) : Prop :=
-  forall r1, In r1 regs ->
-        let (r2, r3) := rm # r1 in
-        n <= r2 /\ n <= r3.
+  forall r1 r2 r3,
+    rm # r1 = (r2, r3) ->
+    In r1 regs ->
+    n <= r2 /\ n <= r3.
 
 Lemma reg_used_fold_right p i l r :
   In (p, i) l ->
@@ -1253,30 +1253,29 @@ Proof.
   eapply reg_used_fold_right; eauto.
 Qed.
 
-Lemma rm_inv_list_rm_inv' params c rm :
+Lemma rm_inv_list_rm_inv params c rm :
   rm_inv_list (max_reg (all_regs params c) + 1) (all_regs_list params c) rm ->
-  rm_inv' params c rm.
+  rm_inv params c rm.
 Proof.
-  intros Hrm r Hused.
-  specialize (Hrm r (reg_used_in_all_regs_list _ _ _ Hused)).
-  destruct (rm # r) eqn:Hr.
-  destruct Hrm as [Hr0 Hr1].
+  intros Hrm r1 r2 r3 Hr1 Hused.
+  specialize (Hrm r1 r2 r3 Hr1 (reg_used_in_all_regs_list _ _ _ Hused)).
+  destruct Hrm as [Hr2 Hr3].
   repeat split.
   - intro Hin.
-    assert (r0 < max_reg (all_regs params c) + 1).
+    assert (r2 < max_reg (all_regs params c) + 1).
     { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
     lia.
   - intro Hin.
-    assert (r1 < max_reg (all_regs params c) + 1).
+    assert (r3 < max_reg (all_regs params c) + 1).
     { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
     lia.
   - intro Hin.
-    assert (r0 < max_reg (all_regs params c) + 1).
+    assert (r2 < max_reg (all_regs params c) + 1).
     { apply in_lt_max_reg, in_elements, PSet.union_3.
       apply reg_used_in_code_pset_in_code_regs; auto. }
     lia.
   - intro Hin.
-    assert (r1 < max_reg (all_regs params c) + 1).
+    assert (r3 < max_reg (all_regs params c) + 1).
     { apply in_lt_max_reg, in_elements, PSet.union_3.
       apply reg_used_in_code_pset_in_code_regs; auto. }
     lia.
@@ -1293,23 +1292,20 @@ Proof.
   revert pf.
   revert s s' rm0 rm.
   induction regs; simpl; intros s s' rm0 rm pf Hlt Hfold.
-  { intros _ []. }
+  { intros _ _ _ _ []. }
   inv Hlt.
   unfold RTLgen.bind in Hfold.
   repeat egen_case.
   eapply IHregs in H; auto.
-  inv H3.
-  inv H5; inv H0.
+  inv H3; inv H5; inv H0.
   repeat state_incr_inv.
   unfold Ple in *; simpl in *.
-  intro x.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec a x); subst.
-  - intros _; rewrite PMap.gss; split; lia.
-  - intros [?|Hin]; subst; try congruence.
-    rewrite PMap.gso; auto.
-    specialize (H x Hin).
-    destruct (t # x) eqn:Hx.
-    lia.
+  intros x1 x2 x3 Hx1 Hin.
+  destruct (DecidableTypeEx.Positive_as_DT.eq_dec a x1); subst.
+  - rewrite PMap.gss in Hx1; inv Hx1; split; lia.
+  - destruct Hin as [?|Hin]; try congruence.
+    rewrite PMap.gso in Hx1; auto.
+    specialize (H x1 x2 x3 Hx1 Hin); lia.
 Qed.
 
 Lemma replication_map_rm_inv' sig params stacksize c entrypoint s pf rm :
@@ -1329,11 +1325,11 @@ Lemma replication_map_rm_inv' sig params stacksize c entrypoint s pf rm :
          fn_code := c;
          fn_entrypoint := entrypoint
        |}) = RTLgen.OK rm s pf ->
-  rm_inv' params c rm.
+  rm_inv params c rm.
 Proof.
   unfold replication_map.
   intro Hfold.
-  apply rm_inv_list_rm_inv'.
+  apply rm_inv_list_rm_inv.
   set (s0 := init_state
          {|
            fn_sig := sig;
@@ -1437,52 +1433,3 @@ Proof.
       apply in_regs_of_builtin_arg_in_builtin_arg; auto.
     + apply in_or_app; right; auto.
 Qed.
-
-Inductive match_stackframes : list stackframe -> list stackframe -> signature -> Prop :=
-| match_stackframes_nil : forall sig,
-    sig.(sig_res) = Xint ->
-    match_stackframes [] [] sig
-| match_stackframes_cons :
-  forall stk tstk sig re rm res1 f tf sp pc rs trs res2 res3 n
-    (* Well-typed *)
-    (WT_FN : wt_function f re)
-    (WT_RS : wt_regset re rs)
-    (WT_RES : re res1 = proj_sig_res sig)
-    (* Match *)
-    (FUN : match_function re rm f tf)
-    (INV : rm_inv f.(fn_params) f.(fn_code) rm rs trs)
-    (RM_WF : rm_wf rm (fun_regs_list f)),
-    reg_used_in_code f.(fn_code) res1 ->
-    rm # res1 = (res2, res3) ->
-    smoveR tf.(fn_code) (re res1) res1 res2 res3 n pc ->
-    match_stackframes stk tstk (fn_sig f) ->
-    match_stackframes
-      (Stackframe res1 f sp pc rs :: stk)
-      (Stackframe res1 tf sp n trs :: tstk) sig.
-
-Inductive match_states : state -> state -> Prop :=
-| match_regular_states :
-  forall stk tstk f tf sp pc rs rs' m re rm
-    (* Well-typed *)
-    (WT_FN: wt_function f re)
-    (WT_RS: wt_regset re rs)
-    (* Match *)
-    (STACKS: match_stackframes stk tstk (fn_sig f))
-    (FUN : match_function re rm f tf)
-    (RM : rm_inv f.(fn_params) f.(fn_code) rm rs rs'),
-    match_states (State stk f sp pc rs m) (State tstk tf sp pc rs' m)
-| match_call_states :
-  forall stk tstk f tf args m
-    (* Well-typed *)
-    (WT_ARGS: Val.has_type_list args (proj_sig_args (funsig f)))
-    (* Match *)
-    (STACKS: match_stackframes stk tstk (funsig f))
-    (FUN : match_fundef f tf),
-    match_states (Callstate stk f args m) (Callstate tstk tf args m)
-| match_return_states :
-  forall sig stk tstk v m
-    (* Well-typed *)
-    (WT_RES : Val.has_type v (proj_sig_res sig))
-    (* Match *)
-    (STACKS: match_stackframes stk tstk sig),
-    match_states (Returnstate stk v m) (Returnstate tstk v m).
