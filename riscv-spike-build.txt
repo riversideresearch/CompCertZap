@@ -10,7 +10,6 @@ sudo chown alex:alex /opt/riscv
 ## compcert
 
 ```bash
-./configure -toolprefix /opt/riscv/bin/riscv64-unknown-elf- riscv64-linux
 ./configure -toolprefix riscv64-linux-gnu- riscv64-linux
 ```
 

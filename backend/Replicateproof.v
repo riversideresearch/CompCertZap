@@ -1683,9 +1683,18 @@ Section PRESERVATION.
     simpl; erewrite IHargs; eauto.
   Qed.
 
-  (* TODO: put lemmas that are used a lot in a hint database to clean
-     up this proof. *)
-  (* Include reg_used_in_code -> reg_used lemma *)
+  Ltac reg_used1 :=
+    eapply reg_used_in_code_in_all_regs_list;
+    eexists; eexists; split; eauto; solve [constructor].
+
+  Ltac reg_used2 :=
+    match goal with
+    | [Hargs : Forall (reg_used_in_code _) _ |- _] =>
+        apply Forall_forall; intros ? ?;
+        eapply reg_used_in_code_in_all_regs_list;
+        rewrite Forall_forall in Hargs; intuition
+    end.
+
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
     forall ts1,
@@ -1696,8 +1705,7 @@ Section PRESERVATION.
     inv Hstep.
 
     - (* exec_Inop *)
-      inv Hmatch.
-      inv FUN; simpl in *.
+      inv Hmatch; inv FUN; simpl in *.
       eexists; split.
       + econstructor.
         * apply exec_Inop; simpl.
@@ -1705,12 +1713,10 @@ Section PRESERVATION.
           inv CODE; eauto.
         * apply star_refl.
         * reflexivity.
-      + econstructor; eauto.
-        econstructor; eauto.
+      + repeat (econstructor; eauto).
 
     - (* exec_Iop *)
-      inv Hmatch.
-      inv FUN; simpl in *.
+      inv Hmatch; inv FUN; simpl in *.
       set (f := {| fn_sig := sig
                 ; fn_params := params
                 ; fn_stacksize := stacksize
@@ -1735,30 +1741,21 @@ Section PRESERVATION.
           { eapply exec_Iop; eauto.
             eapply match_regs_1_3_eval_operation.
             { eauto. }
-            { eapply res2_not_in_args3 with (l := fun_regs_list f); eauto.
-              - eapply reg_used_in_code_in_all_regs_list.
-                eexists; eexists; split; eauto; solve [constructor].
-              - apply Forall_forall.
-                intros r Hin.
-                eapply match_regs_exists_r1' with (args1:=args); eauto. }
+            { eapply res2_not_in_args3 with (l := fun_regs_list f);
+                eauto; try reg_used1.
+              apply Forall_forall.
+              intros r Hin.
+              eapply match_regs_exists_r1' with (args1:=args); eauto. }
             2: { eauto. }
             2: { auto. }
             auto. }
           { eapply star_step.
             - eapply exec_Iop; eauto.
               eapply regular_eval_operation; eauto.
-              + eapply res2_not_in_args1 with (l := fun_regs_list f); eauto.
-                * eapply reg_used_in_code_in_all_regs_list.
-                  eexists; eexists; split; eauto; solve [constructor].
-                * apply Forall_forall; intros r Hin.
-                  eapply reg_used_in_code_in_all_regs_list.
-                  rewrite Forall_forall in Hargs; intuition.
-              + eapply res3_not_in_args1 with (l := fun_regs_list f); eauto.
-                * eapply reg_used_in_code_in_all_regs_list.
-                  eexists; eexists; split; eauto; solve [constructor].
-                * apply Forall_forall; intros r Hin.
-                  eapply reg_used_in_code_in_all_regs_list.
-                  rewrite Forall_forall in Hargs; intuition.
+              + eapply res2_not_in_args1 with (l := fun_regs_list f);
+                  eauto; try reg_used1; reg_used2.
+              + eapply res3_not_in_args1 with (l := fun_regs_list f);
+                  eauto; try reg_used1; reg_used2.
             - apply star_refl.
             - reflexivity. }
           reflexivity.
@@ -1773,18 +1770,12 @@ Section PRESERVATION.
             repeat split.
             - rewrite 2!PMap.gss; reflexivity.
             - rewrite PMap.gss, PMap.gso.
-              2: { symmetry; eapply rm_wf_neq_1_2; eauto.
-                   eapply reg_used_in_code_in_all_regs_list.
-                   eexists; eexists; split; eauto; solve [constructor]. }
+              2: { symmetry; eapply rm_wf_neq_1_2; eauto; reg_used1. }
               rewrite PMap.gso.
-              2: { eapply rm_wf_neq_2_3; eauto.
-                   eapply reg_used_in_code_in_all_regs_list.
-                   eexists; eexists; split; eauto; solve [constructor]. }
+              2: { eapply rm_wf_neq_2_3; eauto; reg_used1. }
               rewrite PMap.gss; reflexivity.
             - rewrite PMap.gss, PMap.gso.
-              2: { symmetry; eapply rm_wf_neq_1_3; eauto.
-                   eapply reg_used_in_code_in_all_regs_list.
-                   eexists; eexists; split; eauto; solve [constructor]. }
+              2: { symmetry; eapply rm_wf_neq_1_3; eauto; reg_used1. }
               rewrite PMap.gss; reflexivity. }
           { assert (Hresused: reg_used_in_code c res).
             { eexists; eexists; split; eauto; apply reg_used_Iop_res. }
@@ -1802,24 +1793,18 @@ Section PRESERVATION.
               2: { intro HC; subst.
                    specialize (RM_INV _ _ _ Hr1 Hused); intuition. }
               rewrite PMap.gso.
-              2: { eapply rm_wf_neq_2_3' with (r1 := res); eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor].
-                   - apply reg_used_in_all_regs_list; auto. }
+              2: { eapply rm_wf_neq_2_3' with (r1 := res); eauto; try reg_used1.
+                   apply reg_used_in_all_regs_list; auto. }
               rewrite PMap.gso.
-              2: { eapply rm_wf_neq_2_2 with (r1 := res); eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor].
-                   - apply reg_used_in_all_regs_list; auto. }
+              2: { eapply rm_wf_neq_2_2 with (r1 := res); eauto; try reg_used1.
+                   apply reg_used_in_all_regs_list; auto. }
               specialize (REGS _ _ _ Hr1 Hused); intuition.
             - rewrite 2!PMap.gso; auto.
               2: { intro HC; subst.
                    specialize (RM_INV _ _ _ Hr1 Hused); intuition. }
               rewrite PMap.gso.
-              2: { eapply rm_wf_neq_3_3 with (r1 := res); eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor].
-                   - apply reg_used_in_all_regs_list; auto. }
+              2: { eapply rm_wf_neq_3_3 with (r1 := res); eauto; try reg_used1.
+                   apply reg_used_in_all_regs_list; auto. }
               rewrite PMap.gso.
               2: { symmetry.
                    eapply rm_wf_neq_2_3' with (r1 := r1); eauto;
@@ -1828,8 +1813,7 @@ Section PRESERVATION.
               specialize (REGS _ _ _ Hr1 Hused); intuition. }
 
     - (* exec_Iload *)
-      inv Hmatch.
-      inv FUN; simpl in *.
+      inv Hmatch; inv FUN; simpl in *.
       set (f := {| fn_sig := sig
                 ; fn_params := params
                 ; fn_stacksize := stacksize
@@ -1854,12 +1838,11 @@ Section PRESERVATION.
           { eapply exec_Iload; eauto.
             eapply match_regs_1_3_eval_addressing.
             { eauto. }
-            { eapply res2_not_in_args3 with (l := fun_regs_list f); eauto.
-              - eapply reg_used_in_code_in_all_regs_list.
-                eexists; eexists; split; eauto; solve [constructor].
-              - apply Forall_forall.
-                intros r Hin.
-                eapply match_regs_exists_r1'; eauto. }
+            { eapply res2_not_in_args3 with (l := fun_regs_list f);
+                eauto; try reg_used1.
+              apply Forall_forall.
+              intros r Hin.
+              eapply match_regs_exists_r1'; eauto. }
             2: { eauto. }
             2: { auto. }
             apply Forall_forall; intros r Hin.
@@ -1868,18 +1851,10 @@ Section PRESERVATION.
           { eapply star_step.
             - eapply exec_Iload; eauto.
               eapply regular_eval_addressing; eauto.
-              + eapply res2_not_in_args1 with (l := fun_regs_list f); eauto.
-                * apply reg_used_in_code_in_all_regs_list;
-                    eexists; eexists; split; eauto; solve [constructor].
-                * apply Forall_forall; intros r Hin.
-                  apply reg_used_in_code_in_all_regs_list.
-                  rewrite Forall_forall in Hargs; intuition.
-              + eapply res3_not_in_args1 with (l := fun_regs_list f); eauto.
-                * apply reg_used_in_code_in_all_regs_list;
-                    eexists; eexists; split; eauto; solve [constructor].
-                * apply Forall_forall; intros r Hin.
-                  apply reg_used_in_code_in_all_regs_list.
-                  rewrite Forall_forall in Hargs; intuition.
+              + eapply res2_not_in_args1 with (l := fun_regs_list f);
+                  eauto; try reg_used1; reg_used2.
+              + eapply res3_not_in_args1 with (l := fun_regs_list f);
+                  eauto; try reg_used1; reg_used2.
             - apply star_refl.
             - reflexivity. }
           reflexivity.
@@ -1894,18 +1869,12 @@ Section PRESERVATION.
             repeat split.
             - rewrite 2!PMap.gss; reflexivity.
             - rewrite PMap.gss, PMap.gso.
-              2: { symmetry; eapply rm_wf_neq_1_2; eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor]. }
+              2: { symmetry; eapply rm_wf_neq_1_2; eauto; reg_used1. }
               rewrite PMap.gso.
-              2: { eapply rm_wf_neq_2_3; eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor]. }
+              2: { eapply rm_wf_neq_2_3; eauto; reg_used1. }
               rewrite PMap.gss; reflexivity.
             - rewrite PMap.gss, PMap.gso.
-              2: { symmetry; eapply rm_wf_neq_1_3; eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor]. }
+              2: { symmetry; eapply rm_wf_neq_1_3; eauto; reg_used1. }
               rewrite PMap.gss; reflexivity. }
           { assert (Hdstused: reg_used_in_code c dst).
             { eexists; eexists; split; eauto; apply reg_used_Iload_res. }
@@ -1923,24 +1892,18 @@ Section PRESERVATION.
               2: { intro HC; subst.
                    specialize (RM_INV _ _ _ Hr1 Hused); intuition. }
               rewrite PMap.gso.
-              2: { eapply rm_wf_neq_2_3' with (r1 := dst); eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor].
-                   - apply reg_used_in_all_regs_list; auto. }
+              2: { eapply rm_wf_neq_2_3' with (r1 := dst); eauto; try reg_used1.
+                   apply reg_used_in_all_regs_list; auto. }
               rewrite PMap.gso.
-              2: { eapply rm_wf_neq_2_2 with (r1 := dst); eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor].
-                   - apply reg_used_in_all_regs_list; auto. }
+              2: { eapply rm_wf_neq_2_2 with (r1 := dst); eauto; try reg_used1.
+                   apply reg_used_in_all_regs_list; auto. }
               specialize (REGS _ _ _ Hr1 Hused); intuition.
             - rewrite 2!PMap.gso; auto.
               2: { intro HC; subst.
                    specialize (RM_INV _ _ _ Hr1 Hused); intuition. }
               rewrite PMap.gso.
-              2: { eapply rm_wf_neq_3_3 with (r1 := dst); eauto.
-                   - eapply reg_used_in_code_in_all_regs_list.
-                     eexists; eexists; split; eauto; solve [constructor].
-                   - apply reg_used_in_all_regs_list; auto. }
+              2: { eapply rm_wf_neq_3_3 with (r1 := dst); eauto; try reg_used1.
+                   apply reg_used_in_all_regs_list; auto. }
               rewrite PMap.gso.
               2: { symmetry.
                    eapply rm_wf_neq_2_3' with (r1 := r1); eauto.
@@ -1949,8 +1912,7 @@ Section PRESERVATION.
               specialize (REGS _ _ _ Hr1 Hused); intuition. }
 
     - (* exec_Istore *)
-      inv Hmatch.
-      inv FUN; simpl in *.
+      inv Hmatch; inv FUN; simpl in *.
       set (f := {| fn_sig := sig
                  ; fn_params := params
                  ; fn_stacksize := stacksize
@@ -2396,9 +2358,7 @@ Section PRESERVATION.
           right; auto.
 
     - (* exec_function_internal *)
-      inv Hmatch.
-      inv FUN; simpl in *.
-      inv FUN0; simpl in *.
+      inv Hmatch; inv FUN; inv FUN0; simpl in *.
       eexists; split.
       + econstructor.
         * apply exec_function_internal; eauto.
@@ -2427,8 +2387,7 @@ Section PRESERVATION.
             rewrite WT_ARGS; reflexivity. }
 
     - (* exec_function_external *)
-      inv Hmatch.
-      inv FUN; simpl in *.
+      inv Hmatch; inv FUN; simpl in *.
       eexists; split.
       + econstructor.
         * apply exec_function_external.
@@ -2440,8 +2399,7 @@ Section PRESERVATION.
         eapply external_call_well_typed; eauto.
 
     - (* exec_return *)
-      inv Hmatch.
-      inv STACKS.
+      inv Hmatch; inv STACKS.
       destruct tf; simpl in *.
       eexists; split.
       + econstructor.
