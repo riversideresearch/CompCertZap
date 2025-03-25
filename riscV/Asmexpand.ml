@@ -156,7 +156,7 @@ let expand_annot_val kind txt targ args res =
 
 let offset_in_range ofs =
   let ofs = Z.to_int64 ofs in -2048L <= ofs && ofs < 2048L
-  
+
 let memcpy_small_arg sz arg tmp =
   match arg with
   | BA (IR r) ->
@@ -485,7 +485,7 @@ let expand_clz ~sixtyfour ~splitlong =
   (* N := bitsize of X's type (32 or 64) *)
   expand_loadimm32 X7 (coqint_of_camlint
                          (if sixtyfour || splitlong then 64l else 32l));
-  (* S := initial shift amount (16 or 32) *)                         
+  (* S := initial shift amount (16 or 32) *)
   expand_loadimm32 X8 (coqint_of_camlint (if sixtyfour then 32l else 16l));
   if splitlong then begin
     (* if (Xhigh == 0) goto lbl1 *)
@@ -526,7 +526,7 @@ let expand_ctz ~sixtyfour ~splitlong =
   (* N := bitsize of X's type (32 or 64) *)
   expand_loadimm32 X7 (coqint_of_camlint
                          (if sixtyfour || splitlong then 64l else 32l));
-  (* S := initial shift amount (16 or 32) *)                         
+  (* S := initial shift amount (16 or 32) *)
   expand_loadimm32 X8 (coqint_of_camlint (if sixtyfour then 32l else 16l));
   if splitlong then begin
     (* if (Xlow == 0) goto lbl1 *)
@@ -564,6 +564,9 @@ let maj_vote
       (mov : 'a -> 'a -> instruction)
       (cmp_j : 'a -> 'a -> label -> instruction list)
       (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+  if a == b || a == c || b == c then begin
+    raise (Error "ill-formed majority vote")
+  end;
   let lbl_done = new_label () in
   let lbl_fix = new_label () in
   side_emit (Plabel lbl_fix);
