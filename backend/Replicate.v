@@ -35,10 +35,105 @@ Require Import
   RTL
   RTLgen
   RTLtyping
+  Lattice
+  Kildall
 .
 Import ListNotations.
 
-Local Open Scope string_scope.
+(** ** Static analysis to find registers that may be used before they are defined *)
+
+(**
+We use a forward dataflow analysis to approximate the set of registers
+defined at each point in a function.
+
+A register may be undefined at point <<n>> if it is undefined at any
+predecessor node for <<n>> in the control flow graph.
+
+Accordingly, lattice elements are sets of (defined) registers where
+the upper bound of two sets is their intersection. The lattice's order
+is reverse inclusion. Its bottom element is the set of all registers.
+
+TODO: We should dispense with <<Regiset>> using lattice <<option
+Regset.t>> letting <<None>> take the place of <<Regiset.top>>.
+Kildall's algorithm uses the bottom element as an initial value but
+upon termination, it produces only elements that have been hit with
+the upper bound operation.
+*)
+
+Module DLat <: SEMILATTICE.
+  Definition t := Regiset.t.
+  Definition eq : t -> t -> Prop := Regiset.Equal.
+  Definition beq : t -> t -> bool := Regiset.equal.
+  Definition ge : t -> t -> Prop := Regiset.Subset.
+  Definition bot : t := Regiset.top.
+  Definition lub : t -> t -> t := Regiset.inter.
+  Definition eq_refl : forall x, eq x x := Regiset.eq_refl.
+  Definition eq_sym : forall x y, eq x y -> eq y x := Regiset.eq_sym.
+  Definition eq_trans : forall x y z, eq x y -> eq y z -> eq x z := Regiset.eq_trans.
+  Definition beq_correct : forall x y, beq x y = true -> eq x y := Regiset.equal_2.
+  Definition ge_refl : forall x y, eq x y -> ge x y := Regiset.subset_equal.
+  Definition ge_trans : forall x y z, ge x y -> ge y z -> ge x z := Regiset.subset_trans.
+  Definition ge_bot : forall x, ge x bot := Regiset.subset_top.
+  Definition ge_lub_left : forall x y, ge (lub x y) x := Regiset.inter_subset_1.
+  Definition ge_lub_right : forall x y, ge (lub x y) y := Regiset.inter_subset_2.
+End DLat.
+Module DS := Dataflow_Solver(DLat)(NodeSetForward).
+
+Notation reg_defined := Regiset.add (only parsing).
+
+Fixpoint reg_list_defined (rs : list reg) (D : Regiset.t) : Regiset.t :=
+  match rs with
+  | nil => D
+  | r :: rs => reg_list_defined rs (reg_defined r D)
+  end.
+
+Definition transfer (f: function) (pc: node) (D: Regiset.t) : Regiset.t :=
+  match f.(fn_code)!pc with
+  | None => D
+  | Some i =>
+    match instr_defs i with
+    | Some r => reg_defined r D
+    | None => D
+    end
+  end.
+
+(**
+Our initial approximation for the function's entry point is the set of
+its parameter registers. This ensures---together with the lattice's
+upper bound operation---that we assign only finite sets of registers
+to program points.
+*)
+
+Definition params_defined (f : function) : Regiset.t :=
+  reg_list_defined f.(fn_params) Regiset.empty.
+
+Definition analyze (f: function) : option (PMap.t Regiset.t) :=
+  DS.fixpoint f.(fn_code) successors_instr (transfer f)
+    f.(fn_entrypoint) (params_defined f).
+
+(**
+Registers that may be used uninitialized.
+*)
+
+Definition uregs_reg (D : Regiset.t) (U : Regset.t) (r : reg) : Regset.t :=
+  if Regiset.mem r D then U else Regset.add r U.
+Definition uregs_instr (def : PMap.t Regiset.t)
+    (U : Regset.t) (pc : node) (i : instruction) : Regset.t :=
+  fold_left (uregs_reg (def!!pc)) (instr_uses i) U.
+Definition uregs_code (def : PMap.t Regiset.t) (c : code) (U : Regset.t) : Regset.t :=
+  PTree.fold (uregs_instr def) c U.
+Definition uregs_function (f : function) : mon (list reg) :=
+  match analyze f with
+  | Some def => ret (Regset.elements (uregs_code def f.(fn_code) Regset.empty))
+  | None =>
+    error (msg "cannot compute registers that may be used uninitialized")
+  end.
+
+(**
+A replication map sends each register to a pair of corresponding
+shadow registers.
+*)
+Definition replmap : Type := Regmap.t (reg * reg).
 
 Definition smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
@@ -47,7 +142,7 @@ Definition smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   | Tsingle => Some ("__smove_single", BI_smove_single)
   | Tfloat => Some ("__smove_float", BI_smove_float)
   | _ => None
-  end.
+  end%string.
 
 Definition smove (ty : typ) (src dst : reg)
   : option (node -> instruction) :=
@@ -65,7 +160,7 @@ Definition maj_vote_sig_of_typ (ty : typ) : option (string * replicate_builtin) 
   | Tsingle => Some ("__vote_single", BI_vote_single)
   | Tfloat => Some ("__vote_float", BI_vote_float)
   | _ => None
-  end.
+  end%string.
 
 Definition maj_vote_of_typ (ty : typ) (r1 r2 r3 : reg)
   : option (node -> instruction) :=
@@ -102,7 +197,7 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
     should begin. Reserves and returns the node at which subsequent
     instructions should continue. *)
 Fixpoint maj_vote_regs
-  (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
+  (re : regenv) (rm : replmap) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
@@ -192,7 +287,7 @@ Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
 (** Insert instructions at [pc] to move contents of [r] to its shadow
     copies and then jump to [succ]. *)
 Definition copy_to_shadows
-  (rm : PMap.t (reg * reg)) (ty : typ) (r1 : reg) (pc : node) (succ : node)
+  (rm : replmap) (ty : typ) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
   let (r2, r3) := rm # r1 in
   match (smove ty r1 r2, smove ty r1 r3) with
@@ -205,7 +300,7 @@ Definition copy_to_shadows
   end.
 
 Fixpoint copy_all_to_shadows
-  (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node)
+  (re : regenv) (rm : replmap) (rs : list reg) (succ : node)
   : mon node :=
   match rs with
   | [] => ret succ
@@ -220,7 +315,7 @@ Fixpoint copy_all_to_shadows
     original function. [rm] (the replication map) maps registers to
     their corresponding shadow registers. *)
 Definition transf_instr
-  (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * instruction)
+  (re : regenv) (rm : replmap) (ni : node * instruction)
   : mon unit :=
   let (pc, instr) := ni in
   match instr with
@@ -301,12 +396,18 @@ Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
   end.
 
 (** Transform function code by transforming the instructions. *)
-Definition transf_code (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
+Definition transf_code (re : regenv) (rm : replmap) (c : code)
   : mon unit :=
   iterM (transf_instr re rm) (PTree.elements c).
 
 (** Sets of positives. *)
-Module PSet := FSetAVL.Make(OrderedPositive).
+(*
+TODO: Switch to <<Regset>> everywhere.
+*)
+Module PSet.
+  Include FSetAVL.Make(OrderedPositive).
+  Include FSetDecide.Decide.
+End PSet.
 
 Definition PSet_of_list (l : list positive) : PSet.t  :=
   fold_right (fun acc p => PSet.add acc p) PSet.empty l.
@@ -319,7 +420,7 @@ Definition PSet_of_option (x : option positive) : PSet.t :=
 
 (** All registers that appear in an instruction (arguments or
     destination). *)
-(* TODO: relate to instr_uses and instr_defined? *)
+(* TODO: Relate to <<instr_uses>>, <<instr_defined>>. *)
 Definition instr_regs (i : instruction) : PSet.t :=
   match i with
   | Inop _ => PSet.empty
@@ -369,15 +470,21 @@ Definition max_reg (regs : PSet.t) :=
   | None => 1%positive
   end.
 
-(** Build replication map (mapping each register to a pair of
-    corresponding shadow registers) for a function with parameters
+(** Build replication map for a function with parameters
     [params] and code body [c]. *)
-Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
+Definition replication_map (f : function) : mon replmap :=
   foldM (fun rm r1 =>
            do r2 <- new_reg;
            do r3 <- new_reg;
            ret (PMap.set r1 (r2, r3) rm)
     ) (fun_regs_list f) (PMap.init (xH, xH)).
+
+Definition prologue_copies (params uregs : list reg) : list reg :=
+  (*
+  A function's prologue copies its parameters (predictable) before any
+  possibly uninitialized registers (not).
+  *)
+  rev_append uregs (rev params).
 
 (** Generate fault-tolerant version of function [f]. [re] should be
     the typing context that resulted from typechecking [f].
@@ -393,7 +500,8 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
 Definition transf_fun (re : regenv) (f : function)
   : mon node :=
   do rm <- replication_map f;
-  do entry_point <- copy_all_to_shadows re rm f.(fn_params) f.(fn_entrypoint);
+  do uregs <- uregs_function f;
+  do entry_point <- copy_all_to_shadows re rm (prologue_copies f.(fn_params) uregs) f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
 
@@ -413,11 +521,13 @@ Program Definition init_state (f : function) : state :=
 Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
   match transf_fun re f (init_state f) with
   | Error err => Errors.Error err
-  | OK entrypoint s _ => Errors.OK {| fn_sig := f.(fn_sig);
-                                    fn_params := f.(fn_params);
-                                    fn_stacksize := f.(fn_stacksize);
-                                    fn_code := s.(st_code);
-                                    fn_entrypoint := entrypoint; |}
+  | OK entrypoint s _ => Errors.OK {|
+    fn_sig := f.(fn_sig);
+    fn_params := f.(fn_params);
+    fn_stacksize := f.(fn_stacksize);
+    fn_code := s.(st_code);
+    fn_entrypoint := entrypoint;
+  |}
   end.
 
 (** Transform a function [f]:
@@ -434,6 +544,3 @@ Definition transf_fundef (fd : fundef) : Errors.res fundef :=
 
 Definition transf_program (p : program) : Errors.res program :=
   transform_partial_program transf_fundef p.
-
-(* Definition transf_program (p : program) : Errors.res program := *)
-(*   Errors.OK p. *)
