@@ -1,5 +1,7 @@
 (** * Relational specificaton of the TMR transformation. *)
 
+Require Import Coq.Classes.Morphisms.
+Require Import Coq.Sorting.Permutation.
 Require Import
   AST
   Coqlib
@@ -65,18 +67,202 @@ Ltac state_incr_inv :=
   | [ H: state_incr ?s1 ?s2 |- _ ] => inv H
   end.
 
-Definition rm_wf (rm : PMap.t (reg * reg)) (l : list positive) : Prop :=
-  forall r1 r2 r3,
-    In r1 l ->
-    PMap.get r1 rm = (r2, r3) ->
-    NoDup [r1; r2; r3] /\
-      forall r1' r2' r3',
-        In r1' l ->
-        r1 <> r1' ->
-        PMap.get r1' rm = (r2', r3') ->
-        NoDup [r1; r2; r3; r1'; r2'; r3'].
+(**
+<<rm_wf rm dom>> imposes an invariant on the restriction of
+replication map <<rm>> to domain <<dom>>. Roughly, it means all
+registers in the codomain are "fresh".
+*)
+Section rm_wf.
+  Context {rm : replmap} {dom : list reg}.
+  Notation R2 r1 := (fst (rm # r1)).
+  Notation R3 r1 := (snd (rm # r1)).
 
-Inductive rm_l (rm : PMap.t (reg * reg))
+  Record rm_wf : Prop := {
+    rm_wf_nodup_1 r1 : In r1 dom -> NoDup [r1; R2 r1; R3 r1];
+    rm_wf_nodup_2 r1 r1' : r1 <> r1' -> In r1 dom -> In r1' dom ->
+      NoDup [r1; R2 r1; R3 r1; r1'; R2 r1'; R3 r1'];
+  }.
+End rm_wf.
+#[global] Arguments rm_wf : clear implicits.
+
+Create HintDb rm_wf discriminated.
+
+Create HintDb symmetry discriminated.
+Global Hint Extern 1000 (_ <> _) => symmetry : symmetry.
+
+Section sep_1.
+  Context {rm dom} (Hrm : rm_wf rm dom).
+  Context (r1 : reg) (Hin : In r1 dom).
+  Notation r2 := (fst (rm # r1)).
+  Notation r3 := (snd (rm # r1)).
+
+  Ltac proof :=
+    generalize (rm_wf_nodup_1 Hrm _ Hin);
+    rewrite !NoDup_cons_iff; clear; firstorder.
+  Lemma rm_wf_ne_12 : r1 <> r2.
+  Proof. proof. Qed.
+  Lemma rm_wf_ne_13 : r1 <> r3.
+  Proof. proof. Qed.
+  Lemma rm_wf_ne_23 : r2 <> r3.
+  Proof. proof. Qed.
+End sep_1.
+#[global] Hint Resolve
+  rm_wf_ne_12 rm_wf_ne_23 rm_wf_ne_13
+: rm_wf.
+
+(**
+Here and elsewhere we restate things with redundant assumptions <<rm #
+r1 = (r2, r3)>> to facilitate proofs which need to <<destruct>> such
+pairs. (We could perhaps make such <<destruct>>s optional by switching
+from pairs to a dedicated record type with primitive projections.)
+*)
+Section sep_1_get.
+  Context {rm dom} (Hrm : rm_wf rm dom).
+  Context (r1 : reg) (Hin : In r1 dom).
+  Context (r2 r3 : reg) (Hget : rm # r1 = (r2, r3)).
+
+  Tactic Notation "lift" open_constr(lem) :=
+    generalize (lem Hrm _ Hin); now rewrite Hget.
+  Lemma rm_wf_ne_12_get : r1 <> r2.
+  Proof. lift rm_wf_ne_12. Qed.
+  Lemma rm_wf_ne_13_get : r1 <> r3.
+  Proof. lift rm_wf_ne_13. Qed.
+  Lemma rm_wf_ne_23_get : r2 <> r3.
+  Proof. lift rm_wf_ne_23. Qed.
+End sep_1_get.
+#[global] Hint Resolve
+  rm_wf_ne_12_get rm_wf_ne_13_get rm_wf_ne_23_get
+: rm_wf.
+
+Section sep_2.
+  Context {rm dom} (Hrm : rm_wf rm dom).
+  Context (r1 : reg) (Hin : In r1 dom).
+  Context (r1' : reg) (Hin' : In r1' dom).
+  Notation r2 := (fst (rm # r1)). Notation r3 := (snd (rm # r1)).
+  Notation r2' := (fst (rm # r1')). Notation r3' := (snd (rm # r1')).
+
+  Tactic Notation "from" open_constr(NE) :=
+    generalize (rm_wf_nodup_2 Hrm _ _ NE Hin Hin');
+    rewrite !NoDup_cons_iff; clear; firstorder.
+  Tactic Notation "lift" open_constr(lem) :=
+    let NE := fresh in
+    destruct (peq r1 r1') as [->|NE];
+    [ eapply lem; eauto
+    | from NE ].
+  Lemma rm_wf_ne_2'1 : r2' <> r1.
+  Proof. symmetry. lift rm_wf_ne_12. Qed.
+  Lemma rm_wf_ne_2'2 : r1 <> r1' -> r2' <> r2.
+  Proof. intros NE. from NE. Qed.
+  Lemma rm_wf_ne_2'3 : r2' <> r3.
+  Proof. lift rm_wf_ne_23. Qed.
+  Lemma rm_wf_ne_3'1 : r3' <> r1.
+  Proof. symmetry. lift rm_wf_ne_13. Qed.
+  Lemma rm_wf_ne_3'2 : r3' <> r2.
+  Proof. symmetry. lift rm_wf_ne_23. Qed.
+  Lemma rm_wf_ne_3'3 : r1 <> r1' -> r3' <> r3.
+  Proof. intros NE. from NE. Qed.
+End sep_2.
+#[global] Hint Resolve
+  rm_wf_ne_2'1 rm_wf_ne_2'2 rm_wf_ne_2'3
+  rm_wf_ne_3'1 rm_wf_ne_3'2 rm_wf_ne_3'3
+: rm_wf.
+
+Section sep_2_get.
+  Context {rm dom} (Hrm : rm_wf rm dom).
+  Context (r1 : reg) (Hin : In r1 dom).
+  Context (r2 r3 : reg) (Hget : rm # r1 = (r2, r3)).
+  Context (r1' : reg) (Hin' : In r1' dom).
+  Context (r2' r3' : reg) (Hget' : rm # r1' = (r2', r3')).
+
+  Tactic Notation "lift" open_constr(lem) :=
+    generalize (lem Hrm _ Hin _ Hin'); now rewrite ?Hget, ?Hget'.
+  Lemma rm_wf_ne_2'1_get : r2' <> r1.
+  Proof. lift rm_wf_ne_2'1. Qed.
+  Lemma rm_wf_ne_2'2_get : r1 <> r1' -> r2' <> r2.
+  Proof. lift rm_wf_ne_2'2. Qed.
+  Lemma rm_wf_ne_2'3_get : r2' <> r3.
+  Proof. lift rm_wf_ne_2'3. Qed.
+  Lemma rm_wf_ne_3'1_get : r3' <> r1.
+  Proof. lift rm_wf_ne_3'1. Qed.
+  Lemma rm_wf_ne_3'2_get : r3' <> r2.
+  Proof. lift rm_wf_ne_3'2. Qed.
+  Lemma rm_wf_ne_3'3_get : r1 <> r1' -> r3' <> r3.
+  Proof. lift rm_wf_ne_3'3. Qed.
+End sep_2_get.
+#[global] Hint Resolve
+  rm_wf_ne_2'1_get rm_wf_ne_2'2_get rm_wf_ne_2'3_get
+  rm_wf_ne_3'1_get rm_wf_ne_3'2_get rm_wf_ne_3'3_get
+: rm_wf.
+
+Lemma rm_wf_nil rm : rm_wf rm nil.
+Proof. split; contradiction. Qed.
+
+Lemma rm_wf_cons {rm dom} r1 r2 r3 :
+  rm_wf rm dom ->
+  NoDup [r1; r2; r3] ->
+  (
+    forall r1', r1 <> r1' -> In r1' dom ->
+    NoDup [r1; r2; r3; r1'; fst (rm # r1'); snd (rm # r1')]
+  ) ->
+  rm_wf (rm # r1 <- (r2, r3)) (r1 :: dom).
+Proof.
+  intros Hrm ? Hnodup. split.
+  { intros r [->|Hin]; [now rewrite Regmap.gss|].
+    destruct (peq r r1) as [->|?]; [now rewrite Regmap.gss|].
+    rewrite Regmap.gso; [|easy].
+    eapply rm_wf_nodup_1; eauto. }
+  { intros r s NE [->|Hin] [->|Hin'].
+    - easy.
+    - rewrite Regmap.gss, Regmap.gso; [|easy]. simpl.
+      now apply Hnodup.
+    - rewrite Regmap.gss, Regmap.gso; [|easy]. simpl.
+      apply not_eq_sym in NE. generalize (Hnodup _ NE Hin).
+      rewrite !NoDup_cons_iff. clear. firstorder.
+    - destruct (peq r r1) as [->|?], (peq s r1) as [->|?].
+      + contradiction.
+      + rewrite Regmap.gss, Regmap.gso; [|easy]. simpl.
+        now apply Hnodup.
+      + rewrite Regmap.gso, Regmap.gss; [|easy]. simpl.
+        apply not_eq_sym in NE. generalize (Hnodup _ NE Hin).
+        rewrite !NoDup_cons_iff. clear. firstorder.
+      + rewrite Regmap.gso, Regmap.gso; [|easy..].
+        eapply rm_wf_nodup_2; eauto. }
+Qed.
+
+Lemma rm_wf_permute dom1 dom2 rm :
+  Permutation dom1 dom2 ->
+  rm_wf rm dom1 ->
+  rm_wf rm dom2.
+Proof.
+  intros P ?. split.
+  { intros r. rewrite <-P. eapply rm_wf_nodup_1; eauto. }
+  { intros r s ?. rewrite <-P. eapply rm_wf_nodup_2; eauto. }
+Qed.
+
+Lemma rm_wf_mono dom1 dom2 rm :
+  (forall r, In r dom2 -> In r dom1) ->
+  rm_wf rm dom1 ->
+  rm_wf rm dom2.
+Proof.
+  intros D ?. split.
+  { intros r ?%D. eapply rm_wf_nodup_1; eauto. }
+  { intros r s NE ?%D ?%D. eapply rm_wf_nodup_2; eauto. }
+Qed.
+
+Lemma rm_wf_cons_inv r1 dom rm :
+  rm_wf rm (r1 :: dom) ->
+  rm_wf rm dom.
+Proof. apply rm_wf_mono. intros ??. now right. Qed.
+#[global] Hint Resolve rm_wf_cons_inv : rm_wf.
+
+#[global] Instance: Params (@rm_wf) 1 := {}.
+#[global] Instance rm_wf_permute' rm :
+  Proper (Permutation (A:=reg) ==> iff) (rm_wf rm).
+Proof.
+  intros dom1 dom2 P. split; now apply rm_wf_permute.
+Qed.
+
+Inductive rm_l (rm : replmap)
   : list reg -> list reg -> list reg -> Prop :=
 | match_nil : rm_l rm [] [] []
 | match_cons : forall r1 r2 r3 rs1 rs2 rs3,
@@ -135,7 +321,7 @@ Ltac smoveR_inv :=
   | [H: smoveR _ _ _ _ _ _ _ |- _ ] => inv H
   end.
 
-Inductive copy_allR re rm c : list reg -> node -> node -> Prop :=
+Inductive copy_allR (re : regenv) (rm : replmap) (c : code) : list reg -> node -> node -> Prop :=
 | copy_all_nil :
   forall n,
     copy_allR re rm c [] n n
@@ -147,7 +333,7 @@ Inductive copy_allR re rm c : list reg -> node -> node -> Prop :=
     copy_allR re rm c (r1 :: rs) n succ.
 
 Lemma copy_to_shadows_smoveR
-  (rm : Regmap.t (reg * reg)) (ty : typ) (r1 r2 r3 : reg) (pc succ : node)
+  (rm : replmap) (ty : typ) (r1 r2 r3 : reg) (pc succ : node)
   (u : unit) (s0 s1 : RTLgen.state) pf (c : code) :
   rm # r1 = (r2, r3) ->
   pc < s0.(st_nextnode) ->
@@ -216,7 +402,7 @@ Qed.
     instruction [i] in the original program, wrt. register environment
     [regenv] and replication map [rm]. *)
 Inductive match_instr
-  (re : regenv) (rm : PMap.t (reg * reg)) (c : code) (pc : positive)
+  (re : regenv) (rm : replmap) (c : code) (pc : positive)
   : instruction -> Prop :=
 | match_Inop :
   forall n,
@@ -293,8 +479,27 @@ Inductive match_instr
 (** [match_code re rm c c'] when for every instruction [i] at location
     [pc] in the original code [c], there is a matching code sequence
     at [pc] in the translated code [c'].*)
-Definition match_code (re : regenv) (rm : PMap.t (reg * reg)) (c c': code) : Prop :=
+Definition match_code (re : regenv) (rm : replmap) (c c': code) : Prop :=
   forall p i, c ! p = Some i -> match_instr re rm c' p i.
+
+Section regs_of_builtin_args.
+  Lemma params_of_builin_arg_regs_of_builtin_arg r a :
+    In r (params_of_builtin_arg a) ->
+    In r (regs_of_builtin_arg a).
+  Proof.
+    revert r. induction a; simpl; auto.
+    all: intros r; rewrite !in_app_iff; firstorder.
+  Qed.
+  Local Hint Resolve params_of_builin_arg_regs_of_builtin_arg : core.
+
+  Lemma params_of_builtin_args_regs_of_builtin_args r args :
+    In r (params_of_builtin_args args) ->
+    In r (regs_of_builtin_args args).
+  Proof.
+    induction args; simpl; auto.
+    rewrite !in_app_iff. firstorder.
+  Qed.
+End regs_of_builtin_args.
 
 Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
 | reg_used_Iop_args : forall op args res succ,
@@ -337,27 +542,58 @@ Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
 | reg_used_Ireturn :
   reg_used_in_instr r (Ireturn (Some r)).
 
+Section reg_used_in_instr.
+  Local Hint Constructors reg_used_in_instr : core.
+  Local Hint Resolve params_of_builtin_args_regs_of_builtin_args : core.
+
+  Lemma instr_uses_reg_used_in_instr r i :
+    In r (instr_uses i) -> reg_used_in_instr r i.
+  Proof.
+    destruct i; simpl; intros Hr.
+    all: repeat lazymatch goal with
+    | H : False |- _ => contradiction
+    | H : (_ = _) \/ _ |- _ => destruct H as [->|?]
+    | H : reg + ident |- _ => destruct H; simpl in Hr
+    | H : option reg |- _ => destruct H; simpl in Hr
+    | _ => auto
+    end.
+  Qed.
+End reg_used_in_instr.
+
 Definition reg_used_in_code (c : code) (r : reg) : Prop :=
   exists pc instr,
     c! pc = Some instr /\ reg_used_in_instr r instr.
+
+Lemma instr_uses_reg_used_in_code c pc i :
+  c!pc = Some i ->
+  Forall (reg_used_in_code c) (instr_uses i).
+Proof.
+  intros. apply Forall_forall. intros r ?%instr_uses_reg_used_in_instr.
+  firstorder.
+Qed.
 
 (** A register is 'used' in a function whenever it either appears in
     the function's parameter list or is used somewhere in its code. *)
 Definition reg_used (params : list reg) (c : code) (r : reg) : Prop :=
   In r params \/ reg_used_in_code c r.
 
-(** Replication map invariant. Asserts that shadow registers in the
-    translated function do not appear in the parameters or code of the
-    original function. *)
-Definition rm_inv
-  (params : list reg) (c : code) (rm : PMap.t (reg * reg)) : Prop :=
-  forall (r1 r2 r3 : reg),
-    rm # r1 = (r2, r3) ->
-    reg_used params c r1 ->
-    ~ In r2 params /\
-      ~ In r3 params /\
-      ~ reg_used_in_code c r2 /\
-      ~ reg_used_in_code c r3.
+Lemma reg_used_in_params_used params c r :
+  In r params -> reg_used params c r.
+Proof. now left. Qed.
+Lemma reg_used_in_code_used params c r :
+  reg_used_in_code c r -> reg_used params c r.
+Proof. now right. Qed.
+
+#[global] Hint Resolve
+  reg_used_in_params_used
+  reg_used_in_code_used
+: rm_wf.
+
+Lemma reg_used_params params c :
+  Forall (reg_used params c) params.
+Proof.
+  unfold reg_used; apply Forall_forall; auto.
+Qed.
 
 Lemma reg_used_cons p params c r :
   reg_used params c r ->
@@ -368,22 +604,108 @@ Proof.
   - right; auto.
 Qed.
 
-Lemma rm_inv_cons p params c rm :
-  rm_inv (p :: params) c rm ->
-  rm_inv params c rm.
+Lemma reg_used_cons_inv p ps c r :
+  reg_used (p :: ps) c r -> r = p \/ reg_used ps c r.
 Proof.
-  unfold rm_inv.
-  intros Hrm r1 r2 r3 Hr1 Hused.
-  specialize (Hrm r1 r2 r3 Hr1 (reg_used_cons _ _ _ _ Hused)).
-  firstorder.
+  destruct 1 as [Hused|Hused].
+  { destruct Hused as [->|?]. now left. now right; left. }
+  { now right; right. }
 Qed.
 
+(**
+<<rm_inv U rm>> imposes an invariant on replication map <<rm>>.
+Roughly, it says the map sends used registers (i.e., satisfying <<U>>)
+to unused registers.
+*)
+Record rm_inv {U : reg -> Prop} {rm : replmap} : Prop := {
+  rm_used_2 r1 : U r1 -> ~ U (fst (rm # r1));
+  rm_used_3 r1 : U r1 -> ~ U (snd (rm # r1));
+}.
+#[global] Arguments rm_inv : clear implicits.
+
+Create HintDb rm_inv discriminated.
+
+Section used_get.
+  Context {U rm} (Hrm : rm_inv U rm).
+  Context (r1 : reg) (Hused : U r1).
+  Context (r2 r3 : reg) (Hget : rm # r1 = (r2, r3)).
+
+  Lemma rm_used_2_get : ~ U r2.
+  Proof. generalize (rm_used_2 Hrm _ Hused). now rewrite Hget. Qed.
+  Lemma rm_used_3_get : ~ U r3.
+  Proof. generalize (rm_used_3 Hrm _ Hused). now rewrite Hget. Qed.
+End used_get.
+#[global] Hint Resolve
+  rm_used_2_get rm_used_3_get
+  reg_used_in_params_used
+  reg_used_in_code_used
+: rm_inv.
+
+Section sep.
+  Context {U rm} (Hrm : rm_inv U rm).
+  Context (r1 : reg) (Hused : U r1).
+  Notation r2 := (fst (rm # r1)).
+  Notation r3 := (snd (rm # r1)).
+
+  Tactic Notation "from" open_constr(lem) :=
+    generalize (lem Hrm _ Hused); intros ?? ->; auto.
+  Lemma rm_inv_ne_2 r : U r -> r <> r2.
+  Proof. from rm_used_2. Qed.
+  Lemma rm_inv_ne_3 r : U r -> r <> r3.
+  Proof. from rm_used_3. Qed.
+End sep.
+#[global] Hint Resolve rm_inv_ne_2 rm_inv_ne_3 : rm_inv.
+
+Section sep_get.
+  Context {U rm} (Hrm : rm_inv U rm).
+  Context (r1 : reg) (Hused : U r1).
+  Context (r2 r3 : reg) (Hget : rm # r1 = (r2, r3)).
+  Context (r : reg) (Hr : U r).
+
+  Tactic Notation "lift" open_constr(lem) :=
+    generalize (lem Hrm _ Hused _ Hr); rewrite Hget; auto.
+  Lemma rm_inv_ne_2_get : r <> r2.
+  Proof. lift rm_inv_ne_2. Qed.
+  Lemma rm_inv_ne_3_get : r <> r3.
+  Proof. lift rm_inv_ne_3. Qed.
+End sep_get.
+#[global] Hint Resolve
+  rm_inv_ne_2_get rm_inv_ne_3_get
+: rm_inv.
+
+(** Possibly uninitialized registers *)
+
+Create HintDb uregs_ok discriminated.
+
+Record uregs_ok (c : code) (params : list reg) (uregs : list reg) : Prop := {
+  uregs_ok_nodup : NoDup uregs;
+  uregs_ok_params : list_disjoint params uregs;
+  uregs_ok_code r : In r uregs -> reg_used_in_code c r;
+}.
+
+Lemma uregs_ok_nodup_params_uregs c params uregs :
+  uregs_ok c params uregs ->
+  NoDup params ->
+  NoDup (params ++ uregs).
+Proof.
+  intros [HDu HD _] HDp. induction params as [|p params IH]; simpl; auto.
+  rewrite NoDup_cons_iff in HDp. destruct HDp.
+  constructor.
+  { intros [?|Hp]%in_app_or; auto.
+    apply list_disjoint_sym in HD.
+    apply (list_disjoint_notin _ HD Hp).
+    now left. }
+  apply IH; auto. eapply list_disjoint_cons_left; eauto.
+Qed.
+#[global] Hint Resolve uregs_ok_nodup_params_uregs : uregs_ok.
+
 Inductive match_function re rm : function -> function -> Prop :=
-| match_fun : forall sig params stacksize c c' entrypoint entrypoint'
-                (RM_WF: rm_wf rm (all_regs_list params c))
-                (RM_INV: rm_inv params c rm)
-                (CODE: match_code re rm c c')
-                (COPY: copy_allR re rm c' params entrypoint' entrypoint),
+| match_fun : forall sig params uregs stacksize c c' entrypoint entrypoint'
+  (RM_WF: rm_wf rm (all_regs_list params c))
+  (RM_INV: rm_inv (reg_used params c) rm)
+  (CODE: match_code re rm c c')
+  (UREGS : uregs_ok c params uregs)
+  (COPY: copy_allR re rm c' (prologue_copies params uregs) entrypoint' entrypoint),
     match_function re rm
       ({|
           fn_sig := sig
@@ -617,7 +939,7 @@ Lemma maj_voteR_ptree_set c ty r1 r2 r3 pc succ n i :
 Proof.
   intros Hc Hmaj; inv Hmaj.
   econstructor; eauto.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+  destruct (peq n pc);
     subst; try congruence.
   rewrite PTree.gso; eauto.
 Qed.
@@ -641,9 +963,9 @@ Lemma smoveR_ptree_set c ty r1 r2 r3 pc succ n i :
 Proof.
   intros Hc Hmove; inv Hmove.
   econstructor; eauto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+  - destruct (peq n pc);
       subst; try congruence; rewrite PTree.gso; eauto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n n0);
+  - destruct (peq n n0);
       subst; try congruence; rewrite PTree.gso; eauto.
 Qed.
 
@@ -902,29 +1224,30 @@ Proof.
 Qed.
 
 Lemma transf_fun_code_matches
-  rm (f : function) (re : regenv) entrypoint s s1 s' pf pf1 :
+  rm uregs (f : function) (re : regenv) entrypoint s s1 s' s2 pf pf1 pf2 :
   transf_fun re f s = RTLgen.OK entrypoint s' pf ->
-  (* replication_map f s = RTLgen.OK rm s1 pf1 -> *)
   replication_map f s = RTLgen.OK rm s1 pf1 ->
+  uregs_function f s1 = RTLgen.OK uregs s2 pf2 ->
   (forall p i, (fn_code f) ! p = Some i -> p < st_nextnode s) ->
   match_code re rm f.(fn_code) s'.(st_code).
 Proof.
-  intros Hf Hrm Hlt.
+  intros Hf Hrm Huregs Hlt.
   unfold transf_fun in Hf.
   apply bind_inversion in Hf.
-  destruct Hf as (rm' & s1' & pf0 & pf1' & Hrm' & Hf).
-  rewrite Hrm' in Hrm; inv Hrm.
+  destruct Hf as (rm' & ?s & pf0 & pf1' & Hrm' & Hf).
+  rewrite Hrm' in Hrm; inv Hrm; clear Hrm' pf0.
   apply bind_inversion in Hf.
-  destruct Hf as (n0 & s2 & pf2 & pf3 & Hparams & Hf).
+  destruct Hf as (uregs' & ?s & pf0 & pf2' & Huregs' & Hf).
+  rewrite Huregs' in Huregs; inv Huregs; clear Huregs' pf0.
   apply bind_inversion in Hf.
-  destruct Hf as ([] & s3 & pf4 & pf5 & Hf & Hret).
+  destruct Hf as (?n & ?s & ?pf & ?pf & _ & Hf).
+  apply bind_inversion in Hf.
+  destruct Hf as ([] & ?s & ?pf & ?pf & Hf & Hret).
   inv Hret.
-  apply transf_code_code_matches in Hf; auto.
-  intros p i Hpi.
-  clear Hparams.
-  inv pf1; inv pf2.
-  unfold Ple in *.
-  specialize (Hlt p i Hpi); lia.
+  apply transf_code_code_matches in Hf; auto. clear Hf.
+  intros p i Hpi. specialize (Hlt _ _ Hpi).
+  repeat lazymatch goal with H : state_incr _ _ |- _ => inv H end.
+  unfold Ple in *. lia.
 Qed.
 
 Lemma lt_ptree_fold_max c p i :
@@ -935,7 +1258,7 @@ Proof.
   apply PTree_Properties.fold_ind; intros t Ht p i Htp.
   { specialize (Ht p); congruence. }
   intros Hcp HI p' i' Htp'.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec p p'); subst.
+  destruct (peq p p'); subst.
   { lia. }
   assert (H: (PTree.remove p t) ! p' = Some i').
   { rewrite PTree.gro; auto. }
@@ -957,20 +1280,22 @@ Lemma lt_nextnode_init_state' p i f :
   p < st_nextnode (init_state f).
 Proof. intro Hget; eapply lt_ptree_fold_max; eauto. Qed.
 
-Lemma transf_fun'_code_matches rm (f tf : function) (re : regenv) s pf :
+Lemma transf_fun'_code_matches rm uregs (f tf : function) (re : regenv) s1 s2 pf1 pf2 :
   transf_fun' re f = OK tf ->
-  replication_map f (init_state f) = RTLgen.OK rm s pf ->
+  replication_map f (init_state f) = RTLgen.OK rm s1 pf1 ->
+  uregs_function f s1 = RTLgen.OK uregs s2 pf2 ->
   match_code re rm f.(fn_code) tf.(fn_code).
 Proof.
   unfold transf_fun'.
-  destruct (transf_fun re f (init_state f)) eqn:Hf; intros H Hrm; inv H; simpl.
+  destruct (transf_fun re f (init_state f)) eqn:Hf; intros H Hrm Huregs; inv H; simpl.
   eapply transf_fun_code_matches; eauto.
   intros; eapply lt_nextnode_init_state'; eauto.
 Qed.
 
-Lemma transf_function_code_matches rm (f tf : function) s pf :
+Lemma transf_function_code_matches rm uregs (f tf : function) s1 s2 pf1 pf2 :
   transf_function f = OK tf ->
-  replication_map f (init_state f) = RTLgen.OK rm s pf ->
+  replication_map f (init_state f) = RTLgen.OK rm s1 pf1 ->
+  uregs_function f s1 = RTLgen.OK uregs s2 pf2 ->
   exists re, match_code re rm f.(fn_code) tf.(fn_code).
 Proof.
   intro H; monadInv H.
@@ -993,20 +1318,23 @@ Qed.
    relational specification of the algorithm and factor this into 1)
    proving the code satisfies the spec and 2) proving the spec implies
    rm_wf.  *)
-Lemma replication_map_wf_aux regs acc s rm s' pf :
-  Forall (fun r => r < s.(st_nextreg)) regs ->
-  foldM
-    (fun rm r1 => do r2 <- new_reg; do r3 <- new_reg; ret rm # r1 <- (r2, r3))
-    regs acc s = RTLgen.OK rm s' pf ->
+Lemma replication_map_wf_aux regs (acc rm : replmap) s s' pf :
+  Forall (fun r1 : reg => r1 < s.(st_nextreg)) regs ->
+  foldM (fun rm (r1 : reg) =>
+    do r2 <- new_reg;
+    do r3 <- new_reg;
+    ret rm # r1 <- (r2, r3)
+  ) regs acc s = RTLgen.OK rm s' pf ->
   rm_wf rm regs /\
-    Forall (fun r1 => forall r2 r3, PMap.get r1 rm = (r2, r3) ->
-                            s.(st_nextreg) <= r2 < s'.(st_nextreg) /\
-                              s.(st_nextreg) <= r3 < s'.(st_nextreg)) regs.
+  Forall (fun r1 : reg =>
+    s.(st_nextreg) <= fst (rm # r1) < s'.(st_nextreg) /\
+    s.(st_nextreg) <= snd (rm # r1) < s'.(st_nextreg)
+  ) regs.
 Proof.
   revert acc s rm s' pf.
-  induction regs; simpl; intros acc s rm s' pf Hall H.
+  induction regs as [|r1 regs IH]; simpl; intros acc s rm s' pf Hall H.
   { split.
-    - intros r1 r2 r3 [].
+    - apply rm_wf_nil.
     - constructor. }
   unfold new_reg in H.
   unfold RTLgen.bind in H.
@@ -1016,111 +1344,47 @@ Proof.
   end.
   { inv H. }
   inv H.
-  inv Hall.
   rename t into rm.
+  generalize (Forall_inv Hall). intros Hltr. apply Forall_inv_tail in Hall.
   assert (rm_wf rm regs).
-  { eapply IHregs; eauto. }
-  assert (Forall
-            (fun r1 : positive =>
-               forall r2 r3 : reg,
-                 rm # r1 = (r2, r3) -> st_nextreg s <= r2 < st_nextreg s'0 /\
-                                        st_nextreg s <= r3 < st_nextreg s'0) regs).
-  { eapply IHregs; eauto. }
-  clear HX IHregs.
-  rewrite Forall_forall in H0.
-  rewrite Forall_forall in H2.
+  { eapply IH; eauto. }
+  assert (
+    Hrange : Forall (fun r1 : reg =>
+      st_nextreg s <= fst (rm # r1) < st_nextreg s'0 /\
+      st_nextreg s <= snd (rm # r1) < st_nextreg s'0
+    ) regs
+  ).
+  { eapply IH; eauto. }
+  clear HX IH.
+  rewrite Forall_forall in Hrange.
+  rewrite Forall_forall in Hall.
   split.
-  - intros r1 r2 r3 Hin Hr1.
-    inv s0; simpl in *; unfold Ple in *.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
-    + clear Hin.
-      rewrite PMap.gss in Hr1; inv Hr1.
-      split.
-      * constructor.
-        { intro Hin; inv Hin; try lia.
-          inv H6; try lia; inv H7. }
-        constructor.
-        { intro Hin; inv Hin; try lia; inv H6. }
-        constructor.
-        { intros []. }
-        constructor.
-      * intros r1' r2' r3' Hin Hneq Hr1'.
-        inv Hin.
-        { congruence. }
-        rewrite PMap.gso in Hr1'; auto.
-        specialize (H0 r1' H6 r2' r3' Hr1').
-        constructor.
-        { intro Hin; inv Hin; try lia.
-          inv H7; try lia.
-          inv H8; try congruence.
-          inv H7; try lia.
-          inv H8; try lia.
-          inv H7. }
-        constructor.
-        { intro Hin; inv Hin; try lia.
-          specialize (H2 r1' H6).
-          inv pf; simpl in *; unfold Ple in *.
-          inv H7; lia. }
-        constructor.
-        { intro Hin; inv Hin.
-          - specialize (H2 (Pos.succ (st_nextreg s'0)) H6); lia.
-          - inv H7; try lia.
-            inv H8; try lia.
-            inv H7. }
-        specialize (H r1' r2' r3' H6 Hr1'); intuition.
-    + destruct Hin as [? | Hin]; try congruence.
-      rewrite PMap.gso in Hr1; auto.
-      specialize (H2 r1 Hin).
-      split.
-      * specialize (H r1 r2 r3 Hin Hr1); intuition.
-      * specialize (H r1 r2 r3 Hin Hr1); destruct H as [H H'].
-        intros r1' r2' r3' Hin' Hneq Hr1'; try congruence.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1'); subst.
-        { rewrite PMap.gss in Hr1'; inv Hr1'.
-          clear Hin' n.
-          constructor.
-          { intro HC; inv HC.
-            { inv H; apply H8; left; reflexivity. }
-            inv H6.
-            { inv H; apply H8; right; left; reflexivity. }
-            inv H7; try contradiction.
-            inv H6; try lia.
-            inv H7; try lia.
-            inv H6. }
-          constructor.
-          { intro HC; inv HC.
-            { inv H; inv H9; apply H7; left; reflexivity. }
-            inv H6.
-            { specialize (H0 r1 Hin r2 r3 Hr1); lia. }
-            inv H7.
-            { specialize (H0 r1 Hin (st_nextreg s'0) r3 Hr1); lia. }
-            inv H6.
-            { specialize (H0 r1 Hin (Pos.succ (st_nextreg s'0)) r3 Hr1); lia. }
-            destruct H7. }
-          constructor.
-          { intro HC; inv HC.
-            { specialize (H0 r1 Hin r2 r3 Hr1); lia. }
-            inv H6.
-            { specialize (H0 r1 Hin r2 (st_nextreg s'0) Hr1); lia. }
-            inv H7.
-            { specialize (H0 r1 Hin r2 (Pos.succ (st_nextreg s'0)) Hr1); lia. }
-            destruct H6. }
-          constructor.
-          { intro HC; inv HC; try lia.
-            inv H6; try lia; destruct H7. }
-          constructor.
-          { intro HC; inv HC; try lia; destruct H6. }
-          constructor; auto; constructor. }
-        destruct Hin' as [? | Hin']; try contradiction.
-        rewrite PMap.gso in Hr1'; auto.
+  - inv s0; simpl in *; unfold Ple in *.
+    inv pf; simpl in *; unfold Ple in *.
+    assert (NoDup_nil_iff : forall A, NoDup (A:=A) [] <-> True).
+    { split. easy. constructor. }
+    apply rm_wf_cons.
+    + assumption.
+    + rewrite !NoDup_cons_iff, NoDup_nil_iff. simpl. lia.
+    + intros r1' NE Hin.
+      specialize (Hall _ Hin).
+      specialize (Hrange _ Hin).
+      Local Ltac invert_In :=
+        repeat match goal with
+        | H : In _ _ |- _ => inv H; first [lia | congruence | idtac]
+        end.
+      constructor; [intros ?; now invert_In|].
+      constructor; [intros ?; now invert_In|].
+      constructor; [intros ?; now invert_In|].
+      eapply rm_wf_nodup_1; eauto.
   - simpl.
-    apply Forall_forall; intros r1 Hin r2 r3 Hr1.
     inv s0; simpl in *; unfold Ple in *.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
-    { rewrite PMap.gss in Hr1; inv Hr1; lia. }
-    inv Hin; try congruence.
-    rewrite PMap.gso in Hr1; auto.
-    specialize (H0 r1 H6 r2 r3 Hr1); lia.
+    apply Forall_forall. intros r [->|Hin].
+    { rewrite Regmap.gss. simpl. lia. }
+    destruct (peq r r1) as [->|?].
+    { rewrite Regmap.gss. simpl. lia. }
+    rewrite Regmap.gso; [|easy].
+    specialize (Hrange _ Hin). lia.
 Qed.
 
 Lemma in_elements p s :
@@ -1159,17 +1423,8 @@ Lemma replication_map_wf f rm s pf :
   rm_wf rm (fun_regs_list f).
 Proof.
   intro H; eapply replication_map_wf_aux; eauto.
-  apply Forall_forall; intros r Hin.
-  apply in_lt_max_reg; auto.
-Qed.
-
-Lemma rm_wf_antimonotone rm rs1 rs2 :
-  rm_wf rm rs1 ->
-  (forall r, In r rs2 -> In r rs1) ->
-  rm_wf rm rs2.
-Proof.
-  intros Hwf Hle r1 r2 r3 Hin Hr1.
-  specialize (Hwf r1 r2 r3 (Hle _ Hin) Hr1); intuition.
+  apply Forall_forall. intros r.
+  apply in_lt_max_reg.
 Qed.
 
 Lemma in_pset_of_list p l :
@@ -1182,15 +1437,15 @@ Proof.
     + apply PSet.add_2, IHl, Hin.
   - revert p; induction l; simpl; intros p Hin.
     { inv Hin. }
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst; auto.
+    destruct (peq a p); subst; auto.
     right; apply PSet.add_3 in Hin; auto.
 Qed.
 
-Definition rm_inv_list n (regs : list reg) (rm : PMap.t (reg * reg)) : Prop :=
-  forall r1 r2 r3,
-    rm # r1 = (r2, r3) ->
+Definition rm_inv_list (min : positive) (regs : list reg) (rm : replmap) : Prop :=
+  forall r1 : reg,
     In r1 regs ->
-    n <= r2 /\ n <= r3.
+    min <= (fst (rm # r1)) /\
+    min <= (snd (rm # r1)).
 
 Lemma reg_used_fold_right p i l r :
   In (p, i) l ->
@@ -1232,14 +1487,18 @@ Proof.
 Qed.
 
 Lemma reg_used_in_all_regs_list params c r :
-  reg_used params c r ->
-  In r (all_regs_list params c).
+  reg_used params c r -> In r (all_regs_list params c).
 Proof.
   intro Hused.
   apply in_elements.
   apply reg_used_pset_in_all_regs; auto.
 Qed.
+#[global] Hint Resolve reg_used_in_all_regs_list : rm_wf.
 
+(**
+TODO: If these are equivalent, consider either proving both directions
+or eliminating one of them. If they are not equivalent, document why.
+*)
 Lemma reg_used_in_code_pset_in_code_regs c r :
   reg_used_in_code c r ->
   PSet.In r (code_regs c).
@@ -1253,59 +1512,59 @@ Proof.
   eapply reg_used_fold_right; eauto.
 Qed.
 
-Lemma rm_inv_list_rm_inv params c rm :
-  rm_inv_list (max_reg (all_regs params c) + 1) (all_regs_list params c) rm ->
-  rm_inv params c rm.
+Lemma reg_used_in_code_max_reg params c r :
+  reg_used_in_code c r ->
+  r < max_reg (all_regs params c) + 1.
 Proof.
-  intros Hrm r1 r2 r3 Hr1 Hused.
-  specialize (Hrm r1 r2 r3 Hr1 (reg_used_in_all_regs_list _ _ _ Hused)).
-  destruct Hrm as [Hr2 Hr3].
-  repeat split.
-  - intro Hin.
-    assert (r2 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
-    lia.
-  - intro Hin.
-    assert (r3 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
-    lia.
-  - intro Hin.
-    assert (r2 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, PSet.union_3.
-      apply reg_used_in_code_pset_in_code_regs; auto. }
-    lia.
-  - intro Hin.
-    assert (r3 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, PSet.union_3.
-      apply reg_used_in_code_pset_in_code_regs; auto. }
-    lia.
+  intros. apply in_lt_max_reg, in_elements, PSet.union_3.
+  apply reg_used_in_code_pset_in_code_regs; auto.
 Qed.
 
-Lemma foldM_rm_inv_list regs s s' pf rm0 rm :
-  Forall (fun r => r < s.(st_nextreg)) regs ->
-  foldM
-    (fun rm1 r1 =>
-       do r2 <- new_reg; do r3 <- new_reg; ret rm1 # r1 <- (r2, r3))
-    regs rm0 s = RTLgen.OK rm s' pf ->
+Lemma reg_used_max_reg params c r :
+  reg_used params c r ->
+  r < max_reg (all_regs params c) + 1.
+Proof.
+  destruct 1.
+  { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
+  { apply reg_used_in_code_max_reg; auto. }
+Qed.
+
+Lemma rm_inv_list_rm_inv params c rm :
+  rm_inv_list (max_reg (all_regs params c) + 1) (all_regs_list params c) rm ->
+  rm_inv (reg_used params c) rm.
+Proof.
+  intros Hrm. split; auto.
+  all: intros r1 ?%reg_used_in_all_regs_list%Hrm ?%reg_used_max_reg.
+  all: lia.
+Qed.
+
+Lemma foldM_rm_inv_list regs s s' pf (rm0 rm : replmap) :
+  Forall (fun r : reg => r < s.(st_nextreg)) regs ->
+  foldM (fun rm1 (r1 : reg) =>
+    do r2 <- new_reg;
+    do r3 <- new_reg;
+    ret rm1 # r1 <- (r2, r3)
+  ) regs rm0 s = RTLgen.OK rm s' pf ->
   rm_inv_list s.(st_nextreg) regs rm.
 Proof.
   revert pf.
   revert s s' rm0 rm.
-  induction regs; simpl; intros s s' rm0 rm pf Hlt Hfold.
-  { intros _ _ _ _ []. }
+  induction regs as [|r regs IH]; simpl; intros s s' rm0 rm pf Hlt Hfold.
+  { intros ? []. }
   inv Hlt.
   unfold RTLgen.bind in Hfold.
   repeat egen_case.
-  eapply IHregs in H; auto.
+  rename H into Hinv.
+  eapply IH in Hinv; auto. clear IH.
   inv H3; inv H5; inv H0.
   repeat state_incr_inv.
   unfold Ple in *; simpl in *.
-  intros x1 x2 x3 Hx1 Hin.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec a x1); subst.
-  - rewrite PMap.gss in Hx1; inv Hx1; split; lia.
-  - destruct Hin as [?|Hin]; try congruence.
-    rewrite PMap.gso in Hx1; auto.
-    specialize (H x1 x2 x3 Hx1 Hin); lia.
+  intros x1 Hin.
+  destruct (peq r x1) as [->|?].
+  { rewrite Regmap.gss. simpl. lia. }
+  rewrite Regmap.gso; [|easy].
+  destruct Hin as [?|Hin]; [contradiction|].
+  specialize (Hinv _ Hin). lia.
 Qed.
 
 Lemma replication_map_rm_inv' sig params stacksize c entrypoint s pf rm :
@@ -1325,7 +1584,7 @@ Lemma replication_map_rm_inv' sig params stacksize c entrypoint s pf rm :
          fn_code := c;
          fn_entrypoint := entrypoint
        |}) = RTLgen.OK rm s pf ->
-  rm_inv params c rm.
+  rm_inv (reg_used params c) rm.
 Proof.
   unfold replication_map.
   intro Hfold.
@@ -1350,6 +1609,181 @@ Proof.
   apply in_elements; auto.
 Qed.
 
+(**
+Everything we need to know about the dataflow analysis.
+*)
+Definition uregs_function_spec : Prop :=
+  forall f uregs s s' pf,
+  uregs_function f s = RTLgen.OK uregs s' pf ->
+  uregs_ok f.(fn_code) f.(fn_params) uregs.
+
+Module Type UREGS.
+  Parameter uregs_function_ok : uregs_function_spec.
+End UREGS.
+
+Module URegs <: UREGS.
+
+  Definition Forall {A} (P : A -> Prop) (m : PMap.t A) : Prop :=
+    forall pc, P (m!!pc).
+
+  Lemma reg_list_defined_mono r rs D :
+    Regiset.In r D -> Regiset.In r (reg_list_defined rs D).
+  Proof.
+    revert D. induction rs; intros; simpl; auto.
+    apply IHrs. rewrite Regiset.add_spec. now right.
+  Qed.
+
+  (** ** Proof of [uregs_ok_params] *)
+
+  (**
+  A function's parameters are included in the intermediate set <<D>>
+  of registers that are well-defined.
+  *)
+  Definition included (params : list reg) (D : Regiset.t) : Prop :=
+    forall r, In r params -> Regiset.In r D.
+
+  Lemma included_invariant f def :
+    analyze f = Some def ->
+    Forall (included f.(fn_params)) def.
+  Proof.
+    intros Hf pc. revert Hf.
+    apply DS.fixpoint_invariant; unfold included.
+    { intros r _. unfold DS.L.bot. apply Regiset.top_spec. }
+    { intros. unfold DS.L.lub. rewrite Regiset.inter_spec. auto. }
+    { intros ?pc i ?D Hi Hinv ?r Hr. unfold transfer. rewrite Hi.
+      destruct (instr_defs i) as [?r|]; auto.
+      rewrite Regiset.add_spec. auto. }
+    { unfold params_defined. generalize Regiset.empty.
+      induction f.(fn_params); simpl; intros D ?r Hr; [easy|].
+      destruct Hr; subst; auto.
+      apply reg_list_defined_mono. rewrite Regiset.add_spec. now left. }
+  Qed.
+
+  (**
+  A function's parameters are disjoint from the intermediate set <<U>>
+  of registers that may be used before being defined.
+  *)
+
+  Definition disjoint (params : list reg) (U : Regset.t) : Prop :=
+    forall r, In r params -> ~ Regset.In r U.
+
+  Lemma disjoint_uregs_reg params D U r :
+    included params D ->
+    disjoint params U ->
+    disjoint params (uregs_reg D U r).
+  Proof.
+    unfold included, disjoint, uregs_reg. intros HP HD.
+    destruct (Regiset.mem _  _) eqn:Hr; [now auto|].
+    rewrite <-Regiset.not_mem_iff in Hr. intros r' Hr1 Hr2.
+    destruct (peq r' r); subst; auto.
+    apply (HD _ Hr1). rewrite Regsetaux.Dec.F.add_iff in Hr2.
+    destruct Hr2 as [->|?]; [exfalso|]; auto.
+  Qed.
+
+  Lemma disjoint_uregs_instr params def U pc i :
+    Forall (included params) def ->
+    disjoint params U ->
+    disjoint params (uregs_instr def U pc i).
+  Proof.
+    unfold Forall, uregs_instr. intros ?. revert U.
+    induction (instr_uses i); simpl; auto using disjoint_uregs_reg.
+  Qed.
+
+  Lemma disjoint_uregs_code params def U c :
+    Forall (included params) def ->
+    disjoint params U ->
+    disjoint params (uregs_code def c U).
+  Proof.
+    unfold uregs_code. rewrite PTree.fold_spec. intros ?. revert U.
+    induction (PTree.elements c); simpl; auto using disjoint_uregs_instr.
+  Qed.
+
+  Lemma disjoint_empty params : disjoint params Regset.empty.
+  Proof. intros r _. apply Regset.empty_1. Qed.
+
+  Lemma disjoint_uregs_function f uregs s s' pf :
+    uregs_function f s = RTLgen.OK uregs s' pf ->
+    list_disjoint f.(fn_params) uregs.
+  Proof.
+    unfold uregs_function. intros Hret.
+    destruct (analyze f) as [def|] eqn:Hf; [|easy].
+    apply included_invariant in Hf. inv Hret.
+    intros r r' Hp Hu <-.
+    rewrite Regsetaux.in_elements in Hu.
+    eapply disjoint_uregs_code; eauto using disjoint_empty.
+  Qed.
+  Local Hint Resolve disjoint_uregs_function : core.
+
+  (** ** Proof of [uregs_ok_code] *)
+
+  Section used.
+    Context (c : code).
+    Notation used := (reg_used_in_code c).
+
+    Lemma used_uregs_reg D U r :
+      Regset.For_all used U ->
+      used r ->
+      Regset.For_all used (uregs_reg D U r).
+    Proof.
+      intros HU Hr. unfold uregs_reg.
+      destruct (Regiset.mem _ _); auto. intros r' Hr'.
+      destruct (peq r' r); subst; auto.
+      eapply Regset.add_3 in Hr'; auto.
+    Qed.
+
+    Lemma used_uregs_instr def U pc i :
+      c ! pc = Some i ->
+      Regset.For_all used U ->
+      Regset.For_all used (uregs_instr def U pc i).
+    Proof.
+      intros Hi%instr_uses_reg_used_in_code.
+      unfold uregs_instr. revert U.
+      induction (instr_uses i); simpl; intros U HU; auto.
+      generalize (Forall_inv Hi). intros Hr.
+      apply Forall_inv_tail in Hi. auto using used_uregs_reg.
+    Qed.
+
+    Lemma used_uregs_code def U :
+      Regset.For_all used U ->
+      Regset.For_all used (uregs_code def c U).
+    Proof.
+      unfold uregs_code. rewrite PTree.fold_spec. revert U.
+      generalize (PTree.elements_complete c). intros Hget.
+      induction (PTree.elements c) as [|[] ??]; simpl in *;
+        auto using used_uregs_instr.
+    Qed.
+
+    Lemma used_empty : Regset.For_all used Regset.empty.
+    Proof. now intros r ?%Regset.empty_1. Qed.
+  End used.
+
+  Lemma used_uregs_function f uregs s s' pf :
+    uregs_function f s = RTLgen.OK uregs s' pf ->
+    forall r, In r uregs -> reg_used_in_code f.(fn_code) r.
+  Proof.
+    unfold uregs_function. intros Hret.
+    destruct (analyze f) as [def|]; [|easy].
+    inv Hret. intros r Hr.
+    rewrite Regsetaux.in_elements in Hr.
+    eapply used_uregs_code; eauto using used_empty.
+  Qed.
+  Local Hint Resolve used_uregs_function : core.
+
+  (** ** Proof of [uregs_ok_nodup] *)
+
+  Lemma uregs_function_nodup f uregs s s' pf :
+    uregs_function f s = RTLgen.OK uregs s' pf ->
+    NoDup uregs.
+  Proof.
+    unfold uregs_function. intros H. destruct (analyze f); [|easy].
+    inv H. apply Regsetaux.elements_NoDup.
+  Qed.
+  Local Hint Resolve uregs_function_nodup : core.
+
+  Lemma uregs_function_ok : uregs_function_spec.
+  Proof. repeat intro. repeat split; eauto. Qed.
+End URegs.
+
 Lemma transf_function_match_fundef (f tf : fundef) :
   transf_fundef f = OK tf ->
   match_fundef f tf.
@@ -1365,31 +1799,45 @@ Proof.
     unfold transf_fun in H.
     unfold RTLgen.bind in H.
     repeat egen_case.
-    apply transf_code_code_matches in H1.
-    inv H3.
-    2: {
+    lazymatch goal with
+    | H : transf_code _ _ _ _ = RTLgen.OK _ _ _ |- _ =>
+      apply transf_code_code_matches in H
+    end.
+    2:{
       intros p i Hpi.
       apply lt_nextnode_init_state' in Hpi.
-      clear H0 H H1.
+      repeat lazymatch goal with
+      | H : _ = RTLgen.OK _ _ _ |- _ => clear H
+      end.
       repeat state_incr_inv.
-      unfold Ple in *; simpl in *; lia. }
+      unfold Ple in *. simpl in *. lia. }
+    lazymatch goal with
+    | H : uregs_function _ _ = RTLgen.OK _ _ _ |- _ =>
+      apply URegs.uregs_function_ok in H
+    end.
+    lazymatch goal with
+    | H : ret _ _ = RTLgen.OK _ _ _ |- _ => inv H
+    end.
     destruct f.
     simpl in *.
     econstructor.
     { apply type_function_correct; eauto. }
-    constructor; eauto.
-    { eapply rm_wf_antimonotone.
-      { eapply replication_map_wf; eauto. }
+    econstructor; eauto.
+    { eapply rm_wf_mono.
+      2:{ eapply replication_map_wf; eauto. }
       auto. }
     { eapply replication_map_rm_inv'; eauto. }
     eapply copy_allR_monotone.
     { eapply copy_all_to_shadows_copy_allR; eauto. }
-    clear H0 H H1.
+    repeat lazymatch goal with
+    | H : _ = RTLgen.OK _ _ _ |- _ => clear H
+    | H : match_code _ _ _ _ |- _ => clear H
+    end.
     repeat state_incr_inv.
     unfold Ple in *.
     simpl in *.
     intros p i Hpi.
-    destruct (H7 p); congruence.
+    destruct (H2 p); congruence.
   - inv Htransf; constructor.
 Qed.
 

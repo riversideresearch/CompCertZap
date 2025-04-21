@@ -22,6 +22,7 @@ Require Import AST.
 Require Import Maps.
 Require Import Ordered.
 Require FSetAVL.
+Require Import MSetsEx.
 Require Import Values.
 
 Definition reg: Type := positive.
@@ -100,3 +101,32 @@ Qed.
 (** Sets of registers *)
 
 Module Regset := FSetAVL.Make(OrderedPositive).
+Module Regsetaux.
+  Include FSetProperties.WProperties_fun Regset.E Regset.
+
+  Lemma in_elements (r : reg) X :
+    In r (Regset.elements X) <-> Regset.In r X.
+  Proof.
+    rewrite Regsetaux.Dec.F.elements_iff, SetoidList.InA_alt. split.
+    - intros. now exists r.
+    - now intros (? & -> & ?).
+  Qed.
+
+  Lemma elements_NoDup X : NoDup (Regset.elements X).
+  Proof.
+    induction (Regset.elements_3w X); constructor;
+    auto using SetoidList.In_InA with typeclass_instances.
+  Qed.
+End Regsetaux.
+
+(** Finite/cofinite sets of registers *)
+
+Module PInhabited <: InfiniteType.INHABITED Pos.
+  Definition inhabitant := xH.
+End PInhabited.
+
+Module PInfinite <: InfiniteType.S Pos Regset.MSet :=
+  InfiniteType.Make Pos PInhabited Pos Regset.MSet.
+
+Module Regiset <: IWSetsOn Pos :=
+  FinCofinOn Pos Regset.MSet PInfinite.
