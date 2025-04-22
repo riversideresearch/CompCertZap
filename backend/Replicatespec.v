@@ -427,7 +427,7 @@ Inductive match_instr
 | match_Istore :
   forall chunk addr args src1 src2 src3 n succ
     (RM_SRC : rm !! src1 = (src2, src3))
-    (VOTE_REGS : maj_vote_regsR c re rm args pc n)
+    (VOTE_REGS : maj_vote_regsR c re rm (src1 :: args) pc n)
     (N : c ! n = Some (Istore chunk addr args src1 succ)),
     match_instr re rm c pc (Istore chunk addr args src1 succ)
 | match_Icall :
@@ -1041,10 +1041,13 @@ Proof.
       * rewrite PTree.gss; reflexivity.
 
     (* Istore *)
-    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+    + unfold RTLgen.bind in Htransf'.
+      simpl in Htransf'.
       gen_case Hmaj.
       gen_case Hupd.
-      (* gen_case Hupd. *)
+      replace ((do succ <- maj_vote_regs re rm l0 p;
+                   let (r2, r3) := rm # r in maj_vote re r r2 r3 succ) s'0)
+        with (maj_vote_regs re rm (r :: l0) p s'0) in Hmaj by auto.
       apply maj_vote_regs_maj_vote_regsR in Hmaj.
       2: { clear Hiter; inv s0; unfold Ple in *; lia. }
       unfold update_instr in Hupd.

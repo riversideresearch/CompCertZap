@@ -1666,18 +1666,17 @@ Section PRESERVATION.
       eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto; constructor; assumption. }
+           { eexists; eexists; split; eauto.
+             destruct Hin; subst; constructor; assumption. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
-           rewrite Heq; clear Hused Heq.
+           rewrite Heq; clear Heq.
            split.
            { apply WT_RS. }
            split.
-           - eapply match_regsets_get_2; eauto.
-             right; eexists; eexists; split; eauto; constructor; auto.
-           - eapply match_regsets_get_3'; eauto.
-             eexists; eexists; split; eauto; constructor; auto. }
+           - eapply match_regsets_get_2; eauto; right; auto.
+           - eapply match_regsets_get_3'; eauto. }
       destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
       eexists; split.
       + eapply star_plus_trans.
