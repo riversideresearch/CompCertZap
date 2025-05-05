@@ -138,7 +138,7 @@ VLIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
   Iteration.v Zbits.v Integers.v Archi.v IEEE754_extra.v Floats.v \
   Parmov.v UnionFind.v Wfsimpl.v \
   Postorder.v FSetAVLplus.v IntvSets.v Decidableplus.v BoolEqual.v \
-  MSetsEx.v MSetsEx_test.v
+  MSetsEx.v MSetsEx_test.v Lens.v
 
 # Parts common to the front-ends and the back-end (in common/)
 
@@ -179,7 +179,7 @@ BACKEND=\
   Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v
 
 ifeq ($(ARCH),riscV)
-BACKEND += Fault.v Tolerant.v
+BACKEND += Regcode.v Fault.v Tolerant.v
 endif
 
 # C front-end modules (in cfrontend/)
