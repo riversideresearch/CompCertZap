@@ -29,15 +29,83 @@ Local Open Scope error_monad_scope.
 
 Module Type TYPE_ALGEBRA.
 
-Parameter t: Type.
+Parameter Inline t: Type.
 Parameter eq: forall (x y: t), {x=y} + {x<>y}.
 Parameter default: t.
 
 End TYPE_ALGEBRA.
 
+(** Constraint solver interface *)
+
+Module Type UNI_SOLVER (T : TYPE_ALGEBRA).
+
+  (** A set of unification constraints. *)
+  Parameter typenv: Type.
+
+  Parameter initial: typenv.
+
+  (** Add the constraint [T(x) = ty]. *)
+  Parameter set : forall (e: typenv) (x: positive) (ty: T.t), res typenv.
+  Parameter set_list : forall (e: typenv) (rl: list positive) (tyl: list T.t), res typenv.
+
+  (**
+  Add the constraint [T(x) = T(y)].
+  The boolean result is [true] if the types of [x] or [y] could be
+  made more precise.  Otherwise, the [typenv] does not change and
+  [false] is returned.
+  *)
+  Parameter move : forall (e: typenv) (x y: positive), res (bool * typenv).
+
+  Definition typassign : Type := positive -> T.t.
+
+  (** Solve the remaining constraints by iteration. *)
+  Parameter solve : forall (e: typenv), res typassign.
+
+  (** What it means to be a solution *)
+  Parameter satisf : typassign -> typenv -> Prop.
+
+  Parameter satisf_initial : forall te, satisf te initial.
+
+  Parameter set_incr :
+    forall te x ty e e', set e x ty = OK e' -> satisf te e' -> satisf te e.
+  (*Global Hint Resolve set_incr: ty.*)
+  Parameter set_sound :
+    forall te x ty e e', set e x ty = OK e' -> satisf te e' -> te x = ty.
+  Parameter set_complete :
+    forall te e x ty,
+    satisf te e -> te x = ty -> exists e', set e x ty = OK e' /\ satisf te e'.
+
+  Parameter set_list_incr :
+    forall te xl tyl e e', set_list e xl tyl = OK e' -> satisf te e' -> satisf te e.
+  (*Global Hint Resolve set_list_incr: ty.*)
+  Parameter set_list_sound :
+    forall te xl tyl e e', set_list e xl tyl = OK e' -> satisf te e' -> map te xl = tyl.
+  Parameter set_list_complete :
+    forall te xl tyl e,
+    satisf te e -> map te xl = tyl ->
+    exists e', set_list e xl tyl = OK e' /\ satisf te e'.
+
+  Parameter move_incr :
+    forall te e r1 r2 e' changed,
+    move e r1 r2 = OK(changed, e') -> satisf te e' -> satisf te e.
+  (*Global Hint Resolve move_incr: ty.*)
+  Parameter move_sound :
+    forall te e r1 r2 e' changed,
+    move e r1 r2 = OK(changed, e') -> satisf te e' -> te r1 = te r2.
+  Parameter move_complete :
+    forall te e r1 r2,
+    satisf te e -> te r1 = te r2 ->
+    exists changed e', move e r1 r2 = OK(changed, e') /\ satisf te e'.
+
+  Parameter solve_sound :
+    forall e te, solve e = OK te -> satisf te e.
+  Parameter solve_complete :
+    forall te e, satisf te e -> exists te', solve e = OK te'.
+End UNI_SOLVER.
+
 (** The constraint solver. *)
 
-Module UniSolver (T: TYPE_ALGEBRA).
+Module UniSolver (T: TYPE_ALGEBRA) <: UNI_SOLVER T.
 
 (* The current set of constraints is represented by a record with two components:
 - [te_typ]: a partial map from variables to types
@@ -47,10 +115,11 @@ Module UniSolver (T: TYPE_ALGEBRA).
 
 Definition constraint : Type := (positive * positive)%type.
 
-Record typenv : Type := Typenv {
+Record typenv' : Type := Typenv {
   te_typ: PTree.t T.t;       (**r mapping var -> typ *)
   te_equ: list constraint    (**r additional equality constraints *)
 }.
+Definition typenv := typenv'.
 
 Definition initial : typenv := {| te_typ := PTree.empty _; te_equ := nil |}.
 
