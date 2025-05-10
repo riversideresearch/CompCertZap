@@ -169,18 +169,13 @@ Qed.
 Definition vote_int (x y z : val) : val :=
   match (x, y, z) with
   | (Vint a, Vint b, Vint c) =>
-      if Int.eq_dec a b || Int.eq_dec a c
-      then x
-      else if Int.eq_dec b c
-           then y
+      if Int.eq_dec a b then x
+      else if Int.eq_dec b c then y
            else Vundef
   | (Vptr a i, Vptr b j, Vptr c k) =>
       if negb Archi.ptr64
-      then if (eq_block a b && Ptrofs.eq_dec i j) ||
-                (eq_block a c && Ptrofs.eq_dec i k)
-           then x
-           else if eq_block b c && Ptrofs.eq_dec j k
-                then y
+      then if (eq_block a b && Ptrofs.eq_dec i j) then x
+           else if eq_block b c && Ptrofs.eq_dec j k then y
                 else Vundef
       else Vundef
   | _ => Vundef
@@ -196,23 +191,7 @@ Proof.
     repeat ((try destruct (eq_block _ _); subst; simpl);
             (try destruct (Ptrofs.eq_dec _ _); simpl; auto)).
 Qed.
-  
-(* Lemma vote_int_compat_inject j v1 v1' v2 v2' v3 v3' : *)
-(*   Val.inject j v1 v1' -> *)
-(*   Val.inject j v2 v2' -> *)
-(*   Val.inject j v3 v3' -> *)
-(*   Val.inject j (vote_int v1 v2 v3) (vote_int v1' v2' v3'). *)
-(* Proof. *)
-(*   unfold vote_int. *)
-(*   intros H0 H1 H2. *)
-(*   inv H0; simpl; auto; inv H1; inv H2; simpl; auto. *)
-(*   - repeat destruct (Int.eq_dec _ _); subst; simpl; auto. *)
-(*   (* - destruct Archi.ptr64 eqn:Harchi; simpl; auto. *) *)
-(*   (*   repeat ((try destruct (eq_block _ _); subst; simpl); *) *)
-(*   (*           (try destruct (Ptrofs.eq_dec _ _); subst; simpl); *) *)
-(*   (*           (try solve [econstructor; eauto; congruence]); *) *)
-(*   (*           (try congruence)). *) *)
-(* Qed. *)
+
 Lemma vote_int_compat_inject j v1 v1' v2 v2' v3 v3' :
   Val.inject j v1 v1' ->
   Val.inject j v2 v2' ->
@@ -237,19 +216,14 @@ Definition vote_int_sem : builtin_sem Xint :=
 Definition vote_long (x y z : val) : val :=
   match (x, y, z) with
   | (Vlong a, Vlong b, Vlong c) =>
-      if Int64.eq_dec a b || Int64.eq_dec a c
-      then x
-      else if Int64.eq_dec b c
-           then y
+      if Int64.eq_dec a b then x
+      else if Int64.eq_dec b c then y
            else Vundef
   | (Vptr a i, Vptr b j, Vptr c k) =>
-      if Archi.ptr64
-      then if (eq_block a b && Ptrofs.eq_dec i j) ||
-                (eq_block a c && Ptrofs.eq_dec i k)
-           then x
-           else if eq_block b c && Ptrofs.eq_dec j k
-                then y
-                else Vundef
+      if Archi.ptr64 then
+        if (eq_block a b && Ptrofs.eq_dec i j) then x
+        else if eq_block b c && Ptrofs.eq_dec j k then y
+             else Vundef
       else Vundef
   | _ => Vundef
   end.
@@ -288,10 +262,8 @@ Definition vote_long_sem : builtin_sem Xlong :=
 Definition vote_single (x y z : val) : val :=
   match (x, y, z) with
   | (Vsingle a, Vsingle b, Vsingle c) =>
-      if Float32.eq_dec a b || Float32.eq_dec a c
-      then x
-      else if Float32.eq_dec b c
-           then y
+      if Float32.eq_dec a b then x
+      else if Float32.eq_dec b c then y
            else Vundef
   | _ => Vundef
   end.
@@ -324,10 +296,8 @@ Definition vote_single_sem : builtin_sem Xsingle :=
 Definition vote_float (x y z : val) : val :=
   match (x, y, z) with
   | (Vfloat a, Vfloat b, Vfloat c) =>
-      if Float.eq_dec a b || Float.eq_dec a c
-      then x
-      else if Float.eq_dec b c
-           then y
+      if Float.eq_dec a b then x
+      else if Float.eq_dec b c then y
            else Vundef
   | _ => Vundef
   end.

@@ -61,12 +61,11 @@ Definition match_regsets
       rs # r1 = rs' # r2 /\
       rs # r1 = rs' # r3.
 
-(** Match relation on stacks. It isn't quite sufficient to lift a
-    simple 'match_stackframe' relation to lists, because the
-    well-typedness of the stack requires a relation between caller and
-    callee frames: the return type of the callee's signature must
-    match the type of the register used by the caller to store the
-    result of the call.  *)
+(** Match relation on stacks. It isn't sufficient to lift a simple
+    'match_stackframe' relation to lists, because the well-typedness
+    of the stack requires a relation between caller and callee frames:
+    the return type of the callee's signature must match the type of
+    the register used by the caller to store the result.  *)
 Inductive match_stackframes : list stackframe -> list stackframe -> signature -> Prop :=
 | match_stackframes_nil : forall sig,
     sig.(sig_res) = Xint ->
