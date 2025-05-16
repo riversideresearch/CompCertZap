@@ -559,6 +559,24 @@ let expand_ctz ~sixtyfour ~splitlong =
 
 (* Handling of compiler-inlined builtins *)
 
+(** Full sync version *)
+(* (\** Generic majority vote. *\) *)
+(* let maj_vote *)
+(*       (mov : 'a -> 'a -> instruction) *)
+(*       (cmp_j : 'a -> 'a -> label -> instruction list) *)
+(*       (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit = *)
+(*   if a == b || a == c || b == c then begin *)
+(*     raise (Error "ill-formed majority vote") *)
+(*   end; *)
+(*   let lbl_done = new_label () in *)
+(*   let lbl_fix = new_label () in *)
+(*   side_emit (Plabel lbl_fix); *)
+(*   side_emit (mov res c); *)
+(*   side_emit (Pj_l lbl_done); *)
+(*   List.iter emit (cmp_j a b lbl_fix); *)
+(*       emit (mov res a); *)
+(*   emit (Plabel lbl_done) *)
+
 (** Generic majority vote. *)
 let maj_vote
       (mov : 'a -> 'a -> instruction)
@@ -570,19 +588,41 @@ let maj_vote
   let lbl_done = new_label () in
   let lbl_fix = new_label () in
   side_emit (Plabel lbl_fix);
-  side_emit (mov res c);
-  side_emit (Pj_l lbl_done);
   if a = res || b = res then begin
-      List.iter emit (cmp_j a b lbl_fix);
+      List.iter emit (cmp_j a b lbl_fix); (* Compare a and b *)
+      side_emit (mov res c); (* If a != b, res := c *)
     end
   else if c = res then begin
-      List.iter emit (cmp_j a c lbl_fix);
+      List.iter emit (cmp_j a c lbl_fix); (* Compare a and c *)
+      side_emit (mov res b); (* If a != c, res := b *)
     end
   else begin
-      List.iter emit (cmp_j a b lbl_fix);
-      emit (mov res a);
+      List.iter emit (cmp_j a b lbl_fix); (* Compare a and b *)
+      emit (mov res a); (* If a == b, res := a *)
+      side_emit (mov res c); (* If a != b, res := c *)
     end;
+  side_emit (Pj_l lbl_done);
   emit (Plabel lbl_done)
+
+(* (\** Generic majority vote. *\) *)
+(* let maj_vote *)
+(*       (mov : 'a -> 'a -> instruction) *)
+(*       (cmp_j : 'a -> 'a -> label -> instruction list) *)
+(*       (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit = *)
+(*   if a == b || a == c || b == c then begin *)
+(*     raise (Error "ill-formed majority vote") *)
+(*   end; *)
+(*   let lbl_done = new_label () in *)
+(*   let lbl_fix = new_label () in *)
+(*   side_emit (Plabel lbl_fix); *)
+(*   side_emit (mov a c); *)
+(*   side_emit (mov b c); *)
+(*   side_emit (Pj_l lbl_done); *)
+(*   List.iter emit (cmp_j a b lbl_fix); *)
+(*   emit (mov c a); *)
+(*   emit (Plabel lbl_done); *)
+(*   if not (a = res || b = res || c = res) then *)
+(*     emit (mov res a) *)
 
 (** Majority vote integers. *)
 let maj_vote_int = maj_vote
