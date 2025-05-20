@@ -169,13 +169,18 @@ Qed.
 Definition vote_int (x y z : val) : val :=
   match (x, y, z) with
   | (Vint a, Vint b, Vint c) =>
-      if Int.eq_dec a b then x
-      else if Int.eq_dec b c then y
+      if Int.eq_dec a b || Int.eq_dec a c
+      then x
+      else if Int.eq_dec b c
+           then y
            else Vundef
   | (Vptr a i, Vptr b j, Vptr c k) =>
       if negb Archi.ptr64
-      then if (eq_block a b && Ptrofs.eq_dec i j) then x
-           else if eq_block b c && Ptrofs.eq_dec j k then y
+      then if (eq_block a b && Ptrofs.eq_dec i j) ||
+                (eq_block a c && Ptrofs.eq_dec i k)
+           then x
+           else if eq_block b c && Ptrofs.eq_dec j k
+                then y
                 else Vundef
       else Vundef
   | _ => Vundef
@@ -216,14 +221,19 @@ Definition vote_int_sem : builtin_sem Xint :=
 Definition vote_long (x y z : val) : val :=
   match (x, y, z) with
   | (Vlong a, Vlong b, Vlong c) =>
-      if Int64.eq_dec a b then x
-      else if Int64.eq_dec b c then y
+      if Int64.eq_dec a b || Int64.eq_dec a c
+      then x
+      else if Int64.eq_dec b c
+           then y
            else Vundef
   | (Vptr a i, Vptr b j, Vptr c k) =>
-      if Archi.ptr64 then
-        if (eq_block a b && Ptrofs.eq_dec i j) then x
-        else if eq_block b c && Ptrofs.eq_dec j k then y
-             else Vundef
+      if Archi.ptr64
+      then if (eq_block a b && Ptrofs.eq_dec i j) ||
+                (eq_block a c && Ptrofs.eq_dec i k)
+           then x
+           else if eq_block b c && Ptrofs.eq_dec j k
+                then y
+                else Vundef
       else Vundef
   | _ => Vundef
   end.
@@ -262,8 +272,10 @@ Definition vote_long_sem : builtin_sem Xlong :=
 Definition vote_single (x y z : val) : val :=
   match (x, y, z) with
   | (Vsingle a, Vsingle b, Vsingle c) =>
-      if Float32.eq_dec a b then x
-      else if Float32.eq_dec b c then y
+      if Float32.eq_dec a b || Float32.eq_dec a c
+      then x
+      else if Float32.eq_dec b c
+           then y
            else Vundef
   | _ => Vundef
   end.
@@ -296,8 +308,10 @@ Definition vote_single_sem : builtin_sem Xsingle :=
 Definition vote_float (x y z : val) : val :=
   match (x, y, z) with
   | (Vfloat a, Vfloat b, Vfloat c) =>
-      if Float.eq_dec a b then x
-      else if Float.eq_dec b c then y
+      if Float.eq_dec a b || Float.eq_dec a c
+      then x
+      else if Float.eq_dec b c
+           then y
            else Vundef
   | _ => Vundef
   end.
