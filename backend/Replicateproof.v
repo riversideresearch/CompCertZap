@@ -1578,80 +1578,63 @@ Section PRESERVATION.
               specialize (REGS _ _ _ Hr1 Hused); intuition. }
 
     - (* exec_Iload *)
-      inv Hmatch; inv FUN; simpl in *.
+      inv Hmatch.
+      pose proof FUN as Hmatch_function.
+      inv FUN; simpl in *.
       set (f := {| fn_sig := sig
                 ; fn_params := params
                 ; fn_stacksize := stacksize
                 ; fn_code := c
                 ; fn_entrypoint := entrypoint |}).
-      pose proof CODE as Hcode.
+      pose proof H as Hcode.
       specialize (CODE pc (Iload chunk addr args dst pc') H); inv CODE.
       assert (Hargs: Forall (reg_used_in_code c) args).
       { apply Forall_forall; intros x Hx;
           eexists; eexists; split; eauto; constructor; auto. }
+      (* smoveR_inv. *)
+      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      2: { apply Forall_forall; intros r1 Hin.
+           assert (Hused: reg_used_in_code c r1).
+           { eexists; eexists; split; eauto.
+             constructor; auto. }
+           assert (Heq: rs' # r1 = rs # r1).
+           { destruct (rm # r1) eqn:Hr1.
+             specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
+           rewrite Heq; clear Heq.
+           split.
+           { apply WT_RS. }
+           split.
+           { eapply match_regsets_get_2; eauto; right; auto. }
+           { eapply match_regsets_get_3'; eauto. } }
+      assert (Hty: Val.has_type v (re dst)).
+      { inv WT_FN.
+        simpl in *.
+        specialize (wt_instrs _ _ Hcode).
+        inv wt_instrs.
+        simpl in *.
+        rewrite H8.
+        destruct a; inv H1.
+        eapply Memory.Mem.load_type; eauto. }
+      destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
       eexists; split.
-      + econstructor.
-        * eapply exec_Iload; eauto.
-          eapply match_regs_1_2_eval_addressing.
-          { eauto. }
-          2: { eauto. }
-          2: { eauto. }
-          apply Forall_forall; intros r Hin.
-          eexists; eexists; split; eauto.
-          constructor; auto.
-        * eapply star_step.
-          { eapply exec_Iload; eauto.
-            eapply match_regs_1_3_eval_addressing.
-            { eauto. }
-            { eapply res2_not_in_args3 with (l := fun_regs_list f);
-                eauto; try reg_used1.
-              apply Forall_forall.
-              intros r Hin.
-              eapply match_regs_exists_r1'; eauto. }
-            2: { eauto. }
-            2: { auto. }
-            apply Forall_forall; intros r Hin.
-            eexists; eexists; split; eauto.
-            constructor; auto. }
-          { eapply star_step.
-            - eapply exec_Iload; eauto.
-              eapply regular_eval_addressing; eauto.
-              + eapply res2_not_in_args1 with (l := fun_regs_list f);
-                  eauto; try reg_used1; reg_used2.
-              + eapply res3_not_in_args1 with (l := fun_regs_list f);
-                  eauto; try reg_used1; reg_used2.
-            - apply star_refl.
-            - reflexivity. }
-          reflexivity.
-        * reflexivity.
-      + econstructor; eauto.
-        { eapply wt_exec_Iload; eauto.
-          eapply wt_instr_at; eauto. }
-        * econstructor; eauto.
-        * intros r1 r2 r3 Hr1 Hused.
-          destruct (peq r1 dst); subst.
-          { rewrite RM_RES in Hr1; inv Hr1.
-            repeat split.
-            - rewrite 2!PMap.gss; reflexivity.
-            - rewrite PMap.gss, PMap.gso; eauto with rm_wf.
-              rewrite PMap.gso; eauto with rm_wf.
-              rewrite PMap.gss; reflexivity.
-            - rewrite PMap.gss, PMap.gso; eauto with rm_wf.
-              rewrite PMap.gss; reflexivity. }
-          { assert (Hdstused: reg_used_in_code c dst).
-            { eexists; eexists; split; eauto; apply reg_used_Iload_res. }
-            repeat split.
-            - rewrite 3!PMap.gso; eauto with rm_inv.
-              rewrite PMap.gso; eauto with rm_inv.
-              specialize (REGS _ _ _ Hr1 Hused); intuition.
-            - rewrite 2!PMap.gso; eauto with rm_inv symmetry.
-              rewrite PMap.gso; eauto with rm_wf.
-              rewrite PMap.gso; eauto with rm_wf.
-              specialize (REGS _ _ _ Hr1 Hused); intuition.
-            - rewrite 2!PMap.gso; eauto with rm_inv symmetry.
-              rewrite PMap.gso; eauto with rm_wf.
-              rewrite PMap.gso; eauto with rm_wf.
-              specialize (REGS _ _ _ Hr1 Hused); intuition. }
+      + eapply star_plus_trans.
+        { apply Hvote. }
+        2: { reflexivity. }
+        econstructor.
+        3: { rewrite Events.E0_right; reflexivity. }
+        { eapply exec_Iload; eauto.
+          eapply match_regsets_eval_addressing; eauto.
+          eapply match_regsets_ext_r; eauto. }
+        eapply smoveR_step in MOVE; eauto.
+        rewrite PMap.gss; auto.
+      + simpl.
+        econstructor; eauto.
+        intro r.
+        destruct (peq dst r); subst.
+        * rewrite PMap.gss; auto.
+        * rewrite PMap.gso; auto.
+        * eapply match_regsets_update; eauto.
+          eexists; eexists; split; eauto; solve [constructor; auto].
 
     - (* exec_Istore *)
       inv Hmatch; inv FUN; simpl in *.

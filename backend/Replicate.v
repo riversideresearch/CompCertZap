@@ -337,20 +337,6 @@ Definition transf_instr
                   (snd (rm # dst))
                   n2);
       update_instr n2 instr
-  | Iload chunk addr args dst _succ =>
-      do n1 <- reserve_instr;
-      do n2 <- reserve_instr;
-      do _ <- update_instr pc
-               (Iload chunk addr
-                  (List.map (fun arg => fst (rm # arg)) args)
-                  (fst (rm # dst))
-                  n1);
-      do _ <- update_instr n1
-               (Iload chunk addr
-                  (List.map (fun arg => snd (rm # arg)) args)
-                  (snd (rm # dst))
-                  n2);
-      update_instr n2 instr
   (* For other instructions, majority vote the argument registers and
      then execute the instruction only in the regular world. For
      instructions with result registers (Icall and Ibuiltin), copy the
