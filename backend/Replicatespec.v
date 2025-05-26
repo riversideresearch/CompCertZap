@@ -1124,29 +1124,29 @@ Proof.
 Qed.
 
 Lemma in_elements p s :
-  In p (PSet.elements s) <-> PSet.In p s.
+  In p (Regset.elements s) <-> Regset.In p s.
 Proof.
   split; intro Hin.
   - apply SetoidList.In_InA with (eqA := eq) in Hin.
     2: { apply Eqsth. }
-    apply PSet.elements_2; assumption.
-  - apply PSet.elements_1 in Hin.
+    apply Regset.elements_2; assumption.
+  - apply Regset.elements_1 in Hin.
     apply SetoidList.InA_alt in Hin.
     destruct Hin as [? [? Hin]]; subst; assumption.
 Qed.
 
 Lemma in_lt_max_reg r s :
-  In r (PSet.elements s) ->
+  In r (Regset.elements s) ->
   r < max_reg s + 1.
 Proof.
   unfold max_reg. simpl.
   intro Hin.
   apply in_elements in Hin.
-  destruct (PSet.max_elt s) eqn:Hmax.
-  { eapply PSet.max_elt_2 in Hmax; eauto.
+  destruct (Regset.max_elt s) eqn:Hmax.
+  { eapply Regset.max_elt_2 in Hmax; eauto.
     unfold Plt in Hmax; lia. }
-  apply PSet.max_elt_3 in Hmax.
-  apply PSet.is_empty_1 in Hmax.
+  apply Regset.max_elt_3 in Hmax.
+  apply Regset.is_empty_1 in Hmax.
   destruct s; simpl in *.
   compute in Hmax.
   destruct this.
@@ -1173,17 +1173,17 @@ Proof.
 Qed.
 
 Lemma in_pset_of_list p l :
-  In p l <-> PSet.In p (PSet_of_list l).
+  In p l <-> Regset.In p (Regset_of_list l).
 Proof.
   split.
   - revert p; induction l; simpl; intros p Hin; try contradiction.
     destruct Hin as [? | Hin]; subst.
-    + apply PSet.add_1; reflexivity.
-    + apply PSet.add_2, IHl, Hin.
+    + apply Regset.add_1; reflexivity.
+    + apply Regset.add_2, IHl, Hin.
   - revert p; induction l; simpl; intros p Hin.
     { inv Hin. }
     destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst; auto.
-    right; apply PSet.add_3 in Hin; auto.
+    right; apply Regset.add_3 in Hin; auto.
 Qed.
 
 Definition rm_inv_list n (regs : list reg) (rm : PMap.t (reg * reg)) : Prop :=
@@ -1195,34 +1195,34 @@ Definition rm_inv_list n (regs : list reg) (rm : PMap.t (reg * reg)) : Prop :=
 Lemma reg_used_fold_right p i l r :
   In (p, i) l ->
   reg_used_in_instr r i ->
-  PSet.In r
-    (fold_right (fun (y : positive * instruction) (x : PSet.t) =>
-                   PSet.union x (instr_regs (snd y))) PSet.empty
+  Regset.In r
+    (fold_right (fun (y : positive * instruction) (x : Regset.t) =>
+                   Regset.union x (instr_regs (snd y))) Regset.empty
        l).
 Proof.
   revert p i r.
   induction l; simpl; intros p i r Hin Hused; try contradiction.
   destruct Hin as [? | Hin]; subst.
-  - inv Hused; simpl; try destruct fn; apply PSet.union_3;
-      try solve [apply PSet.union_3, PSet.singleton_2; reflexivity];
-      try solve [apply PSet.union_2, in_pset_of_list; auto];
+  - inv Hused; simpl; try destruct fn; apply Regset.union_3;
+      try solve [apply Regset.union_3, Regset.singleton_2; reflexivity];
+      try solve [apply Regset.union_2, in_pset_of_list; auto];
       try solve [apply in_pset_of_list; assumption];
-      try solve [apply PSet.singleton_2; reflexivity].
-    + apply PSet.union_2, PSet.add_1; reflexivity.
-    + apply PSet.union_2, PSet.add_2, in_pset_of_list; assumption.
-    + apply PSet.add_1; reflexivity.
-    + apply PSet.add_2, in_pset_of_list; assumption.
+      try solve [apply Regset.singleton_2; reflexivity].
+    + apply Regset.union_2, Regset.add_1; reflexivity.
+    + apply Regset.union_2, Regset.add_2, in_pset_of_list; assumption.
+    + apply Regset.add_1; reflexivity.
+    + apply Regset.add_2, in_pset_of_list; assumption.
   - inv Hused; simpl;
-      solve [apply PSet.union_2; eapply IHl; eauto; constructor; auto].
+      solve [apply Regset.union_2; eapply IHl; eauto; constructor; auto].
 Qed.
 
 Lemma reg_used_pset_in_all_regs params c r :
   reg_used params c r ->
-  PSet.In r (all_regs params c).
+  Regset.In r (all_regs params c).
 Proof.
   intros [Hin | (p & i & Hget & Hused)].
-  - apply PSet.union_2, in_pset_of_list; auto.
-  - apply PSet.union_3.
+  - apply Regset.union_2, in_pset_of_list; auto.
+  - apply Regset.union_3.
     apply PTree.elements_correct in Hget.
     unfold code_regs.
     rewrite PTree.fold_spec.
@@ -1242,7 +1242,7 @@ Qed.
 
 Lemma reg_used_in_code_pset_in_code_regs c r :
   reg_used_in_code c r ->
-  PSet.In r (code_regs c).
+  Regset.In r (code_regs c).
 Proof.
   intros (p & i & Hget & Hused).
   apply PTree.elements_correct in Hget.
@@ -1263,20 +1263,20 @@ Proof.
   repeat split.
   - intro Hin.
     assert (r2 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
+    { apply in_lt_max_reg, in_elements, Regset.union_2, in_pset_of_list; auto. }
     lia.
   - intro Hin.
     assert (r3 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, PSet.union_2, in_pset_of_list; auto. }
+    { apply in_lt_max_reg, in_elements, Regset.union_2, in_pset_of_list; auto. }
     lia.
   - intro Hin.
     assert (r2 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, PSet.union_3.
+    { apply in_lt_max_reg, in_elements, Regset.union_3.
       apply reg_used_in_code_pset_in_code_regs; auto. }
     lia.
   - intro Hin.
     assert (r3 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, PSet.union_3.
+    { apply in_lt_max_reg, in_elements, Regset.union_3.
       apply reg_used_in_code_pset_in_code_regs; auto. }
     lia.
 Qed.

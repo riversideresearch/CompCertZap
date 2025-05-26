@@ -646,22 +646,22 @@ Section PRESERVATION.
 
   Lemma pset_in_res_fold_right pc op args res pc' l :
     In (pc, Iop op args res pc') l ->
-    PSet.In res
-      (fold_right (fun (y : positive * instruction) (x : PSet.t) =>
-                     PSet.union x (instr_regs (snd y))) PSet.empty
+    Regset.In res
+      (fold_right (fun (y : positive * instruction) (x : Regset.t) =>
+                     Regset.union x (instr_regs (snd y))) Regset.empty
          l).
   Proof.
     revert pc op args res pc'.
     induction l; simpl; intros pc op args res pc' Hin; try contradiction.
     destruct a as [p i]; simpl.
     destruct Hin as [H | Hin].
-    - inv H; apply PSet.union_3, PSet.union_3, PSet.singleton_2; reflexivity.
-    - apply PSet.union_2; eapply IHl; eauto.
+    - inv H; apply Regset.union_3, Regset.union_3, Regset.singleton_2; reflexivity.
+    - apply Regset.union_2; eapply IHl; eauto.
   Qed.
 
   Lemma reg_used_in_code_in_elements_code_regs c r :
     reg_used_in_code c r ->
-    In r (PSet.elements (code_regs c)).
+    In r (Regset.elements (code_regs c)).
   Proof.
     intro Hused.
     apply in_elements, reg_used_in_code_pset_in_code_regs; auto.
@@ -672,7 +672,7 @@ Section PRESERVATION.
     In r (all_regs_list params c).
   Proof.
     intro Hused.
-    apply in_elements, PSet.union_3, in_elements.
+    apply in_elements, Regset.union_3, in_elements.
     apply reg_used_in_code_in_elements_code_regs; assumption.
   Qed.
 
@@ -681,7 +681,7 @@ Section PRESERVATION.
     In r (all_regs_list params c).
   Proof.
     intro Hused.
-    apply in_elements, PSet.union_2, in_pset_of_list; auto.
+    apply in_elements, Regset.union_2, in_pset_of_list; auto.
   Qed.
 
   Lemma match_regs_in_args3_exists_in_args1 rm  args1 args2 args3 r3 :
@@ -703,7 +703,7 @@ Section PRESERVATION.
     rm_l rm args1 args2 args3 ->
     In r args3 ->
     exists (r1 : positive) (r2 : reg),
-      In r1 (PSet.elements (code_regs c)) /\ rm # r1 = (r2, r).
+      In r1 (Regset.elements (code_regs c)) /\ rm # r1 = (r2, r).
   Proof.
     intros Hget Hmatch Hin.
     eapply match_regs_in_args3_exists_in_args1 in Hmatch; eauto.
@@ -726,7 +726,7 @@ Section PRESERVATION.
     exists r1, r2; split; auto.
     apply in_elements.
     apply in_elements in Hin.
-    apply PSet.union_3; assumption.
+    apply Regset.union_3; assumption.
   Qed.
 
   Lemma maj_voteR_step
@@ -1457,16 +1457,16 @@ Section PRESERVATION.
     { rewrite Hr1 in Ha; inv Ha.
       rewrite 2!PMap.gso.
       2: { eapply rm_wf_neq_1_2; eauto.
-           apply in_elements, PSet.union_2, in_pset_of_list; left; auto. }
+           apply in_elements, Regset.union_2, in_pset_of_list; left; auto. }
       2: { eapply rm_wf_neq_1_3; eauto.
-           apply in_elements, PSet.union_2, in_pset_of_list; left; auto. }
+           apply in_elements, Regset.union_2, in_pset_of_list; left; auto. }
       rewrite PMap.gss.
       rewrite PMap.gso.
       2: { eapply rm_wf_neq_2_3; eauto.
-           apply in_elements, PSet.union_2, in_pset_of_list; left; auto. }
+           apply in_elements, Regset.union_2, in_pset_of_list; left; auto. }
       rewrite PMap.gss; reflexivity. }
     assert (Ha': In a (all_regs_list (a :: params) c)).
-    { apply in_elements, PSet.union_2, in_pset_of_list; left; auto. }
+    { apply in_elements, Regset.union_2, in_pset_of_list; left; auto. }
     assert (Hr1': In r1 (all_regs_list (a :: params) c)).
     { apply reg_used_in_all_regs_list; auto. }
     rewrite !PMap.gso; auto.
@@ -1475,10 +1475,10 @@ Section PRESERVATION.
         intros r Hin.
         apply in_elements in Hin.
         apply in_elements.
-        destruct (PSet.union_1 Hin) as [Hparams | Hc].
-        + apply PSet.union_2, in_pset_of_list; right.
+        destruct (Regset.union_1 Hin) as [Hparams | Hc].
+        + apply Regset.union_2, in_pset_of_list; right.
           apply in_pset_of_list; auto.
-        + apply PSet.union_3; auto.
+        + apply Regset.union_3; auto.
       - destruct Hused as [[? | Hin] | Hused]; subst; try congruence.
         + left; auto.
         + right; auto. }
@@ -1516,11 +1516,11 @@ Section PRESERVATION.
       rewrite 2!PMap.gso.
       rewrite 2!PMap.gss; reflexivity.
       - eapply rm_wf_neq_1_2; eauto.
-        apply in_elements, PSet.union_2, in_pset_of_list; left; auto.
+        apply in_elements, Regset.union_2, in_pset_of_list; left; auto.
       - eapply rm_wf_neq_1_3; eauto.
-        apply in_elements, PSet.union_2, in_pset_of_list; left; auto. }
+        apply in_elements, Regset.union_2, in_pset_of_list; left; auto. }
     assert (Ha': In a (all_regs_list (a :: params) c)).
-    { apply in_elements, PSet.union_2, in_pset_of_list; left; auto. }
+    { apply in_elements, Regset.union_2, in_pset_of_list; left; auto. }
     assert (Hr1': In r1 (all_regs_list (a :: params) c)).
     { apply reg_used_in_all_regs_list; auto. }
     rewrite !PMap.gso; auto.
@@ -1529,10 +1529,10 @@ Section PRESERVATION.
         intros r Hin.
         apply in_elements in Hin.
         apply in_elements.
-        destruct (PSet.union_1 Hin) as [Hparams | Hc].
-        + apply PSet.union_2, in_pset_of_list; right.
+        destruct (Regset.union_1 Hin) as [Hparams | Hc].
+        + apply Regset.union_2, in_pset_of_list; right.
           apply in_pset_of_list; auto.
-        + apply PSet.union_3; auto.
+        + apply Regset.union_3; auto.
       - destruct Hused as [[? | Hin] | Hused]; subst; try congruence.
         + left; auto.
         + right; auto. }
@@ -1569,7 +1569,7 @@ Section PRESERVATION.
     - rewrite update_regset_init_regs; auto.
       2: { eapply rm_wf_antimonotone; eauto.
            intros x Hx.
-           apply in_elements, PSet.union_2, in_pset_of_list; auto. }
+           apply in_elements, Regset.union_2, in_pset_of_list; auto. }
       eapply init_regs_init_regs'; eauto.
       apply Forall_forall.
       intros x1 Hin' x2 x3 Hx1.
@@ -1593,7 +1593,7 @@ Section PRESERVATION.
     - rewrite update_regset_init_regs; auto.
       2: { eapply rm_wf_antimonotone; eauto.
            intros x Hx.
-           apply in_elements, PSet.union_2, in_pset_of_list; auto. }
+           apply in_elements, Regset.union_2, in_pset_of_list; auto. }
       erewrite <- init_regs'_r2; eauto.
       eapply init_regs_init_regs'; eauto.
       apply Forall_forall.
@@ -1618,7 +1618,7 @@ Section PRESERVATION.
     - rewrite update_regset_init_regs; auto.
       2: { eapply rm_wf_antimonotone; eauto.
            intros x Hx.
-           apply in_elements, PSet.union_2, in_pset_of_list; auto. }
+           apply in_elements, Regset.union_2, in_pset_of_list; auto. }
       erewrite <- init_regs'_r3; eauto.
       eapply init_regs_init_regs'; eauto.
       apply Forall_forall.
