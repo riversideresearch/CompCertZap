@@ -351,21 +351,23 @@ let maj_vote
   let lbl_done = new_label () in
   let lbl_fix = new_label () in
   side_emit (Plabel lbl_fix);
-  side_emit (mov res c);
-  side_emit (Pjmp_l lbl_done);
   if a = res || b = res then begin
+      side_emit (mov res c);
       emit (cmp a b);
       emit (Pjcc (Cond_ne, lbl_fix));
     end
   else if c = res then begin
+      side_emit (mov res a);
       emit (cmp a c);
       emit (Pjcc (Cond_ne, lbl_fix));
     end
   else begin
+      side_emit (mov res c);
       emit (cmp a b);
       emit (Pjcc (Cond_ne, lbl_fix));
       emit (mov res a);
     end;
+  side_emit (Pjmp_l lbl_done);
   emit (Plabel lbl_done)
 
 (** Majority vote integers. *)
