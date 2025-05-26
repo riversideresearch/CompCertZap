@@ -378,21 +378,20 @@ Proof.
 Qed.
 
 Inductive match_function re rm : function -> function -> Prop :=
-| match_fun : forall sig params stacksize c c' entrypoint entrypoint'
+| match_fun : forall sig params stacksize c c' entrypoint entrypoint' copy_regs
                 (RM_WF: rm_wf rm (all_regs_list params c))
                 (RM_INV: rm_inv params c rm)
                 (CODE: match_code re rm c c')
-                (COPY: copy_allR re rm c' params entrypoint' entrypoint),
+                (COPY_REGS_OK: Forall (fun x => In x (all_regs_list params c)) copy_regs)
+                (COPY: copy_allR re rm c' (copy_regs ++ params) entrypoint' entrypoint),
     match_function re rm
-      ({|
-          fn_sig := sig
+      ({| fn_sig := sig
         ; fn_params := params
         ; fn_stacksize := stacksize
         ; fn_code := c
         ; fn_entrypoint := entrypoint
        |})
-      ({|
-          fn_sig := sig
+      ({| fn_sig := sig
         ; fn_params := params
         ; fn_stacksize := stacksize
         ; fn_code := c'
@@ -909,7 +908,6 @@ Qed.
 Lemma transf_fun_code_matches
   rm (f : function) (re : regenv) entrypoint s s1 s' pf pf1 :
   transf_fun re f s = RTLgen.OK entrypoint s' pf ->
-  (* replication_map f s = RTLgen.OK rm s1 pf1 -> *)
   replication_map f s = RTLgen.OK rm s1 pf1 ->
   (forall p i, (fn_code f) ! p = Some i -> p < st_nextnode s) ->
   match_code re rm f.(fn_code) s'.(st_code).
@@ -920,14 +918,17 @@ Proof.
   destruct Hf as (rm' & s1' & pf0 & pf1' & Hrm' & Hf).
   rewrite Hrm' in Hrm; inv Hrm.
   apply bind_inversion in Hf.
-  destruct Hf as (n0 & s2 & pf2 & pf3 & Hparams & Hf).
+  destruct Hf as (regs & s2 & pf2 & pf3 & Hlive & Hf).
   apply bind_inversion in Hf.
-  destruct Hf as ([] & s3 & pf4 & pf5 & Hf & Hret).
+  destruct Hf as (n0 & s3 & pf4 & pf5 & Hparams & Hf).
+  apply bind_inversion in Hf.
+  destruct Hf as ([] & s4 & pf6 & pf7 & Hf & Hret).
   inv Hret.
   apply transf_code_code_matches in Hf; auto.
   intros p i Hpi.
   clear Hparams.
-  inv pf1; inv pf2.
+  clear Hlive.
+  inv pf1; inv pf2; inv pf4.
   unfold Ple in *.
   specialize (Hlt p i Hpi); lia.
 Qed.
@@ -1370,31 +1371,37 @@ Proof.
     unfold transf_fun in H.
     unfold RTLgen.bind in H.
     repeat egen_case.
-    apply transf_code_code_matches in H1.
-    inv H3.
-    2: {
-      intros p i Hpi.
-      apply lt_nextnode_init_state' in Hpi.
-      clear H0 H H1.
-      repeat state_incr_inv.
-      unfold Ple in *; simpl in *; lia. }
+    apply transf_code_code_matches in H2.
+    inv H4.
+    2: { intros p i Hpi.
+         apply lt_nextnode_init_state' in Hpi.
+         clear H0 H H1.
+         repeat state_incr_inv.
+         unfold Ple in *; simpl in *; lia. }
     destruct f.
     simpl in *.
     econstructor.
     { apply type_function_correct; eauto. }
-    constructor; eauto.
+    eapply match_fun.
     { eapply rm_wf_antimonotone.
       { eapply replication_map_wf; eauto. }
       auto. }
     { eapply replication_map_rm_inv'; eauto. }
-    eapply copy_allR_monotone.
-    { eapply copy_all_to_shadows_copy_allR; eauto. }
-    clear H0 H H1.
-    repeat state_incr_inv.
-    unfold Ple in *.
-    simpl in *.
-    intros p i Hpi.
-    destruct (H7 p); congruence.
+    { auto. }
+    2: { eapply copy_allR_monotone.
+         { eapply copy_all_to_shadows_copy_allR; eauto. }
+         clear H0 H H1.
+         repeat state_incr_inv.
+         unfold Ple in *; simpl in *.
+         intros p i Hpi; destruct (H8 p); congruence. }
+    apply Forall_forall; intros x Hin.
+    unfold live_regs_to_copy in H; simpl in H.
+    unfold live_regs in H; simpl in H.
+    destruct (Liveness.analyze _).
+    inv H.
+    2: { inv H. }
+    apply in_elements, Regset.diff_1, Regset.inter_2 in Hin.
+    apply in_elements, Regset.union_3; auto.
   - inv Htransf; constructor.
 Qed.
 

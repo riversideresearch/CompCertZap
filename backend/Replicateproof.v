@@ -1695,6 +1695,53 @@ Section PRESERVATION.
         rewrite Forall_forall in Hargs; intuition
     end.
 
+  (* This would be better if match_regsets was parameterized by the
+     domain of registers it cares about. Then this proof could just
+     abstract over that single parameter ([l] here) instead of
+     appending with [all_regs_list params c]. *)
+  Lemma match_regsets_extra params c rm rs rs' l :
+    rm_wf rm (l ++ all_regs_list params c) ->
+    match_regsets params c rm rs rs' ->
+    match_regsets params c rm rs (update_regset rm rs' l).
+  Proof.
+    induction l; simpl; auto; intros Hwf Hrefl.
+    destruct (rm # a) eqn:Ha.
+    apply IHl in Hrefl; clear IHl.
+    2: { eapply rm_wf_antimonotone; eauto; intuition. }
+    intros r1 r2 r3 Hr1 Hused.
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 a); subst.
+    { rewrite Hr1 in Ha; inv Ha.
+      rewrite PMap.gss.
+      rewrite 3!PMap.gso.
+      - rewrite PMap.gss.
+        eapply Hrefl in Hused.
+        2: { eauto. }
+        repeat split; intuition.
+      - eapply rm_wf_neq_2_3; eauto; left; auto.
+      - eapply rm_wf_neq_1_2; eauto; left; auto.
+      - eapply rm_wf_neq_1_3; eauto; left; auto. }
+    assert (In a (a :: l ++ all_regs_list params c)).
+    { left; auto. }
+    assert (In r1 (a :: l ++ all_regs_list params c)).
+    { right; apply in_app; right.
+      apply reg_used_in_all_regs_list; auto. }
+    rewrite 6!PMap.gso; auto; symmetry.
+    - eapply rm_wf_neq_2_3' with (r1:=r1) (r1':=a); eauto.
+    - eapply rm_wf_neq_3_3 with (r1:=r1) (r1':=a); eauto.
+    - eapply rm_wf_neq_2_2 with (r1:=r1) (r1':=a); eauto.
+    - symmetry; eapply rm_wf_neq_2_3' with (r1:=a) (r1':=r1); eauto.
+    - eapply rm_wf_neq_2_1' with (r1:=r1) (r1':=a); eauto.
+    - eapply rm_wf_neq_3_1' with (r1:=r1) (r1':=a); eauto.
+  Qed.
+
+  Lemma update_regset_app rm rs l1 l2 :
+    update_regset rm rs (l1 ++ l2) = update_regset rm (update_regset rm rs l2) l1.
+  Proof.
+    revert l2; induction l1; intro l2; simpl; auto.
+    destruct (rm # a) eqn:Ha.
+    rewrite IHl1; auto.
+  Qed.
+
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
     forall ts1,
@@ -1763,7 +1810,7 @@ Section PRESERVATION.
       + econstructor; eauto.
         { eapply wt_exec_Iop; eauto.
           eapply wt_instr_at; eauto. }
-        * constructor; eauto.
+        * econstructor; eauto.
         * intros r1 r2 r3 Hr1 Hused.
           destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 res); subst.
           { rewrite RM_RES in Hr1; inv Hr1.
@@ -2330,14 +2377,25 @@ Section PRESERVATION.
             rewrite <- wt_params in WT_ARGS.
             apply wt_regset_init_regs; auto. }
           { eapply rm_wf_antimonotone; eauto.
-            intros r Hin; apply param_in_all_regs_list; auto. }
+            intros r Hin.
+            unfold all_regs_list.
+            apply in_app_or in Hin.
+            destruct Hin as [Hin | Hin].
+            - rewrite Forall_forall in COPY_REGS_OK; auto.
+            - apply in_elements, Regset.union_2, in_pset_of_list; auto. }
         * reflexivity.
       + econstructor; eauto.
         * apply wt_init_regs.
           inv WT; simpl in *.
           rewrite wt_params; auto.
-        * constructor; eauto.
-        * apply rm_inv_init_regs; auto.
+        * econstructor; eauto.
+        * rewrite update_regset_app.
+          apply match_regsets_extra.
+          { eapply rm_wf_antimonotone; eauto.
+            rewrite Forall_forall in COPY_REGS_OK.
+            intros r Hin.
+            apply in_app_or in Hin; destruct Hin as [Hin|Hin]; auto. }
+          apply rm_inv_init_regs; auto.
           { inv WT; simpl in *; apply list_norepet_nodup; auto. }
           { inv WT; simpl in *.
             apply has_type_list_length in WT_ARGS.

@@ -35,6 +35,7 @@ Require Import
   RTL
   RTLgen
   RTLtyping
+  Liveness
 .
 Import ListNotations.
 
@@ -362,6 +363,25 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
            ret (PMap.set r1 (r2, r3) rm)
     ) (fun_regs_list f) (PMap.init (xH, xH)).
 
+(** Compute registers that are live-in at the entry point of [f]. *)
+Definition live_regs (f : function) : mon Regset.t :=
+  match Liveness.analyze f with
+  | Some m => ret (m !! (fn_entrypoint f))
+  | None => error (MSG "live_regs: liveness analysis failed" :: nil)
+  end.
+
+(** Compute the list of registers that need to be copied to their
+    shadows in the function prologue: take the intersection of live
+    registers with registers appearing in the code (to trivially know
+    that everything in the resulting set is a register that appears in
+    the code, without having to reason about the liveness analysis
+    itself), and then subtract the function's parameters. *)
+Definition live_regs_to_copy (f : function) : mon (list reg) :=
+  do live <- live_regs f;
+  ret (Regset.elements (Regset.diff
+                          (Regset.inter live (code_regs f.(fn_code)))
+                          (Regset_of_list f.(fn_params)))).
+
 (** Generate fault-tolerant version of function [f]. [re] should be
     the typing context that resulted from typechecking [f].
 
@@ -376,7 +396,9 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
 Definition transf_fun (re : regenv) (f : function)
   : mon node :=
   do rm <- replication_map f;
-  do entry_point <- copy_all_to_shadows re rm f.(fn_params) f.(fn_entrypoint);
+  do live <- live_regs_to_copy f;
+  do entry_point <- copy_all_to_shadows re rm (live ++ f.(fn_params))
+                     f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
 
