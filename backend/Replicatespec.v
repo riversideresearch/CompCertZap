@@ -230,14 +230,13 @@ Inductive match_instr
     (N1 : c ! n1 = Some (Iop op args3 res3 n2))
     (N2 : c ! n2 = Some (Iop op args1 res1 succ)),
     match_instr re rm c pc (Iop op args1 res1 succ)
-| match_Iload :
-  forall chunk addr args1 args2 args3 res1 res2 res3 n1 n2 succ
-    (ARGS : rm_l rm args1 args2 args3)
+| match_iload :
+  forall chunk addr args res1 res2 res3 n1 n2 succ
+    (VOTE_ARGS : maj_vote_regsR c re rm args pc n1)
+    (N1 : c ! n1 = Some (Iload chunk addr args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
-    (PC : c ! pc = Some (Iload chunk addr args2 res2 n1))
-    (N1 : c ! n1 = Some (Iload chunk addr args3 res3 n2))
-    (N2 : c ! n2 = Some (Iload chunk addr args1 res1 succ)),
-    match_instr re rm c pc (Iload chunk addr args1 res1 succ)
+    (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
+  match_instr re rm c pc (Iload chunk addr args res1 succ)
 | match_Istore :
   forall chunk addr args src1 src2 src3 n succ
     (RM_SRC : rm !! src1 = (src2, src3))
@@ -485,13 +484,16 @@ Proof.
     + rewrite Hs'; eauto.
     + rewrite Hs'1; eauto.
     + rewrite Hs'2; eauto.
-  - destruct (H1 p) as [?|Hs']; try congruence.
-    destruct (H1 n1) as [?|Hs'1]; try congruence.
-    destruct (H1 n2) as [?|Hs'2]; try congruence.
+  - inv MOVE.
+    destruct (H1 n) as [?|Hn]; try congruence.
+    destruct (H1 n1) as [?|Hn1]; try congruence.
+    destruct (H1 n2) as [?|Hn2]; try congruence.
     econstructor; eauto.
-    + rewrite Hs'; eauto.
-    + rewrite Hs'1; eauto.
-    + rewrite Hs'2; eauto.
+    + eapply state_incr_maj_vote_regsR; eauto.
+    + rewrite Hn1; eauto.
+    + econstructor; eauto.
+      * rewrite Hn2; eauto.
+      * rewrite Hn; auto.
   - destruct (H1 n) as [?|Hs']; try congruence.
     econstructor; eauto.
     2: { rewrite Hs'; auto. }
@@ -703,20 +705,20 @@ Proof.
     (* Iload *)
     + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
       repeat egen_case.
-      unfold update_instr in *.
-      repeat lr_case.
-      destruct (rm # r) eqn:Hrmr; simpl in *.
-      assert (p < st_nextnode s'0).
-      { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
-      eapply match_Iload with (pc := p)
-                              (n1 := s'0.(st_nextnode))
-                              (n2 := Pos.succ (s'0.(st_nextnode))); eauto.
-      { apply rm_l_map_rm. }
-      * rewrite 2!PTree.gso; try lia.
-        rewrite PTree.gss; reflexivity.
-      * rewrite PTree.gso; try lia.
-        rewrite PTree.gss; reflexivity.
-      * rewrite PTree.gss; reflexivity.
+      unfold update_instr in H2.
+      repeat lr_case; simpl.
+      destruct (rm # r) eqn:Hr.
+      eapply copy_to_shadows_smoveR in H0; eauto.
+      2: { simpl; lia. }
+      eapply match_iload with (n1:=n0); eauto.
+      3: { apply smoveR_ptree_set; eauto. }
+      2: { rewrite PTree.gss; auto. }
+      eapply maj_vote_regsR_ptree_set; auto.
+      eapply state_incr_maj_vote_regsR.
+      2: { eapply maj_vote_regs_maj_vote_regsR.
+           2: { eauto. }
+           clear Hiter; inv s0; unfold Ple in *; lia. }
+      intro pc; inv s5; auto.
 
     (* Istore *)
     + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
