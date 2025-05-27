@@ -383,7 +383,8 @@ Inductive match_function re rm : function -> function -> Prop :=
                 (RM_INV: rm_inv params c rm)
                 (CODE: match_code re rm c c')
                 (COPY_REGS_OK: Forall (fun x => In x (all_regs_list params c)) copy_regs)
-                (COPY: copy_allR re rm c' (copy_regs ++ params) entrypoint' entrypoint),
+                (* (COPY: copy_allR re rm c' (copy_regs ++ params) entrypoint' entrypoint), *)
+                (COPY: copy_allR re rm c' (app' copy_regs params) entrypoint' entrypoint),
     match_function re rm
       ({| fn_sig := sig
         ; fn_params := params

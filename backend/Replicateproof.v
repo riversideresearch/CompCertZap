@@ -2379,6 +2379,7 @@ Section PRESERVATION.
           { eapply rm_wf_antimonotone; eauto.
             intros r Hin.
             unfold all_regs_list.
+            rewrite <- app_app' in Hin.
             apply in_app_or in Hin.
             destruct Hin as [Hin | Hin].
             - rewrite Forall_forall in COPY_REGS_OK; auto.
@@ -2389,7 +2390,8 @@ Section PRESERVATION.
           inv WT; simpl in *.
           rewrite wt_params; auto.
         * econstructor; eauto.
-        * rewrite update_regset_app.
+        * rewrite <- app_app'.
+          rewrite update_regset_app.
           apply match_regsets_extra.
           { eapply rm_wf_antimonotone; eauto.
             rewrite Forall_forall in COPY_REGS_OK.

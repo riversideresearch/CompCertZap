@@ -397,6 +397,29 @@ Definition live_regs_to_copy (f : function) : mon (list reg) :=
                           (Regset.inter live (code_regs f.(fn_code)))
                           (Regset_of_list f.(fn_params)))).
 
+Definition app' {A : Type} (l1 l2 : list A) : list A :=
+  rev_append (rev' l1) l2.
+
+Lemma nil_rev_eq {A : Type} (l : list A) :
+  [] = rev l -> l = [].
+Proof.
+  destruct l; simpl; intro Heq; auto.
+  symmetry in Heq.
+  apply app_eq_nil in Heq.
+  destruct Heq as [_ H]; inv H.
+Qed.
+
+Lemma rev_rev' {A : Type} (l : list A) :
+  rev l = rev' l.
+Proof. unfold rev'; rewrite rev_append_rev, app_nil_r; auto. Qed.
+
+Lemma app_app' {A : Type} (l1 l2 : list A) :
+  app l1 l2 = app' l1 l2.
+Proof.
+  unfold app'.
+  rewrite rev_append_rev, <- rev_rev', rev_involutive; reflexivity.
+Qed.
+
 (** Generate fault-tolerant version of function [f]. [re] should be
     the typing context that resulted from typechecking [f].
 
@@ -412,7 +435,7 @@ Definition transf_fun (re : regenv) (f : function)
   : mon node :=
   do rm <- replication_map f;
   do live <- live_regs_to_copy f;
-  do entry_point <- copy_all_to_shadows re rm (live ++ f.(fn_params))
+  do entry_point <- copy_all_to_shadows re rm (app' live f.(fn_params))
                      f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
