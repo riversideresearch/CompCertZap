@@ -89,7 +89,8 @@ Definition maj_vote_of_typ (ty : typ) (r1 r2 r3 : reg)
 Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
   match maj_vote_of_typ (re r1) r1 r2 r3 with
-  | None => error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
+  | None => error (MSG "Replicate.v:maj_vote: unexpected Tany32 or Tany64"
+                    :: POS pc :: nil)
   | Some vote =>
       do succ <- reserve_instr;
       do _ <- update_instr pc (vote succ);
@@ -201,8 +202,8 @@ Definition copy_to_shadows
       do n <- reserve_instr;
       do _ <- update_instr pc (mov1 n);
       update_instr n (mov2 succ)
-  | _ =>
-      error (MSG "maj_vote: unexpected Tany32 or Tany64" :: POS pc :: nil)
+  | _ => error (MSG "Replicate.v:maj_vote: unexpected Tany32 or Tany64"
+                 :: POS pc :: nil)
   end.
 
 Fixpoint copy_all_to_shadows
@@ -363,11 +364,25 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
            ret (PMap.set r1 (r2, r3) rm)
     ) (fun_regs_list f) (PMap.init (xH, xH)).
 
-(** Compute registers that are live-in at the entry point of [f]. *)
+(** Compute registers that are live-in at the entry point of
+    [f]. Remove the result register of the entry point instruction if
+    it has one (I guess the liveness analysis computes live-out
+    sets?). *)
 Definition live_regs (f : function) : mon Regset.t :=
   match Liveness.analyze f with
-  | Some m => ret (m !! (fn_entrypoint f))
-  | None => error (MSG "live_regs: liveness analysis failed" :: nil)
+  | Some m =>
+      let pc := fn_entrypoint f in
+      match f.(fn_code) ! pc with
+      | Some instr =>
+          match res_of_instruction instr with
+          | Some res => ret (Regset.remove res (m !! pc))
+          | None => ret (m !! pc)
+          end
+      | None =>
+          error (MSG "Replicate.v:live_regs: missing entry point instruction"
+                   :: nil)
+      end
+  | None => error (MSG "Replicate.v:live_regs: liveness analysis failed" :: nil)
   end.
 
 (** Compute the list of registers that need to be copied to their

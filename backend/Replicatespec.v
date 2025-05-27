@@ -1400,8 +1400,14 @@ Proof.
     destruct (Liveness.analyze _).
     inv H.
     2: { inv H. }
-    apply in_elements, Regset.diff_1, Regset.inter_2 in Hin.
-    apply in_elements, Regset.union_3; auto.
+    Ltac go H :=
+      (apply in_elements, Regset.diff_1, Regset.inter_2 in H;
+       apply in_elements, Regset.union_3; auto).
+    destruct (fn_code ! fn_entrypoint).
+    { destruct (res_of_instruction i).
+      - inv H4; go Hin.
+      - inv H4; go Hin. }
+    inv H4; go Hin.
   - inv Htransf; constructor.
 Qed.
 
