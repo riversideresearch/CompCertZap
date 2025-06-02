@@ -367,7 +367,8 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
 (** Compute registers that are live-in at the entry point of
     [f]. Remove the result register of the entry point instruction if
     it has one (I guess the liveness analysis computes live-out
-    sets?). *)
+    sets?), and union with the arg registers (in case it needs to be
+    added back). *)
 Definition live_regs (f : function) : mon Regset.t :=
   match Liveness.analyze f with
   | Some m =>
@@ -375,7 +376,8 @@ Definition live_regs (f : function) : mon Regset.t :=
       match f.(fn_code) ! pc with
       | Some instr =>
           match res_of_instruction instr with
-          | Some res => ret (Regset.remove res (m !! pc))
+          | Some res => ret (Regset.union (Regset.remove res (m !! pc))
+                              (Regset_of_list (args_of_instruction instr)))
           | None => ret (m !! pc)
           end
       | None =>
