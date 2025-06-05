@@ -17,6 +17,7 @@ Require Import
   Registers
   Replicate
   Replicatespec
+  RTLfault
   RTLgen
   RTLtyping
   Smallstep
@@ -1483,6 +1484,97 @@ Section PRESERVATION.
         rewrite Forall_forall in Hargs; intuition
     end.
 
+  Lemma fault_match_states_impl s1 s2 bs :
+    RTLfault.match_states s1 (s2, bs) ->
+    match_states s1 s2.
+  Admitted.
+
+  Definition stk_of_state (s : state) : list stackframe :=
+    match s with
+    | State stk _ _ _ _ _ => stk
+    | Callstate stk _ _ _ => stk
+    | Returnstate stk _ _ => stk
+    end.    
+
+  (* Definition false_bs_of_state (s : state) : list bool := *)
+  (*   false :: List.map (fun _ => false) (stk_of_state s). *)
+
+  Definition true_bs_of_state (s : state) : list bool :=
+    false :: List.map (fun _ => true) (stk_of_state s).
+
+  Lemma match_states_impl s1 s2 :
+    match_states s1 s2 ->
+    RTLfault.match_states s1 (s2, true_bs_of_state s2).
+  Proof.
+    intro Hmatch.
+    inv Hmatch.
+    - econstructor; eauto.
+      + admit.
+      + admit.
+    - constructor; auto.
+      admit.
+    - econstructor; eauto.
+      admit.
+  Admitted.
+
+  (* Lemma step_fstep s1 t s2 : *)
+  (*   step ge s1 t s2 -> *)
+  (*   fstep ge (s1, false_bs_of_state s1) t (s2, false_bs_of_state s2). *)
+  (* Proof. *)
+  (*   intro Hstep; inv Hstep; solve [constructor; econstructor; eauto]. *)
+  (* Qed. *)
+
+  (* Lemma zap_true_bs_of_state s1 s2 bs : *)
+  (*   zap (s1, true_bs_of_state s1) (s2, bs) -> *)
+  (*   bs = true_bs_of_state s2. *)
+  (* Proof. *)
+  (* Admitted. *)
+
+  (* Lemma zap_true_bs_of_state s : *)
+  (*   zap s (true_bs_of_state s) s (true_bs_of_state s). *)
+  (* Proof. *)
+  (* Admitted. *)
+
+  (* Lemma fstep_step s1 s2 t bs : *)
+  (*   fstep tge s1 (true_bs_of_state s1) t s2 bs -> *)
+  (*   step tge s1 t s2. *)
+  (* Proof. intro H; inv H; auto. Qed. *)
+
+  Lemma fstep_step s1 s2 t bs1 bs2 :
+    fstep tge s1 bs1 t s2 bs2 ->
+    step tge s1 t s2.
+  Proof. intro H; inv H; auto. Qed.
+
+  Lemma fstar_star_step s1 s2 bs t :
+    fstar tge s1 bs t s2 ->
+    star step tge s1 t s2.
+  Proof.
+    induction 1; subst.
+    { apply star_refl. }
+    assert (Hzap: zap s1 bs1 s1 bs1) by apply zap_nothing.
+    apply H in Hzap.
+    destruct Hzap as [bs2 Hfstep].
+    econstructor; eauto.
+    - eapply fstep_step; eauto.
+    - eapply H1; eauto; apply zap_nothing.
+  Qed.
+
+  Lemma fplus_plus_step s1 s2 t :
+    fplus tge s1 (true_bs_of_state s1) t s2 ->
+    plus step (Genv.globalenv tprog) s1 t s2.
+  Proof.
+    intro Hfplus; inv Hfplus.
+    assert (Hzap: zap s1 (true_bs_of_state s1) s1 _) by apply zap_nothing.
+    apply H in Hzap.
+    destruct Hzap as [bs2 Hfstep].
+    econstructor; eauto.
+    - eapply fstep_step; eauto.
+    - eapply fstar_star_step. eauto.
+      eapply H0.
+      + apply zap_nothing.
+      + eauto.
+  Qed.
+
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
     forall ts1,
@@ -1490,654 +1582,669 @@ Section PRESERVATION.
       exists ts2, plus step tge ts1 t ts2 /\ match_states s2 ts2.
   Proof.
     intros Hstep ts1 Hmatch.
-    inv Hstep.
-
-    - (* exec_Inop *)
-      inv Hmatch; inv FUN; simpl in *.
-      eexists; split.
-      + econstructor.
-        * apply exec_Inop; simpl.
-          specialize (CODE pc (Inop pc') H).
-          inv CODE; eauto.
-        * apply star_refl.
-        * reflexivity.
-      + repeat (econstructor; eauto).
-
-    - (* exec_Iop *)
-      inv Hmatch; inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                ; fn_params := params
-                ; fn_stacksize := stacksize
-                ; fn_code := c
-                ; fn_entrypoint := entrypoint |}).
-      pose proof CODE as Hcode.
-      specialize (CODE pc (Iop op args res pc') H); inv CODE.
-      assert (Hargs: Forall (reg_used_in_code c) args).
-      { apply Forall_forall; intros x Hx;
-          eexists; eexists; split; eauto; constructor; auto. }
-      eexists; split.
-      + econstructor.
-        * eapply exec_Iop; eauto.
-          eapply match_regs_1_2_eval_operation.
-          { eauto. }
-          2: { eauto. }
-          2: { eauto. }
-          apply Forall_forall; intros r Hin.
-          eexists; eexists; split; eauto.
-          constructor; auto.
-        * eapply star_step.
-          { eapply exec_Iop; eauto.
-            eapply match_regs_1_3_eval_operation.
-            { eauto. }
-            { eapply res2_not_in_args3 with (l := fun_regs_list f);
-                eauto; try reg_used1.
-              apply Forall_forall.
-              intros r Hin.
-              eapply match_regs_exists_r1' with (args1:=args); eauto. }
-            2: { eauto. }
-            2: { auto. }
-            auto. }
-          { eapply star_step.
-            - eapply exec_Iop; eauto.
-              eapply regular_eval_operation; eauto.
-              + eapply res2_not_in_args1 with (l := fun_regs_list f);
-                  eauto; try reg_used1; reg_used2.
-              + eapply res3_not_in_args1 with (l := fun_regs_list f);
-                  eauto; try reg_used1; reg_used2.
-            - apply star_refl.
-            - reflexivity. }
-          reflexivity.
-        * reflexivity.
-      + econstructor; eauto.
-        { eapply wt_exec_Iop; eauto.
-          eapply wt_instr_at; eauto. }
-        * econstructor; eauto.
-        * intros r1 r2 r3 Hr1 Hused.
-          destruct (peq r1 res); subst.
-          { rewrite RM_RES in Hr1; inv Hr1.
-            repeat split.
-            - rewrite 2!PMap.gss; reflexivity.
-            - rewrite PMap.gss, PMap.gso; eauto with rm_wf.
-              rewrite PMap.gso; eauto with rm_wf.
-              rewrite PMap.gss; reflexivity.
-            - rewrite PMap.gss, PMap.gso; eauto with rm_wf.
-              rewrite PMap.gss; reflexivity. }
-          { assert (Hresused: reg_used_in_code c res).
-            { eexists; eexists; split; eauto; apply reg_used_Iop_res. }
-            repeat split.
-            - rewrite 3!PMap.gso; eauto with rm_inv.
-              rewrite PMap.gso; eauto with rm_inv.
-              specialize (REGS _ _ _ Hr1 Hused); intuition.
-            - rewrite 2!PMap.gso; eauto with rm_inv symmetry.
-              rewrite PMap.gso; eauto with rm_wf.
-              rewrite PMap.gso; eauto with rm_wf.
-              specialize (REGS _ _ _ Hr1 Hused); intuition.
-            - rewrite 2!PMap.gso; eauto with rm_inv symmetry.
-              rewrite PMap.gso; eauto with rm_wf.
-              rewrite PMap.gso; eauto with rm_wf.
-              specialize (REGS _ _ _ Hr1 Hused); intuition. }
-
-    - (* exec_Iload *)
-      inv Hmatch.
-      pose proof FUN as Hmatch_function.
-      inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                ; fn_params := params
-                ; fn_stacksize := stacksize
-                ; fn_code := c
-                ; fn_entrypoint := entrypoint |}).
-      pose proof H as Hcode.
-      specialize (CODE pc (Iload chunk addr args dst pc') H); inv CODE.
-      assert (Hargs: Forall (reg_used_in_code c) args).
-      { apply Forall_forall; intros x Hx;
-          eexists; eexists; split; eauto; constructor; auto. }
-      (* smoveR_inv. *)
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
-      2: { apply Forall_forall; intros r1 Hin.
-           assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto.
-             constructor; auto. }
-           assert (Heq: rs' # r1 = rs # r1).
-           { destruct (rm # r1) eqn:Hr1.
-             specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
-           rewrite Heq; clear Heq.
-           split.
-           { apply WT_RS. }
-           split.
-           { eapply match_regsets_get_2; eauto; right; auto. }
-           { eapply match_regsets_get_3'; eauto. } }
-      assert (Hty: Val.has_type v (re dst)).
-      { inv WT_FN.
-        simpl in *.
-        specialize (wt_instrs _ _ Hcode).
-        inv wt_instrs.
-        simpl in *.
-        rewrite H8.
-        destruct a; inv H1.
-        eapply Memory.Mem.load_type; eauto. }
-      destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-      eexists; split.
-      + eapply star_plus_trans.
-        { apply Hvote. }
-        2: { reflexivity. }
-        econstructor.
-        3: { rewrite Events.E0_right; reflexivity. }
-        { eapply exec_Iload; eauto.
-          eapply match_regsets_eval_addressing; eauto.
-          eapply match_regsets_ext_r; eauto. }
-        eapply smoveR_step in MOVE; eauto.
-        rewrite PMap.gss; auto.
-      + simpl.
-        econstructor; eauto.
-        intro r.
-        destruct (peq dst r); subst.
-        * rewrite PMap.gss; auto.
-        * rewrite PMap.gso; auto.
-        * eapply match_regsets_update; eauto.
-          eexists; eexists; split; eauto; solve [constructor; auto].
-
-    - (* exec_Istore *)
-      inv Hmatch; inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                 ; fn_params := params
-                 ; fn_stacksize := stacksize
-                 ; fn_code := c
-                 ; fn_entrypoint := entrypoint |}).
-      pose proof CODE as Hcode.
-      specialize (CODE pc (Istore chunk addr args src pc') H); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
-      2: { apply Forall_forall; intros r1 Hin.
-           assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto.
-             destruct Hin; subst; constructor; assumption. }
-           assert (Heq: rs' # r1 = rs # r1).
-           { destruct (rm # r1) eqn:Hr1.
-             specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
-           rewrite Heq; clear Heq.
-           split.
-           { apply WT_RS. }
-           split.
-           - eapply match_regsets_get_2; eauto; right; auto.
-           - eapply match_regsets_get_3'; eauto. }
-      destruct VOTE_REGS as (rs'' & Hvote & Hrs'').
-      eexists; split.
-      + eapply star_plus_trans.
-        { apply Hvote. }
-        2: { reflexivity. }
-        econstructor.
-        2: { apply star_refl. }
-        2: { rewrite Events.E0_right; reflexivity. }
-        eapply exec_Istore; simpl; eauto.
-        * erewrite <- rs_map_ext; eauto.
-          eapply match_regsets_eval_addressing; eauto.
-          apply Forall_forall; intros r Hr; eexists; eexists; split; eauto.
-          constructor; auto.
-        * rewrite <- Hrs''.
-          eapply match_regsets_storev; eauto.
-          eexists; eexists; split; eauto; solve [constructor].
-      + econstructor; eauto.
-        * econstructor; eauto.
-        * eapply match_regsets_ext_r; eauto.
-
-    - (* exec_Icall *)
-      inv Hmatch.
-      pose proof FUN as Hmatch_function.
-      inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                ; fn_params := params
-                ; fn_stacksize := stacksize
-                ; fn_code := c
-                ; fn_entrypoint := entrypoint |}).
-      pose proof H as Hcode.
-      specialize (CODE pc (Icall (funsig fd) ros args res pc') Hcode); inv CODE.
-      smoveR_inv.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
-      2: { apply Forall_forall; intros r1 Hin.
-           assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto.
-             apply in_app_or in Hin; destruct Hin as [Hin|Hin].
-             - destruct ros; simpl in *; inv Hin; try contradiction.
-               constructor.
-             - constructor; auto. }
-           assert (Heq: rs' # r1 = rs # r1).
-           { destruct (rm # r1) eqn:Hr1.
-             specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
-           rewrite Heq; clear Heq.
-           split.
-           { apply WT_RS. }
-           split.
-           { eapply match_regsets_get_2; eauto; right; auto. }
-           { eapply match_regsets_get_3'; eauto. } }
-      destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-      assert (Htf: exists tf, transf_fundef fd = OK tf /\
-                           find_function tge ros rs = Some tf).
-      { unfold find_function in *.
-        destruct ros.
-        - apply functions_translated in H0.
-          destruct H0 as (cu & tf & Hfind & Htrans & Hlink).
-          eexists; split; eauto.
-        - destruct (Genv.find_symbol ge i) eqn:Hsym; try congruence.
-          apply function_ptr_translated in H0.
-          destruct H0 as (cu & tf & Hfind & Htrans & Hlink).
-          eexists; split; eauto.
-          rewrite symbols_preserved, Hsym; auto. }
-      destruct Htf as (tf & Htransf_fundef & Hfind_tf).
-      eexists; split.
-      + eapply star_plus_trans.
-        { apply Hvote. }
-        2: { reflexivity. }
-        econstructor.
-        2: { apply star_refl. }
-        2: { rewrite Events.E0_right; reflexivity. }
-        eapply exec_Icall; simpl.
-        { eauto. }
-        { erewrite find_function_proper.
-          { eauto. }
-          { intros r ?; subst.
-            etransitivity.
-            2: { rewrite <- Hrs''; reflexivity. }
-            eapply match_regsets_get; eauto.
-            right; eexists; eexists; split; eauto; constructor. }
-          eauto. }
-        { apply sig_function_translated; auto. }
-      + erewrite rs_args_rs'_args; eauto.
-        2: { apply Forall_forall; intros r' Hr';
-             eexists; eexists; split; eauto; constructor; auto. }
-        erewrite rs_map_ext; eauto.
-        constructor; auto.
-        { inv WT_FN; simpl in *.
-          apply wt_instrs in Hcode; inv Hcode.
-          rewrite <- H11.
-          erewrite <- rs_map_ext; eauto.
-          erewrite <- rs_args_rs'_args; eauto.
-          2: { apply Forall_forall; intros x Hx.
-               eexists; eexists; split; eauto; constructor; auto. }
-          apply wt_regset_list; auto. }
-        { econstructor; eauto.
-          - inv WT_FN.
-            simpl in *.
-            apply wt_instrs in Hcode.
-            inv Hcode; auto.
-          - eapply match_regsets_ext_r; eauto.
-          - eexists; eexists; split; eauto; solve [constructor; auto].
-          - econstructor; eauto. }
-        { apply transf_function_match_fundef; auto. }
-
-    - (* exec_Itailcall *)
-      inv Hmatch.
-      pose proof FUN as Hmatch_function.
-      inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                ; fn_params := params
-                ; fn_stacksize := stacksize
-                ; fn_code := c
-                ; fn_entrypoint := entrypoint |}).
-      pose proof H as Hcode.
-      specialize (CODE pc (Itailcall (funsig fd) ros args) Hcode); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
-      2: { apply Forall_forall; intros r1 Hin.
-           assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto.
-             apply in_app_or in Hin; destruct Hin as [Hin|Hin].
-             - destruct ros; simpl in *; inv Hin; try contradiction.
-               constructor.
-             - constructor; auto. }
-           assert (Heq: rs' # r1 = rs # r1).
-           { destruct (rm # r1) eqn:Hr1.
-             specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
-           rewrite Heq; clear Heq.
-           split.
-           { apply WT_RS. }
-           split.
-           { eapply match_regsets_get_2; eauto; right; auto. }
-           { eapply match_regsets_get_3'; eauto. } }
-      destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-      assert (Htf: exists tf, transf_fundef fd = OK tf /\
-                           find_function tge ros rs = Some tf).
-      { unfold find_function in *.
-        destruct ros.
-        - apply functions_translated in H0.
-          destruct H0 as (cu & tf & Hfind & Htrans & Hlink).
-          eexists; split; eauto.
-        - destruct (Genv.find_symbol ge i) eqn:Hsym; try congruence.
-          apply function_ptr_translated in H0.
-          destruct H0 as (cu & tf & Hfind & Htrans & Hlink).
-          eexists; split; eauto.
-          rewrite symbols_preserved, Hsym; auto. }
-      destruct Htf as (tf & Htransf_fundef & Hfind_tf).
-      eexists; split.
-      + eapply star_plus_trans.
-        { apply Hvote. }
-        2: { reflexivity. }
-        econstructor.
-        2: { apply star_refl. }
-        2: { rewrite Events.E0_right; reflexivity. }
-        eapply exec_Itailcall; simpl.
-        { eauto. }
-        { erewrite find_function_proper.
-          { eauto. }
-          { intros r ?; subst.
-            etransitivity.
-            2: { rewrite <- Hrs''; reflexivity. }
-            eapply match_regsets_get; eauto.
-            right; eexists; eexists; split; eauto; constructor. }
-          eauto. }
-        { apply sig_function_translated; auto. }
-        { eauto. }
-      + erewrite rs_args_rs'_args; eauto.
-        2: { apply Forall_forall; intros r' Hr';
-             eexists; eexists; split; eauto; constructor; auto. }
-        erewrite rs_map_ext; eauto.
-        constructor; auto.
-        { inv WT_FN; simpl in *.
-          apply wt_instrs in Hcode; inv Hcode.
-          rewrite <- H6.
-          erewrite <- rs_map_ext; eauto.
-          erewrite <- rs_args_rs'_args; eauto.
-          2: { apply Forall_forall; intros x Hx.
-               eexists; eexists; split; eauto; constructor; auto. }
-          apply wt_regset_list; auto. }
-        { eapply match_stackframes_sig_proper.
-          2: { eauto. }
-          inv WT_FN.
-          simpl in *.
-          apply wt_instrs in Hcode.
-          inv Hcode; auto. }
-        { apply transf_function_match_fundef; auto. }
-
-    - (* exec_Ibuiltin *)
-      inv Hmatch.
-      pose proof FUN as Hmatch_function.
-      inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                ; fn_params := params
-                ; fn_stacksize := stacksize
-                ; fn_code := c
-                ; fn_entrypoint := entrypoint |}).
-      pose proof H as Hcode.
-      specialize (CODE pc (Ibuiltin ef args res pc') Hcode); inv CODE.
-      { (* No result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
-        2: { apply Forall_forall; intros r1 Hin.
-             assert (Hused: reg_used_in_code c r1).
-             { eexists; eexists; split; eauto; constructor; auto. }
-             assert (Heq: rs' # r1 = rs # r1).
-             { destruct (rm # r1) eqn:Hr1.
-               specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
-             rewrite Heq; clear Heq.
-             split.
-             { apply WT_RS. }
-             split.
-             { eapply match_regsets_get_2; eauto; right; auto. }
-             { eapply match_regsets_get_3'; eauto. } }
-        destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-        eexists; split.
-        + eapply star_plus_trans.
-          { apply Hvote. }
-          2: { reflexivity. }
-          econstructor.
-          3: { rewrite Events.E0_right; reflexivity. }
-          { eapply exec_Ibuiltin; simpl.
-            { eauto. }
-            { eapply eval_builtin_args_preserved.
-              - intros id; apply symbols_preserved.
-              - eapply eval_builtin_args_proper; eauto.
-                apply Forall_forall.
-                intros arg Harg r Hr.
-                rewrite <- Hrs''.
-                eapply match_regsets_get; eauto.
-                right; eexists; eexists; split; eauto.
-                constructor.
-                apply in_regs_of_builtin_args_exists_in_builtin_arg.
-                apply Exists_exists.
-                eexists; split; eauto. }
-            { eapply external_call_symbols_preserved; eauto.
-              apply senv_preserved. } }
-          rewrite regmap_setres_id; auto.
-          apply star_refl.
-        + rewrite regmap_setres_id; auto.
-          econstructor; eauto.
-          eapply match_regsets_ext_r; eauto. }
-      { (* With result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
-        2: { apply Forall_forall; intros r1 Hin.
-             assert (Hused: reg_used_in_code c r1).
-             { eexists; eexists; split; eauto; constructor; auto. }
-             assert (Heq: rs' # r1 = rs # r1).
-             { destruct (rm # r1) eqn:Hr1.
-               specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
-             rewrite Heq; clear Heq.
-             split.
-             { apply WT_RS. }
-             split.
-             { eapply match_regsets_get_2; eauto; right; auto. }
-             { eapply match_regsets_get_3'; eauto. } }
-        destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-        assert (Hty: Val.has_type vres (re res1)).
-        { inv WT_FN.
-          simpl in *.
-          specialize (wt_instrs _ _ Hcode).
-          inv wt_instrs.
-          simpl in *.
-          rewrite H7.
-          eapply external_call_well_typed; eauto. }
-        eexists; split.
-        + eapply star_plus_trans.
-          { apply Hvote. }
-          2: { reflexivity. }
-          econstructor.
-          3: { rewrite Events.E0_right; reflexivity. }
-          { eapply exec_Ibuiltin; simpl.
-            { eauto. }
-            { eapply eval_builtin_args_preserved.
-              - intros id; apply symbols_preserved.
-              - eapply eval_builtin_args_proper; eauto.
-                apply Forall_forall.
-                intros arg Harg r Hr.
-                rewrite <- Hrs''.
-                eapply match_regsets_get; eauto.
-                right; eexists; eexists; split; eauto.
-                constructor.
-                apply in_regs_of_builtin_args_exists_in_builtin_arg.
-                apply Exists_exists.
-                eexists; split; eauto. }
-            { eapply external_call_symbols_preserved; eauto.
-              apply senv_preserved. } }
-          eapply smoveR_step in MOVE; eauto.
-          simpl.
-          rewrite PMap.gss; auto.
-        + simpl.
-          econstructor; eauto.
-          intro r.
-          destruct (peq res1 r); subst.
-          * rewrite PMap.gss; auto.
-          * rewrite PMap.gso; auto.
-          * eapply match_regsets_update; eauto.
-            eexists; eexists; split; eauto; solve [constructor; auto]. }
-
-    - (* exec_Icond *)
-      inv Hmatch.
-      pose proof FUN as Hmatch_function.
-      inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                ; fn_params := params
-                ; fn_stacksize := stacksize
-                ; fn_code := c
-                ; fn_entrypoint := entrypoint |}).
-      pose proof H as Hcode.
-      specialize (CODE pc (Icond cond args ifso ifnot) Hcode); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
-      2: { apply Forall_forall; intros r1 Hin.
-           assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto; constructor; auto. }
-           assert (Heq: rs' # r1 = rs # r1).
-           { destruct (rm # r1) eqn:Hr1.
-             specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
-           rewrite Heq; clear Heq.
-           split.
-           { apply WT_RS. }
-           split.
-           { eapply match_regsets_get_2; eauto; right; auto. }
-           { eapply match_regsets_get_3'; eauto. } }
-      destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-      eexists; split.
-      + eapply star_plus_trans.
-        { apply Hvote. }
-        2: { reflexivity. }
-        econstructor.
-        3: { rewrite Events.E0_right; reflexivity. }
-        { eapply exec_Icond with (b := b)
-                                 (pc' := if b then ifso else ifnot);
-            simpl; auto.
-          { eauto. }
-          { eapply eval_condition_lessdef; eauto.
-            - erewrite rs_args_rs'_args; eauto.
-              + erewrite rs_map_ext; eauto.
-                apply lessdef_list_refl.
-              + apply Forall_forall; intros x Hx.
-                eexists; eexists; split; eauto; constructor; auto.
-            - apply Memory.Mem.extends_refl. } }
-        apply star_refl.
-      + econstructor; eauto.
-        eapply match_regsets_ext_r; eauto.
-
-    - (* exec_Ijumptable *)
-      inv Hmatch.
-      pose proof FUN as Hmatch_function.
-      inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                ; fn_params := params
-                ; fn_stacksize := stacksize
-                ; fn_code := c
-                ; fn_entrypoint := entrypoint |}).
-      pose proof H as Hcode.
-      specialize (CODE pc (Ijumptable arg tbl) Hcode); inv CODE.
-      assert (Hused: reg_used_in_code c arg).
-      { eexists; eexists; split; eauto; constructor. }
-      eapply maj_voteR_step with (rs := rs') in VOTE.
-      2: { erewrite <- match_regsets_get; eauto; right; auto. }
-      2: { erewrite <- match_regsets_get; eauto.
-           - eapply match_regsets_get_2; eauto; right; auto.
-           - right; auto. }
-      2: { eapply match_regsets_get_3'; eauto. }
-      destruct VOTE as (rs'' & Hvote & Hrs'').
-      eexists; split.
-      + eapply plus_trans.
-        { apply Hvote. }
-        2: { reflexivity. }
-        econstructor.
-        3: { rewrite Events.E0_right; reflexivity. }
-        { eapply exec_Ijumptable; eauto.
-          rewrite <- Hrs''.
-          erewrite <- match_regsets_get; eauto; right; auto. }
-        apply star_refl.
-      + econstructor; eauto.
-        eapply match_regsets_ext_r; eauto.
-
-    - (* exec_Ireturn *)
-      inv Hmatch.
-      pose proof FUN as Hmatch_function.
-      inv FUN; simpl in *.
-      set (f := {| fn_sig := sig
-                ; fn_params := params
-                ; fn_stacksize := stacksize
-                ; fn_code := c
-                ; fn_entrypoint := entrypoint |}).
-      pose proof H as Hcode.
-      specialize (CODE pc (Ireturn or) Hcode); inv CODE.
-      + (* Without return value *)
-        eexists; split.
-        * econstructor.
-          { apply exec_Ireturn; eauto. }
-          { apply star_refl. }
-          reflexivity.
-        * econstructor; eauto.
-          inv WT_FN; simpl in *.
-          apply wt_instrs in Hcode; inv Hcode; auto.
-      + (* With return value *)
-        assert (Hused: reg_used_in_code c arg1).
-        { eexists; eexists; split; eauto; constructor. }
-        eapply maj_voteR_step with (rs := rs') in VOTE.
-        2: { erewrite <- match_regsets_get; eauto; right; auto. }
-        2: { erewrite <- match_regsets_get; eauto.
-             - eapply match_regsets_get_2; eauto; right; auto.
-             - right; auto. }
-        2: { eapply match_regsets_get_3'; eauto. }
-        destruct VOTE as (rs'' & Hvote & Hrs'').
-        eexists; split.
-        * eapply plus_trans.
-          { apply Hvote. }
-          2: { reflexivity. }
-          econstructor.
-          3: { rewrite Events.E0_right; reflexivity. }
-          { eapply exec_Ireturn; eauto. }
-        apply star_refl.
-        * simpl; rewrite <- Hrs''.
-          erewrite match_regsets_get; eauto.
-          { econstructor; eauto.
-            inv WT_FN; simpl in *.
-            apply wt_instrs in Hcode; inv Hcode.
-            simpl in H3; rewrite <- H3.
-            erewrite <- match_regsets_get; eauto; right; auto. }
-          right; auto.
-
-    - (* exec_function_internal *)
-      inv Hmatch; inv FUN; inv FUN0; simpl in *.
-      eexists; split.
-      + econstructor.
-        * apply exec_function_internal; eauto.
-        * simpl.
-          eapply copy_allR_star_step.
-          3: eassumption.
-          { apply Forall_forall.
-            intros x Hx.
-            inv WT; subst; simpl in *.
-            rewrite <- wt_params in WT_ARGS.
-            apply wt_regset_init_regs; auto. }
-          { eauto with uregs_ok. }
-        * reflexivity.
-      + econstructor; eauto.
-        * apply wt_init_regs.
-          inv WT; simpl in *.
-          rewrite wt_params; auto.
-        * econstructor; eauto.
-        * apply rm_inv_init_regs; auto.
-          { inv WT; simpl in *; apply list_norepet_nodup; auto. }
-          { inv WT; simpl in *. clear -wt_params WT_ARGS.
-            apply has_type_list_length in WT_ARGS.
-            rewrite <- wt_params in WT_ARGS.
-            now rewrite list_length_map in WT_ARGS. }
-
-    - (* exec_function_external *)
-      inv Hmatch; inv FUN; simpl in *.
-      eexists; split.
-      + econstructor.
-        * apply exec_function_external.
-          eapply external_call_symbols_preserved; eauto.
-          apply senv_preserved.
-        * apply star_refl.
-        * rewrite E0_right; reflexivity.
-      + econstructor; eauto.
-        eapply external_call_well_typed; eauto.
-
-    - (* exec_return *)
-      inv Hmatch; inv STACKS.
-      destruct tf; simpl in *.
-      eexists; split.
-      + econstructor.
-        * apply exec_return.
-        * eapply smoveR_step with (rs := trs # res <- vres) in H9.
-          2: { rewrite PMap.gss; rewrite WT_RES0; auto. }
-          eapply H9.
-        * reflexivity.
-      + econstructor; eauto.
-        * intro r.
-          destruct (peq r res); subst.
-          { rewrite PMap.gss; rewrite WT_RES0; auto. }
-          rewrite PMap.gso; auto.
-        * eapply match_regsets_update; eauto.
-          inv FUN; auto.
+    apply match_states_impl in Hmatch.
+    eapply fstep_simulation in Hmatch; eauto.
+    destruct Hmatch as (ts2 & bs2 & Hfplus & Hmatch').
+    exists ts2; split.
+    - apply fplus_plus_step; auto.
+    - eapply fault_match_states_impl; eauto.
   Qed.
+
+  (* Theorem step_simulation s1 t s2 : *)
+  (*   step ge s1 t s2 -> *)
+  (*   forall ts1, *)
+  (*     match_states s1 ts1 -> *)
+  (*     exists ts2, plus step tge ts1 t ts2 /\ match_states s2 ts2. *)
+  (* Proof. *)
+  (*   intros Hstep ts1 Hmatch. *)
+  (*   inv Hstep. *)
+
+  (*   - (* exec_Inop *) *)
+  (*     inv Hmatch; inv FUN; simpl in *. *)
+  (*     eexists; split. *)
+  (*     + econstructor. *)
+  (*       * apply exec_Inop; simpl. *)
+  (*         specialize (CODE pc (Inop pc') H). *)
+  (*         inv CODE; eauto. *)
+  (*       * apply star_refl. *)
+  (*       * reflexivity. *)
+  (*     + repeat (econstructor; eauto). *)
+
+  (*   - (* exec_Iop *) *)
+  (*     inv Hmatch; inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof CODE as Hcode. *)
+  (*     specialize (CODE pc (Iop op args res pc') H); inv CODE. *)
+  (*     assert (Hargs: Forall (reg_used_in_code c) args). *)
+  (*     { apply Forall_forall; intros x Hx; *)
+  (*         eexists; eexists; split; eauto; constructor; auto. } *)
+  (*     eexists; split. *)
+  (*     + econstructor. *)
+  (*       * eapply exec_Iop; eauto. *)
+  (*         eapply match_regs_1_2_eval_operation. *)
+  (*         { eauto. } *)
+  (*         2: { eauto. } *)
+  (*         2: { eauto. } *)
+  (*         apply Forall_forall; intros r Hin. *)
+  (*         eexists; eexists; split; eauto. *)
+  (*         constructor; auto. *)
+  (*       * eapply star_step. *)
+  (*         { eapply exec_Iop; eauto. *)
+  (*           eapply match_regs_1_3_eval_operation. *)
+  (*           { eauto. } *)
+  (*           { eapply res2_not_in_args3 with (l := fun_regs_list f); *)
+  (*               eauto; try reg_used1. *)
+  (*             apply Forall_forall. *)
+  (*             intros r Hin. *)
+  (*             eapply match_regs_exists_r1' with (args1:=args); eauto. } *)
+  (*           2: { eauto. } *)
+  (*           2: { auto. } *)
+  (*           auto. } *)
+  (*         { eapply star_step. *)
+  (*           - eapply exec_Iop; eauto. *)
+  (*             eapply regular_eval_operation; eauto. *)
+  (*             + eapply res2_not_in_args1 with (l := fun_regs_list f); *)
+  (*                 eauto; try reg_used1; reg_used2. *)
+  (*             + eapply res3_not_in_args1 with (l := fun_regs_list f); *)
+  (*                 eauto; try reg_used1; reg_used2. *)
+  (*           - apply star_refl. *)
+  (*           - reflexivity. } *)
+  (*         reflexivity. *)
+  (*       * reflexivity. *)
+  (*     + econstructor; eauto. *)
+  (*       { eapply wt_exec_Iop; eauto. *)
+  (*         eapply wt_instr_at; eauto. } *)
+  (*       * econstructor; eauto. *)
+  (*       * intros r1 r2 r3 Hr1 Hused. *)
+  (*         destruct (peq r1 res); subst. *)
+  (*         { rewrite RM_RES in Hr1; inv Hr1. *)
+  (*           repeat split. *)
+  (*           - rewrite 2!PMap.gss; reflexivity. *)
+  (*           - rewrite PMap.gss, PMap.gso; eauto with rm_wf. *)
+  (*             rewrite PMap.gso; eauto with rm_wf. *)
+  (*             rewrite PMap.gss; reflexivity. *)
+  (*           - rewrite PMap.gss, PMap.gso; eauto with rm_wf. *)
+  (*             rewrite PMap.gss; reflexivity. } *)
+  (*         { assert (Hresused: reg_used_in_code c res). *)
+  (*           { eexists; eexists; split; eauto; apply reg_used_Iop_res. } *)
+  (*           repeat split. *)
+  (*           - rewrite 3!PMap.gso; eauto with rm_inv. *)
+  (*             rewrite PMap.gso; eauto with rm_inv. *)
+  (*             specialize (REGS _ _ _ Hr1 Hused); intuition. *)
+  (*           - rewrite 2!PMap.gso; eauto with rm_inv symmetry. *)
+  (*             rewrite PMap.gso; eauto with rm_wf. *)
+  (*             rewrite PMap.gso; eauto with rm_wf. *)
+  (*             specialize (REGS _ _ _ Hr1 Hused); intuition. *)
+  (*           - rewrite 2!PMap.gso; eauto with rm_inv symmetry. *)
+  (*             rewrite PMap.gso; eauto with rm_wf. *)
+  (*             rewrite PMap.gso; eauto with rm_wf. *)
+  (*             specialize (REGS _ _ _ Hr1 Hused); intuition. } *)
+
+  (*   - (* exec_Iload *) *)
+  (*     inv Hmatch. *)
+  (*     pose proof FUN as Hmatch_function. *)
+  (*     inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof H as Hcode. *)
+  (*     specialize (CODE pc (Iload chunk addr args dst pc') H); inv CODE. *)
+  (*     assert (Hargs: Forall (reg_used_in_code c) args). *)
+  (*     { apply Forall_forall; intros x Hx; *)
+  (*         eexists; eexists; split; eauto; constructor; auto. } *)
+  (*     (* smoveR_inv. *) *)
+  (*     eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto. *)
+  (*     2: { apply Forall_forall; intros r1 Hin. *)
+  (*          assert (Hused: reg_used_in_code c r1). *)
+  (*          { eexists; eexists; split; eauto. *)
+  (*            constructor; auto. } *)
+  (*          assert (Heq: rs' # r1 = rs # r1). *)
+  (*          { destruct (rm # r1) eqn:Hr1. *)
+  (*            specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. } *)
+  (*          rewrite Heq; clear Heq. *)
+  (*          split. *)
+  (*          { apply WT_RS. } *)
+  (*          split. *)
+  (*          { eapply match_regsets_get_2; eauto; right; auto. } *)
+  (*          { eapply match_regsets_get_3'; eauto. } } *)
+  (*     assert (Hty: Val.has_type v (re dst)). *)
+  (*     { inv WT_FN. *)
+  (*       simpl in *. *)
+  (*       specialize (wt_instrs _ _ Hcode). *)
+  (*       inv wt_instrs. *)
+  (*       simpl in *. *)
+  (*       rewrite H8. *)
+  (*       destruct a; inv H1. *)
+  (*       eapply Memory.Mem.load_type; eauto. } *)
+  (*     destruct VOTE_ARGS as (rs'' & Hvote & Hrs''). *)
+  (*     eexists; split. *)
+  (*     + eapply star_plus_trans. *)
+  (*       { apply Hvote. } *)
+  (*       2: { reflexivity. } *)
+  (*       econstructor. *)
+  (*       3: { rewrite Events.E0_right; reflexivity. } *)
+  (*       { eapply exec_Iload; eauto. *)
+  (*         eapply match_regsets_eval_addressing; eauto. *)
+  (*         eapply match_regsets_ext_r; eauto. } *)
+  (*       eapply smoveR_step in MOVE; eauto. *)
+  (*       rewrite PMap.gss; auto. *)
+  (*     + simpl. *)
+  (*       econstructor; eauto. *)
+  (*       intro r. *)
+  (*       destruct (peq dst r); subst. *)
+  (*       * rewrite PMap.gss; auto. *)
+  (*       * rewrite PMap.gso; auto. *)
+  (*       * eapply match_regsets_update; eauto. *)
+  (*         eexists; eexists; split; eauto; solve [constructor; auto]. *)
+
+  (*   - (* exec_Istore *) *)
+  (*     inv Hmatch; inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*                ; fn_params := params *)
+  (*                ; fn_stacksize := stacksize *)
+  (*                ; fn_code := c *)
+  (*                ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof CODE as Hcode. *)
+  (*     specialize (CODE pc (Istore chunk addr args src pc') H); inv CODE. *)
+  (*     eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto. *)
+  (*     2: { apply Forall_forall; intros r1 Hin. *)
+  (*          assert (Hused: reg_used_in_code c r1). *)
+  (*          { eexists; eexists; split; eauto. *)
+  (*            destruct Hin; subst; constructor; assumption. } *)
+  (*          assert (Heq: rs' # r1 = rs # r1). *)
+  (*          { destruct (rm # r1) eqn:Hr1. *)
+  (*            specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. } *)
+  (*          rewrite Heq; clear Heq. *)
+  (*          split. *)
+  (*          { apply WT_RS. } *)
+  (*          split. *)
+  (*          - eapply match_regsets_get_2; eauto; right; auto. *)
+  (*          - eapply match_regsets_get_3'; eauto. } *)
+  (*     destruct VOTE_REGS as (rs'' & Hvote & Hrs''). *)
+  (*     eexists; split. *)
+  (*     + eapply star_plus_trans. *)
+  (*       { apply Hvote. } *)
+  (*       2: { reflexivity. } *)
+  (*       econstructor. *)
+  (*       2: { apply star_refl. } *)
+  (*       2: { rewrite Events.E0_right; reflexivity. } *)
+  (*       eapply exec_Istore; simpl; eauto. *)
+  (*       * erewrite <- rs_map_ext; eauto. *)
+  (*         eapply match_regsets_eval_addressing; eauto. *)
+  (*         apply Forall_forall; intros r Hr; eexists; eexists; split; eauto. *)
+  (*         constructor; auto. *)
+  (*       * rewrite <- Hrs''. *)
+  (*         eapply match_regsets_storev; eauto. *)
+  (*         eexists; eexists; split; eauto; solve [constructor]. *)
+  (*     + econstructor; eauto. *)
+  (*       * econstructor; eauto. *)
+  (*       * eapply match_regsets_ext_r; eauto. *)
+
+  (*   - (* exec_Icall *) *)
+  (*     inv Hmatch. *)
+  (*     pose proof FUN as Hmatch_function. *)
+  (*     inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof H as Hcode. *)
+  (*     specialize (CODE pc (Icall (funsig fd) ros args res pc') Hcode); inv CODE. *)
+  (*     smoveR_inv. *)
+  (*     eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto. *)
+  (*     2: { apply Forall_forall; intros r1 Hin. *)
+  (*          assert (Hused: reg_used_in_code c r1). *)
+  (*          { eexists; eexists; split; eauto. *)
+  (*            apply in_app_or in Hin; destruct Hin as [Hin|Hin]. *)
+  (*            - destruct ros; simpl in *; inv Hin; try contradiction. *)
+  (*              constructor. *)
+  (*            - constructor; auto. } *)
+  (*          assert (Heq: rs' # r1 = rs # r1). *)
+  (*          { destruct (rm # r1) eqn:Hr1. *)
+  (*            specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. } *)
+  (*          rewrite Heq; clear Heq. *)
+  (*          split. *)
+  (*          { apply WT_RS. } *)
+  (*          split. *)
+  (*          { eapply match_regsets_get_2; eauto; right; auto. } *)
+  (*          { eapply match_regsets_get_3'; eauto. } } *)
+  (*     destruct VOTE_ARGS as (rs'' & Hvote & Hrs''). *)
+  (*     assert (Htf: exists tf, transf_fundef fd = OK tf /\ *)
+  (*                          find_function tge ros rs = Some tf). *)
+  (*     { unfold find_function in *. *)
+  (*       destruct ros. *)
+  (*       - apply functions_translated in H0. *)
+  (*         destruct H0 as (cu & tf & Hfind & Htrans & Hlink). *)
+  (*         eexists; split; eauto. *)
+  (*       - destruct (Genv.find_symbol ge i) eqn:Hsym; try congruence. *)
+  (*         apply function_ptr_translated in H0. *)
+  (*         destruct H0 as (cu & tf & Hfind & Htrans & Hlink). *)
+  (*         eexists; split; eauto. *)
+  (*         rewrite symbols_preserved, Hsym; auto. } *)
+  (*     destruct Htf as (tf & Htransf_fundef & Hfind_tf). *)
+  (*     eexists; split. *)
+  (*     + eapply star_plus_trans. *)
+  (*       { apply Hvote. } *)
+  (*       2: { reflexivity. } *)
+  (*       econstructor. *)
+  (*       2: { apply star_refl. } *)
+  (*       2: { rewrite Events.E0_right; reflexivity. } *)
+  (*       eapply exec_Icall; simpl. *)
+  (*       { eauto. } *)
+  (*       { erewrite find_function_proper. *)
+  (*         { eauto. } *)
+  (*         { intros r ?; subst. *)
+  (*           etransitivity. *)
+  (*           2: { rewrite <- Hrs''; reflexivity. } *)
+  (*           eapply match_regsets_get; eauto. *)
+  (*           right; eexists; eexists; split; eauto; constructor. } *)
+  (*         eauto. } *)
+  (*       { apply sig_function_translated; auto. } *)
+  (*     + erewrite rs_args_rs'_args; eauto. *)
+  (*       2: { apply Forall_forall; intros r' Hr'; *)
+  (*            eexists; eexists; split; eauto; constructor; auto. } *)
+  (*       erewrite rs_map_ext; eauto. *)
+  (*       constructor; auto. *)
+  (*       { inv WT_FN; simpl in *. *)
+  (*         apply wt_instrs in Hcode; inv Hcode. *)
+  (*         rewrite <- H11. *)
+  (*         erewrite <- rs_map_ext; eauto. *)
+  (*         erewrite <- rs_args_rs'_args; eauto. *)
+  (*         2: { apply Forall_forall; intros x Hx. *)
+  (*              eexists; eexists; split; eauto; constructor; auto. } *)
+  (*         apply wt_regset_list; auto. } *)
+  (*       { econstructor; eauto. *)
+  (*         - inv WT_FN. *)
+  (*           simpl in *. *)
+  (*           apply wt_instrs in Hcode. *)
+  (*           inv Hcode; auto. *)
+  (*         - eapply match_regsets_ext_r; eauto. *)
+  (*         - eexists; eexists; split; eauto; solve [constructor; auto]. *)
+  (*         - econstructor; eauto. } *)
+  (*       { apply transf_function_match_fundef; auto. } *)
+
+  (*   - (* exec_Itailcall *) *)
+  (*     inv Hmatch. *)
+  (*     pose proof FUN as Hmatch_function. *)
+  (*     inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof H as Hcode. *)
+  (*     specialize (CODE pc (Itailcall (funsig fd) ros args) Hcode); inv CODE. *)
+  (*     eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto. *)
+  (*     2: { apply Forall_forall; intros r1 Hin. *)
+  (*          assert (Hused: reg_used_in_code c r1). *)
+  (*          { eexists; eexists; split; eauto. *)
+  (*            apply in_app_or in Hin; destruct Hin as [Hin|Hin]. *)
+  (*            - destruct ros; simpl in *; inv Hin; try contradiction. *)
+  (*              constructor. *)
+  (*            - constructor; auto. } *)
+  (*          assert (Heq: rs' # r1 = rs # r1). *)
+  (*          { destruct (rm # r1) eqn:Hr1. *)
+  (*            specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. } *)
+  (*          rewrite Heq; clear Heq. *)
+  (*          split. *)
+  (*          { apply WT_RS. } *)
+  (*          split. *)
+  (*          { eapply match_regsets_get_2; eauto; right; auto. } *)
+  (*          { eapply match_regsets_get_3'; eauto. } } *)
+  (*     destruct VOTE_ARGS as (rs'' & Hvote & Hrs''). *)
+  (*     assert (Htf: exists tf, transf_fundef fd = OK tf /\ *)
+  (*                          find_function tge ros rs = Some tf). *)
+  (*     { unfold find_function in *. *)
+  (*       destruct ros. *)
+  (*       - apply functions_translated in H0. *)
+  (*         destruct H0 as (cu & tf & Hfind & Htrans & Hlink). *)
+  (*         eexists; split; eauto. *)
+  (*       - destruct (Genv.find_symbol ge i) eqn:Hsym; try congruence. *)
+  (*         apply function_ptr_translated in H0. *)
+  (*         destruct H0 as (cu & tf & Hfind & Htrans & Hlink). *)
+  (*         eexists; split; eauto. *)
+  (*         rewrite symbols_preserved, Hsym; auto. } *)
+  (*     destruct Htf as (tf & Htransf_fundef & Hfind_tf). *)
+  (*     eexists; split. *)
+  (*     + eapply star_plus_trans. *)
+  (*       { apply Hvote. } *)
+  (*       2: { reflexivity. } *)
+  (*       econstructor. *)
+  (*       2: { apply star_refl. } *)
+  (*       2: { rewrite Events.E0_right; reflexivity. } *)
+  (*       eapply exec_Itailcall; simpl. *)
+  (*       { eauto. } *)
+  (*       { erewrite find_function_proper. *)
+  (*         { eauto. } *)
+  (*         { intros r ?; subst. *)
+  (*           etransitivity. *)
+  (*           2: { rewrite <- Hrs''; reflexivity. } *)
+  (*           eapply match_regsets_get; eauto. *)
+  (*           right; eexists; eexists; split; eauto; constructor. } *)
+  (*         eauto. } *)
+  (*       { apply sig_function_translated; auto. } *)
+  (*       { eauto. } *)
+  (*     + erewrite rs_args_rs'_args; eauto. *)
+  (*       2: { apply Forall_forall; intros r' Hr'; *)
+  (*            eexists; eexists; split; eauto; constructor; auto. } *)
+  (*       erewrite rs_map_ext; eauto. *)
+  (*       constructor; auto. *)
+  (*       { inv WT_FN; simpl in *. *)
+  (*         apply wt_instrs in Hcode; inv Hcode. *)
+  (*         rewrite <- H6. *)
+  (*         erewrite <- rs_map_ext; eauto. *)
+  (*         erewrite <- rs_args_rs'_args; eauto. *)
+  (*         2: { apply Forall_forall; intros x Hx. *)
+  (*              eexists; eexists; split; eauto; constructor; auto. } *)
+  (*         apply wt_regset_list; auto. } *)
+  (*       { eapply match_stackframes_sig_proper. *)
+  (*         2: { eauto. } *)
+  (*         inv WT_FN. *)
+  (*         simpl in *. *)
+  (*         apply wt_instrs in Hcode. *)
+  (*         inv Hcode; auto. } *)
+  (*       { apply transf_function_match_fundef; auto. } *)
+
+  (*   - (* exec_Ibuiltin *) *)
+  (*     inv Hmatch. *)
+  (*     pose proof FUN as Hmatch_function. *)
+  (*     inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof H as Hcode. *)
+  (*     specialize (CODE pc (Ibuiltin ef args res pc') Hcode); inv CODE. *)
+  (*     { (* No result register *) *)
+  (*       eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto. *)
+  (*       2: { apply Forall_forall; intros r1 Hin. *)
+  (*            assert (Hused: reg_used_in_code c r1). *)
+  (*            { eexists; eexists; split; eauto; constructor; auto. } *)
+  (*            assert (Heq: rs' # r1 = rs # r1). *)
+  (*            { destruct (rm # r1) eqn:Hr1. *)
+  (*              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. } *)
+  (*            rewrite Heq; clear Heq. *)
+  (*            split. *)
+  (*            { apply WT_RS. } *)
+  (*            split. *)
+  (*            { eapply match_regsets_get_2; eauto; right; auto. } *)
+  (*            { eapply match_regsets_get_3'; eauto. } } *)
+  (*       destruct VOTE_ARGS as (rs'' & Hvote & Hrs''). *)
+  (*       eexists; split. *)
+  (*       + eapply star_plus_trans. *)
+  (*         { apply Hvote. } *)
+  (*         2: { reflexivity. } *)
+  (*         econstructor. *)
+  (*         3: { rewrite Events.E0_right; reflexivity. } *)
+  (*         { eapply exec_Ibuiltin; simpl. *)
+  (*           { eauto. } *)
+  (*           { eapply eval_builtin_args_preserved. *)
+  (*             - intros id; apply symbols_preserved. *)
+  (*             - eapply eval_builtin_args_proper; eauto. *)
+  (*               apply Forall_forall. *)
+  (*               intros arg Harg r Hr. *)
+  (*               rewrite <- Hrs''. *)
+  (*               eapply match_regsets_get; eauto. *)
+  (*               right; eexists; eexists; split; eauto. *)
+  (*               constructor. *)
+  (*               apply in_regs_of_builtin_args_exists_in_builtin_arg. *)
+  (*               apply Exists_exists. *)
+  (*               eexists; split; eauto. } *)
+  (*           { eapply external_call_symbols_preserved; eauto. *)
+  (*             apply senv_preserved. } } *)
+  (*         rewrite regmap_setres_id; auto. *)
+  (*         apply star_refl. *)
+  (*       + rewrite regmap_setres_id; auto. *)
+  (*         econstructor; eauto. *)
+  (*         eapply match_regsets_ext_r; eauto. } *)
+  (*     { (* With result register *) *)
+  (*       eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto. *)
+  (*       2: { apply Forall_forall; intros r1 Hin. *)
+  (*            assert (Hused: reg_used_in_code c r1). *)
+  (*            { eexists; eexists; split; eauto; constructor; auto. } *)
+  (*            assert (Heq: rs' # r1 = rs # r1). *)
+  (*            { destruct (rm # r1) eqn:Hr1. *)
+  (*              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. } *)
+  (*            rewrite Heq; clear Heq. *)
+  (*            split. *)
+  (*            { apply WT_RS. } *)
+  (*            split. *)
+  (*            { eapply match_regsets_get_2; eauto; right; auto. } *)
+  (*            { eapply match_regsets_get_3'; eauto. } } *)
+  (*       destruct VOTE_ARGS as (rs'' & Hvote & Hrs''). *)
+  (*       assert (Hty: Val.has_type vres (re res1)). *)
+  (*       { inv WT_FN. *)
+  (*         simpl in *. *)
+  (*         specialize (wt_instrs _ _ Hcode). *)
+  (*         inv wt_instrs. *)
+  (*         simpl in *. *)
+  (*         rewrite H7. *)
+  (*         eapply external_call_well_typed; eauto. } *)
+  (*       eexists; split. *)
+  (*       + eapply star_plus_trans. *)
+  (*         { apply Hvote. } *)
+  (*         2: { reflexivity. } *)
+  (*         econstructor. *)
+  (*         3: { rewrite Events.E0_right; reflexivity. } *)
+  (*         { eapply exec_Ibuiltin; simpl. *)
+  (*           { eauto. } *)
+  (*           { eapply eval_builtin_args_preserved. *)
+  (*             - intros id; apply symbols_preserved. *)
+  (*             - eapply eval_builtin_args_proper; eauto. *)
+  (*               apply Forall_forall. *)
+  (*               intros arg Harg r Hr. *)
+  (*               rewrite <- Hrs''. *)
+  (*               eapply match_regsets_get; eauto. *)
+  (*               right; eexists; eexists; split; eauto. *)
+  (*               constructor. *)
+  (*               apply in_regs_of_builtin_args_exists_in_builtin_arg. *)
+  (*               apply Exists_exists. *)
+  (*               eexists; split; eauto. } *)
+  (*           { eapply external_call_symbols_preserved; eauto. *)
+  (*             apply senv_preserved. } } *)
+  (*         eapply smoveR_step in MOVE; eauto. *)
+  (*         simpl. *)
+  (*         rewrite PMap.gss; auto. *)
+  (*       + simpl. *)
+  (*         econstructor; eauto. *)
+  (*         intro r. *)
+  (*         destruct (peq res1 r); subst. *)
+  (*         * rewrite PMap.gss; auto. *)
+  (*         * rewrite PMap.gso; auto. *)
+  (*         * eapply match_regsets_update; eauto. *)
+  (*           eexists; eexists; split; eauto; solve [constructor; auto]. } *)
+
+  (*   - (* exec_Icond *) *)
+  (*     inv Hmatch. *)
+  (*     pose proof FUN as Hmatch_function. *)
+  (*     inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof H as Hcode. *)
+  (*     specialize (CODE pc (Icond cond args ifso ifnot) Hcode); inv CODE. *)
+  (*     eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto. *)
+  (*     2: { apply Forall_forall; intros r1 Hin. *)
+  (*          assert (Hused: reg_used_in_code c r1). *)
+  (*          { eexists; eexists; split; eauto; constructor; auto. } *)
+  (*          assert (Heq: rs' # r1 = rs # r1). *)
+  (*          { destruct (rm # r1) eqn:Hr1. *)
+  (*            specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. } *)
+  (*          rewrite Heq; clear Heq. *)
+  (*          split. *)
+  (*          { apply WT_RS. } *)
+  (*          split. *)
+  (*          { eapply match_regsets_get_2; eauto; right; auto. } *)
+  (*          { eapply match_regsets_get_3'; eauto. } } *)
+  (*     destruct VOTE_ARGS as (rs'' & Hvote & Hrs''). *)
+  (*     eexists; split. *)
+  (*     + eapply star_plus_trans. *)
+  (*       { apply Hvote. } *)
+  (*       2: { reflexivity. } *)
+  (*       econstructor. *)
+  (*       3: { rewrite Events.E0_right; reflexivity. } *)
+  (*       { eapply exec_Icond with (b := b) *)
+  (*                                (pc' := if b then ifso else ifnot); *)
+  (*           simpl; auto. *)
+  (*         { eauto. } *)
+  (*         { eapply eval_condition_lessdef; eauto. *)
+  (*           - erewrite rs_args_rs'_args; eauto. *)
+  (*             + erewrite rs_map_ext; eauto. *)
+  (*               apply lessdef_list_refl. *)
+  (*             + apply Forall_forall; intros x Hx. *)
+  (*               eexists; eexists; split; eauto; constructor; auto. *)
+  (*           - apply Memory.Mem.extends_refl. } } *)
+  (*       apply star_refl. *)
+  (*     + econstructor; eauto. *)
+  (*       eapply match_regsets_ext_r; eauto. *)
+
+  (*   - (* exec_Ijumptable *) *)
+  (*     inv Hmatch. *)
+  (*     pose proof FUN as Hmatch_function. *)
+  (*     inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof H as Hcode. *)
+  (*     specialize (CODE pc (Ijumptable arg tbl) Hcode); inv CODE. *)
+  (*     assert (Hused: reg_used_in_code c arg). *)
+  (*     { eexists; eexists; split; eauto; constructor. } *)
+  (*     eapply maj_voteR_step with (rs := rs') in VOTE. *)
+  (*     2: { erewrite <- match_regsets_get; eauto; right; auto. } *)
+  (*     2: { erewrite <- match_regsets_get; eauto. *)
+  (*          - eapply match_regsets_get_2; eauto; right; auto. *)
+  (*          - right; auto. } *)
+  (*     2: { eapply match_regsets_get_3'; eauto. } *)
+  (*     destruct VOTE as (rs'' & Hvote & Hrs''). *)
+  (*     eexists; split. *)
+  (*     + eapply plus_trans. *)
+  (*       { apply Hvote. } *)
+  (*       2: { reflexivity. } *)
+  (*       econstructor. *)
+  (*       3: { rewrite Events.E0_right; reflexivity. } *)
+  (*       { eapply exec_Ijumptable; eauto. *)
+  (*         rewrite <- Hrs''. *)
+  (*         erewrite <- match_regsets_get; eauto; right; auto. } *)
+  (*       apply star_refl. *)
+  (*     + econstructor; eauto. *)
+  (*       eapply match_regsets_ext_r; eauto. *)
+
+  (*   - (* exec_Ireturn *) *)
+  (*     inv Hmatch. *)
+  (*     pose proof FUN as Hmatch_function. *)
+  (*     inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof H as Hcode. *)
+  (*     specialize (CODE pc (Ireturn or) Hcode); inv CODE. *)
+  (*     + (* Without return value *) *)
+  (*       eexists; split. *)
+  (*       * econstructor. *)
+  (*         { apply exec_Ireturn; eauto. } *)
+  (*         { apply star_refl. } *)
+  (*         reflexivity. *)
+  (*       * econstructor; eauto. *)
+  (*         inv WT_FN; simpl in *. *)
+  (*         apply wt_instrs in Hcode; inv Hcode; auto. *)
+  (*     + (* With return value *) *)
+  (*       assert (Hused: reg_used_in_code c arg1). *)
+  (*       { eexists; eexists; split; eauto; constructor. } *)
+  (*       eapply maj_voteR_step with (rs := rs') in VOTE. *)
+  (*       2: { erewrite <- match_regsets_get; eauto; right; auto. } *)
+  (*       2: { erewrite <- match_regsets_get; eauto. *)
+  (*            - eapply match_regsets_get_2; eauto; right; auto. *)
+  (*            - right; auto. } *)
+  (*       2: { eapply match_regsets_get_3'; eauto. } *)
+  (*       destruct VOTE as (rs'' & Hvote & Hrs''). *)
+  (*       eexists; split. *)
+  (*       * eapply plus_trans. *)
+  (*         { apply Hvote. } *)
+  (*         2: { reflexivity. } *)
+  (*         econstructor. *)
+  (*         3: { rewrite Events.E0_right; reflexivity. } *)
+  (*         { eapply exec_Ireturn; eauto. } *)
+  (*       apply star_refl. *)
+  (*       * simpl; rewrite <- Hrs''. *)
+  (*         erewrite match_regsets_get; eauto. *)
+  (*         { econstructor; eauto. *)
+  (*           inv WT_FN; simpl in *. *)
+  (*           apply wt_instrs in Hcode; inv Hcode. *)
+  (*           simpl in H3; rewrite <- H3. *)
+  (*           erewrite <- match_regsets_get; eauto; right; auto. } *)
+  (*         right; auto. *)
+
+  (*   - (* exec_function_internal *) *)
+  (*     inv Hmatch; inv FUN; inv FUN0; simpl in *. *)
+  (*     eexists; split. *)
+  (*     + econstructor. *)
+  (*       * apply exec_function_internal; eauto. *)
+  (*       * simpl. *)
+  (*         eapply copy_allR_star_step. *)
+  (*         3: eassumption. *)
+  (*         { apply Forall_forall. *)
+  (*           intros x Hx. *)
+  (*           inv WT; subst; simpl in *. *)
+  (*           rewrite <- wt_params in WT_ARGS. *)
+  (*           apply wt_regset_init_regs; auto. } *)
+  (*         { eauto with uregs_ok. } *)
+  (*       * reflexivity. *)
+  (*     + econstructor; eauto. *)
+  (*       * apply wt_init_regs. *)
+  (*         inv WT; simpl in *. *)
+  (*         rewrite wt_params; auto. *)
+  (*       * econstructor; eauto. *)
+  (*       * apply rm_inv_init_regs; auto. *)
+  (*         { inv WT; simpl in *; apply list_norepet_nodup; auto. } *)
+  (*         { inv WT; simpl in *. clear -wt_params WT_ARGS. *)
+  (*           apply has_type_list_length in WT_ARGS. *)
+  (*           rewrite <- wt_params in WT_ARGS. *)
+  (*           now rewrite list_length_map in WT_ARGS. } *)
+
+  (*   - (* exec_function_external *) *)
+  (*     inv Hmatch; inv FUN; simpl in *. *)
+  (*     eexists; split. *)
+  (*     + econstructor. *)
+  (*       * apply exec_function_external. *)
+  (*         eapply external_call_symbols_preserved; eauto. *)
+  (*         apply senv_preserved. *)
+  (*       * apply star_refl. *)
+  (*       * rewrite E0_right; reflexivity. *)
+  (*     + econstructor; eauto. *)
+  (*       eapply external_call_well_typed; eauto. *)
+
+  (*   - (* exec_return *) *)
+  (*     inv Hmatch; inv STACKS. *)
+  (*     destruct tf; simpl in *. *)
+  (*     eexists; split. *)
+  (*     + econstructor. *)
+  (*       * apply exec_return. *)
+  (*       * eapply smoveR_step with (rs := trs # res <- vres) in H9. *)
+  (*         2: { rewrite PMap.gss; rewrite WT_RES0; auto. } *)
+  (*         eapply H9. *)
+  (*       * reflexivity. *)
+  (*     + econstructor; eauto. *)
+  (*       * intro r. *)
+  (*         destruct (peq r res); subst. *)
+  (*         { rewrite PMap.gss; rewrite WT_RES0; auto. } *)
+  (*         rewrite PMap.gso; auto. *)
+  (*       * eapply match_regsets_update; eauto. *)
+  (*         inv FUN; auto. *)
+  (* Qed. *)
 
   Lemma transf_initial_states st1 :
     initial_state prog st1 ->

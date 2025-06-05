@@ -19,52 +19,51 @@ Import ListNotations.
 
 Definition fstate := (RTL.state * list bool)%type.
 
+(* (** Describes how normal execution affects the fault state. A function *)
+(*     from the first three arguments (initial RTL state and its fault *)
+(*     state, and final RTL state) to the final fault state. *) *)
+(* Inductive next : fstate -> fstate -> Prop := *)
+(* (* Function-internal steps don't affect the fault state. *) *)
+(* (* | next_State : forall stk f sp pc rs m stk' f' sp' pc' rs' m' bs, *) *)
+(* (*     next (State stk f sp pc rs m, bs) (State stk' f' sp' pc' rs' m', bs) *) *)
+(* | next_State : forall stk f sp pc rs m s' bs, *)
+(*     next (State stk f sp pc rs m, bs) (s', bs) *)
+(* (* Stepping into a new function pushes a fresh fault state on the stack. *) *)
+(* | next_Callstate : forall stk fd args m stk' f sp pc rs m' bs, *)
+(*     next (Callstate stk fd args m, bs) (State stk' f sp pc rs m', false :: bs) *)
+(* (* Returning from a function pops the fault state stack. *) *)
+(* | next_Returnstate : forall stk v m stk' f sp pc rs m' b bs, *)
+(*     next (Returnstate stk v m, b :: bs) (State stk' f sp pc rs m', bs). *)
+
 (** Describes how normal execution affects the fault state. A function
     from the first three arguments (initial RTL state and its fault
     state, and final RTL state) to the final fault state. *)
-Inductive next : fstate -> fstate -> Prop :=
+Inductive next : RTL.state -> list bool -> RTL.state -> list bool -> Prop :=
+(* Function-internal steps don't affect the fault state. *)
 | next_State : forall stk f sp pc rs m stk' f' sp' pc' rs' m' bs,
-    next (State stk f sp pc rs m, bs) (State stk' f' sp' pc' rs' m', bs)
-(* | next_Callstate : forall stk f args m stk' f' args' m' bs, *)
-(*     next (Callstate stk f args m, bs) (Callstate stk' f' args' m', bs) *)
-(* | next_Returnstate : forall stk v m stk' v' m' *)
-(*     next (Callstate stk f args m, bs) (Callstate stk' f' args' m', bs) *)
-.
-(* TODO: Callstate and Returnstate *)
-
-(* Inductive state : Type := *)
-(*   | State: *)
-(*       forall (stack: list stackframe) (**r call stack *) *)
-(*              (f: function)            (**r current function *) *)
-(*              (sp: val)                (**r stack pointer *) *)
-(*              (pc: node)               (**r current program point in [c] *) *)
-(*              (rs: regset)             (**r register state *) *)
-(*              (m: mem),                (**r memory state *) *)
-(*       state *)
-(*   | Callstate: *)
-(*       forall (stack: list stackframe) (**r call stack *) *)
-(*              (f: fundef)              (**r function to call *) *)
-(*              (args: list val)         (**r arguments to the call *) *)
-(*              (m: mem),                (**r memory state *) *)
-(*       state *)
-(*   | Returnstate: *)
-(*       forall (stack: list stackframe) (**r call stack *) *)
-(*              (v: val)                 (**r return value for the call *) *)
-(*              (m: mem),                (**r memory state *) *)
-(*       state. *)
-
-(* Inductive faults_wf : fstate -> Prop := *)
-(* | faults_wf_State : forall frame stk f sp pc rs m b bs, *)
-(*     faults_wf (State stk f sp pc rs m, bs) -> *)
-(*     faults_wf (State (frame :: stk) f sp pc rs m, b :: bs). *)
-(* (* TODO: Callstate and Returnstate *) *)
+    next (State stk f sp pc rs m) bs (State stk' f' sp' pc' rs' m') bs
+| next_State_call : forall f pc sig ros args res pc' stk sp rs m stk' fd args' m' bs,
+    (fn_code f)!pc = Some (Icall sig ros args res pc') ->
+    next (State stk f sp pc rs m) bs (Callstate stk' fd args' m') (false :: bs)
+| next_State_tailcall : forall sig ros args stk f sp pc rs m stk' fd args' m' bs,
+    (fn_code f)!pc = Some (Itailcall sig ros args) ->
+    next (State stk f sp pc rs m) bs (Callstate stk' fd args' m') bs
+| next_State_return : forall stk f sp pc rs m stk' v m' bs,
+  next (State stk f sp pc rs m) bs (Returnstate stk' v m') bs
+| next_Callstate : forall stk fd args m s' bs,
+    next (Callstate stk fd args m) bs s' bs
+| next_Returnstate : forall stk v m s' b bs,
+    next (Returnstate stk v m) (b :: bs) s' bs.
 
 (** Zap relation *)
-Inductive zap : fstate -> fstate -> Prop :=
-  (* Assign arbitrary value to arbitrary register. *)
-  zap_reg : forall stk f sp pc rs m bs r v,
-      zap (State stk f sp pc rs m, false :: bs)
-        (State stk f sp pc (rs # r <- v) m, true :: bs).
+Inductive zap : RTL.state -> list bool -> RTL.state -> list bool -> Prop :=
+  (* Assign arbitrary value to arbitrary register, and update the
+     fault state to mark that a fault has occurred. *)
+| zap_reg : forall stk f sp pc rs m bs r v,
+    zap (State stk f sp pc rs m) (false :: bs)
+      (State stk f sp pc (rs # r <- v) m) (true :: bs)
+| zap_nothing : forall s bs,
+  zap s bs s bs.
 
 Section fstep.
   Variable ge : genv.
@@ -72,37 +71,67 @@ Section fstep.
   (** Step relation lifted to states augmented with fault state. Uses
       the [next] relation to allow normal execution to affect the
       fault state (e.g., pushing/popping the fault budget stack). *)
-  Inductive fstep : fstate -> trace -> fstate -> Prop :=
+  Inductive fstep : RTL.state -> list bool -> trace -> RTL.state -> list bool -> Prop :=
   | fstep_step : forall s s' bs bs' t,
       RTL.step ge s t s' ->
-      next (s, bs) (s', bs') ->
-      fstep (s, bs) t (s', bs').
+      next s bs s' bs' ->
+      fstep s bs t s' bs'.
 
-  Inductive fstar : fstate -> trace -> RTL.state -> Prop :=
+  (* Inductive fstar : RTL.state -> list bool -> trace -> RTL.state -> Prop := *)
+  (* | fstar_refl: forall s bs, *)
+  (*     fstar s bs E0 s *)
+  (* | fstar_step: forall s1 t1 s2 t2 s3 bs1 t, *)
+  (*     (forall s1' bs1', zap s1 bs1 s1' bs1' -> *)
+  (*                  exists bs2, fstep s1' bs1' t1 s2 bs2 /\ *)
+  (*                           fstar s2 bs2 t2 s3) -> *)
+  (*     t = t1 ** t2 -> *)
+  (*     fstar s1 bs1 t s3. *)
+  
+  (* Inductive fstar : RTL.state -> list bool -> trace -> RTL.state -> Prop := *)
+  (* | fstar_refl: forall s bs, *)
+  (*     fstar s bs E0 s *)
+  (* | fstar_step: forall s1 t1 s2 t2 s3 bs1 t, *)
+  (*     (forall s1' bs1', zap s1 bs1 s1' bs1' -> *)
+  (*                  exists bs2, fstep s1' bs1' t1 s2 bs2) -> *)
+  (*     (forall bs2, fstar s2 bs2 t2 s3) -> *)
+  (*     t = t1 ** t2 -> *)
+  (*     fstar s1 bs1 t s3. *)
+
+  Inductive fstar : RTL.state -> list bool -> trace -> RTL.state -> Prop :=
   | fstar_refl: forall s bs,
-      fstar (s, bs) E0 s
+      fstar s bs E0 s
   | fstar_step: forall s1 t1 s2 t2 s3 bs1 t,
-      (forall s1' bs1', zap (s1, bs1) (s1', bs1') ->
-                   exists bs2, fstep (s1', bs1') t1 (s2, bs2) ->
-                          fstar (s2, bs2) t2 s3) ->
+      (forall s1' bs1',
+          zap s1 bs1 s1' bs1' ->
+          exists bs2, fstep s1' bs1' t1 s2 bs2) ->
+      (forall s1' bs1' bs2,
+          zap s1 bs1 s1' bs1' ->
+          fstep s1' bs1' t1 s2 bs2 ->
+          fstar s2 bs2 t2 s3) ->
       t = t1 ** t2 ->
-      fstar (s1, bs1) t s3.
+      fstar s1 bs1 t s3.
 
-  Inductive fplus : fstate -> trace -> RTL.state -> Prop :=
-    fplus_left: forall s1 t1 s2 t2 s3 bs1 t,
-        (forall s1' bs1', zap (s1, bs1) (s1', bs1') ->
-                     exists bs2, fstep (s1', bs1') t1 (s2, bs2) ->
-                            fstar (s2, bs2) t2 s3) ->
-        t = t1 ** t2 ->
-        fplus (s1, bs1) t s3.
+  (* Inductive fplus : RTL.state -> list bool -> trace -> RTL.state -> Prop := *)
+  (* | fplus_left: forall s1 t1 s2 t2 s3 bs1 t, *)
+  (*     (forall s1' bs1', zap s1 bs1 s1' bs1' -> *)
+  (*                  exists bs2, fstep s1' bs1' t1 s2 bs2) -> *)
+  (*     (forall bs2, fstar s2 bs2 t2 s3) -> *)
+  (*     t = t1 ** t2 -> *)
+  (*     fplus s1 bs1 t s3. *)
+
+  Inductive fplus : RTL.state -> list bool -> trace -> RTL.state -> Prop :=
+  | fplus_left: forall s1 t1 s2 t2 s3 bs1 t,
+      (forall s1' bs1',
+          zap s1 bs1 s1' bs1' ->
+          exists bs2, fstep s1' bs1' t1 s2 bs2) ->
+      (forall s1' bs1' bs2,
+          zap s1 bs1 s1' bs1' ->
+          fstep s1' bs1' t1 s2 bs2 ->
+          fstar s2 bs2 t2 s3) ->
+      t = t1 ** t2 ->
+      fplus s1 bs1 t s3.
 
 End fstep.
-
-  (* Theorem step_simulation s1 t s2 : *)
-  (*   step ge s1 t s2 -> *)
-  (*   forall ts1, *)
-  (*     match_states s1 ts1 -> *)
-  (*     exists ts2, plus step tge ts1 t ts2 /\ match_states s2 ts2. *)
 
 Definition match_prog (prog tprog: program) :=
   match_program (fun cu f tf => transf_fundef f = OK tf) eq prog tprog.
@@ -186,14 +215,14 @@ Section FAULT_TOLERANCE.
   Hypothesis TRANSF: match_prog prog tprog.
   Let ge := Genv.globalenv prog.
   Let tge := Genv.globalenv tprog.
-  
+
   (* Variable match_states : RTL.state -> fstate -> Prop. *)
-  
+
   Theorem fstep_simulation (s1 s2 : RTL.state) (t : trace) :
     RTL.step ge s1 t s2 ->
     forall ts1 bs1,
       match_states s1 (ts1, bs1) ->
-      exists ts2 bs2, fplus tge (ts1, bs1) t ts2 /\ match_states s2 (ts2, bs2).
+      exists ts2 bs2, fplus tge ts1 bs1 t ts2 /\ match_states s2 (ts2, bs2).
   Admitted.
 
 End FAULT_TOLERANCE.
