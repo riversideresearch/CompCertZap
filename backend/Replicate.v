@@ -386,72 +386,65 @@ Definition transf_code (re : regenv) (rm : replmap) (c : code)
   : mon unit :=
   iterM (transf_instr re rm) (PTree.elements c).
 
-(** Sets of positives. *)
-(*
-TODO: Switch to <<Regset>> everywhere.
-*)
-Module PSet.
-  Include FSetAVL.Make(OrderedPositive).
-  Include FSetDecide.Decide.
-End PSet.
+(** Functions for sets of registers *)
 
-Definition PSet_of_list (l : list positive) : PSet.t  :=
-  fold_right (fun acc p => PSet.add acc p) PSet.empty l.
+Definition Regset_of_list (l : list positive) : Regset.t  :=
+  fold_right (fun acc p => Regset.add acc p) Regset.empty l.
 
-Definition PSet_of_option (x : option positive) : PSet.t :=
+Definition Regset_of_option (x : option positive) : Regset.t :=
   match x with
-  | Some p => PSet.singleton p
-  | None => PSet.empty
+  | Some p => Regset.singleton p
+  | None => Regset.empty
   end.
 
 (** All registers that appear in an instruction (arguments or
     destination). *)
 (* TODO: Relate to <<instr_uses>>, <<instr_defined>>. *)
-Definition instr_regs (i : instruction) : PSet.t :=
+Definition instr_regs (i : instruction) : Regset.t :=
   match i with
-  | Inop _ => PSet.empty
+  | Inop _ => Regset.empty
   | Iop _ args res _ =>
-      PSet.union (PSet_of_list args) (PSet.singleton res)
+      Regset.union (Regset_of_list args) (Regset.singleton res)
   | Iload _ _ args dst _ =>
-      PSet.union (PSet_of_list args) (PSet.singleton dst)
+      Regset.union (Regset_of_list args) (Regset.singleton dst)
   | Istore _ _ args src _ =>
-      PSet.union (PSet_of_list args) (PSet.singleton src)
+      Regset.union (Regset_of_list args) (Regset.singleton src)
   | Icall _ (inl r) args res _ =>
-      PSet.union (PSet_of_list (r :: args)) (PSet.singleton res)
+      Regset.union (Regset_of_list (r :: args)) (Regset.singleton res)
   | Icall _ _ args res _ =>
-      PSet.union (PSet_of_list args) (PSet.singleton res)
-  | Itailcall _ (inl r) args => PSet_of_list (r :: args)
-  | Itailcall _ _ args => PSet_of_list args
+      Regset.union (Regset_of_list args) (Regset.singleton res)
+  | Itailcall _ (inl r) args => Regset_of_list (r :: args)
+  | Itailcall _ _ args => Regset_of_list args
   | Ibuiltin _ args res _ =>
-      PSet.union (PSet_of_list (regs_of_builtin_args args))
-        (PSet_of_option (reg_of_builtin_res res))
-  | Icond _ args _ _ => PSet_of_list args
-  | Ijumptable arg _ => PSet.singleton arg
-  | Ireturn (Some arg) => PSet.singleton arg
-  | Ireturn None => PSet.empty
+      Regset.union (Regset_of_list (regs_of_builtin_args args))
+        (Regset_of_option (reg_of_builtin_res res))
+  | Icond _ args _ _ => Regset_of_list args
+  | Ijumptable arg _ => Regset.singleton arg
+  | Ireturn (Some arg) => Regset.singleton arg
+  | Ireturn None => Regset.empty
   end.
 
 (** All registers that appear in the given code (used in
     instructions). *)
-Definition code_regs (c : code) : PSet.t :=
-  PTree.fold (fun rs _ instr => PSet.union rs (instr_regs instr)) c PSet.empty.
+Definition code_regs (c : code) : Regset.t :=
+  PTree.fold (fun rs _ instr => Regset.union rs (instr_regs instr)) c Regset.empty.
 
-Definition all_regs (params : list reg) (c : code) : PSet.t :=
-  PSet.union (PSet_of_list params) (code_regs c).
+Definition all_regs (params : list reg) (c : code) : Regset.t :=
+  Regset.union (Regset_of_list params) (code_regs c).
 
 Definition all_regs_list (params : list reg) (c : code) : list reg :=
-  PSet.elements (all_regs params c).
+  Regset.elements (all_regs params c).
 
 (** All registers that appear in the given function (params + regs
     used in instructions). *)
-Definition fun_regs (f : function) : PSet.t :=
+Definition fun_regs (f : function) : Regset.t :=
   all_regs f.(fn_params) f.(fn_code).
 
 Definition fun_regs_list (f : function) : list positive :=
   all_regs_list f.(fn_params) f.(fn_code).
 
-Definition max_reg (regs : PSet.t) :=
-  match PSet.max_elt regs with
+Definition max_reg (regs : Regset.t) :=
+  match Regset.max_elt regs with
   | Some p => p
   | None => 1%positive
   end.
