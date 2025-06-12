@@ -364,26 +364,11 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
            ret (PMap.set r1 (r2, r3) rm)
     ) (fun_regs_list f) (PMap.init (xH, xH)).
 
-(** Compute registers that are live-in at the entry point of
-    [f]. Remove the result register of the entry point instruction if
-    it has one (I guess the liveness analysis computes live-out
-    sets?), and union with the arg registers (in case it needs to be
-    added back). *)
+(** Compute registers that are live-in at the entry point of [f]. *)
 Definition live_regs (f : function) : mon Regset.t :=
   match Liveness.analyze f with
-  | Some m =>
-      let pc := fn_entrypoint f in
-      match f.(fn_code) ! pc with
-      | Some instr =>
-          match res_of_instruction instr with
-          | Some res => ret (Regset.union (Regset.remove res (m !! pc))
-                              (Regset_of_list (args_of_instruction instr)))
-          | None => ret (m !! pc)
-          end
-      | None =>
-          error (MSG "Replicate.v:live_regs: missing entry point instruction"
-                   :: nil)
-      end
+  | Some m => let pc := fn_entrypoint f in
+             ret (transfer f pc (m !! pc))
   | None => error (MSG "Replicate.v:live_regs: liveness analysis failed" :: nil)
   end.
 
