@@ -259,7 +259,7 @@ Definition transf_instr
       end
   end.
 
-(* The following two functions are not tail-recursive (because their
+(* The following two functions are not tail recursive (because their
    tail-recursive variants are harder to reason about by induction)
    which could potentially be a problem when translating very large
    functions (containing lots of instructions and/or temporaries).
