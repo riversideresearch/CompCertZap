@@ -22,7 +22,98 @@ Require Import Replicate.
 Require Import Errors.
 Import ListNotations.
 
+Require Import Coq.Logic.ProofIrrelevance.
+
 Local Open Scope positive_scope.
+
+Lemma nil_rev_eq {A : Type} (l : list A) :
+  [] = rev l -> l = [].
+Proof.
+  destruct l; simpl; intro Heq; auto.
+  symmetry in Heq.
+  apply app_eq_nil in Heq.
+  destruct Heq as [_ H]; inv H.
+Qed.
+
+Lemma rev_rev' {A : Type} (l : list A) :
+  rev l = rev' l.
+Proof. unfold rev'; rewrite rev_append_rev, app_nil_r; auto. Qed.
+
+Lemma app_app' {A : Type} (l1 l2 : list A) :
+  l1 ++ l2 = app' l1 l2.
+Proof.
+  unfold app'.
+  rewrite rev_append_rev, <- rev_rev', rev_involutive; reflexivity.
+Qed.
+
+Lemma iterM'_app {A : Type} (f : A -> mon unit) (l1 l2 : list A) s :
+  iterM' f (l1 ++ l2) s = (do _ <- iterM' f l1; iterM' f l2) s.
+Proof.
+  unfold RTLgen.bind.
+  revert l2 s; induction l1; intros l2 s; simpl.
+  { destruct (iterM' f l2 s); auto.
+    f_equal; apply proof_irrelevance. }
+  unfold RTLgen.bind.
+  destruct (f a s); auto.
+  rewrite IHl1.
+  destruct (iterM' f l1 s'); auto.
+  destruct (iterM' f l2 s'0); auto.
+  f_equal; apply proof_irrelevance.
+Qed.
+
+Lemma iterM_iterM'_rev {A : Type} (f : A -> mon unit) (l : list A) s :
+  iterM f l s = iterM' f (rev l) s.
+Proof.
+  revert s; induction l; intro s; simpl; auto.
+  unfold RTLgen.bind.
+  rewrite IHl, iterM'_app.
+  simpl; unfold RTLgen.bind; simpl.
+  destruct (iterM' f (rev l) s); auto.
+  destruct (f a s'); auto.
+  destruct u0.
+  f_equal; apply proof_irrelevance.
+Qed.
+
+Lemma iterM_iterM'_rev' {A : Type} (f : A -> mon unit) (l : list A) s :
+  iterM f l s = iterM' f (rev' l) s.
+Proof.
+  rewrite <- rev_rev'.
+  apply iterM_iterM'_rev.
+Qed.
+
+Lemma foldM'_app {A B : Type} (f : A -> B -> mon A) (l1 l2 : list B) a s :
+  foldM' f (l1 ++ l2) a s = (do a' <- foldM' f l1 a; foldM' f l2 a') s.
+Proof.
+  unfold RTLgen.bind.
+  revert l2 s a; induction l1; intros l2 s x; simpl.
+  { destruct (foldM' f l2 x s); auto.
+    f_equal; apply proof_irrelevance. }
+  unfold RTLgen.bind.
+  destruct (f x a s); auto.
+  rewrite IHl1.
+  destruct (foldM' f l1 a0 s'); auto.
+  destruct (foldM' f l2 a1 s'0); auto.
+  f_equal; apply proof_irrelevance.
+Qed.
+
+Lemma foldM_foldM'_rev {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A) s :
+  foldM f l a s = foldM' f (rev l) a s.
+Proof.
+  revert a s; induction l; intros x s; simpl; auto.
+  unfold RTLgen.bind.
+  rewrite IHl, foldM'_app.
+  simpl; unfold RTLgen.bind; simpl.
+  destruct (foldM' f (rev l) x s); auto.
+  destruct (f a0 a s'); auto.
+  f_equal; apply proof_irrelevance.
+Qed.
+
+Lemma foldM_foldM'_rev' {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A) s :
+  foldM f l a s = foldM' f (rev' l) a s.
+Proof.
+  rewrite <- rev_rev'.
+  apply foldM_foldM'_rev.
+Qed.
 
 Ltac gen_contra :=
   try match goal with
@@ -889,9 +980,10 @@ Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
   transf_code re rm c s = RTLgen.OK u s' pf ->
   match_code re rm c s'.(st_code).
 Proof.
-  intros Hlt Hc p i Hi.
+  unfold transf_code; intros Hlt Hc p i Hi.
+  rewrite <- iterM_iterM'_rev' in Hc.
   eapply iterM_match_instr; eauto.
-  apply PTree.elements_correct; auto.
+  apply PTree.elements_correct; eauto.
 Qed.
 
 Lemma bind_inversion :
@@ -1165,6 +1257,7 @@ Lemma replication_map_wf f rm s pf :
   replication_map f (init_state f) = RTLgen.OK rm s pf ->
   rm_wf rm (fun_regs_list f).
 Proof.
+  unfold replication_map; rewrite <- foldM_foldM'_rev'.
   intro H; eapply replication_map_wf_aux; eauto.
   apply Forall_forall; intros r Hin.
   apply in_lt_max_reg; auto.
@@ -1335,6 +1428,7 @@ Lemma replication_map_rm_inv' sig params stacksize c entrypoint s pf rm :
   rm_inv params c rm.
 Proof.
   unfold replication_map.
+  rewrite <- foldM_foldM'_rev'.
   intro Hfold.
   apply rm_inv_list_rm_inv.
   set (s0 := init_state

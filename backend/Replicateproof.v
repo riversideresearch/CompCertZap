@@ -24,26 +24,6 @@ Require Import Replicate.
 Require Import Errors.
 Import ListNotations.
 
-Lemma nil_rev_eq {A : Type} (l : list A) :
-  [] = rev l -> l = [].
-Proof.
-  destruct l; simpl; intro Heq; auto.
-  symmetry in Heq.
-  apply app_eq_nil in Heq.
-  destruct Heq as [_ H]; inv H.
-Qed.
-
-Lemma rev_rev' {A : Type} (l : list A) :
-  rev l = rev' l.
-Proof. unfold rev'; rewrite rev_append_rev, app_nil_r; auto. Qed.
-
-Lemma app_app' {A : Type} (l1 l2 : list A) :
-  l1 ++ l2 = app' l1 l2.
-Proof.
-  unfold app'.
-  rewrite rev_append_rev, <- rev_rev', rev_involutive; reflexivity.
-Qed.
-
 Local Open Scope positive_scope.
 
 Definition match_prog (prog tprog: program) :=
@@ -1109,22 +1089,6 @@ Section PRESERVATION.
       constructor.
   Qed.
 
-  Lemma wt_program_prog :
-    wt_program prog.
-  Proof.
-    intros x fd Hin.
-    unfold match_prog, match_program, match_program_gen in TRANSF.
-    destruct fd.
-    2: { constructor. }
-    destruct TRANSF as (H0 & H1 & H2).
-    eapply list_forall2_in_left in H0; eauto.
-    destruct H0 as ([y gd] & Hy & H3 & H4).
-    simpl in *; subst; inv H4.
-    simpl in H3; monadInv H3; monadInv EQ.
-    apply type_function_correct in EQ0.
-    econstructor; eauto.
-  Qed.
-
   Lemma rs_in_singleton (rs : Regmap.t val) args v r :
     rs ## args = [v] ->
     In r args ->
@@ -1147,18 +1111,6 @@ Section PRESERVATION.
     - inv Hargs; auto.
     - inv Hargs.
       right; eapply rs_in_singleton; eauto.
-  Qed.
-
-  Lemma wt_stackframes_sig_proper s sig1 sig2 :
-    sig_res sig1 = sig_res sig2 ->
-    wt_stackframes s sig1 ->
-    wt_stackframes s sig2.
-  Proof.
-    intros Hres Hwt.
-    inv Hwt.
-    - constructor; rewrite <- Hres; assumption.
-    - econstructor; eauto.
-      unfold proj_sig_res; rewrite <- Hres; assumption.
   Qed.
 
   Lemma match_stackframes_sig_proper stk tstk sig1 sig2 :

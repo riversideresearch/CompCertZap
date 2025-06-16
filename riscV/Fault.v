@@ -164,6 +164,10 @@ Definition replicate_builtin_tolerance (f: replicate_builtin)
   | BI_vote_long
   | BI_vote_single
   | BI_vote_float
+  | BI_check_int
+  | BI_check_long
+  | BI_check_single
+  | BI_check_float
     => Tolerant
 
   end.

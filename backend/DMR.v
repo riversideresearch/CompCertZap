@@ -1,21 +1,20 @@
-(** * Add triple-modular redundancy to RTL *)
+(** * Add dual-modular redundancy (DMR) to RTL *)
 
 (** In a nutshell, per function:
 
-  1) reserve two shadow registers for each function parameter and
+  1) reserve a shadow register for each function parameter and each
   register that appears in the body,
 
   2) begin new code with instructions that copy the function
   parameters into their shadow copies,
 
-  3) for each Iop and Iload instruction in the original code, emit two
-  additional corresponding instructions in the two shadow worlds,
+  3) for each Iop and Iload instruction in the original code, emit an
+  additional corresponding instruction in the shadow world,
 
-  4) for all other instructions, emit preceding code to majority vote
-  their arguments (leaving the voted results in the regular world
-  registers) and then the regular instruction only. Then, if the
-  instruction has a result register, emit a move from the result
-  register to its shadow registers.
+  4) for all other instructions, emit preceding code to compare their
+  arguments and then execute the main world instruction
+  only. Afterware, if the instruction has a result register, emit a
+  move from the result register to its shadow register.
 
   We use the state+error monad from [backend/RTLgen.v]. Each function
   in the program is translated by a separate monadic computation that
@@ -59,59 +58,62 @@ Definition smove (ty : typ) (src dst : reg)
               [BA src] (BR dst))
   end.
 
-Definition maj_vote_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
+Definition check_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
-  | Tint => Some ("__vote_int", BI_vote_int)
-  | Tlong => Some ("__vote_long", BI_vote_long)
-  | Tsingle => Some ("__vote_single", BI_vote_single)
-  | Tfloat => Some ("__vote_float", BI_vote_float)
+  | Tint => Some ("__check_int", BI_check_int)
+  | Tlong => Some ("__check_long", BI_check_long)
+  | Tsingle => Some ("__check_single", BI_check_single)
+  | Tfloat => Some ("__check_float", BI_check_float)
   | _ => None
   end.
 
-Definition maj_vote_of_typ (ty : typ) (r1 r2 r3 : reg)
+Definition check_of_typ (ty : typ) (r1 r2 res : reg)
   : option (node -> instruction) :=
-  match maj_vote_sig_of_typ ty with
+  match check_sig_of_typ ty with
   | None => None
   | Some (nm, kind) =>
       Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
-              [BA r1; BA r2; BA r3] (BR r1))
+              [BA r1; BA r2] (BR res))
   end.
 
-(** Emit instructions for majority voting registers [r1], [r2], and
-    [r3], storing the result in [r1] and leaving the contents of [r2]
-    and [r3] unchanged.
+(** Emit instructions for comparing register [r1] with its shadow copy
+    [r2].
 
-    [re] is the register typing context of the original function. [pc]
-    is the node at which the emitted instructions should
-    begin. Reserves and returns the node at which subsequent
-    instructions should continue.
+    [re] is the register type environment of the original
+    function. [pc] is the node label where the emitted checkpoint
+    should begin. Reserves and returns the node label from which
+    subsequent instructions should continue.
 *)
-Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
+Definition check (re : regenv) (r1 r2 : reg) (pc : node)
   : mon node :=
-  match maj_vote_of_typ (re r1) r1 r2 r3 with
-  | None => error (MSG "Replicate.v:maj_vote: unexpected Tany32 or Tany64"
-                    :: POS pc :: nil)
-  | Some vote =>
+  do res <- new_reg;
+  match check_of_typ (re r1) r1 r2 res with
+  | None =>
+      error (MSG "Replicate.v:compare_with_shadow: unexpected Tany32 or Tany64"
+               :: POS pc :: nil)
+  | Some cmp =>
       do succ <- reserve_instr;
-      do _ <- update_instr pc (vote succ);
+      do _ <- update_instr pc (cmp succ);
       ret succ
   end.
 
-(** Emit code for majority voting the list of registers [reg]. [re] is
-    the register typing context of the original function. [rm] (the
+(** Emit code for checking the list of registers [regs]. [re] is the
+    register type environment of the original function. [rm] (the
     replication map) maps registers to their corresponding shadow
     registers. [pc] is the node at which the emitted instructions
     should begin. Reserves and returns the node at which subsequent
-    instructions should continue. *)
-Fixpoint maj_vote_regs
-  (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
+    instructions should continue.
+ *)
+(* TODO: swap order here, so that this is tail recursive? I don't
+   think it really matters either way. *)
+Fixpoint check_regs
+  (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
   | r1 :: rs =>
-      do succ <- maj_vote_regs re rm rs pc;
-      let (r2, r3) := rm # r1 in
-      maj_vote re r1 r2 r3 succ
+      do succ <- check_regs re rm rs pc;
+      check re r1 (rm # r1) succ
   end.
 
 Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
@@ -206,31 +208,6 @@ Definition copy_to_shadows
                  :: POS pc :: nil)
   end.
 
-(* Fixpoint copy_all_to_shadows *)
-(*   (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node) *)
-(*   : mon node := *)
-(*   match rs with *)
-(*   | [] => ret succ *)
-(*   | r :: rs' => *)
-(*       do succ' <- copy_all_to_shadows re rm rs' succ; *)
-(*       do n <- reserve_instr; *)
-(*       do _ <- copy_to_shadows rm (re r) r n succ'; *)
-(*       ret n *)
-(*   end. *)
-
-(** This emits instructions in the opposite order of [rs] so that the
-    lemma [copy_allR_star_step] in Replicateproof.v can go through
-    easily without using a different definition of update_regset
-    (which is defined such that update_regset ∘ init_regs ==
-    init_regs'). Basically, we want the recursive call to correspond
-    to the instructions that step first, followed by the
-    copy_to_shadows that performs some concrete steps to update the
-    regset. An alternative would be to change update_regset to be a
-    left fold (I think..), but that might make
-    [update_regset_init_regs] harder to prove (could probably just
-    prove the two versions of update_regset equivalent, but that might
-    only be true under the assumption of rm_wf or something so the
-    equivalence proof would be annoying. *)
 Fixpoint copy_all_to_shadows
   (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node)
   : mon node :=
