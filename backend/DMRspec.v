@@ -912,322 +912,295 @@ Proof.
     eapply state_incr_match_instr; eauto.
 Qed.
 
-(* Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u : *)
-(*   (forall p i, c ! p = Some i -> p < st_nextnode s) -> *)
-(*   transf_code re rm c s = RTLgen.OK u s' pf -> *)
-(*   match_code re rm c s'.(st_code). *)
-(* Proof. *)
-(*   unfold transf_code; intros Hlt Hc p i Hi. *)
-(*   rewrite <- iterM_iterM'_rev' in Hc. *)
-(*   eapply iterM_match_instr; eauto. *)
-(*   apply PTree.elements_correct; eauto. *)
-(* Qed. *)
+Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
+  (forall p i, c ! p = Some i -> p < st_nextnode s) ->
+  transf_code re rm c s = RTLgen.OK u s' pf ->
+  match_code re rm c s'.(st_code).
+Proof.
+  unfold transf_code; intros Hlt Hc p i Hi.
+  rewrite <- iterM_iterM'_rev' in Hc.
+  eapply iterM_match_instr; eauto.
+  apply PTree.elements_correct; eauto.
+Qed.
 
-(* Lemma bind_inversion : *)
-(*   forall (A B: Type) (f: mon A) (g: A -> mon B) (y: B) s0 s2 pf, *)
-(*     RTLgen.bind f g s0 = RTLgen.OK y s2 pf -> *)
-(*   exists x s1 pf0 pf1, f s0 = RTLgen.OK x s1 pf0 /\ g x s1 = RTLgen.OK y s2 pf1. *)
-(* Proof. *)
-(*   intros A B f g u s s' pf Heq. *)
-(*   unfold RTLgen.bind in Heq. *)
-(*   destruct (f s) eqn:Hf; inv Heq. *)
-(*   destruct (g a s'0) eqn:Hg; inv H0. *)
-(*   eexists; eexists; eexists; eexists; split; eauto. *)
-(* Qed. *)
+Lemma bind_inversion :
+  forall (A B: Type) (f: mon A) (g: A -> mon B) (y: B) s0 s2 pf,
+    RTLgen.bind f g s0 = RTLgen.OK y s2 pf ->
+  exists x s1 pf0 pf1, f s0 = RTLgen.OK x s1 pf0 /\ g x s1 = RTLgen.OK y s2 pf1.
+Proof.
+  intros A B f g u s s' pf Heq.
+  unfold RTLgen.bind in Heq.
+  destruct (f s) eqn:Hf; inv Heq.
+  destruct (g a s'0) eqn:Hg; inv H0.
+  eexists; eexists; eexists; eexists; split; eauto.
+Qed.
 
-(* Lemma transf_fun_code_matches *)
-(*   rm (f : function) (re : regenv) entrypoint s s1 s' pf pf1 : *)
-(*   transf_fun re f s = RTLgen.OK entrypoint s' pf -> *)
-(*   replication_map f s = RTLgen.OK rm s1 pf1 -> *)
-(*   (forall p i, (fn_code f) ! p = Some i -> p < st_nextnode s) -> *)
-(*   match_code re rm f.(fn_code) s'.(st_code). *)
-(* Proof. *)
-(*   intros Hf Hrm Hlt. *)
-(*   unfold transf_fun in Hf. *)
-(*   apply bind_inversion in Hf. *)
-(*   destruct Hf as (rm' & s1' & pf0 & pf1' & Hrm' & Hf). *)
-(*   rewrite Hrm' in Hrm; inv Hrm. *)
-(*   apply bind_inversion in Hf. *)
-(*   destruct Hf as (regs & s2 & pf2 & pf3 & Hlive & Hf). *)
-(*   apply bind_inversion in Hf. *)
-(*   destruct Hf as (n0 & s3 & pf4 & pf5 & Hparams & Hf). *)
-(*   apply bind_inversion in Hf. *)
-(*   destruct Hf as ([] & s4 & pf6 & pf7 & Hf & Hret). *)
-(*   inv Hret. *)
-(*   apply transf_code_code_matches in Hf; auto. *)
-(*   intros p i Hpi. *)
-(*   clear Hparams. *)
-(*   clear Hlive. *)
-(*   inv pf1; inv pf2; inv pf4. *)
-(*   unfold Ple in *. *)
-(*   specialize (Hlt p i Hpi); lia. *)
-(* Qed. *)
+Lemma transf_fun_code_matches
+  rm (f : function) (re : regenv) entrypoint s s1 s' pf pf1 :
+  transf_fun re f s = RTLgen.OK entrypoint s' pf ->
+  replication_map f s = RTLgen.OK rm s1 pf1 ->
+  (forall p i, (fn_code f) ! p = Some i -> p < st_nextnode s) ->
+  match_code re rm f.(fn_code) s'.(st_code).
+Proof.
+  intros Hf Hrm Hlt.
+  unfold transf_fun in Hf.
+  apply bind_inversion in Hf.
+  destruct Hf as (rm' & s1' & pf0 & pf1' & Hrm' & Hf).
+  rewrite Hrm' in Hrm; inv Hrm.
+  apply bind_inversion in Hf.
+  destruct Hf as (regs & s2 & pf2 & pf3 & Hlive & Hf).
+  apply bind_inversion in Hf.
+  destruct Hf as (n0 & s3 & pf4 & pf5 & Hparams & Hf).
+  apply bind_inversion in Hf.
+  destruct Hf as ([] & s4 & pf6 & pf7 & Hf & Hret).
+  inv Hret.
+  apply transf_code_code_matches in Hf; auto.
+  intros p i Hpi.
+  clear Hparams.
+  clear Hlive.
+  inv pf1; inv pf2; inv pf4.
+  unfold Ple in *.
+  specialize (Hlt p i Hpi); lia.
+Qed.
 
-(* Lemma lt_ptree_fold_max c p i : *)
-(*   c ! p = Some i -> *)
-(*   p < PTree.fold (fun m pc (_ : instruction) => Pos.max m pc) c 1 + 1. *)
-(* Proof. *)
-(*   revert p i. *)
-(*   apply PTree_Properties.fold_ind; intros t Ht p i Htp. *)
-(*   { specialize (Ht p); congruence. } *)
-(*   intros Hcp HI p' i' Htp'. *)
-(*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec p p'); subst. *)
-(*   { lia. } *)
-(*   assert (H: (PTree.remove p t) ! p' = Some i'). *)
-(*   { rewrite PTree.gro; auto. } *)
-(*   specialize (HI p' i' H); lia. *)
-(* Qed. *)
+Lemma lt_ptree_fold_max c p i :
+  c ! p = Some i ->
+  p < PTree.fold (fun m pc (_ : instruction) => Pos.max m pc) c 1 + 1.
+Proof.
+  revert p i.
+  apply PTree_Properties.fold_ind; intros t Ht p i Htp.
+  { specialize (Ht p); congruence. }
+  intros Hcp HI p' i' Htp'.
+  destruct (DecidableTypeEx.Positive_as_DT.eq_dec p p'); subst.
+  { lia. }
+  assert (H: (PTree.remove p t) ! p' = Some i').
+  { rewrite PTree.gro; auto. }
+  specialize (HI p' i' H); lia.
+Qed.
 
-(* Lemma lt_nextnode_init_state p i sig params stacksize c entrypoint : *)
-(*   c ! p = Some i -> *)
-(*   p < st_nextnode (init_state {| fn_sig := sig *)
-(*                                ; fn_params := params *)
-(*                                ; fn_stacksize := stacksize *)
-(*                                ; fn_code := c *)
-(*                                ; fn_entrypoint := entrypoint *)
-(*                               |}). *)
-(* Proof. intro Hget; eapply lt_ptree_fold_max; eauto. Qed. *)
+Lemma lt_nextnode_init_state p i sig params stacksize c entrypoint :
+  c ! p = Some i ->
+  p < st_nextnode (init_state {| fn_sig := sig
+                               ; fn_params := params
+                               ; fn_stacksize := stacksize
+                               ; fn_code := c
+                               ; fn_entrypoint := entrypoint
+                              |}).
+Proof. intro Hget; eapply lt_ptree_fold_max; eauto. Qed.
 
-(* Lemma lt_nextnode_init_state' p i f : *)
-(*   (fn_code f) ! p = Some i -> *)
-(*   p < st_nextnode (init_state f). *)
-(* Proof. intro Hget; eapply lt_ptree_fold_max; eauto. Qed. *)
+Lemma lt_nextnode_init_state' p i f :
+  (fn_code f) ! p = Some i ->
+  p < st_nextnode (init_state f).
+Proof. intro Hget; eapply lt_ptree_fold_max; eauto. Qed.
 
-(* Lemma transf_fun'_code_matches rm (f tf : function) (re : regenv) s pf : *)
-(*   transf_fun' re f = OK tf -> *)
-(*   replication_map f (init_state f) = RTLgen.OK rm s pf -> *)
-(*   match_code re rm f.(fn_code) tf.(fn_code). *)
-(* Proof. *)
-(*   unfold transf_fun'. *)
-(*   destruct (transf_fun re f (init_state f)) eqn:Hf; intros H Hrm; inv H; simpl. *)
-(*   eapply transf_fun_code_matches; eauto. *)
-(*   intros; eapply lt_nextnode_init_state'; eauto. *)
-(* Qed. *)
+Lemma transf_fun'_code_matches rm (f tf : function) (re : regenv) s pf :
+  transf_fun' re f = OK tf ->
+  replication_map f (init_state f) = RTLgen.OK rm s pf ->
+  match_code re rm f.(fn_code) tf.(fn_code).
+Proof.
+  unfold transf_fun'.
+  destruct (transf_fun re f (init_state f)) eqn:Hf; intros H Hrm; inv H; simpl.
+  eapply transf_fun_code_matches; eauto.
+  intros; eapply lt_nextnode_init_state'; eauto.
+Qed.
 
-(* Lemma transf_function_code_matches rm (f tf : function) s pf : *)
-(*   transf_function f = OK tf -> *)
-(*   replication_map f (init_state f) = RTLgen.OK rm s pf -> *)
-(*   exists re, match_code re rm f.(fn_code) tf.(fn_code). *)
-(* Proof. *)
-(*   intro H; monadInv H. *)
-(*   exists x; eapply transf_fun'_code_matches; eauto. *)
-(* Qed. *)
+Lemma transf_function_code_matches rm (f tf : function) s pf :
+  transf_function f = OK tf ->
+  replication_map f (init_state f) = RTLgen.OK rm s pf ->
+  exists re, match_code re rm f.(fn_code) tf.(fn_code).
+Proof.
+  intro H; monadInv H.
+  exists x; eapply transf_fun'_code_matches; eauto.
+Qed.
 
-(* Lemma copy_allR_monotone re rm c1 c2 params n entrypoint : *)
-(*   copy_allR re rm c1 params n entrypoint -> *)
-(*   (forall p i, c1 ! p = Some i -> c2 ! p = Some i) -> *)
-(*   copy_allR re rm c2 params n entrypoint. *)
-(* Proof. *)
-(*   revert n entrypoint; induction params; *)
-(*     simpl; intros n entrypoint Hmatch Hle; inv Hmatch. *)
-(*   { constructor. } *)
-(*   econstructor; eauto. *)
-(*   inv H5; econstructor; eauto. *)
-(* Qed. *)
+Lemma copy_allR_monotone re rm c1 c2 params n entrypoint :
+  copy_allR re rm c1 params n entrypoint ->
+  (forall p i, c1 ! p = Some i -> c2 ! p = Some i) ->
+  copy_allR re rm c2 params n entrypoint.
+Proof.
+  revert n entrypoint; induction params;
+    simpl; intros n entrypoint Hmatch Hle; inv Hmatch.
+  { constructor. }
+  econstructor; eauto.
+  inv H4; econstructor; eauto.
+Qed.
 
-(* (* TODO: clean up this mess. Might be a good idea to define a *)
+(* TODO: clean up this mess. Might be a good idea to define a *)
 (*    relational specification of the algorithm and factor this into 1) *)
 (*    proving the code satisfies the spec and 2) proving the spec implies *)
-(*    rm_wf.  *) *)
-(* Lemma replication_map_wf_aux regs acc s rm s' pf : *)
-(*   Forall (fun r => r < s.(st_nextreg)) regs -> *)
-(*   foldM *)
-(*     (fun rm r1 => do r2 <- new_reg; do r3 <- new_reg; ret rm # r1 <- (r2, r3)) *)
-(*     regs acc s = RTLgen.OK rm s' pf -> *)
-(*   rm_wf rm regs /\ *)
-(*     Forall (fun r1 => forall r2 r3, PMap.get r1 rm = (r2, r3) -> *)
-(*                             s.(st_nextreg) <= r2 < s'.(st_nextreg) /\ *)
-(*                               s.(st_nextreg) <= r3 < s'.(st_nextreg)) regs. *)
-(* Proof. *)
-(*   revert acc s rm s' pf. *)
-(*   induction regs; simpl; intros acc s rm s' pf Hall H. *)
-(*   { split. *)
-(*     - intros r1 r2 r3 []. *)
-(*     - constructor. } *)
-(*   unfold new_reg in H. *)
-(*   unfold RTLgen.bind in H. *)
-(*   simpl in H. *)
-(*   match goal with *)
-(*   | [ _: match ?X with | RTLgen.Error _ => _ | RTLgen.OK _ _ _ => _ end = _ |- _ ] => destruct X eqn:HX *)
-(*   end. *)
-(*   { inv H. } *)
-(*   inv H. *)
-(*   inv Hall. *)
-(*   rename t into rm. *)
-(*   assert (rm_wf rm regs). *)
-(*   { eapply IHregs; eauto. } *)
-(*   assert (Forall *)
-(*             (fun r1 : positive => *)
-(*                forall r2 r3 : reg, *)
-(*                  rm # r1 = (r2, r3) -> st_nextreg s <= r2 < st_nextreg s'0 /\ *)
-(*                                         st_nextreg s <= r3 < st_nextreg s'0) regs). *)
-(*   { eapply IHregs; eauto. } *)
-(*   clear HX IHregs. *)
-(*   rewrite Forall_forall in H0. *)
-(*   rewrite Forall_forall in H2. *)
-(*   split. *)
-(*   - intros r1 r2 r3 Hin Hr1. *)
-(*     inv s0; simpl in *; unfold Ple in *. *)
-(*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst. *)
-(*     + clear Hin. *)
-(*       rewrite PMap.gss in Hr1; inv Hr1. *)
-(*       split. *)
-(*       * constructor. *)
-(*         { intro Hin; inv Hin; try lia. *)
-(*           inv H6; try lia; inv H7. } *)
-(*         constructor. *)
-(*         { intro Hin; inv Hin; try lia; inv H6. } *)
-(*         constructor. *)
-(*         { intros []. } *)
-(*         constructor. *)
-(*       * intros r1' r2' r3' Hin Hneq Hr1'. *)
-(*         inv Hin. *)
-(*         { congruence. } *)
-(*         rewrite PMap.gso in Hr1'; auto. *)
-(*         specialize (H0 r1' H6 r2' r3' Hr1'). *)
-(*         constructor. *)
-(*         { intro Hin; inv Hin; try lia. *)
-(*           inv H7; try lia. *)
-(*           inv H8; try congruence. *)
-(*           inv H7; try lia. *)
-(*           inv H8; try lia. *)
-(*           inv H7. } *)
-(*         constructor. *)
-(*         { intro Hin; inv Hin; try lia. *)
-(*           specialize (H2 r1' H6). *)
-(*           inv pf; simpl in *; unfold Ple in *. *)
-(*           inv H7; lia. } *)
-(*         constructor. *)
-(*         { intro Hin; inv Hin. *)
-(*           - specialize (H2 (Pos.succ (st_nextreg s'0)) H6); lia. *)
-(*           - inv H7; try lia. *)
-(*             inv H8; try lia. *)
-(*             inv H7. } *)
-(*         specialize (H r1' r2' r3' H6 Hr1'); intuition. *)
-(*     + destruct Hin as [? | Hin]; try congruence. *)
-(*       rewrite PMap.gso in Hr1; auto. *)
-(*       specialize (H2 r1 Hin). *)
-(*       split. *)
-(*       * specialize (H r1 r2 r3 Hin Hr1); intuition. *)
-(*       * specialize (H r1 r2 r3 Hin Hr1); destruct H as [H H']. *)
-(*         intros r1' r2' r3' Hin' Hneq Hr1'; try congruence. *)
-(*         destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1'); subst. *)
-(*         { rewrite PMap.gss in Hr1'; inv Hr1'. *)
-(*           clear Hin' n. *)
-(*           constructor. *)
-(*           { intro HC; inv HC. *)
-(*             { inv H; apply H8; left; reflexivity. } *)
-(*             inv H6. *)
-(*             { inv H; apply H8; right; left; reflexivity. } *)
-(*             inv H7; try contradiction. *)
-(*             inv H6; try lia. *)
-(*             inv H7; try lia. *)
-(*             inv H6. } *)
-(*           constructor. *)
-(*           { intro HC; inv HC. *)
-(*             { inv H; inv H9; apply H7; left; reflexivity. } *)
-(*             inv H6. *)
-(*             { specialize (H0 r1 Hin r2 r3 Hr1); lia. } *)
-(*             inv H7. *)
-(*             { specialize (H0 r1 Hin (st_nextreg s'0) r3 Hr1); lia. } *)
-(*             inv H6. *)
-(*             { specialize (H0 r1 Hin (Pos.succ (st_nextreg s'0)) r3 Hr1); lia. } *)
-(*             destruct H7. } *)
-(*           constructor. *)
-(*           { intro HC; inv HC. *)
-(*             { specialize (H0 r1 Hin r2 r3 Hr1); lia. } *)
-(*             inv H6. *)
-(*             { specialize (H0 r1 Hin r2 (st_nextreg s'0) Hr1); lia. } *)
-(*             inv H7. *)
-(*             { specialize (H0 r1 Hin r2 (Pos.succ (st_nextreg s'0)) Hr1); lia. } *)
-(*             destruct H6. } *)
-(*           constructor. *)
-(*           { intro HC; inv HC; try lia. *)
-(*             inv H6; try lia; destruct H7. } *)
-(*           constructor. *)
-(*           { intro HC; inv HC; try lia; destruct H6. } *)
-(*           constructor; auto; constructor. } *)
-(*         destruct Hin' as [? | Hin']; try contradiction. *)
-(*         rewrite PMap.gso in Hr1'; auto. *)
-(*   - simpl. *)
-(*     apply Forall_forall; intros r1 Hin r2 r3 Hr1. *)
-(*     inv s0; simpl in *; unfold Ple in *. *)
-(*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst. *)
-(*     { rewrite PMap.gss in Hr1; inv Hr1; lia. } *)
-(*     inv Hin; try congruence. *)
-(*     rewrite PMap.gso in Hr1; auto. *)
-(*     specialize (H0 r1 H6 r2 r3 Hr1); lia. *)
-(* Qed. *)
+(*    rm_wf.  *)
+Lemma replication_map_wf_aux regs acc s rm s' pf :
+  Forall (fun r => r < s.(st_nextreg)) regs ->
+  foldM
+    (fun rm r1 => do r2 <- new_reg; ret rm # r1 <- r2)
+    regs acc s = RTLgen.OK rm s' pf ->
+  rm_wf rm regs /\
+    Forall (fun r1 => forall r2, PMap.get r1 rm = r2 ->
+                         s.(st_nextreg) <= r2 < s'.(st_nextreg)) regs.
+Proof.
+  revert acc s rm s' pf.
+  induction regs; simpl; intros acc s rm s' pf Hall H.
+  { split.
+    - intros r1 [].
+    - constructor. }
+  unfold new_reg in H.
+  unfold RTLgen.bind in H.
+  simpl in H.
+  match goal with
+  | [ _: match ?X with | RTLgen.Error _ => _ | RTLgen.OK _ _ _ => _ end = _ |- _ ] =>
+      destruct X eqn:HX
+  end.
+  { inv H. }
+  inv H.
+  inv Hall.
+  rename t into rm.
+  assert (rm_wf rm regs).
+  { eapply IHregs; eauto. }
+  assert (Forall
+            (fun r1 : positive =>
+               forall r2 : reg,
+                 rm # r1 = r2 -> st_nextreg s <= r2 < st_nextreg s'0) regs).
+  { eapply IHregs; eauto. }
+  clear HX IHregs.
+  rewrite Forall_forall in H0.
+  rewrite Forall_forall in H2.
+  split.
+  - intros r1 Hin.
+    inv s0; simpl in *; unfold Ple in *.
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
+    + clear Hin.
+      rewrite PMap.gss.
+      split.
+      * lia.
+      * intros r1' Hin Hneq.
+        inv Hin.
+        { congruence. }
+        rewrite PMap.gso; auto.
+        specialize (H0 r1' H6).
+        constructor.
+        { intro Hin; inv Hin; try lia.
+          inv H7; try lia.
+          inv H8.
+          2: { inv H7. }
+          specialize (H0 (rm # r1') (eq_refl _)); lia. }
+        constructor.
+        { intro Hin; inv Hin; try lia.
+          apply H2 in H6; lia.
+          inv pf; simpl in *; unfold Ple in *.
+          inv H7; auto.
+          apply H0 in H11; lia. }
+        constructor.
+        { intro Hin; inv Hin.
+          - apply H2 in H6.
+            apply H0 in H7; lia.
+          - inv H7. }
+        constructor; intuition; constructor.
+    + destruct Hin as [? | Hin]; try congruence.
+      rewrite PMap.gso; auto.
+      specialize (H2 r1 Hin).
+      split.
+      * apply H in Hin; intuition.
+      * specialize (H r1 Hin); destruct H as [H H'].
+        intros r1' Hin' Hneq; try congruence.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1'); subst.
+        { rewrite PMap.gss.
+          clear Hin' n.
+          constructor.
+          { intro HC; inv HC; auto.
+            inv H6; auto.
+            inv H7; try lia.
+            inv H6. }
+          constructor.
+          { intro HC; inv HC.
+            { eapply H0 in Hin; eauto; lia. }
+            inv H6.
+            { eapply H0 in Hin; eauto; lia. }
+            inv H7. }
+          constructor.
+          { intro HC; inv HC; auto; lia. }
+          constructor.
+          { intro HC; inv HC. }
+          constructor. }
+        destruct Hin' as [? | Hin']; try contradiction.
+        rewrite PMap.gso; auto.
+  - simpl.
+    apply Forall_forall; intros r1 Hin r2 Hr1.
+    inv s0; simpl in *; unfold Ple in *.
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
+    { rewrite PMap.gss; lia. }
+    inv Hin; try congruence.
+    rewrite PMap.gso; auto.
+    eapply H0 in H6; eauto; lia.
+Qed.
 
-(* Lemma in_elements p s : *)
-(*   In p (Regset.elements s) <-> Regset.In p s. *)
-(* Proof. *)
-(*   split; intro Hin. *)
-(*   - apply SetoidList.In_InA with (eqA := eq) in Hin. *)
-(*     2: { apply Eqsth. } *)
-(*     apply Regset.elements_2; assumption. *)
-(*   - apply Regset.elements_1 in Hin. *)
-(*     apply SetoidList.InA_alt in Hin. *)
-(*     destruct Hin as [? [? Hin]]; subst; assumption. *)
-(* Qed. *)
+Lemma in_elements p s :
+  In p (Regset.elements s) <-> Regset.In p s.
+Proof.
+  split; intro Hin.
+  - apply SetoidList.In_InA with (eqA := eq) in Hin.
+    2: { apply Eqsth. }
+    apply Regset.elements_2; assumption.
+  - apply Regset.elements_1 in Hin.
+    apply SetoidList.InA_alt in Hin.
+    destruct Hin as [? [? Hin]]; subst; assumption.
+Qed.
 
-(* Lemma in_lt_max_reg r s : *)
-(*   In r (Regset.elements s) -> *)
-(*   r < max_reg s + 1. *)
-(* Proof. *)
-(*   unfold max_reg. simpl. *)
-(*   intro Hin. *)
-(*   apply in_elements in Hin. *)
-(*   destruct (Regset.max_elt s) eqn:Hmax. *)
-(*   { eapply Regset.max_elt_2 in Hmax; eauto. *)
-(*     unfold Plt in Hmax; lia. } *)
-(*   apply Regset.max_elt_3 in Hmax. *)
-(*   apply Regset.is_empty_1 in Hmax. *)
-(*   destruct s; simpl in *. *)
-(*   compute in Hmax. *)
-(*   destruct this. *)
-(*   2: { congruence. } *)
-(*   inv Hin. *)
-(* Qed. *)
+Lemma in_lt_max_reg r s :
+  In r (Regset.elements s) ->
+  r < max_reg s + 1.
+Proof.
+  unfold max_reg. simpl.
+  intro Hin.
+  apply in_elements in Hin.
+  destruct (Regset.max_elt s) eqn:Hmax.
+  { eapply Regset.max_elt_2 in Hmax; eauto.
+    unfold Plt in Hmax; lia. }
+  apply Regset.max_elt_3 in Hmax.
+  apply Regset.is_empty_1 in Hmax.
+  destruct s; simpl in *.
+  compute in Hmax.
+  destruct this.
+  2: { congruence. }
+  inv Hin.
+Qed.
 
-(* Lemma replication_map_wf f rm s pf : *)
-(*   replication_map f (init_state f) = RTLgen.OK rm s pf -> *)
-(*   rm_wf rm (fun_regs_list f). *)
-(* Proof. *)
-(*   unfold replication_map; rewrite <- foldM_foldM'_rev'. *)
-(*   intro H; eapply replication_map_wf_aux; eauto. *)
-(*   apply Forall_forall; intros r Hin. *)
-(*   apply in_lt_max_reg; auto. *)
-(* Qed. *)
+Lemma replication_map_wf f rm s pf :
+  replication_map f (init_state f) = RTLgen.OK rm s pf ->
+  rm_wf rm (fun_regs_list f).
+Proof.
+  unfold replication_map; rewrite <- foldM_foldM'_rev'.
+  intro H; eapply replication_map_wf_aux; eauto.
+  apply Forall_forall; intros r Hin.
+  apply in_lt_max_reg; auto.
+Qed.
 
-(* Lemma rm_wf_antimonotone rm rs1 rs2 : *)
-(*   rm_wf rm rs1 -> *)
-(*   (forall r, In r rs2 -> In r rs1) -> *)
-(*   rm_wf rm rs2. *)
-(* Proof. *)
-(*   intros Hwf Hle r1 r2 r3 Hin Hr1. *)
-(*   specialize (Hwf r1 r2 r3 (Hle _ Hin) Hr1); intuition. *)
-(* Qed. *)
+Lemma rm_wf_antimonotone rm rs1 rs2 :
+  rm_wf rm rs1 ->
+  (forall r, In r rs2 -> In r rs1) ->
+  rm_wf rm rs2.
+Proof.
+  intros Hwf Hle r1 Hin.
+  specialize (Hwf r1 (Hle _ Hin)); intuition.
+Qed.
 
-(* Lemma in_pset_of_list p l : *)
-(*   In p l <-> Regset.In p (Regset_of_list l). *)
-(* Proof. *)
-(*   split. *)
-(*   - revert p; induction l; simpl; intros p Hin; try contradiction. *)
-(*     destruct Hin as [? | Hin]; subst. *)
-(*     + apply Regset.add_1; reflexivity. *)
-(*     + apply Regset.add_2, IHl, Hin. *)
-(*   - revert p; induction l; simpl; intros p Hin. *)
-(*     { inv Hin. } *)
-(*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst; auto. *)
-(*     right; apply Regset.add_3 in Hin; auto. *)
-(* Qed. *)
+Lemma in_pset_of_list p l :
+  In p l <-> Regset.In p (Regset_of_list l).
+Proof.
+  split.
+  - revert p; induction l; simpl; intros p Hin; try contradiction.
+    destruct Hin as [? | Hin]; subst.
+    + apply Regset.add_1; reflexivity.
+    + apply Regset.add_2, IHl, Hin.
+  - revert p; induction l; simpl; intros p Hin.
+    { inv Hin. }
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst; auto.
+    right; apply Regset.add_3 in Hin; auto.
+Qed.
 
-(* Definition rm_inv_list n (regs : list reg) (rm : PMap.t (reg * reg)) : Prop := *)
-(*   forall r1 r2 r3, *)
-(*     rm # r1 = (r2, r3) -> *)
-(*     In r1 regs -> *)
-(*     n <= r2 /\ n <= r3. *)
+Definition rm_inv_list n (regs : list reg) (rm : PMap.t reg) : Prop :=
+  forall r1,
+    In r1 regs ->
+    n <= rm # r1.
 
 (* Lemma reg_used_fold_right p i l r : *)
 (*   In (p, i) l -> *)
