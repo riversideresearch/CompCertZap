@@ -202,7 +202,7 @@ Definition copy_to_shadows
       do n <- reserve_instr;
       do _ <- update_instr pc (mov1 n);
       update_instr n (mov2 succ)
-  | _ => error (MSG "Replicate.v:maj_vote: unexpected Tany32 or Tany64"
+  | _ => error (MSG "Replicate.v:copy_to_shadows: unexpected Tany32 or Tany64"
                  :: POS pc :: nil)
   end.
 

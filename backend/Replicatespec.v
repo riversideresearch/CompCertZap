@@ -329,11 +329,11 @@ Inductive match_instr
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
   match_instr re rm c pc (Iload chunk addr args res1 succ)
 | match_Istore :
-  forall chunk addr args src1 src2 src3 n succ
-    (RM_SRC : rm !! src1 = (src2, src3))
-    (VOTE_REGS : maj_vote_regsR c re rm (src1 :: args) pc n)
-    (N : c ! n = Some (Istore chunk addr args src1 succ)),
-    match_instr re rm c pc (Istore chunk addr args src1 succ)
+  forall chunk addr args src n succ
+    (* (RM_SRC : rm !! src1 = (src2, src3)) *)
+    (VOTE_REGS : maj_vote_regsR c re rm (src :: args) pc n)
+    (N : c ! n = Some (Istore chunk addr args src succ)),
+    match_instr re rm c pc (Istore chunk addr args src succ)
 | match_Icall :
   forall sig fn args res1 res2 res3 succ n1 n2
     (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1)
@@ -827,7 +827,6 @@ Proof.
       inv s1; inv s3; inv pf; simpl in *; unfold Ple in *.
       destruct (rm # r) eqn:Hrmr; simpl in *.
       econstructor.
-      { eauto. }
       2: { rewrite PTree.gss; reflexivity. }
       apply maj_vote_regsR_ptree_set; auto.
 

@@ -76,8 +76,7 @@ Definition check_of_typ (ty : typ) (r1 r2 res : reg)
               [BA r1; BA r2] (BR res))
   end.
 
-(** Emit instructions for comparing register [r1] with its shadow copy
-    [r2].
+(** Emit instructions for comparing register [r1] with its shadow copy [r2].
 
     [re] is the register type environment of the original
     function. [pc] is the node label where the emitted checkpoint
@@ -89,11 +88,10 @@ Definition check (re : regenv) (r1 r2 : reg) (pc : node)
   do res <- new_reg;
   match check_of_typ (re r1) r1 r2 res with
   | None =>
-      error (MSG "Replicate.v:compare_with_shadow: unexpected Tany32 or Tany64"
-               :: POS pc :: nil)
-  | Some cmp =>
+      error (MSG "DMR.v:check: unexpected Tany32 or Tany64" :: POS pc :: nil)
+  | Some chk =>
       do succ <- reserve_instr;
-      do _ <- update_instr pc (cmp succ);
+      do _ <- update_instr pc (chk succ);
       ret succ
   end.
 
@@ -196,20 +194,16 @@ Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
 (** Insert instructions at [pc] to move contents of [r] to its shadow
     copies and then jump to [succ]. *)
 Definition copy_to_shadows
-  (rm : PMap.t (reg * reg)) (ty : typ) (r1 : reg) (pc : node) (succ : node)
+  (rm : PMap.t reg) (ty : typ) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
-  let (r2, r3) := rm # r1 in
-  match (smove ty r1 r2, smove ty r1 r3) with
-  | (Some mov1, Some mov2) =>
-      do n <- reserve_instr;
-      do _ <- update_instr pc (mov1 n);
-      update_instr n (mov2 succ)
-  | _ => error (MSG "Replicate.v:maj_vote: unexpected Tany32 or Tany64"
+  match smove ty r1 (rm # r1) with
+  | Some mov => update_instr pc (mov succ)
+  | _ => error (MSG "DMR.v:copy_to_shadows: unexpected Tany32 or Tany64"
                  :: POS pc :: nil)
   end.
 
 Fixpoint copy_all_to_shadows
-  (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node)
+  (re : regenv) (rm : PMap.t reg) (rs : list reg) (succ : node)
   : mon node :=
   match rs with
   | [] => ret succ
@@ -224,34 +218,28 @@ Fixpoint copy_all_to_shadows
     original function. [rm] (the replication map) maps registers to
     their corresponding shadow registers. *)
 Definition transf_instr
-  (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * instruction)
+  (re : regenv) (rm : PMap.t reg) (ni : node * instruction)
   : mon unit :=
   let (pc, instr) := ni in
   match instr with
   | Inop n =>
       update_instr pc (Inop n)
   (* For data operations, simply execute the instruction in the
-     regular and two shadow worlds. *)
+     regular and shadow worlds. *)
   | Iop op args dst _succ =>
-      do n1 <- reserve_instr;
-      do n2 <- reserve_instr;
+      do n <- reserve_instr;
       do _ <- update_instr pc
                (Iop op
-                  (List.map (fun arg => fst (rm # arg)) args)
-                  (fst (rm # dst))
-                  n1);
-      do _ <- update_instr n1
-               (Iop op
-                  (List.map (fun arg => snd (rm # arg)) args)
-                  (snd (rm # dst))
-                  n2);
-      update_instr n2 instr
-  (* For other instructions, majority vote the argument registers and
-     then execute the instruction only in the regular world. For
+                  (List.map (fun arg => rm # arg) args)
+                  (rm # dst)
+                  n);
+      update_instr n instr
+  (* For other instructions, check the argument registers and then
+     execute the instruction only in the regular world. For
      instructions with result registers (Icall and Ibuiltin), copy the
-     result into its shadow registers. *)
+     result to its shadow register. *)
   | _ =>
-      do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
+      do n <- check_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | Some res, Some succ =>
           do m <- reserve_instr;
@@ -300,7 +288,7 @@ Fixpoint foldM' {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
   end.
 
 (** Transform function code by transforming the instructions. *)
-Definition transf_code (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
+Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code)
   : mon unit :=
   iterM' (transf_instr re rm) (rev' (PTree.elements c)).
 
@@ -367,12 +355,11 @@ Definition max_reg (regs : Regset.t) :=
 
 (** Build replication map (mapping each register to a pair of
     corresponding shadow registers) for function [f]. *)
-Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
+Definition replication_map (f : function) : mon (PMap.t reg) :=
   foldM' (fun rm r1 =>
            do r2 <- new_reg;
-           do r3 <- new_reg;
-           ret (PMap.set r1 (r2, r3) rm)
-    ) (rev' (fun_regs_list f)) (PMap.init (xH, xH)).
+           ret (PMap.set r1 r2 rm)
+    ) (rev' (fun_regs_list f)) (PMap.init xH).
 
 (** Compute registers that are live-in at the entry point of [f]. *)
 Definition live_regs (f : function) : mon Regset.t :=
