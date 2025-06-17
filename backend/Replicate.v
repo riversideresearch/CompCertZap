@@ -236,14 +236,14 @@ Definition copy_to_shadows
     proving that update_regset ∘ init_regs establishes match_regset,
     which would probably free us to define this copy_all_to_shadows
     function however we want. It's too late to change now, I suppose,
-    but if I had to prove it over again I would definitely take a
-    different approach. Roughly, the idea is just to prove that
-    init_regset establishes a weaker version of match_regsets that
-    ignores shadow registers, and then update_regset takes any regset
-    that satisfies that to one that satisfies the full match_regets
-    (under whatever conditions). Maybe I'm forgetting some reason that
-    that didn't work, but it seems obvious now.
-*)
+    but if I had to prove it over again I would try a different
+    approach. Roughly, the idea is just to prove that init_regset
+    establishes a weaker version of match_regsets that ignores shadow
+    registers, and then that update_regset takes any regset satisfying
+    that to one that satisfies the full match_regets (under whatever
+    conditions). Maybe I'm forgetting some reason that that didn't
+    work, but it seems obvious now that it should work and be much
+    simpler. *)
 Fixpoint copy_all_to_shadows
   (re : regenv) (rm : PMap.t (reg * reg)) (rs : list reg) (succ : node)
   : mon node :=
