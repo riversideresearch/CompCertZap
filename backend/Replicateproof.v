@@ -12,7 +12,6 @@ Require Import
   Maps
   Op
   Registers
-  Replicate
   Replicatespec
   RTLgen
   RTLtyping

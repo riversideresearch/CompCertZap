@@ -358,48 +358,47 @@ Definition vote_float_sem : builtin_sem Xfloat :=
   mkbuiltin_v3t Xfloat vote_float vote_float_well_typed vote_float_compat_inject.
 
 (** ******************)
-(** DMR comparisons. *)
+(** DMR checkpoints. *)
 
-Definition cmp_int (x y : val) : val :=
-  match (x, y) with
-  | (Vint a, Vint b) => if Int.eq_dec a b then x else Vundef
-  | (Vptr a i, Vptr b j) =>
-      if negb Archi.ptr64 && eq_block a b && Ptrofs.eq_dec i j
-      then x else Vundef
-  | _ => Vundef
-  end.
+(* Definition cmp_int (x y : val) : val := *)
+(*   match (x, y) with *)
+(*   | (Vint a, Vint b) => if Int.eq_dec a b then x else Vundef *)
+(*   | (Vptr a i, Vptr b j) => *)
+(*       if negb Archi.ptr64 && eq_block a b && Ptrofs.eq_dec i j *)
+(*       then x else Vundef *)
+(*   | _ => Vundef *)
+(*   end. *)
 
-Lemma cmp_int_well_typed x y :
-  Val.has_rettype (cmp_int x y) Xint.
-Proof.
-  unfold Val.has_rettype, cmp_int.
-  destruct x, y; auto.
-  - destruct (Int.eq_dec _ _); simpl; auto.
-  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
-    destruct (eq_block _ _); subst; simpl;
-      try destruct (Ptrofs.eq_dec _ _); simpl; auto.
-Qed.
+(* Lemma cmp_int_well_typed x y : *)
+(*   Val.has_rettype (cmp_int x y) Xint. *)
+(* Proof. *)
+(*   unfold Val.has_rettype, cmp_int. *)
+(*   destruct x, y; auto. *)
+(*   - destruct (Int.eq_dec _ _); simpl; auto. *)
+(*   - destruct Archi.ptr64 eqn:Harchi; simpl; auto. *)
+(*     destruct (eq_block _ _); subst; simpl; *)
+(*       try destruct (Ptrofs.eq_dec _ _); simpl; auto. *)
+(* Qed. *)
 
-Lemma cmp_int_compat_inject j v1 v1' v2 v2' :
-  Val.inject j v1 v1' ->
-  Val.inject j v2 v2' ->
-  Val.inject j (cmp_int v1 v2) (cmp_int v1' v2').
-Proof.
-  unfold cmp_int.
-  intros H0 H1.
-  inv H0; simpl; auto; inv H1; simpl; auto;
-    (* This is necessary for riscv but not x86_64. Why? *)
-    try solve [destruct Archi.ptr64 eqn:Harchi; simpl; auto;
-               repeat ((try destruct (eq_block _ _); subst; simpl);
-                       (try destruct (Ptrofs.eq_dec _ _); subst; simpl);
-                       (try solve [econstructor; eauto; congruence]);
-                       (try congruence))].
-  repeat destruct (Int.eq_dec _ _); subst; simpl; auto.
-Qed.
+(* Lemma cmp_int_compat_inject j v1 v1' v2 v2' : *)
+(*   Val.inject j v1 v1' -> *)
+(*   Val.inject j v2 v2' -> *)
+(*   Val.inject j (cmp_int v1 v2) (cmp_int v1' v2'). *)
+(* Proof. *)
+(*   unfold cmp_int. *)
+(*   intros H0 H1. *)
+(*   inv H0; simpl; auto; inv H1; simpl; auto; *)
+(*     (* This is necessary for riscv but not x86_64. Why? *) *)
+(*     try solve [destruct Archi.ptr64 eqn:Harchi; simpl; auto; *)
+(*                repeat ((try destruct (eq_block _ _); subst; simpl); *)
+(*                        (try destruct (Ptrofs.eq_dec _ _); subst; simpl); *)
+(*                        (try solve [econstructor; eauto; congruence]); *)
+(*                        (try congruence))]. *)
+(*   repeat destruct (Int.eq_dec _ _); subst; simpl; auto. *)
+(* Qed. *)
 
-Definition cmp_int_sem : builtin_sem Xint :=
-  mkbuiltin_v2t Xint cmp_int cmp_int_well_typed cmp_int_compat_inject.
-
+(* Definition cmp_int_sem : builtin_sem Xint := *)
+(*   mkbuiltin_v2t Xint cmp_int cmp_int_well_typed cmp_int_compat_inject. *)
 
 Definition check_int (x y : val) : val := Vundef.
 
