@@ -193,21 +193,21 @@ Definition is_actual_type (ty : typ) : Prop :=
 Inductive checkR
   (c : code) (ty : typ) (r1 r2 : reg) (pc succ : node) : Prop :=
 | check_1 :
-  forall chk res,
+  forall chk,
     is_actual_type ty ->
-    check_of_typ ty r1 r2 res = Some chk ->
+    check_of_typ ty r1 r2 = Some chk ->
     c ! pc = Some (chk succ) ->
     checkR c ty r1 r2 pc succ.
 
 Inductive check_regsR c re rm : list reg -> node -> node -> Prop :=
 | check_regs_nil :
   forall pc,
-    check_regsR c re rm nil pc pc
+    check_regsR c re rm [] pc pc
 | check_regs_cons :
-  forall r args pc succ n,
+  forall arg args pc succ n,
     check_regsR c re rm args pc n ->
-    checkR c (re r) r (rm # r) n succ ->
-    check_regsR c re rm (r :: args) pc succ.
+    checkR c (re arg) arg (rm # arg) n succ ->
+    check_regsR c re rm (arg :: args) pc succ.
 
 Inductive smoveR
   (c : code) (ty : typ) (src dst : reg) (pc succ : node): Prop :=
@@ -289,7 +289,7 @@ Proof.
 Qed.
 
 (** [match_instr re rm c pc i] means that the translated code [c]
-    contains instructions starting at pc] that correspond to
+    contains instructions starting at [pc] that correspond to
     instruction [i] in the original program, wrt. register environment
     [regenv] and replication map [rm]. *)
 Inductive match_instr
@@ -587,8 +587,8 @@ Proof.
     + rewrite Hn; auto.
 Qed.
 
-Lemma check_of_typ_is_actual_type ty r1 r2 r3 i :
-  check_of_typ ty r1 r2 r3 = Some i ->
+Lemma check_of_typ_is_actual_type ty r1 r2 i :
+  check_of_typ ty r1 r2 = Some i ->
   is_actual_type ty.
 Proof. destruct ty; simpl; intro Hchk; auto; inv Hchk. Qed.
 

@@ -55,7 +55,7 @@ Definition smove (ty : typ) (src dst : reg)
   | None => None
   | Some (nm, kind) =>
       Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
-              [BA src] (BR dst))
+              [BA src] BR_none)
   end.
 
 Definition check_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
@@ -67,13 +67,13 @@ Definition check_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   | _ => None
   end.
 
-Definition check_of_typ (ty : typ) (r1 r2 res : reg)
+Definition check_of_typ (ty : typ) (r1 r2 : reg)
   : option (node -> instruction) :=
   match check_sig_of_typ ty with
   | None => None
   | Some (nm, kind) =>
       Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
-              [BA r1; BA r2] (BR res))
+              [BA r1; BA r2] BR_none)
   end.
 
 (** Emit instructions for comparing register [r1] with its shadow copy [r2].
@@ -85,8 +85,7 @@ Definition check_of_typ (ty : typ) (r1 r2 res : reg)
 *)
 Definition check (re : regenv) (r1 r2 : reg) (pc : node)
   : mon node :=
-  do res <- new_reg;
-  match check_of_typ (re r1) r1 r2 res with
+  match check_of_typ (re r1) r1 r2 with
   | None =>
       error (MSG "DMR.v:check: unexpected Tany32 or Tany64" :: POS pc :: nil)
   | Some chk =>

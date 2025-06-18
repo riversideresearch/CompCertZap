@@ -830,7 +830,7 @@ Section PRESERVATION.
           rewrite PMap.gss; reflexivity. }
   Qed.
 
-  Lemma maj_vote_regR_star_step
+  Lemma maj_vote_regsR_star_step
     c re (rm : PMap.t (reg * reg))
     args pc n tstk sig params stacksize entrypoint sp rs m :
     Forall (fun r1 => Val.has_type (rs # r1) (re r1) /\
@@ -1845,7 +1845,7 @@ Section PRESERVATION.
       { apply Forall_forall; intros x Hx;
           eexists; eexists; split; eauto; constructor; auto. }
       (* smoveR_inv. *)
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
@@ -1898,7 +1898,7 @@ Section PRESERVATION.
                  ; fn_entrypoint := entrypoint |}).
       pose proof CODE as Hcode.
       specialize (CODE pc (Istore chunk addr args src pc') H); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_REGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
@@ -1944,7 +1944,7 @@ Section PRESERVATION.
       pose proof H as Hcode.
       specialize (CODE pc (Icall (funsig fd) ros args res pc') Hcode); inv CODE.
       smoveR_inv.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
@@ -2027,7 +2027,7 @@ Section PRESERVATION.
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
       specialize (CODE pc (Itailcall (funsig fd) ros args) Hcode); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
@@ -2110,7 +2110,7 @@ Section PRESERVATION.
       pose proof H as Hcode.
       specialize (CODE pc (Ibuiltin ef args res pc') Hcode); inv CODE.
       { (* No result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+        eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto; constructor; auto. }
@@ -2152,7 +2152,7 @@ Section PRESERVATION.
           econstructor; eauto.
           eapply match_regsets_ext_r; eauto. }
       { (* With result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+        eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto; constructor; auto. }
@@ -2219,7 +2219,7 @@ Section PRESERVATION.
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
       specialize (CODE pc (Icond cond args ifso ifnot) Hcode); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto; constructor; auto. }
