@@ -19,7 +19,7 @@ Require Import
   Values
 .
 Require Import RTL.
-Require Import Replicate.
+Require Import DMR.
 Require Import Errors.
 Import ListNotations.
 
@@ -469,12 +469,110 @@ Section PRESERVATION.
       simpl; eauto; repeat constructor.
   Qed.
 
-  (* Lemma check_regsR_star_step *)
-  (*   c re (rm : PMap.t reg) *)
-  (*   args pc n tstk sig params stacksize entrypoint sp rs m : *)
-  (*   (* Forall (fun r => Val.has_type (rs # r) (re r) /\ *) *)
-  (*   (*                 rs # r = rs # (rm # r)) args -> *) *)
-  (*   check_regsR c re rm args pc n -> *)
+  Lemma check_regsR_star_step
+    c re (rm : PMap.t reg)
+    args pc n tstk sig params stacksize entrypoint sp rs m :
+    check_regsR c re rm args pc n ->
+    star step tge
+      (State tstk
+             {| fn_sig := sig
+             ; fn_params := params
+             ; fn_stacksize := stacksize
+             ; fn_code := c
+             ; fn_entrypoint := entrypoint |}
+             sp pc rs m) Events.E0
+      (State tstk
+             {| fn_sig := sig
+             ; fn_params := params
+             ; fn_stacksize := stacksize
+             ; fn_code := c
+             ; fn_entrypoint := entrypoint |}
+             sp n rs m).
+  Proof.
+    revert pc n.
+    induction args; intros pc n Hchk; inv Hchk.
+    { apply star_refl. }
+    eapply star_step; eauto.
+    - eapply checkR_step; eauto.
+    - reflexivity.
+  Qed.
+
+  Lemma smove_step
+    ty src dst mov tstk sig params stacksize c entrypoint sp rs m pc succ :
+    Val.has_type (rs # src) ty ->
+    smove ty src dst = Some mov ->
+    c ! pc = Some (mov succ) ->
+    step tge
+      (State tstk
+             {| fn_sig := sig
+             ; fn_params := params
+             ; fn_stacksize := stacksize
+             ; fn_code := c
+             ; fn_entrypoint := entrypoint |}
+             sp pc rs m) E0
+    (State tstk
+           {| fn_sig := sig
+           ; fn_params := params
+           ; fn_stacksize := stacksize
+           ; fn_code := c
+           ; fn_entrypoint := entrypoint |}
+           sp succ (rs # dst <- (rs # src)) m).
+  Proof.
+    intros Hty Hmove Hpc.
+    unfold smove in Hmove.
+    assert (Heq: rs # dst <- (rs # src) = regmap_setres (BR dst) (rs # src) rs).
+    { reflexivity. }
+    rewrite Heq; clear Heq.
+    destruct ty; inv Hmove.
+    - eapply exec_Ibuiltin; eauto.
+      + repeat constructor.
+      + constructor; simpl.
+        unfold Val.has_type in Hty.
+        destruct (rs # src); try contradiction; auto.
+        rewrite Hty; reflexivity.
+    - eapply exec_Ibuiltin; eauto.
+      + repeat constructor.
+      + constructor.
+        unfold Val.has_type in Hty.
+        destruct (rs # src); try contradiction; auto.
+    - eapply exec_Ibuiltin; eauto.
+      + repeat constructor.
+      + constructor; simpl.
+        destruct (rs # src); auto; simpl in Hty; try contradiction;
+          try rewrite Hty; reflexivity.
+    - eapply exec_Ibuiltin; eauto.
+      + repeat constructor.
+      + constructor.
+        unfold Val.has_type in Hty.
+        destruct (rs # src); try contradiction; auto.
+  Qed.
+
+  Lemma smoveR_step tstk sig params stacksize c entrypoint ty r1 r2 sp rs m pc succ :
+    Val.has_type (rs # r1) ty ->
+    smoveR c ty r1 r2 pc succ ->
+    step tge
+      (State tstk
+             {| fn_sig := sig
+             ; fn_params := params
+             ; fn_stacksize := stacksize
+             ; fn_code := c
+             ; fn_entrypoint := entrypoint |}
+             sp pc rs m) E0
+    (State tstk
+           {| fn_sig := sig
+           ; fn_params := params
+           ; fn_stacksize := stacksize
+           ; fn_code := c
+           ; fn_entrypoint := entrypoint |}
+           sp succ (rs # r2 <- (rs # r1)) m).
+  Proof.
+    intros Hty Hmov; inv Hmov.
+    eapply smove_step; eauto.
+  Qed.
+
+  (* Lemma smoveR_step tstk sig params stacksize c entrypoint ty r1 r2 sp rs m pc succ : *)
+  (*   Val.has_type (rs # r1) ty -> *)
+  (*   smoveR c ty r1 r2 pc succ -> *)
   (*   star step tge *)
   (*     (State tstk *)
   (*            {| fn_sig := sig *)
@@ -482,237 +580,92 @@ Section PRESERVATION.
   (*            ; fn_stacksize := stacksize *)
   (*            ; fn_code := c *)
   (*            ; fn_entrypoint := entrypoint |} *)
-  (*            sp pc rs m) Events.E0 *)
-  (*     (State tstk *)
-  (*            {| fn_sig := sig *)
-  (*            ; fn_params := params *)
-  (*            ; fn_stacksize := stacksize *)
-  (*            ; fn_code := c *)
-  (*            ; fn_entrypoint := entrypoint |} *)
-  (*            sp n rs m). *)
+  (*            sp pc rs m) E0 *)
+  (*   (State tstk *)
+  (*          {| fn_sig := sig *)
+  (*          ; fn_params := params *)
+  (*          ; fn_stacksize := stacksize *)
+  (*          ; fn_code := c *)
+  (*          ; fn_entrypoint := entrypoint |} *)
+  (*          sp succ (rs # r2 <- (rs # r1)) m). *)
   (* Proof. *)
-  (*   revert pc n. *)
-  (*   induction args; intros pc n Hchk; inv Hchk. *)
-  (*   { apply star_refl. } *)
-  (*   (* apply IHargs in H1. *) *)
-  (*   eapply star_step; eauto. *)
-  (*   - eapply checkR_step; eauto. *)
-  (*   destruct H3 as (Hty & H3); destruct (H3 r2 r3 H1) as [Hr2 Hr3]. *)
-  (*   eapply IHargs in H4. *)
-  (*   2: { eauto. } *)
-  (*   destruct H4 as (rs' & H4 & Hrs'). *)
-  (*   generalize (Hrs' a); intro Ha. *)
-  (*   eapply maj_voteR_step with (rs:=rs') in H5. *)
-  (*   2: { rewrite <- Ha; auto. } *)
-  (*   2: { rewrite <- 2!Hrs'; auto. } *)
-  (*   2: { rewrite <- 2!Hrs'; auto. } *)
-  (*   destruct H5 as (rs'' & H5 & Hr''). *)
-  (*   eexists; split. *)
-  (*   { apply plus_star. *)
-  (*     eapply star_plus_trans. *)
-  (*     { apply H4. } *)
-  (*     2: { reflexivity. } *)
-  (*     apply H5. } *)
-  (*   intro r; rewrite Hrs'; apply Hr''. *)
+  (*   intros Hty Hmove; inv Hmove. *)
+  (*   eapply star_step. *)
+  (*   { eapply smove_step. *)
+  (*     - apply Hty. *)
+  (*     - apply H. *)
+  (*     - eauto. } *)
+  (*   2: { reflexivity. } *)
+  (*   eapply star_step. *)
+  (*   { eapply smove_step; auto. *)
+      
+  (*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 r2); subst. *)
+  (*     - rewrite PMap.gss; auto. *)
+  (*     - rewrite PMap.gso; auto. } *)
+  (*   2: { reflexivity. } *)
+  (*   assert (Heq: (rs # r2 <- (rs # r1)) # r3 <- ((rs # r2 <- (rs # r1)) # r1) = *)
+  (*                  ((rs # r2 <- (rs # r1)) # r3 <- (rs # r1))). *)
+  (*   { f_equal. *)
+  (*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 r2); subst. *)
+  (*     - rewrite PMap.gss; reflexivity. *)
+  (*     - rewrite PMap.gso; auto. } *)
+  (*   rewrite Heq. *)
+  (*   apply star_refl. *)
   (* Qed. *)
 
-  (* Lemma check_regsR_star_step *)
-  (*   c re (rm : PMap.t reg) *)
-  (*   args pc n tstk sig params stacksize entrypoint sp rs m : *)
-  (*   Forall (fun r => Val.has_type (rs # r) (re r) /\ *)
-  (*                   rs # r = rs # (rm # r)) args -> *)
-  (*   check_regsR c re rm args pc n -> *)
-  (*   exists rs', star step tge *)
-  (*            (State tstk *)
-  (*                   {| fn_sig := sig *)
-  (*                   ; fn_params := params *)
-  (*                   ; fn_stacksize := stacksize *)
-  (*                   ; fn_code := c *)
-  (*                   ; fn_entrypoint := entrypoint |} *)
-  (*                   sp pc rs m) Events.E0 *)
-  (*            (State tstk *)
-  (*                   {| fn_sig := sig *)
-  (*                   ; fn_params := params *)
-  (*                   ; fn_stacksize := stacksize *)
-  (*                   ; fn_code := c *)
-  (*                   ; fn_entrypoint := entrypoint |} *)
-  (*                   sp n rs' m) /\ (forall r, rs # r = rs' # r).   *)
-  (* Proof. *)
-  (*   revert pc n. *)
-  (*   induction args; intros pc n Hall Hmaj; inv Hmaj. *)
-  (*   { eexists; split. *)
-  (*     - apply star_refl. *)
-  (*     - intro; reflexivity. } *)
-  (*   inv Hall. *)
-  (*   destruct H3 as (Hty & H3); destruct (H3 r2 r3 H1) as [Hr2 Hr3]. *)
-  (*   eapply IHargs in H4. *)
-  (*   2: { eauto. } *)
-  (*   destruct H4 as (rs' & H4 & Hrs'). *)
-  (*   generalize (Hrs' a); intro Ha. *)
-  (*   eapply maj_voteR_step with (rs:=rs') in H5. *)
-  (*   2: { rewrite <- Ha; auto. } *)
-  (*   2: { rewrite <- 2!Hrs'; auto. } *)
-  (*   2: { rewrite <- 2!Hrs'; auto. } *)
-  (*   destruct H5 as (rs'' & H5 & Hr''). *)
-  (*   eexists; split. *)
-  (*   { apply plus_star. *)
-  (*     eapply star_plus_trans. *)
-  (*     { apply H4. } *)
-  (*     2: { reflexivity. } *)
-  (*     apply H5. } *)
-  (*   intro r; rewrite Hrs'; apply Hr''. *)
-  (* Qed. *)
+  Fixpoint shadow_regs (rm : PMap.t reg) (args : list reg) : list reg :=
+    match args with
+    | [] => []
+    | r1 :: args' =>
+        rm # r1 :: shadow_regs rm args'
+    end.
 
-(*   Lemma smove_step *)
-(*     ty src dst mov tstk sig params stacksize c entrypoint sp rs m pc succ : *)
-(*     Val.has_type (rs # src) ty -> *)
-(*     smove ty src dst = Some mov -> *)
-(*     c ! pc = Some (mov succ) -> *)
-(*     step tge *)
-(*       (State tstk *)
-(*              {| fn_sig := sig *)
-(*              ; fn_params := params *)
-(*              ; fn_stacksize := stacksize *)
-(*              ; fn_code := c *)
-(*              ; fn_entrypoint := entrypoint |} *)
-(*              sp pc rs m) E0 *)
-(*     (State tstk *)
-(*            {| fn_sig := sig *)
-(*            ; fn_params := params *)
-(*            ; fn_stacksize := stacksize *)
-(*            ; fn_code := c *)
-(*            ; fn_entrypoint := entrypoint |} *)
-(*            sp succ (rs # dst <- (rs # src)) m). *)
-(*   Proof. *)
-(*     intros Hty Hmove Hpc. *)
-(*     unfold smove in Hmove. *)
-(*     assert (Heq: rs # dst <- (rs # src) = regmap_setres (BR dst) (rs # src) rs). *)
-(*     { reflexivity. } *)
-(*     rewrite Heq; clear Heq. *)
-(*     destruct ty; inv Hmove. *)
-(*     - eapply exec_Ibuiltin; eauto. *)
-(*       + repeat constructor. *)
-(*       + constructor; simpl. *)
-(*         unfold Val.has_type in Hty. *)
-(*         destruct (rs # src); try contradiction; auto. *)
-(*         rewrite Hty; reflexivity. *)
-(*     - eapply exec_Ibuiltin; eauto. *)
-(*       + repeat constructor. *)
-(*       + constructor. *)
-(*         unfold Val.has_type in Hty. *)
-(*         destruct (rs # src); try contradiction; auto. *)
-(*     - eapply exec_Ibuiltin; eauto. *)
-(*       + repeat constructor. *)
-(*       + constructor; simpl. *)
-(*         destruct (rs # src); auto; simpl in Hty; try contradiction; *)
-(*           try rewrite Hty; reflexivity. *)
-(*     - eapply exec_Ibuiltin; eauto. *)
-(*       + repeat constructor. *)
-(*       + constructor. *)
-(*         unfold Val.has_type in Hty. *)
-(*         destruct (rs # src); try contradiction; auto. *)
-(*   Qed. *)
+  (* TODO: get rid of this entirely if possible and replace with
+     simpler proof strategy for establishing match_regsets upon
+     function entry. *)
+  Fixpoint update_regset
+    (rm : PMap.t reg) (rs : regset) (args : list reg)
+    : regset :=
+    match args with
+    | [] => rs
+    | r1 :: args' =>
+        let rs' := update_regset rm rs args' in
+        rs' # (rm # r1) <- (rs' # r1)
+    end.
 
-(*   Lemma smoveR_step tstk sig params stacksize c entrypoint ty r1 r2 r3 sp rs m pc succ : *)
-(*     Val.has_type (rs # r1) ty -> *)
-(*     smoveR c ty r1 r2 r3 pc succ -> *)
-(*     star step tge *)
-(*       (State tstk *)
-(*              {| fn_sig := sig *)
-(*              ; fn_params := params *)
-(*              ; fn_stacksize := stacksize *)
-(*              ; fn_code := c *)
-(*              ; fn_entrypoint := entrypoint |} *)
-(*              sp pc rs m) E0 *)
-(*     (State tstk *)
-(*            {| fn_sig := sig *)
-(*            ; fn_params := params *)
-(*            ; fn_stacksize := stacksize *)
-(*            ; fn_code := c *)
-(*            ; fn_entrypoint := entrypoint |} *)
-(*            sp succ (rs # r2 <- (rs # r1) # r3 <- (rs # r1)) m). *)
-(*   Proof. *)
-(*     intros Hty Hmove; inv Hmove. *)
-(*     eapply star_step. *)
-(*     { eapply smove_step. *)
-(*       - apply Hty. *)
-(*       - apply H. *)
-(*       - eauto. } *)
-(*     2: { reflexivity. } *)
-(*     eapply star_step. *)
-(*     { eapply smove_step; eauto. *)
-(*       destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 r2); subst. *)
-(*       - rewrite PMap.gss; auto. *)
-(*       - rewrite PMap.gso; auto. } *)
-(*     2: { reflexivity. } *)
-(*     assert (Heq: (rs # r2 <- (rs # r1)) # r3 <- ((rs # r2 <- (rs # r1)) # r1) = *)
-(*                    ((rs # r2 <- (rs # r1)) # r3 <- (rs # r1))). *)
-(*     { f_equal. *)
-(*       destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 r2); subst. *)
-(*       - rewrite PMap.gss; reflexivity. *)
-(*       - rewrite PMap.gso; auto. } *)
-(*     rewrite Heq. *)
-(*     apply star_refl. *)
-(*   Qed. *)
+  Inductive updated_regset
+    (rm : PMap.t reg) (rs : regset) : list reg -> regset -> Prop :=
+  | updated_regset_nil : updated_regset rm rs [] rs
+  | updated_regset_cons :
+    forall r1 rest rs' rs'',
+      updated_regset rm rs rest rs' ->
+      rs'' = rs' # (rm # r1) <- (rs # r1) ->
+      updated_regset rm rs (r1 :: rest) rs''.
 
-(*   Fixpoint shadow_regs (rm : PMap.t (reg * reg)) (args : list reg) : list reg := *)
-(*     match args with *)
-(*     | [] => [] *)
-(*     | r1 :: args' => *)
-(*         let (r2, r3) := rm # r1 in *)
-(*         r2 :: r3 :: shadow_regs rm args' *)
-(*     end. *)
+  Lemma rm_wf_cons rm a args :
+    rm_wf rm (a :: args) ->
+    rm_wf rm args.
+  Proof.
+    unfold rm_wf.
+    intros Hwf r1 Hin.
+    specialize (Hwf r1 (in_cons _ _ _ Hin)).
+    destruct Hwf as (Hnodup & Hwf).
+    split; auto.
+    intros r1' Hin' Hneq.
+    apply Hwf; auto; right; auto.
+  Qed.
 
-(*   Fixpoint update_regset *)
-(*     (rm : PMap.t (reg * reg)) (rs : regset) (args : list reg) *)
-(*     : regset := *)
-(*     match args with *)
-(*     | [] => rs *)
-(*     | r1 :: args' => *)
-(*         let (r2, r3) := rm # r1 in *)
-(*         let rs' := update_regset rm rs args' in *)
-(*         (rs' # r2 <- (rs' # r1)) # r3 <- (rs' # r1) *)
-(*     end. *)
-
-(*   Inductive updated_regset *)
-(*     (rm : PMap.t (reg * reg)) (rs : regset) : list reg -> regset -> Prop := *)
-(*   | updated_regset_nil : updated_regset rm rs [] rs *)
-(*   | updated_regset_cons : *)
-(*     forall r1 r2 r3 rest rs' rs'', *)
-(*       rm # r1 = (r2, r3) -> *)
-(*       updated_regset rm rs rest rs' -> *)
-(*       rs'' = (rs' # r2 <- (rs # r1)) # r3 <- (rs # r1) -> *)
-(*       updated_regset rm rs (r1 :: rest) rs''. *)
-
-(*   Lemma rm_wf_cons rm a args : *)
-(*     rm_wf rm (a :: args) -> *)
-(*     rm_wf rm args. *)
-(*   Proof. *)
-(*     unfold rm_wf. *)
-(*     intros Hwf r1 r2 r3 Hin Hr1. *)
-(*     specialize (Hwf r1 r2 r3 (in_cons _ _ _ Hin) Hr1). *)
-(*     destruct Hwf as (Hnodup & Hwf). *)
-(*     split; auto. *)
-(*     intros r1' r2' r3' Hin' Hneq Hr1'. *)
-(*     apply Hwf; auto; right; auto. *)
-(*   Qed. *)
-
-(*   Lemma update_regset_not_in *)
-(*     (rm : PMap.t (reg * reg)) (rs : regset) (r : reg) (args : list reg) : *)
-(*     Forall (fun r1 => forall r2 r3, rm # r1 = (r2, r3) -> NoDup [r; r2; r3]) args -> *)
-(*     (update_regset rm rs args) # r = rs # r. *)
-(*   Proof. *)
-(*     revert r; induction args; simpl; intros r Hall; auto. *)
-(*     inv Hall. *)
-(*     destruct (rm # a) as [r1 r2] eqn:Ha. *)
-(*     specialize (H1 _ _ eq_refl). *)
-(*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r2); subst. *)
-(*     { inv H1; exfalso; apply H3; right; left; reflexivity. } *)
-(*     rewrite PMap.gso; auto. *)
-(*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst. *)
-(*     { inv H1; exfalso; apply H3; left; reflexivity. } *)
-(*     rewrite PMap.gso; auto. *)
-(*   Qed. *)
+  Lemma update_regset_not_in
+    (rm : PMap.t reg) (rs : regset) (r : reg) (args : list reg) :
+    Forall (fun r1 => r <> rm # r1) args ->
+    (update_regset rm rs args) # r = rs # r.
+  Proof.
+    revert r; induction args; simpl; intros r Hall; auto.
+    inv Hall.
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec r (rm # a));
+      subst; try contradiction.
+    rewrite PMap.gso; auto.
+  Qed.
 
 (*   Lemma copy_allR_star_step *)
 (*     c re (rm : PMap.t (reg * reg)) *)

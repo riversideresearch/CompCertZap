@@ -55,7 +55,7 @@ Definition smove (ty : typ) (src dst : reg)
   | None => None
   | Some (nm, kind) =>
       Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
-              [BA src] BR_none)
+              [BA src] (BR dst))
   end.
 
 Definition check_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
@@ -103,14 +103,24 @@ Definition check (re : regenv) (r1 r2 : reg) (pc : node)
  *)
 (* TODO: swap order here, so that this is tail recursive? I don't
    think it really matters either way. *)
+(* Fixpoint check_regs *)
+(*   (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node) *)
+(*   : mon node := *)
+(*   match regs with *)
+(*   | [] => ret pc *)
+(*   | r1 :: rs => *)
+(*       do succ <- check_regs re rm rs pc; *)
+(*       check re r1 (rm # r1) succ *)
+(*   end. *)
+
 Fixpoint check_regs
   (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
   | r1 :: rs =>
-      do succ <- check_regs re rm rs pc;
-      check re r1 (rm # r1) succ
+      do succ <- check re r1 (rm # r1) pc;
+      check_regs re rm rs succ
   end.
 
 Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=

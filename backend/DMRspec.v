@@ -205,8 +205,10 @@ Inductive check_regsR c re rm : list reg -> node -> node -> Prop :=
     check_regsR c re rm [] pc pc
 | check_regs_cons :
   forall arg args pc succ n,
-    check_regsR c re rm args pc n ->
-    checkR c (re arg) arg (rm # arg) n succ ->
+    (* check_regsR c re rm args pc n -> *)
+    (* checkR c (re arg) arg (rm # arg) n succ -> *)
+    checkR c (re arg) arg (rm # arg) pc n ->
+    check_regsR c re rm args n succ ->
     check_regsR c re rm (arg :: args) pc succ.
 
 Inductive smoveR
@@ -633,9 +635,30 @@ Proof.
   unfold RTLgen.bind in H0.
   gen_case Hchk.
   egen_case.
-  apply IHregs in Hchk; auto.
+  apply IHregs in H; auto.
   eapply check_succ_lt_nextnode; eauto.
 Qed.
+
+(* Lemma check_regs_check_regsR re rm regs pc succ s s' pf : *)
+(*   pc < s.(st_nextnode) -> *)
+(*   check_regs re rm regs pc s = RTLgen.OK succ s' pf -> *)
+(*   check_regsR s'.(st_code) re rm regs pc succ. *)
+(* Proof. *)
+(*   revert pc succ s s' pf. *)
+(*   induction regs; simpl; intros pc succ s s' pf Hlt Hchk. *)
+(*   { inv Hchk; constructor. } *)
+(*   unfold RTLgen.bind in Hchk. *)
+(*   gen_case H0. *)
+(*   destruct (check re a (rm # a) n s'0) eqn:Hm; gen_contra; gen_inv. *)
+(*   pose proof H0 as H0'. *)
+(*   apply check_regs_succ_lt_nextnode in H0'; auto. *)
+(*   apply IHregs in H0; auto. *)
+(*   econstructor; eauto. *)
+(*   - eapply state_incr_check_regsR. *)
+(*     2: { eauto. } *)
+(*     clear Hm; inv s1; auto. *)
+(*   - eapply check_checkR; eauto. *)
+(* Qed. *)
 
 Lemma check_regs_check_regsR re rm regs pc succ s s' pf :
   pc < s.(st_nextnode) ->
@@ -647,15 +670,14 @@ Proof.
   { inv Hchk; constructor. }
   unfold RTLgen.bind in Hchk.
   gen_case H0.
-  destruct (check re a (rm # a) n s'0) eqn:Hm; gen_contra; gen_inv.
+  gen_case H1.
   pose proof H0 as H0'.
-  apply check_regs_succ_lt_nextnode in H0'; auto.
-  apply IHregs in H0; auto.
+  apply check_succ_lt_nextnode in H0'; auto.
+  apply IHregs in H1; auto.
   econstructor; eauto.
-  - eapply state_incr_check_regsR.
-    2: { eauto. }
-    clear Hm; inv s1; auto.
-  - eapply check_checkR; eauto.
+  eapply state_incr_checkR.
+  2: { eapply check_checkR; eauto. }
+  intro m; inv s1; auto.
 Qed.
 
 Lemma checkR_ptree_set c ty r1 r2 pc succ n i :
@@ -764,8 +786,10 @@ Proof.
       simpl in Htransf'.
       gen_case Hchk.
       gen_case Hupd.
-      replace ((do succ <- check_regs re rm l0 p;
-                   check re r (rm # r) succ) s'0)
+      (* replace ((do succ <- check_regs re rm l0 p; *)
+      (*              check re r (rm # r) succ) s'0) *)
+      (*   with (check_regs re rm (r :: l0) p s'0) in Hchk by auto. *)
+      replace ((do succ <- check re r rm # r p; check_regs re rm l0 succ) s'0)
         with (check_regs re rm (r :: l0) p s'0) in Hchk by auto.
       apply check_regs_check_regsR in Hchk.
       2: { clear Hiter; inv s0; unfold Ple in *; lia. }
