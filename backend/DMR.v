@@ -211,16 +211,39 @@ Definition copy_to_shadows
                  :: POS pc :: nil)
   end.
 
+(* Fixpoint copy_all_to_shadows *)
+(*   (re : regenv) (rm : PMap.t reg) (rs : list reg) (succ : node) *)
+(*   : mon node := *)
+(*   match rs with *)
+(*   | [] => ret succ *)
+(*   | r :: rs' => *)
+(*       do n <- reserve_instr; *)
+(*       do _ <- copy_to_shadows rm (re r) r n succ; *)
+(*       copy_all_to_shadows re rm rs' n *)
+(*   end. *)
+
 Fixpoint copy_all_to_shadows
   (re : regenv) (rm : PMap.t reg) (rs : list reg) (succ : node)
   : mon node :=
   match rs with
   | [] => ret succ
   | r :: rs' =>
+      do succ' <- copy_all_to_shadows re rm rs' succ;
       do n <- reserve_instr;
-      do _ <- copy_to_shadows rm (re r) r n succ;
-      copy_all_to_shadows re rm rs' n
+      do _ <- copy_to_shadows rm (re r) r n succ';
+      ret n
   end.
+
+(* Fixpoint copy_all_to_shadows *)
+(*   (re : regenv) (rm : PMap.t reg) (rs : list reg) (succ : node) *)
+(*   : mon node := *)
+(*   match rs with *)
+(*   | [] => ret succ *)
+(*   | r :: rs' => *)
+(*       do n <- reserve_instr; *)
+(*       do _ <- copy_to_shadows rm (re r) r n succ; *)
+(*       copy_all_to_shadows re rm rs' n *)
+(*   end. *)
 
 (** Generate fault-tolerant instruction sequence corresponding to the
     input instruction. [re] is the register typing context of the
@@ -409,7 +432,8 @@ Definition transf_fun (re : regenv) (f : function)
   : mon node :=
   do rm <- replication_map f;
   do live <- live_regs_to_copy f;
-  do entry_point <- copy_all_to_shadows re rm (app' live f.(fn_params))
+  (* do entry_point <- copy_all_to_shadows re rm (app' live f.(fn_params)) *)
+  do entry_point <- copy_all_to_shadows re rm (app' f.(fn_params) live)
                      f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.

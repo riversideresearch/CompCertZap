@@ -1,4 +1,9 @@
-(** * Forward simulation proof for TMR pass. *)
+(** * Forward simulation proof for DMR pass. *)
+
+(* TODO: factor out things in common with TMR (and do same for spec). *)
+(* TODO: remove well-typedness stuff from match relation? may not need
+   it anymore since we don't care about the inputs to checkpoints
+   being well-typed. Or maybe we still need them because of smoves... *)
 
 Require Import
   AST
@@ -152,6 +157,27 @@ Section PRESERVATION.
     destruct (transf_fun _ _ _); inv EQ0; reflexivity.
   Qed.
 
+  Ltac in_list :=
+    match goal with
+    | [ |- In ?x (?x :: _) ] => left; reflexivity
+    | [ |- In ?x (?y :: ?ys) ] => right; in_list
+    end.
+
+  Ltac not_in_list :=
+    match goal with
+    | [ H: ~ In ?x (?y :: ?ys) |- _ ] => exfalso; apply H; in_list
+    end.
+
+  Ltac nodup_false :=
+    match goal with
+    | [ H : NoDup (?x :: ?xs) |- _ ] => inv H; try not_in_list; nodup_false
+    end.      
+
+  Ltac not_nodup :=
+    match goal with
+    | [ |- ~ NoDup (?x :: ?xs) ] => intro HC; nodup_false
+    end.
+
   Lemma rm_wf_neq_1_2 (rm : PMap.t reg) l (r : reg) :
     rm_wf rm l ->
     In r l ->
@@ -173,7 +199,7 @@ Section PRESERVATION.
     destruct Hwf as [Hr Hwf].
     specialize (Hwf r' Hn' Hneq).
     rewrite H in Hwf.
-    inv Hwf; inv H3 ;apply H4; right; left; reflexivity.
+    nodup_false.
   Qed.
 
   Lemma rm_wf_neq_2_1' (rm : PMap.t reg) l (r r' : reg) :
@@ -187,8 +213,8 @@ Section PRESERVATION.
     - eapply rm_wf_neq_1_2; eauto.
     - apply Hwf in Hn.
       destruct Hn as [Hneq Hn].
-      apply Hn in Hn'; auto;inv Hn'.
-      apply H1; right; right; left; reflexivity.
+      apply Hn in Hn'; auto.
+      nodup_false.
   Qed.
 
   Lemma rm_wf_neq_2_2' (rm : PMap.t reg) l (r r' : reg) :
@@ -203,8 +229,7 @@ Section PRESERVATION.
     destruct Hn as [Hneq' Hn].
     apply Hn in Hn'; auto.
     rewrite HC in Hn'.
-    inv Hn'; inv H2.
-    apply H3; right; left; reflexivity.
+    nodup_false.
   Qed.
 
   Lemma rs_args1_rs'_args2 params c rm args1 args2 rs rs' :
@@ -398,8 +423,7 @@ Section PRESERVATION.
     apply Hwf in Hres1.
     destruct Hres1 as [Hneq Hres1].
     apply Hres1 in H; auto.
-    inv H; inv H3.
-    apply H1; left; reflexivity.
+    nodup_false.
   Qed.
 
   Lemma pset_in_res_fold_right pc op args res pc' l :
@@ -613,34 +637,43 @@ Section PRESERVATION.
   (*   apply star_refl. *)
   (* Qed. *)
 
-  Fixpoint shadow_regs (rm : PMap.t reg) (args : list reg) : list reg :=
-    match args with
-    | [] => []
-    | r1 :: args' =>
-        rm # r1 :: shadow_regs rm args'
-    end.
+  (* Fixpoint shadow_regs (rm : PMap.t reg) (args : list reg) : list reg := *)
+  (*   match args with *)
+  (*   | [] => [] *)
+  (*   | r1 :: args' => *)
+  (*       rm # r1 :: shadow_regs rm args' *)
+  (*   end. *)
 
-  (* TODO: get rid of this entirely if possible and replace with
-     simpler proof strategy for establishing match_regsets upon
-     function entry. *)
+  (* (* TODO: get rid of this entirely if possible and replace with *)
+  (*    simpler proof strategy for establishing match_regsets upon *)
+  (*    function entry. *) *)
+  (* Fixpoint update_regset *)
+  (*   (rm : PMap.t reg) (rs : regset) (args : list reg) *)
+  (*   : regset := *)
+  (*   match args with *)
+  (*   | [] => rs *)
+  (*   | r1 :: args' => *)
+  (*       let rs' := update_regset rm rs args' in *)
+  (*       rs' # (rm # r1) <- (rs' # r1) *)
+  (*   end. *)
+
   Fixpoint update_regset
     (rm : PMap.t reg) (rs : regset) (args : list reg)
     : regset :=
     match args with
     | [] => rs
-    | r1 :: args' =>
-        let rs' := update_regset rm rs args' in
-        rs' # (rm # r1) <- (rs' # r1)
+    | arg :: args' =>
+        update_regset rm (rs # (rm # arg) <- (rs # arg)) args'
     end.
 
-  Inductive updated_regset
-    (rm : PMap.t reg) (rs : regset) : list reg -> regset -> Prop :=
-  | updated_regset_nil : updated_regset rm rs [] rs
-  | updated_regset_cons :
-    forall r1 rest rs' rs'',
-      updated_regset rm rs rest rs' ->
-      rs'' = rs' # (rm # r1) <- (rs # r1) ->
-      updated_regset rm rs (r1 :: rest) rs''.
+  (* Inductive updated_regset *)
+  (*   (rm : PMap.t reg) (rs : regset) : list reg -> regset -> Prop := *)
+  (* | updated_regset_nil : updated_regset rm rs [] rs *)
+  (* | updated_regset_cons : *)
+  (*   forall r1 rest rs' rs'', *)
+  (*     updated_regset rm rs rest rs' -> *)
+  (*     rs'' = rs' # (rm # r1) <- (rs # r1) -> *)
+  (*     updated_regset rm rs (r1 :: rest) rs''. *)
 
   Lemma rm_wf_cons rm a args :
     rm_wf rm (a :: args) ->
@@ -660,232 +693,214 @@ Section PRESERVATION.
     Forall (fun r1 => r <> rm # r1) args ->
     (update_regset rm rs args) # r = rs # r.
   Proof.
-    revert r; induction args; simpl; intros r Hall; auto.
+    revert r rs; induction args; simpl; intros r rs Hall; auto.
     inv Hall.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec r (rm # a));
-      subst; try contradiction.
+    rewrite IHargs; auto.
     rewrite PMap.gso; auto.
   Qed.
 
-(*   Lemma copy_allR_star_step *)
-(*     c re (rm : PMap.t (reg * reg)) *)
-(*     args pc succ tstk sig params stacksize entrypoint sp rs m : *)
-(*     Forall (fun r => Val.has_type (rs # r) (re r)) args -> *)
-(*     rm_wf rm args -> *)
-(*     copy_allR re rm c args pc succ -> *)
-(*     star step tge *)
-(*       (State tstk *)
-(*              {| fn_sig := sig *)
-(*              ; fn_params := params *)
-(*              ; fn_stacksize := stacksize *)
-(*              ; fn_code := c *)
-(*              ; fn_entrypoint := entrypoint |} *)
-(*              sp pc rs m) Events.E0 *)
-(*       (State tstk *)
-(*              {| fn_sig := sig *)
-(*              ; fn_params := params *)
-(*              ; fn_stacksize := stacksize *)
-(*              ; fn_code := c *)
-(*              ; fn_entrypoint := entrypoint |} *)
-(*              sp succ (update_regset rm rs args) m). *)
-(*   Proof. *)
-(*     revert rs pc succ. *)
-(*     induction args; intros rs pc succ Hargs Hwf Hcopy; inv Hcopy. *)
-(*     { apply star_refl. } *)
-(*     inv Hargs. *)
-(*     apply IHargs with (rs := rs) in H2; auto. *)
-(*     2: { eapply rm_wf_cons; eauto. } *)
-(*     eapply star_trans. *)
-(*     { apply H2. } *)
-(*     2: { reflexivity. } *)
-(*     simpl. *)
-(*     rewrite H1. *)
-(*     eapply smoveR_step; eauto. *)
-(*     rewrite update_regset_not_in; auto. *)
-(*     apply Forall_forall. *)
-(*     intros x1 Hx x2 x3 Hx1. *)
-(*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec a x1); subst. *)
-(*     - unfold rm_wf in Hwf. *)
-(*       specialize (Hwf x1 x2 x3 (in_eq _ _) Hx1); intuition. *)
-(*     - destruct (Hwf a r2 r3 (in_eq _ _) H1) as [Hnodup H]. *)
-(*       specialize (H x1 x2 x3 (in_cons _ _ _ Hx) n Hx1). *)
-(*       inv H; inv H8; inv H9; inv H10; inv H11. *)
-(*       constructor. *)
-(*       { intro HC; inv HC. *)
-(*         - apply H7; right; right; right; left; reflexivity. *)
-(*         - inv H. *)
-(*           + apply H7; right; right; right; right; left; reflexivity. *)
-(*           + inv H0. } *)
-(*       constructor. *)
-(*       { intro HC; inv HC. *)
-(*         - apply H10; left; reflexivity. *)
-(*         - inv H. } *)
-(*       constructor. *)
-(*       { intros []. } *)
-(*       constructor. *)
-(*   Qed. *)
+  Lemma copy_allR_star_step
+    c re (rm : PMap.t reg)
+    args pc succ tstk sig params stacksize entrypoint sp rs m :
+    Forall (fun r => Val.has_type (rs # r) (re r)) args ->
+    rm_wf rm args ->
+    copy_allR re rm c args pc succ ->
+    star step tge
+      (State tstk
+             {| fn_sig := sig
+             ; fn_params := params
+             ; fn_stacksize := stacksize
+             ; fn_code := c
+             ; fn_entrypoint := entrypoint |}
+             sp pc rs m) Events.E0
+      (State tstk
+             {| fn_sig := sig
+             ; fn_params := params
+             ; fn_stacksize := stacksize
+             ; fn_code := c
+             ; fn_entrypoint := entrypoint |}
+             sp succ (update_regset rm rs args) m).
+  Proof.
+    revert rs pc succ.
+    induction args; intros rs pc succ Hargs Hwf Hcopy; inv Hcopy.
+    { apply star_refl. }
+    inv Hargs.
+    eapply star_step.
+    { eapply smoveR_step; eauto. }
+    2: { reflexivity. }
+    simpl.
+    apply IHargs; auto.
+    - apply Forall_forall; intros x Hin.
+      rewrite Forall_forall in H3.
+      specialize (H3 _ Hin).
+      generalize (rm_wf_neq_2_1' rm (a :: args) x a).
+      intro H; apply H in Hwf.
+      2: { right; auto. }
+      2: { left; reflexivity. }
+      destruct (DecidableTypeEx.Positive_as_DT.eq_dec (rm # a) x); subst.
+      { contradiction. }
+      { rewrite PMap.gso; auto. }
+    - eapply rm_wf_cons; eauto.
+  Qed.
 
-(*   Lemma rs_in_singleton (rs : Regmap.t val) args v r : *)
-(*     rs ## args = [v] -> *)
-(*     In r args -> *)
-(*     rs # r = v. *)
-(*   Proof. *)
-(*     intros Hargs Hin. *)
-(*     destruct args; inv Hin. *)
-(*     - inv Hargs; auto. *)
-(*     - inv Hargs. *)
-(*       apply map_eq_nil in H2; subst; inv H. *)
-(*   Qed. *)
+  Lemma rs_in_singleton (rs : Regmap.t val) args v r :
+    rs ## args = [v] ->
+    In r args ->
+    rs # r = v.
+  Proof.
+    intros Hargs Hin.
+    destruct args; inv Hin.
+    - inv Hargs; auto.
+    - inv Hargs.
+      apply map_eq_nil in H2; subst; inv H.
+  Qed.
 
-(*   Lemma rs_in_l_2 (rs : Regmap.t val) args v1 v2 r : *)
-(*     rs ## args = [v1; v2] -> *)
-(*     In r args -> *)
-(*     rs # r = v1 \/ rs # r = v2. *)
-(*   Proof. *)
-(*     intros Hargs Hin. *)
-(*     destruct args; inv Hin. *)
-(*     - inv Hargs; auto. *)
-(*     - inv Hargs. *)
-(*       right; eapply rs_in_singleton; eauto. *)
-(*   Qed. *)
+  Lemma rs_in_l_2 (rs : Regmap.t val) args v1 v2 r :
+    rs ## args = [v1; v2] ->
+    In r args ->
+    rs # r = v1 \/ rs # r = v2.
+  Proof.
+    intros Hargs Hin.
+    destruct args; inv Hin.
+    - inv Hargs; auto.
+    - inv Hargs.
+      right; eapply rs_in_singleton; eauto.
+  Qed.
 
-(*   Lemma match_stackframes_sig_proper stk tstk sig1 sig2 : *)
-(*     sig_res sig1 = sig_res sig2 -> *)
-(*     match_stackframes stk tstk sig1 -> *)
-(*     match_stackframes stk tstk sig2. *)
-(*   Proof. *)
-(*     intros Hres Hwt. *)
-(*     induction Hwt. *)
-(*     { constructor; rewrite <- Hres; auto. } *)
-(*     econstructor; eauto. *)
-(*     unfold proj_sig_res. unfold proj_xtype. *)
-(*     rewrite <- Hres. *)
-(*     rewrite WT_RES. *)
-(*     reflexivity. *)
-(*   Qed. *)
+  Lemma match_stackframes_sig_proper stk tstk sig1 sig2 :
+    sig_res sig1 = sig_res sig2 ->
+    match_stackframes stk tstk sig1 ->
+    match_stackframes stk tstk sig2.
+  Proof.
+    intros Hres Hwt.
+    induction Hwt.
+    { constructor; rewrite <- Hres; auto. }
+    econstructor; eauto.
+    unfold proj_sig_res. unfold proj_xtype.
+    rewrite <- Hres.
+    rewrite WT_RES.
+    reflexivity.
+  Qed.
 
-(*   Lemma match_regsets_ext_r rs0 rs1 rs2 params c rm : *)
-(*     (forall r, rs1 # r = rs2 # r) -> *)
-(*     match_regsets params c rm rs0 rs1 -> *)
-(*     match_regsets params c rm rs0 rs2. *)
-(*   Proof. *)
-(*     unfold match_regsets. *)
-(*     intros Heq Hinv r1 r2 r3 Hr1 Hused. *)
-(*     eapply Hinv in Hused; eauto. *)
-(*     destruct Hused as (H0 & H1 & H2). *)
-(*     repeat split; auto; rewrite <- Heq; auto. *)
-(*   Qed. *)
+  Lemma match_regsets_ext_r rs0 rs1 rs2 params c rm :
+    (forall r, rs1 # r = rs2 # r) ->
+    match_regsets params c rm rs0 rs1 ->
+    match_regsets params c rm rs0 rs2.
+  Proof.
+    unfold match_regsets.
+    intros Heq Hinv r1 Hused.
+    eapply Hinv in Hused; eauto.
+    destruct Hused as [H0 H1].
+    split; auto; rewrite <- Heq; auto.
+  Qed.
 
-(*   Lemma find_function_proper rs rs' ros f : *)
-(*     (forall r, ros = inl r -> rs # r = rs' # r) -> *)
-(*     find_function tge ros rs = Some f -> *)
-(*     find_function tge ros rs' = Some f. *)
-(*   Proof. *)
-(*     unfold find_function. *)
-(*     intros Heq Hfind. *)
-(*     destruct ros. *)
-(*     - rewrite <- Heq; auto. *)
-(*     - destruct (Genv.find_symbol _ _); congruence. *)
-(*   Qed. *)
+  Lemma find_function_proper rs rs' ros f :
+    (forall r, ros = inl r -> rs # r = rs' # r) ->
+    find_function tge ros rs = Some f ->
+    find_function tge ros rs' = Some f.
+  Proof.
+    unfold find_function.
+    intros Heq Hfind.
+    destruct ros.
+    - rewrite <- Heq; auto.
+    - destruct (Genv.find_symbol _ _); congruence.
+  Qed.
 
-(*   Lemma eval_builtin_arg_proper rs rs' sp m barg varg : *)
-(*     (forall arg, in_builtin_arg arg barg -> rs # arg = rs' # arg) -> *)
-(*     eval_builtin_arg ge (fun r : positive => rs # r) sp m barg varg -> *)
-(*     eval_builtin_arg ge (fun r : positive => rs' # r) sp m barg varg. *)
-(*   Proof. *)
-(*     revert varg; induction barg; intros varg Heq Heval; *)
-(*       try solve [inv Heval; constructor; auto]; inv Heval; *)
-(*       try (rewrite Heq; auto; constructor); *)
-(*       constructor; try apply IHbarg1; try apply IHbarg2; auto; *)
-(*       intros arg Hin; apply Heq; solve [constructor; auto]. *)
-(*   Qed. *)
+  Lemma eval_builtin_arg_proper rs rs' sp m barg varg :
+    (forall arg, in_builtin_arg arg barg -> rs # arg = rs' # arg) ->
+    eval_builtin_arg ge (fun r : positive => rs # r) sp m barg varg ->
+    eval_builtin_arg ge (fun r : positive => rs' # r) sp m barg varg.
+  Proof.
+    revert varg; induction barg; intros varg Heq Heval;
+      try solve [inv Heval; constructor; auto]; inv Heval;
+      try (rewrite Heq; auto; constructor);
+      constructor; try apply IHbarg1; try apply IHbarg2; auto;
+      intros arg Hin; apply Heq; solve [constructor; auto].
+  Qed.
 
-(*   Lemma eval_builtin_args_proper rs rs' sp m bargs vargs : *)
-(*     Forall (fun barg => forall arg, *)
-(*                 in_builtin_arg arg barg -> rs # arg = rs' # arg) bargs -> *)
-(*     eval_builtin_args ge (fun r : positive => rs # r) sp m bargs vargs -> *)
-(*     eval_builtin_args ge (fun r : positive => rs' # r) sp m bargs vargs. *)
-(*   Proof. *)
-(*     revert vargs; induction bargs; *)
-(*       intros vargs Hall Heval; inv Heval; constructor. *)
-(*     - inv Hall; eapply eval_builtin_arg_proper; eauto. *)
-(*     - eapply list_forall2_imply; eauto. *)
-(*       intros arg v Harg Hv Heval. *)
-(*       inv Hall; rewrite Forall_forall in H4. *)
-(*       eapply eval_builtin_arg_proper. *)
-(*       2: { eauto. } *)
-(*       intros p Hin; eapply H4; eauto. *)
-(*   Qed. *)
+  Lemma eval_builtin_args_proper rs rs' sp m bargs vargs :
+    Forall (fun barg => forall arg,
+                in_builtin_arg arg barg -> rs # arg = rs' # arg) bargs ->
+    eval_builtin_args ge (fun r : positive => rs # r) sp m bargs vargs ->
+    eval_builtin_args ge (fun r : positive => rs' # r) sp m bargs vargs.
+  Proof.
+    revert vargs; induction bargs;
+      intros vargs Hall Heval; inv Heval; constructor.
+    - inv Hall; eapply eval_builtin_arg_proper; eauto.
+    - eapply list_forall2_imply; eauto.
+      intros arg v Harg Hv Heval.
+      inv Hall; rewrite Forall_forall in H4.
+      eapply eval_builtin_arg_proper.
+      2: { eauto. }
+      intros p Hin; eapply H4; eauto.
+  Qed.
 
-(*   Lemma regmap_setres_id res (vres : val) rs : *)
-(*     ~ is_BR res -> *)
-(*     regmap_setres res vres rs = rs. *)
-(*   Proof. *)
-(*     intro Hres; destruct res; simpl in *; auto. *)
-(*     exfalso; apply Hres; constructor. *)
-(*   Qed. *)
+  Lemma regmap_setres_id res (vres : val) rs :
+    ~ is_BR res ->
+    regmap_setres res vres rs = rs.
+  Proof.
+    intro Hres; destruct res; simpl in *; auto.
+    exfalso; apply Hres; constructor.
+  Qed.
 
-(*   Lemma lessdef_list_refl (l : list val) : *)
-(*     Val.lessdef_list l l. *)
-(*   Proof. induction l; constructor; auto. Qed. *)
+  Lemma lessdef_list_refl (l : list val) :
+    Val.lessdef_list l l.
+  Proof. induction l; constructor; auto. Qed.
 
-(*   Lemma match_regsets_update params c rm rs rs' rs'' res1 res2 res3 vres : *)
-(*     rm_wf rm (all_regs_list params c) -> *)
-(*     rm_inv params c rm -> *)
-(*     rm # res1 = (res2, res3) -> *)
-(*     (forall r, rs' # r = rs'' # r) -> *)
-(*     reg_used_in_code c res1 -> *)
-(*     match_regsets params c rm rs rs' -> *)
-(*     match_regsets params c rm (rs # res1 <- vres) *)
-(*       ((rs'' # res1 <- vres) # res2 <- ((rs'' # res1 <- vres) # res1)) # res3 <- *)
-(*       ((rs'' # res1 <- vres) # res1). *)
-(*   Proof. *)
-(*     intros Hwf Hrm Hres1 Hrs'' Hres1_used Hregs r1 r2 r3 Hr1 Hr1_used. *)
-(*     assert (Heq: rs # r1 = rs'' # r1). *)
-(*     { rewrite <- Hrs''; eapply match_regsets_get; eauto. } *)
-(*     unfold reg_used in Hr1_used. *)
-(*     repeat split. *)
-(*     { destruct (DecidableTypeEx.Positive_as_DT.eq_dec res1 r1); subst. *)
-(*       - rewrite 2!PMap.gss. *)
-(*         rewrite Hres1 in Hr1; inv Hr1. *)
-(*         rewrite 2!PMap.gso. *)
-(*         2: { eapply rm_wf_neq_1_2; eauto. *)
-(*              apply reg_used_in_all_regs_list; auto. } *)
-(*         2: { eapply rm_wf_neq_1_3; eauto. *)
-(*              apply reg_used_in_all_regs_list; auto. } *)
-(*         rewrite PMap.gss; reflexivity. *)
-(*       - rewrite 4!PMap.gso; auto; intro; subst; *)
-(*           specialize (Hrm _ _ _ Hres1 (or_intror Hres1_used)); intuition. } *)
-(*     { destruct (DecidableTypeEx.Positive_as_DT.eq_dec res1 r1); subst. *)
-(*       - rewrite 2!PMap.gss. *)
-(*         rewrite Hres1 in Hr1; inv Hr1. *)
-(*         rewrite PMap.gso. *)
-(*         2: { eapply rm_wf_neq_2_3; eauto. *)
-(*              apply reg_used_in_all_regs_list; auto. } *)
-(*         rewrite PMap.gss; reflexivity. *)
-(*       - rewrite 4!PMap.gso; auto. *)
-(*         + rewrite <- Hrs''. *)
-(*           eapply match_regsets_get_2; eauto. *)
-(*         + eapply rm_wf_neq_2_1'; eauto; *)
-(*             apply reg_used_in_all_regs_list; auto; right; auto. *)
-(*         + eapply rm_wf_neq_2_2'; eauto; *)
-(*             apply reg_used_in_all_regs_list; auto; right; auto. *)
-(*         + eapply rm_wf_neq_2_3'; eauto; *)
-(*             apply reg_used_in_all_regs_list; auto; right; auto. } *)
-(*     { destruct (DecidableTypeEx.Positive_as_DT.eq_dec res1 r1); subst. *)
-(*       - rewrite 2!PMap.gss. *)
-(*         rewrite Hres1 in Hr1; inv Hr1. *)
-(*         rewrite PMap.gss; reflexivity. *)
-(*       - rewrite 4!PMap.gso; auto. *)
-(*         + rewrite <- Hrs''. *)
-(*           eapply match_regsets_get_3; eauto. *)
-(*         + eapply rm_wf_neq_3_1'; eauto; *)
-(*             apply reg_used_in_all_regs_list; auto; right; auto. *)
-(*         + eapply rm_wf_neq_3_2'; eauto; *)
-(*             apply reg_used_in_all_regs_list; auto; right; auto. *)
-(*         + eapply rm_wf_neq_3_3'; eauto; *)
-(*             apply reg_used_in_all_regs_list; auto; right; auto. } *)
-(*   Qed. *)
+  (* Lemma match_regsets_update params c rm rs rs' rs'' res1 res2 vres : *)
+  (*   rm_wf rm (all_regs_list params c) -> *)
+  (*   rm_inv params c rm -> *)
+  (*   (forall r, rs' # r = rs'' # r) -> *)
+  (*   reg_used_in_code c res1 -> *)
+  (*   match_regsets params c rm rs rs' -> *)
+  (*   match_regsets params c rm (rs # res1 <- vres) *)
+  (*     (rs'' # res1 <- vres) # res2 <- ((rs'' # res1 <- vres) # res1). *)
+  (* Proof. *)
+  (*   intros Hwf Hrm Hrs'' Hres1_used Hregs r1 Hr1_used. *)
+  (*   assert (Heq: rs # r1 = rs'' # r1). *)
+  (*   { rewrite <- Hrs''; eapply match_regsets_get; eauto. } *)
+  (*   unfold reg_used in Hr1_used. *)
+  (*   split. *)
+  (*   { destruct (DecidableTypeEx.Positive_as_DT.eq_dec res1 r1); subst. *)
+  (*     - rewrite 2!PMap.gss. *)
+  (*       rewrite PMap.gso. *)
+  (*       2: { eapply rm_wf_neq_1_2; eauto. *)
+  (*            apply reg_used_in_all_regs_list; auto. } *)
+  (*       2: { eapply rm_wf_neq_1_3; eauto. *)
+  (*            apply reg_used_in_all_regs_list; auto. } *)
+  (*       rewrite PMap.gss; reflexivity. *)
+  (*     - rewrite 4!PMap.gso; auto; intro; subst; *)
+  (*         specialize (Hrm _ _ _ Hres1 (or_intror Hres1_used)); intuition. } *)
+  (*   { destruct (DecidableTypeEx.Positive_as_DT.eq_dec res1 r1); subst. *)
+  (*     - rewrite 2!PMap.gss. *)
+  (*       rewrite Hres1 in Hr1; inv Hr1. *)
+  (*       rewrite PMap.gso. *)
+  (*       2: { eapply rm_wf_neq_2_3; eauto. *)
+  (*            apply reg_used_in_all_regs_list; auto. } *)
+  (*       rewrite PMap.gss; reflexivity. *)
+  (*     - rewrite 4!PMap.gso; auto. *)
+  (*       + rewrite <- Hrs''. *)
+  (*         eapply match_regsets_get_2; eauto. *)
+  (*       + eapply rm_wf_neq_2_1'; eauto; *)
+  (*           apply reg_used_in_all_regs_list; auto; right; auto. *)
+  (*       + eapply rm_wf_neq_2_2'; eauto; *)
+  (*           apply reg_used_in_all_regs_list; auto; right; auto. *)
+  (*       + eapply rm_wf_neq_2_3'; eauto; *)
+  (*           apply reg_used_in_all_regs_list; auto; right; auto. } *)
+  (*   { destruct (DecidableTypeEx.Positive_as_DT.eq_dec res1 r1); subst. *)
+  (*     - rewrite 2!PMap.gss. *)
+  (*       rewrite Hres1 in Hr1; inv Hr1. *)
+  (*       rewrite PMap.gss; reflexivity. *)
+  (*     - rewrite 4!PMap.gso; auto. *)
+  (*       + rewrite <- Hrs''. *)
+  (*         eapply match_regsets_get_3; eauto. *)
+  (*       + eapply rm_wf_neq_3_1'; eauto; *)
+  (*           apply reg_used_in_all_regs_list; auto; right; auto. *)
+  (*       + eapply rm_wf_neq_3_2'; eauto; *)
+  (*           apply reg_used_in_all_regs_list; auto; right; auto. *)
+  (*       + eapply rm_wf_neq_3_3'; eauto; *)
+  (*           apply reg_used_in_all_regs_list; auto; right; auto. } *)
+  (* Qed. *)
 
 (*   Fixpoint init_regs' *)
 (*     (rm : PMap.t (reg * reg)) (vl: list val) (rl: list reg) {struct rl} *)
@@ -941,34 +956,23 @@ Section PRESERVATION.
 (*     rewrite 3!PMap.gso; auto. *)
 (*   Qed. *)
 
-(*   Lemma rm_wf_forall_neq rm params a a2 a3 : *)
-(*     rm_wf rm (a :: params) -> *)
-(*     rm # a = (a2, a3) -> *)
-(*     Forall *)
-(*       (fun _ : positive => *)
-(*          forall (r1 : positive) (r2 r3 : reg), *)
-(*            In r1 params -> *)
-(*            rm # r1 = (r2, r3) -> *)
-(*            a <> r2 /\ a <> r3) *)
-(*       params. *)
-(*   Proof. *)
-(*     intros Hwf Ha. *)
-(*     apply Forall_forall; intros x Hx r1 r2 r3 Hr1; split. *)
-(*     + symmetry. *)
-(*       eapply rm_wf_neq_2_1'. *)
-(*       { eauto. } *)
-(*       { left; reflexivity. } *)
-(*       { right; eauto. } *)
-(*       { eauto. } *)
-(*       { eauto. } *)
-(*     + symmetry. *)
-(*       eapply rm_wf_neq_3_1'. *)
-(*       { eauto. } *)
-(*       { left; reflexivity. } *)
-(*       { right; eauto. } *)
-(*       { eauto. } *)
-(*       { eauto. } *)
-(*   Qed. *)
+  Lemma rm_wf_forall_neq rm params a :
+    rm_wf rm (a :: params) ->
+    Forall
+      (fun _ : positive =>
+         forall (r1 : positive),
+           In r1 params ->
+           a <> rm # r1)
+      params.
+  Proof.
+    intros Hwf.
+    apply Forall_forall; intros x Hx r1 Hin.
+    symmetry.
+    eapply rm_wf_neq_2_1'.
+    { eauto. }
+    { left; reflexivity. }
+    { right; eauto. }
+  Qed.
 
 (*   Lemma update_regset_init_regs rm args params r : *)
 (*     rm_wf rm params -> *)
@@ -1039,17 +1043,17 @@ Section PRESERVATION.
 (*     - right; auto. *)
 (*   Qed. *)
 
-(*   Definition in_dec (p : positive) (l : list positive) *)
-(*     : { In p l } + { ~ In p l }. *)
-(*   Proof. *)
-(*     induction l; simpl. *)
-(*     { right; intro; contradiction. } *)
-(*     destruct IHl as [Hin | Hnotin]. *)
-(*     - left; right; assumption. *)
-(*     - destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst. *)
-(*       + left; left; reflexivity. *)
-(*       + right; intros [?|H]; subst; congruence. *)
-(*   Qed. *)
+  Definition in_dec (p : positive) (l : list positive)
+    : { In p l } + { ~ In p l }.
+  Proof.
+    induction l; simpl.
+    { right; intro; contradiction. }
+    destruct IHl as [Hin | Hnotin].
+    - left; right; assumption.
+    - destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst.
+      + left; left; reflexivity.
+      + right; intros [?|H]; subst; congruence.
+  Qed.
 
 (*   Lemma init_regs'_r2 params c rm r1 r2 r3 args : *)
 (*     rm_wf rm (all_regs_list params c) -> *)
@@ -1250,63 +1254,64 @@ Section PRESERVATION.
 (*         inv H'; apply H2; right; right; right; right; left; reflexivity. *)
 (*   Qed. *)
 
-(*   Lemma copy_allR_params_used_in_code re rm c params pc succ : *)
-(*     copy_allR re rm c params pc succ -> *)
-(*     Forall (reg_used_in_code c) params. *)
-(*   Proof. *)
-(*     induction 1. *)
-(*     { constructor. } *)
-(*     constructor; auto. *)
-(*     inv H1. *)
-(*     unfold smove in *. *)
-(*     destruct (re r1) eqn:Hr1; inv H2; inv H3; *)
-(*       eexists; eexists; split; eauto; constructor; simpl; auto. *)
-(*   Qed. *)
+  Lemma copy_allR_params_used_in_code re rm c params pc succ :
+    copy_allR re rm c params pc succ ->
+    Forall (reg_used_in_code c) params.
+  Proof.
+    induction 1.
+    { constructor. }
+    constructor; auto.
+    inv H.
+    unfold smove in *.
+    unfold reg_used_in_code.
+    destruct (re r) eqn:Hr; inv H1; eexists; eexists; split;
+      eauto; constructor; left; reflexivity.
+  Qed.
 
-(*   Lemma wt_regset_init_regs re params args : *)
-(*     list_norepet params -> *)
-(*     Val.has_type_list args (map re params) -> *)
-(*     wt_regset re (init_regs args params). *)
-(*   Proof. *)
-(*     revert args; induction params; simpl; intros args Hnodup Hty. *)
-(*     { constructor. } *)
-(*     inv Hnodup. *)
-(*     destruct args; inv Hty. *)
-(*     intro r. *)
-(*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec r a); subst. *)
-(*     { rewrite PMap.gss; auto. } *)
-(*     rewrite PMap.gso; auto. *)
-(*     apply IHparams; auto. *)
-(*   Qed. *)
+  Lemma wt_regset_init_regs re params args :
+    list_norepet params ->
+    Val.has_type_list args (map re params) ->
+    wt_regset re (init_regs args params).
+  Proof.
+    revert args; induction params; simpl; intros args Hnodup Hty.
+    { constructor. }
+    inv Hnodup.
+    destruct args; inv Hty.
+    intro r.
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec r a); subst.
+    { rewrite PMap.gss; auto. }
+    rewrite PMap.gso; auto.
+    apply IHparams; auto.
+  Qed.
 
-(*   Lemma list_norepet_nodup {A : Type} (l : list A) : *)
-(*     list_norepet l <-> NoDup l. *)
-(*   Proof. split; induction l; intro H; inv H; constructor; auto. Qed. *)
+  Lemma list_norepet_nodup {A : Type} (l : list A) :
+    list_norepet l <-> NoDup l.
+  Proof. split; induction l; intro H; inv H; constructor; auto. Qed.
 
-(*   Lemma has_type_list_length args tys : *)
-(*     Val.has_type_list args tys -> *)
-(*     length args = length tys. *)
-(*   Proof. *)
-(*     revert tys; induction args; intros tys Hty; destruct tys; auto; inv Hty. *)
-(*     simpl; erewrite IHargs; eauto. *)
-(*   Qed. *)
+  Lemma has_type_list_length args tys :
+    Val.has_type_list args tys ->
+    length args = length tys.
+  Proof.
+    revert tys; induction args; intros tys Hty; destruct tys; auto; inv Hty.
+    simpl; erewrite IHargs; eauto.
+  Qed.
 
-(*   Ltac reg_used1 := *)
-(*     eapply reg_used_in_code_in_all_regs_list; *)
-(*     eexists; eexists; split; eauto; solve [constructor]. *)
+  Ltac reg_used1 :=
+    eapply reg_used_in_code_in_all_regs_list;
+    eexists; eexists; split; eauto; solve [constructor].
 
-(*   Ltac reg_used2 := *)
-(*     match goal with *)
-(*     | [Hargs : Forall (reg_used_in_code _) _ |- _] => *)
-(*         apply Forall_forall; intros ? ?; *)
-(*         eapply reg_used_in_code_in_all_regs_list; *)
-(*         rewrite Forall_forall in Hargs; intuition *)
-(*     end. *)
+  Ltac reg_used2 :=
+    match goal with
+    | [Hargs : Forall (reg_used_in_code _) _ |- _] =>
+        apply Forall_forall; intros ? ?;
+        eapply reg_used_in_code_in_all_regs_list;
+        rewrite Forall_forall in Hargs; intuition
+    end.
 
-(*   (* This would be better if match_regsets was parameterized by the *)
-(*      domain of registers it cares about. Then this proof could just *)
-(*      abstract over that single parameter ([l] here) instead of *)
-(*      appending with [all_regs_list params c]. *) *)
+(*   (* This would be better if match_regsets was parameterized by the *) *)
+(* (*      domain of registers it cares about. Then this proof could just *) *)
+(* (*      abstract over that single parameter ([l] here) instead of *) *)
+(* (*      appending with [all_regs_list params c]. *) *)
 (*   Lemma match_regsets_extra params c rm rs rs' l : *)
 (*     rm_wf rm (l ++ all_regs_list params c) -> *)
 (*     match_regsets params c rm rs rs' -> *)
@@ -1350,122 +1355,122 @@ Section PRESERVATION.
 (*     rewrite IHl1; auto. *)
 (*   Qed. *)
 
-(*   Theorem step_simulation s1 t s2 : *)
-(*     step ge s1 t s2 -> *)
-(*     forall ts1, *)
-(*       match_states s1 ts1 -> *)
-(*       exists ts2, plus step tge ts1 t ts2 /\ match_states s2 ts2. *)
-(*   Proof. *)
-(*     intros Hstep ts1 Hmatch. *)
-(*     inv Hstep. *)
+  (* Theorem step_simulation s1 t s2 : *)
+  (*   step ge s1 t s2 -> *)
+  (*   forall ts1, *)
+  (*     match_states s1 ts1 -> *)
+  (*     exists ts2, plus step tge ts1 t ts2 /\ match_states s2 ts2. *)
+  (* Proof. *)
+  (*   intros Hstep ts1 Hmatch. *)
+  (*   inv Hstep. *)
 
-(*     - (* exec_Inop *) *)
-(*       inv Hmatch; inv FUN; simpl in *. *)
-(*       eexists; split. *)
-(*       + econstructor. *)
-(*         * apply exec_Inop; simpl. *)
-(*           specialize (CODE pc (Inop pc') H). *)
-(*           inv CODE; eauto. *)
-(*         * apply star_refl. *)
-(*         * reflexivity. *)
-(*       + repeat (econstructor; eauto). *)
+  (*   - (* exec_Inop *) *)
+  (*     inv Hmatch; inv FUN; simpl in *. *)
+  (*     eexists; split. *)
+  (*     + econstructor. *)
+  (*       * apply exec_Inop; simpl. *)
+  (*         specialize (CODE pc (Inop pc') H). *)
+  (*         inv CODE; eauto. *)
+  (*       * apply star_refl. *)
+  (*       * reflexivity. *)
+  (*     + repeat (econstructor; eauto). *)
 
-(*     - (* exec_Iop *) *)
-(*       inv Hmatch; inv FUN; simpl in *. *)
-(*       set (f := {| fn_sig := sig *)
-(*                 ; fn_params := params *)
-(*                 ; fn_stacksize := stacksize *)
-(*                 ; fn_code := c *)
-(*                 ; fn_entrypoint := entrypoint |}). *)
-(*       pose proof CODE as Hcode. *)
-(*       specialize (CODE pc (Iop op args res pc') H); inv CODE. *)
-(*       assert (Hargs: Forall (reg_used_in_code c) args). *)
-(*       { apply Forall_forall; intros x Hx; *)
-(*           eexists; eexists; split; eauto; constructor; auto. } *)
-(*       eexists; split. *)
-(*       + econstructor. *)
-(*         * eapply exec_Iop; eauto. *)
-(*           eapply match_regs_1_2_eval_operation. *)
-(*           { eauto. } *)
-(*           2: { eauto. } *)
-(*           2: { eauto. } *)
-(*           apply Forall_forall; intros r Hin. *)
-(*           eexists; eexists; split; eauto. *)
-(*           constructor; auto. *)
-(*         * eapply star_step. *)
-(*           { eapply exec_Iop; eauto. *)
-(*             eapply match_regs_1_3_eval_operation. *)
-(*             { eauto. } *)
-(*             { eapply res2_not_in_args3 with (l := fun_regs_list f); *)
-(*                 eauto; try reg_used1. *)
-(*               apply Forall_forall. *)
-(*               intros r Hin. *)
-(*               eapply match_regs_exists_r1' with (args1:=args); eauto. } *)
-(*             2: { eauto. } *)
-(*             2: { auto. } *)
-(*             auto. } *)
-(*           { eapply star_step. *)
-(*             - eapply exec_Iop; eauto. *)
-(*               eapply regular_eval_operation; eauto. *)
-(*               + eapply res2_not_in_args1 with (l := fun_regs_list f); *)
-(*                   eauto; try reg_used1; reg_used2. *)
-(*               + eapply res3_not_in_args1 with (l := fun_regs_list f); *)
-(*                   eauto; try reg_used1; reg_used2. *)
-(*             - apply star_refl. *)
-(*             - reflexivity. } *)
-(*           reflexivity. *)
-(*         * reflexivity. *)
-(*       + econstructor; eauto. *)
-(*         { eapply wt_exec_Iop; eauto. *)
-(*           eapply wt_instr_at; eauto. } *)
-(*         * econstructor; eauto. *)
-(*         * intros r1 r2 r3 Hr1 Hused. *)
-(*           destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 res); subst. *)
-(*           { rewrite RM_RES in Hr1; inv Hr1. *)
-(*             repeat split. *)
-(*             - rewrite 2!PMap.gss; reflexivity. *)
-(*             - rewrite PMap.gss, PMap.gso. *)
-(*               2: { symmetry; eapply rm_wf_neq_1_2; eauto; reg_used1. } *)
-(*               rewrite PMap.gso. *)
-(*               2: { eapply rm_wf_neq_2_3; eauto; reg_used1. } *)
-(*               rewrite PMap.gss; reflexivity. *)
-(*             - rewrite PMap.gss, PMap.gso. *)
-(*               2: { symmetry; eapply rm_wf_neq_1_3; eauto; reg_used1. } *)
-(*               rewrite PMap.gss; reflexivity. } *)
-(*           { assert (Hresused: reg_used_in_code c res). *)
-(*             { eexists; eexists; split; eauto; apply reg_used_Iop_res. } *)
-(*             repeat split. *)
-(*             - rewrite 3!PMap.gso; auto. *)
-(*               2: { intro HC; subst. *)
-(*                    specialize (RM_INV _ _ _ RM_RES (or_intror Hresused)). *)
-(*                    destruct Hused; intuition. } *)
-(*               rewrite PMap.gso. *)
-(*               2: { intro HC; subst. *)
-(*                    specialize (RM_INV _ _ _ RM_RES (or_intror Hresused)). *)
-(*                    destruct Hused; intuition. } *)
-(*               specialize (REGS _ _ _ Hr1 Hused); intuition. *)
-(*             - rewrite 2!PMap.gso; auto. *)
-(*               2: { intro HC; subst. *)
-(*                    specialize (RM_INV _ _ _ Hr1 Hused); intuition. } *)
-(*               rewrite PMap.gso. *)
-(*               2: { eapply rm_wf_neq_2_3' with (r1 := res); eauto; try reg_used1. *)
-(*                    apply reg_used_in_all_regs_list; auto. } *)
-(*               rewrite PMap.gso. *)
-(*               2: { eapply rm_wf_neq_2_2 with (r1 := res); eauto; try reg_used1. *)
-(*                    apply reg_used_in_all_regs_list; auto. } *)
-(*               specialize (REGS _ _ _ Hr1 Hused); intuition. *)
-(*             - rewrite 2!PMap.gso; auto. *)
-(*               2: { intro HC; subst. *)
-(*                    specialize (RM_INV _ _ _ Hr1 Hused); intuition. } *)
-(*               rewrite PMap.gso. *)
-(*               2: { eapply rm_wf_neq_3_3 with (r1 := res); eauto; try reg_used1. *)
-(*                    apply reg_used_in_all_regs_list; auto. } *)
-(*               rewrite PMap.gso. *)
-(*               2: { symmetry. *)
-(*                    eapply rm_wf_neq_2_3' with (r1 := r1); eauto; *)
-(*                      apply reg_used_in_all_regs_list; auto. *)
-(*                    right; auto. } *)
-(*               specialize (REGS _ _ _ Hr1 Hused); intuition. } *)
+  (*   - (* exec_Iop *) *)
+  (*     inv Hmatch; inv FUN; simpl in *. *)
+  (*     set (f := {| fn_sig := sig *)
+  (*               ; fn_params := params *)
+  (*               ; fn_stacksize := stacksize *)
+  (*               ; fn_code := c *)
+  (*               ; fn_entrypoint := entrypoint |}). *)
+  (*     pose proof CODE as Hcode. *)
+  (*     specialize (CODE pc (Iop op args res pc') H); inv CODE. *)
+  (*     assert (Hargs: Forall (reg_used_in_code c) args). *)
+  (*     { apply Forall_forall; intros x Hx; *)
+  (*         eexists; eexists; split; eauto; constructor; auto. } *)
+  (*     eexists; split. *)
+  (*     + econstructor. *)
+  (*       * eapply exec_Iop; eauto. *)
+  (*         eapply match_regs_1_2_eval_operation. *)
+  (*         { eauto. } *)
+  (*         2: { eauto. } *)
+  (*         2: { eauto. } *)
+  (*         apply Forall_forall; intros r Hin. *)
+  (*         eexists; eexists; split; eauto. *)
+  (*         constructor; auto. *)
+  (*       * eapply star_step. *)
+  (*         { eapply exec_Iop; eauto. *)
+  (*           eapply match_regs_1_3_eval_operation. *)
+  (*           { eauto. } *)
+  (*           { eapply res2_not_in_args3 with (l := fun_regs_list f); *)
+  (*               eauto; try reg_used1. *)
+  (*             apply Forall_forall. *)
+  (*             intros r Hin. *)
+  (*             eapply match_regs_exists_r1' with (args1:=args); eauto. } *)
+  (*           2: { eauto. } *)
+  (*           2: { auto. } *)
+  (*           auto. } *)
+  (*         { eapply star_step. *)
+  (*           - eapply exec_Iop; eauto. *)
+  (*             eapply regular_eval_operation; eauto. *)
+  (*             + eapply res2_not_in_args1 with (l := fun_regs_list f); *)
+  (*                 eauto; try reg_used1; reg_used2. *)
+  (*             + eapply res3_not_in_args1 with (l := fun_regs_list f); *)
+  (*                 eauto; try reg_used1; reg_used2. *)
+  (*           - apply star_refl. *)
+  (*           - reflexivity. } *)
+  (*         reflexivity. *)
+  (*       * reflexivity. *)
+  (*     + econstructor; eauto. *)
+  (*       { eapply wt_exec_Iop; eauto. *)
+  (*         eapply wt_instr_at; eauto. } *)
+  (*       * econstructor; eauto. *)
+  (*       * intros r1 r2 r3 Hr1 Hused. *)
+  (*         destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 res); subst. *)
+  (*         { rewrite RM_RES in Hr1; inv Hr1. *)
+  (*           repeat split. *)
+  (*           - rewrite 2!PMap.gss; reflexivity. *)
+  (*           - rewrite PMap.gss, PMap.gso. *)
+  (*             2: { symmetry; eapply rm_wf_neq_1_2; eauto; reg_used1. } *)
+  (*             rewrite PMap.gso. *)
+  (*             2: { eapply rm_wf_neq_2_3; eauto; reg_used1. } *)
+  (*             rewrite PMap.gss; reflexivity. *)
+  (*           - rewrite PMap.gss, PMap.gso. *)
+  (*             2: { symmetry; eapply rm_wf_neq_1_3; eauto; reg_used1. } *)
+  (*             rewrite PMap.gss; reflexivity. } *)
+  (*         { assert (Hresused: reg_used_in_code c res). *)
+  (*           { eexists; eexists; split; eauto; apply reg_used_Iop_res. } *)
+  (*           repeat split. *)
+  (*           - rewrite 3!PMap.gso; auto. *)
+  (*             2: { intro HC; subst. *)
+  (*                  specialize (RM_INV _ _ _ RM_RES (or_intror Hresused)). *)
+  (*                  destruct Hused; intuition. } *)
+  (*             rewrite PMap.gso. *)
+  (*             2: { intro HC; subst. *)
+  (*                  specialize (RM_INV _ _ _ RM_RES (or_intror Hresused)). *)
+  (*                  destruct Hused; intuition. } *)
+  (*             specialize (REGS _ _ _ Hr1 Hused); intuition. *)
+  (*           - rewrite 2!PMap.gso; auto. *)
+  (*             2: { intro HC; subst. *)
+  (*                  specialize (RM_INV _ _ _ Hr1 Hused); intuition. } *)
+  (*             rewrite PMap.gso. *)
+  (*             2: { eapply rm_wf_neq_2_3' with (r1 := res); eauto; try reg_used1. *)
+  (*                  apply reg_used_in_all_regs_list; auto. } *)
+  (*             rewrite PMap.gso. *)
+  (*             2: { eapply rm_wf_neq_2_2 with (r1 := res); eauto; try reg_used1. *)
+  (*                  apply reg_used_in_all_regs_list; auto. } *)
+  (*             specialize (REGS _ _ _ Hr1 Hused); intuition. *)
+  (*           - rewrite 2!PMap.gso; auto. *)
+  (*             2: { intro HC; subst. *)
+  (*                  specialize (RM_INV _ _ _ Hr1 Hused); intuition. } *)
+  (*             rewrite PMap.gso. *)
+  (*             2: { eapply rm_wf_neq_3_3 with (r1 := res); eauto; try reg_used1. *)
+  (*                  apply reg_used_in_all_regs_list; auto. } *)
+  (*             rewrite PMap.gso. *)
+  (*             2: { symmetry. *)
+  (*                  eapply rm_wf_neq_2_3' with (r1 := r1); eauto; *)
+  (*                    apply reg_used_in_all_regs_list; auto. *)
+  (*                  right; auto. } *)
+  (*             specialize (REGS _ _ _ Hr1 Hused); intuition. } *)
 
 (*     - (* exec_Iload *) *)
 (*       inv Hmatch. *)

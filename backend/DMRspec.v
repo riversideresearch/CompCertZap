@@ -224,14 +224,24 @@ Ltac smoveR_inv :=
   | [H: smoveR _ _ _ _ _ _ |- _ ] => inv H
   end.
 
+(* Inductive copy_allR re rm c : list reg -> node -> node -> Prop := *)
+(* | copy_all_nil : *)
+(*   forall n, *)
+(*     copy_allR re rm c [] n n *)
+(* | copy_all_cons : *)
+(*   forall r rs succ n p, *)
+(*     copy_allR re rm c rs n p -> *)
+(*     smoveR c (re r) r (rm # r) p succ -> *)
+(*     copy_allR re rm c (r :: rs) n succ. *)
+
 Inductive copy_allR re rm c : list reg -> node -> node -> Prop :=
 | copy_all_nil :
   forall n,
     copy_allR re rm c [] n n
 | copy_all_cons :
   forall r rs succ n p,
-    copy_allR re rm c rs n p ->
-    smoveR c (re r) r (rm # r) p succ ->
+    smoveR c (re r) r (rm # r) n p ->
+    copy_allR re rm c rs p succ ->
     copy_allR re rm c (r :: rs) n succ.
 
 Lemma copy_to_shadows_smoveR
@@ -257,6 +267,27 @@ Proof.
   rewrite PTree.gss; reflexivity.
 Qed.
 
+(* Lemma copy_all_to_shadows_copy_allR re rm params n succ s0 s1 pf c : *)
+(*   copy_all_to_shadows re rm params succ s0 = RTLgen.OK n s1 pf -> *)
+(*   (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) -> *)
+(*   copy_allR re rm c params n succ. *)
+(* Proof. *)
+(*   revert pf. *)
+(*   revert s0 s1 n succ. *)
+(*   induction params; simpl; intros s0 s1 n succ pf Hcopy Hc; inv Hcopy. *)
+(*   { constructor. } *)
+(*   unfold RTLgen.bind in H0; simpl in H0. *)
+(*   repeat egen_case. *)
+(*   econstructor; eauto. *)
+(*   eapply copy_to_shadows_smoveR; eauto; simpl; try lia. *)
+(*   intros p i Hpi. *)
+(*   apply Hc. *)
+(*   clear H1. *)
+(*   repeat state_incr_inv. *)
+(*   simpl in *. *)
+(*   destruct (H2 p); congruence. *)
+(* Qed. *)
+
 Lemma copy_all_to_shadows_copy_allR re rm params n succ s0 s1 pf c :
   copy_all_to_shadows re rm params succ s0 = RTLgen.OK n s1 pf ->
   (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) ->
@@ -269,13 +300,11 @@ Proof.
   unfold RTLgen.bind in H0; simpl in H0.
   repeat egen_case.
   econstructor; eauto.
+  2: { eapply IHparams; eauto.
+       intros p i Hpi; apply Hc.
+       repeat state_incr_inv; simpl in *.
+       destruct (H3 p); congruence. }
   eapply copy_to_shadows_smoveR; eauto; simpl; try lia.
-  intros p i Hpi.
-  apply Hc.
-  clear H1.
-  repeat state_incr_inv.
-  simpl in *.
-  destruct (H2 p); congruence.
 Qed.
 
 Inductive is_BR {A: Type} : builtin_res A -> Prop :=
@@ -450,7 +479,7 @@ Inductive match_function re rm : function -> function -> Prop :=
                 (RM_INV: rm_inv params c rm)
                 (CODE: match_code re rm c c')
                 (COPY_REGS_OK: Forall (fun x => In x (all_regs_list params c)) copy_regs)
-                (COPY: copy_allR re rm c' (app' copy_regs params) entrypoint' entrypoint),
+                (COPY: copy_allR re rm c' (app' params copy_regs) entrypoint' entrypoint),
     match_function re rm
       ({| fn_sig := sig
         ; fn_params := params
@@ -1037,6 +1066,18 @@ Proof.
   exists x; eapply transf_fun'_code_matches; eauto.
 Qed.
 
+(* Lemma copy_allR_monotone re rm c1 c2 params n entrypoint : *)
+(*   copy_allR re rm c1 params n entrypoint -> *)
+(*   (forall p i, c1 ! p = Some i -> c2 ! p = Some i) -> *)
+(*   copy_allR re rm c2 params n entrypoint. *)
+(* Proof. *)
+(*   revert n entrypoint; induction params; *)
+(*     simpl; intros n entrypoint Hmatch Hle; inv Hmatch. *)
+(*   { constructor. } *)
+(*   econstructor; eauto. *)
+(*   inv H4; econstructor; eauto. *)
+(* Qed. *)
+
 Lemma copy_allR_monotone re rm c1 c2 params n entrypoint :
   copy_allR re rm c1 params n entrypoint ->
   (forall p i, c1 ! p = Some i -> c2 ! p = Some i) ->
@@ -1046,7 +1087,7 @@ Proof.
     simpl; intros n entrypoint Hmatch Hle; inv Hmatch.
   { constructor. }
   econstructor; eauto.
-  inv H4; econstructor; eauto.
+  inv H1; econstructor; eauto.
 Qed.
 
 (* TODO: This is a bit of a mess. Might be a good idea to define a
