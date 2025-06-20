@@ -1,9 +1,6 @@
 (** * Forward simulation proof for DMR pass. *)
 
 (* TODO: factor out things in common with TMR (and do same for spec). *)
-(* TODO: remove well-typedness stuff from match relation? may not need
-   it anymore since we don't care about the inputs to checkpoints
-   being well-typed. Or maybe we still need them because of smoves... *)
 
 Require Import
   AST
@@ -1286,52 +1283,39 @@ Section PRESERVATION.
         rewrite Forall_forall in Hargs; intuition
     end.
 
-(*   (* This would be better if match_regsets was parameterized by the *) *)
-(* (*      domain of registers it cares about. Then this proof could just *) *)
-(* (*      abstract over that single parameter ([l] here) instead of *) *)
-(* (*      appending with [all_regs_list params c]. *) *)
-(*   Lemma match_regsets_extra params c rm rs rs' l : *)
-(*     rm_wf rm (l ++ all_regs_list params c) -> *)
-(*     match_regsets params c rm rs rs' -> *)
-(*     match_regsets params c rm rs (update_regset rm rs' l). *)
-(*   Proof. *)
-(*     induction l; simpl; auto; intros Hwf Hrefl. *)
-(*     destruct (rm # a) eqn:Ha. *)
-(*     apply IHl in Hrefl; clear IHl. *)
-(*     2: { eapply rm_wf_antimonotone; eauto; intuition. } *)
-(*     intros r1 r2 r3 Hr1 Hused. *)
-(*     destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 a); subst. *)
-(*     { rewrite Hr1 in Ha; inv Ha. *)
-(*       rewrite PMap.gss. *)
-(*       rewrite 3!PMap.gso. *)
-(*       - rewrite PMap.gss. *)
-(*         eapply Hrefl in Hused. *)
-(*         2: { eauto. } *)
-(*         repeat split; intuition. *)
-(*       - eapply rm_wf_neq_2_3; eauto; left; auto. *)
-(*       - eapply rm_wf_neq_1_2; eauto; left; auto. *)
-(*       - eapply rm_wf_neq_1_3; eauto; left; auto. } *)
-(*     assert (In a (a :: l ++ all_regs_list params c)). *)
-(*     { left; auto. } *)
-(*     assert (In r1 (a :: l ++ all_regs_list params c)). *)
-(*     { right; apply in_app; right. *)
-(*       apply reg_used_in_all_regs_list; auto. } *)
-(*     rewrite 6!PMap.gso; auto; symmetry. *)
-(*     - eapply rm_wf_neq_2_3' with (r1:=r1) (r1':=a); eauto. *)
-(*     - eapply rm_wf_neq_3_3 with (r1:=r1) (r1':=a); eauto. *)
-(*     - eapply rm_wf_neq_2_2 with (r1:=r1) (r1':=a); eauto. *)
-(*     - symmetry; eapply rm_wf_neq_2_3' with (r1:=a) (r1':=r1); eauto. *)
-(*     - eapply rm_wf_neq_2_1' with (r1:=r1) (r1':=a); eauto. *)
-(*     - eapply rm_wf_neq_3_1' with (r1:=r1) (r1':=a); eauto. *)
-(*   Qed. *)
+  Lemma match_regsets_extra params c rm rs rs' l :
+    rm_wf rm (l ++ all_regs_list params c) ->
+    match_regsets params c rm rs rs' ->
+    match_regsets params c rm rs (update_regset rm rs' l).
+  Proof.
+    revert rs rs'.
+    induction l; simpl; auto; intros rs rs' Hwf Hmatch.
+    apply IHl.
+    { eapply rm_wf_antimonotone; eauto.
+      intros r Hin; right; auto. }
+    intros r1 Hused.
+    specialize (Hmatch r1 Hused).
+    destruct Hmatch as [Hmatch1 Hmatch2].
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 a); subst.
+    { rewrite PMap.gso, PMap.gss; auto.
+      eapply rm_wf_neq_1_2; eauto; left; reflexivity. }
+    { assert (Hr1: In r1 (l ++ all_regs_list params c)).
+      { apply in_or_app; right.
+        destruct Hused as [Hin | Hused].
+        - apply param_in_all_regs_list; auto.
+        - apply reg_used_in_code_in_all_regs_list; auto. }
+      rewrite 2!PMap.gso; auto.
+      - eapply rm_wf_neq_2_2; eauto.
+        + left; reflexivity.
+        + right; auto.
+      - symmetry; eapply rm_wf_neq_2_1'; eauto.
+        + right; auto.
+        + left; reflexivity. }
+  Qed.
 
-(*   Lemma update_regset_app rm rs l1 l2 : *)
-(*     update_regset rm rs (l1 ++ l2) = update_regset rm (update_regset rm rs l2) l1. *)
-(*   Proof. *)
-(*     revert l2; induction l1; intro l2; simpl; auto. *)
-(*     destruct (rm # a) eqn:Ha. *)
-(*     rewrite IHl1; auto. *)
-(*   Qed. *)
+  Lemma update_regset_app rm rs l1 l2 :
+    update_regset rm rs (l1 ++ l2) = update_regset rm (update_regset rm rs l1) l2.
+  Proof. revert rs; induction l1; intros rs; simpl; auto. Qed.
 
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
@@ -1813,12 +1797,12 @@ Section PRESERVATION.
           rewrite wt_params; auto.
         * econstructor; eauto.
         * rewrite <- app_app'.
-          (* rewrite update_regset_app. *)
-          (* apply match_regsets_extra. *)
-          (* { eapply rm_wf_antimonotone; eauto. *)
-          (*   rewrite Forall_forall in COPY_REGS_OK. *)
-          (*   intros r Hin. *)
-          (*   apply in_app_or in Hin; destruct Hin as [Hin|Hin]; auto. } *)
+          rewrite update_regset_app.
+          apply match_regsets_extra.
+          { eapply rm_wf_antimonotone; eauto.
+            rewrite Forall_forall in COPY_REGS_OK.
+            intros r Hin.
+            apply in_app_or in Hin; destruct Hin as [Hin|Hin]; auto. }
           (* apply rm_inv_init_regs; auto. *)
           (* { inv WT; simpl in *; apply list_norepet_nodup; auto. } *)
           (* { inv WT; simpl in *. *)
@@ -1913,13 +1897,12 @@ Section PRESERVATION.
     forward_simulation (semantics prog) (semantics tprog).
   Proof.
     intros.
-    apply forward_simulation_plus with
-      (match_states := fun s1 s2 => match_states s1 s2).
+    eapply forward_simulation_plus; simpl.
     - apply senv_preserved.
-    - simpl; intros. exploit transf_initial_states; eauto.
-    - simpl; intros s1 s2 r Hmatch Hfin.
+    - intros. exploit transf_initial_states; eauto.
+    - intros s1 s2 r Hmatch Hfin.
       eapply transf_final_states; eauto; intuition.
-    - simpl; intros s1 t s1' Hstep s2 Hmatch.
+    - intros s1 t s1' Hstep s2 Hmatch.
       eapply step_simulation; eauto; intuition.
   Qed.
 
