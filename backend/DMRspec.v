@@ -155,9 +155,6 @@ Ltac state_incr_inv :=
   | [ H: state_incr ?s1 ?s2 |- _ ] => inv H
   end.
 
-(* Definition rm_wf (rm : PMap.t reg) (l : list positive) : Prop := *)
-(*   Forall (fun r => r <> rm # r /\ Forall (fun r' => r <> r' -> NoDup [r; rm # r; r'; rm # r']) l) l. *)
-
 Definition rm_wf (rm : PMap.t reg) (l : list positive) : Prop :=
   forall r,
     In r l ->
@@ -205,8 +202,6 @@ Inductive check_regsR c re rm : list reg -> node -> node -> Prop :=
     check_regsR c re rm [] pc pc
 | check_regs_cons :
   forall arg args pc succ n,
-    (* check_regsR c re rm args pc n -> *)
-    (* checkR c (re arg) arg (rm # arg) n succ -> *)
     checkR c (re arg) arg (rm # arg) pc n ->
     check_regsR c re rm args n succ ->
     check_regsR c re rm (arg :: args) pc succ.
@@ -223,16 +218,6 @@ Ltac smoveR_inv :=
   try match goal with
   | [H: smoveR _ _ _ _ _ _ |- _ ] => inv H
   end.
-
-(* Inductive copy_allR re rm c : list reg -> node -> node -> Prop := *)
-(* | copy_all_nil : *)
-(*   forall n, *)
-(*     copy_allR re rm c [] n n *)
-(* | copy_all_cons : *)
-(*   forall r rs succ n p, *)
-(*     copy_allR re rm c rs n p -> *)
-(*     smoveR c (re r) r (rm # r) p succ -> *)
-(*     copy_allR re rm c (r :: rs) n succ. *)
 
 Inductive copy_allR re rm c : list reg -> node -> node -> Prop :=
 | copy_all_nil :
@@ -266,27 +251,6 @@ Proof.
   apply Hc.
   rewrite PTree.gss; reflexivity.
 Qed.
-
-(* Lemma copy_all_to_shadows_copy_allR re rm params n succ s0 s1 pf c : *)
-(*   copy_all_to_shadows re rm params succ s0 = RTLgen.OK n s1 pf -> *)
-(*   (forall p i, s1.(st_code) ! p = Some i -> c ! p = Some i) -> *)
-(*   copy_allR re rm c params n succ. *)
-(* Proof. *)
-(*   revert pf. *)
-(*   revert s0 s1 n succ. *)
-(*   induction params; simpl; intros s0 s1 n succ pf Hcopy Hc; inv Hcopy. *)
-(*   { constructor. } *)
-(*   unfold RTLgen.bind in H0; simpl in H0. *)
-(*   repeat egen_case. *)
-(*   econstructor; eauto. *)
-(*   eapply copy_to_shadows_smoveR; eauto; simpl; try lia. *)
-(*   intros p i Hpi. *)
-(*   apply Hc. *)
-(*   clear H1. *)
-(*   repeat state_incr_inv. *)
-(*   simpl in *. *)
-(*   destruct (H2 p); congruence. *)
-(* Qed. *)
 
 Lemma copy_all_to_shadows_copy_allR re rm params n succ s0 s1 pf c :
   copy_all_to_shadows re rm params succ s0 = RTLgen.OK n s1 pf ->
@@ -668,27 +632,6 @@ Proof.
   eapply check_succ_lt_nextnode; eauto.
 Qed.
 
-(* Lemma check_regs_check_regsR re rm regs pc succ s s' pf : *)
-(*   pc < s.(st_nextnode) -> *)
-(*   check_regs re rm regs pc s = RTLgen.OK succ s' pf -> *)
-(*   check_regsR s'.(st_code) re rm regs pc succ. *)
-(* Proof. *)
-(*   revert pc succ s s' pf. *)
-(*   induction regs; simpl; intros pc succ s s' pf Hlt Hchk. *)
-(*   { inv Hchk; constructor. } *)
-(*   unfold RTLgen.bind in Hchk. *)
-(*   gen_case H0. *)
-(*   destruct (check re a (rm # a) n s'0) eqn:Hm; gen_contra; gen_inv. *)
-(*   pose proof H0 as H0'. *)
-(*   apply check_regs_succ_lt_nextnode in H0'; auto. *)
-(*   apply IHregs in H0; auto. *)
-(*   econstructor; eauto. *)
-(*   - eapply state_incr_check_regsR. *)
-(*     2: { eauto. } *)
-(*     clear Hm; inv s1; auto. *)
-(*   - eapply check_checkR; eauto. *)
-(* Qed. *)
-
 Lemma check_regs_check_regsR re rm regs pc succ s s' pf :
   pc < s.(st_nextnode) ->
   check_regs re rm regs pc s = RTLgen.OK succ s' pf ->
@@ -815,9 +758,6 @@ Proof.
       simpl in Htransf'.
       gen_case Hchk.
       gen_case Hupd.
-      (* replace ((do succ <- check_regs re rm l0 p; *)
-      (*              check re r (rm # r) succ) s'0) *)
-      (*   with (check_regs re rm (r :: l0) p s'0) in Hchk by auto. *)
       replace ((do succ <- check re r rm # r p; check_regs re rm l0 succ) s'0)
         with (check_regs re rm (r :: l0) p s'0) in Hchk by auto.
       apply check_regs_check_regsR in Hchk.
@@ -1066,18 +1006,6 @@ Proof.
   exists x; eapply transf_fun'_code_matches; eauto.
 Qed.
 
-(* Lemma copy_allR_monotone re rm c1 c2 params n entrypoint : *)
-(*   copy_allR re rm c1 params n entrypoint -> *)
-(*   (forall p i, c1 ! p = Some i -> c2 ! p = Some i) -> *)
-(*   copy_allR re rm c2 params n entrypoint. *)
-(* Proof. *)
-(*   revert n entrypoint; induction params; *)
-(*     simpl; intros n entrypoint Hmatch Hle; inv Hmatch. *)
-(*   { constructor. } *)
-(*   econstructor; eauto. *)
-(*   inv H4; econstructor; eauto. *)
-(* Qed. *)
-
 Lemma copy_allR_monotone re rm c1 c2 params n entrypoint :
   copy_allR re rm c1 params n entrypoint ->
   (forall p i, c1 ! p = Some i -> c2 ! p = Some i) ->
@@ -1249,7 +1177,7 @@ Proof.
   specialize (Hwf r1 (Hle _ Hin)); intuition.
 Qed.
 
-Lemma in_pset_of_list p l :
+Lemma in_regset_of_list p l :
   In p l <-> Regset.In p (Regset_of_list l).
 Proof.
   split.
@@ -1281,13 +1209,13 @@ Proof.
   destruct Hin as [? | Hin]; subst.
   - inv Hused; simpl; try destruct fn; apply Regset.union_3;
       try solve [apply Regset.union_3, Regset.singleton_2; reflexivity];
-      try solve [apply Regset.union_2, in_pset_of_list; auto];
-      try solve [apply in_pset_of_list; assumption];
+      try solve [apply Regset.union_2, in_regset_of_list; auto];
+      try solve [apply in_regset_of_list; assumption];
       try solve [apply Regset.singleton_2; reflexivity].
     + apply Regset.union_2, Regset.add_1; reflexivity.
-    + apply Regset.union_2, Regset.add_2, in_pset_of_list; assumption.
+    + apply Regset.union_2, Regset.add_2, in_regset_of_list; assumption.
     + apply Regset.add_1; reflexivity.
-    + apply Regset.add_2, in_pset_of_list; assumption.
+    + apply Regset.add_2, in_regset_of_list; assumption.
   - inv Hused; simpl;
       solve [apply Regset.union_2; eapply IHl; eauto; constructor; auto].
 Qed.
@@ -1297,7 +1225,7 @@ Lemma reg_used_pset_in_all_regs params c r :
   Regset.In r (all_regs params c).
 Proof.
   intros [Hin | (p & i & Hget & Hused)].
-  - apply Regset.union_2, in_pset_of_list; auto.
+  - apply Regset.union_2, in_regset_of_list; auto.
   - apply Regset.union_3.
     apply PTree.elements_correct in Hget.
     unfold code_regs.
@@ -1316,7 +1244,7 @@ Proof.
   apply reg_used_pset_in_all_regs; auto.
 Qed.
 
-Lemma reg_used_in_code_pset_in_code_regs c r :
+Lemma reg_used_in_code_in_code_regs c r :
   reg_used_in_code c r ->
   Regset.In r (code_regs c).
 Proof.
@@ -1337,11 +1265,11 @@ Proof.
   specialize (Hrm r1 (reg_used_in_all_regs_list _ _ _ Hused)).
   split; intro Hin.
   - assert (rm # r1 < max_reg (all_regs params c) + 1).
-    { apply in_lt_max_reg, in_elements, Regset.union_2, in_pset_of_list; auto. }
+    { apply in_lt_max_reg, in_elements, Regset.union_2, in_regset_of_list; auto. }
     lia.
   - assert (rm # r1 < max_reg (all_regs params c) + 1).
     { apply in_lt_max_reg, in_elements, Regset.union_3.
-      apply reg_used_in_code_pset_in_code_regs; auto. }
+      apply reg_used_in_code_in_code_regs; auto. }
     lia.
 Qed.
 

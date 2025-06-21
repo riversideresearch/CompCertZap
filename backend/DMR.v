@@ -101,18 +101,6 @@ Definition check (re : regenv) (r1 r2 : reg) (pc : node)
     should begin. Reserves and returns the node at which subsequent
     instructions should continue.
  *)
-(* TODO: swap order here, so that this is tail recursive? I don't
-   think it really matters either way. *)
-(* Fixpoint check_regs *)
-(*   (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node) *)
-(*   : mon node := *)
-(*   match regs with *)
-(*   | [] => ret pc *)
-(*   | r1 :: rs => *)
-(*       do succ <- check_regs re rm rs pc; *)
-(*       check re r1 (rm # r1) succ *)
-(*   end. *)
-
 Fixpoint check_regs
   (re : regenv) (rm : PMap.t reg) (regs : list reg) (pc : node)
   : mon node :=
@@ -211,17 +199,6 @@ Definition copy_to_shadows
                  :: POS pc :: nil)
   end.
 
-(* Fixpoint copy_all_to_shadows *)
-(*   (re : regenv) (rm : PMap.t reg) (rs : list reg) (succ : node) *)
-(*   : mon node := *)
-(*   match rs with *)
-(*   | [] => ret succ *)
-(*   | r :: rs' => *)
-(*       do n <- reserve_instr; *)
-(*       do _ <- copy_to_shadows rm (re r) r n succ; *)
-(*       copy_all_to_shadows re rm rs' n *)
-(*   end. *)
-
 Fixpoint copy_all_to_shadows
   (re : regenv) (rm : PMap.t reg) (rs : list reg) (succ : node)
   : mon node :=
@@ -233,17 +210,6 @@ Fixpoint copy_all_to_shadows
       do _ <- copy_to_shadows rm (re r) r n succ';
       ret n
   end.
-
-(* Fixpoint copy_all_to_shadows *)
-(*   (re : regenv) (rm : PMap.t reg) (rs : list reg) (succ : node) *)
-(*   : mon node := *)
-(*   match rs with *)
-(*   | [] => ret succ *)
-(*   | r :: rs' => *)
-(*       do n <- reserve_instr; *)
-(*       do _ <- copy_to_shadows rm (re r) r n succ; *)
-(*       copy_all_to_shadows re rm rs' n *)
-(*   end. *)
 
 (** Generate fault-tolerant instruction sequence corresponding to the
     input instruction. [re] is the register typing context of the
@@ -432,7 +398,6 @@ Definition transf_fun (re : regenv) (f : function)
   : mon node :=
   do rm <- replication_map f;
   do live <- live_regs_to_copy f;
-  (* do entry_point <- copy_all_to_shadows re rm (app' live f.(fn_params)) *)
   do entry_point <- copy_all_to_shadows re rm (app' f.(fn_params) live)
                      f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
