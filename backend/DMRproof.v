@@ -1316,6 +1316,257 @@ Section PRESERVATION.
   Lemma update_regset_app rm rs l1 l2 :
     update_regset rm rs (l1 ++ l2) = update_regset rm (update_regset rm rs l1) l2.
   Proof. revert rs; induction l1; intros rs; simpl; auto. Qed.
+  
+  (* (** Weaker form of match_regsets that doesn't care about shadow *)
+  (*     registers, established by init_regs and then taken to the full *)
+  (*     match_regsets by update_regset. *) *)
+  (* Definition match_regsets_aux *)
+  (*   (params : list reg) (c : code) (rm : PMap.t reg) (rs rs' : regset) : Prop := *)
+  (*   forall r, reg_used params c r -> rs # r = rs' # r. *)
+
+  (* TODO: still need weaker form, except it says that the normal
+     relation holds for all registers *except* params, for which the
+     weaker thing holds (but shadow registers are maybe out of
+     sync). Then update_regset brings the params shadow registers into
+     sync, establishing the full property. *)
+
+  Lemma rm_wf_all_regs_list_cons rm a params c :
+    rm_wf rm (all_regs_list (a :: params) c) ->
+    rm_wf rm (all_regs_list params c).
+  Proof.
+    intro H.
+    eapply rm_wf_antimonotone; eauto.
+    intros x Hx.
+    apply in_elements.
+    apply in_elements in Hx.
+    apply Regset.union_1 in Hx.
+    destruct Hx as [Hx | Hx].
+    - apply Regset.union_2.
+      apply Regset.add_2; auto.
+    - apply Regset.union_3; auto.
+  Qed.
+
+  Lemma in_all_regs_list_cons r a params c :
+    a <> r ->
+    In r (all_regs_list (a :: params) c) ->
+    In r (all_regs_list params c).
+  Proof.
+  Admitted.
+  
+  (* Lemma match_regsets_update_regset c rm rs params : *)
+  (*   rm_inv params c rm -> *)
+  (*   rm_wf rm (all_regs_list params c) -> *)
+  (*   (* (forall r, In r params \/ rs # r = rs # (rm # r)) -> *) *)
+  (*   match_regsets params c rm rs (update_regset rm rs params). *)
+  (* Proof. *)
+
+  Lemma match_regsets_update_regset c rm rs params :
+    rm_inv params c rm ->
+    rm_wf rm (all_regs_list params c) ->
+    (* NoDup params -> *)
+    (forall r, In r (all_regs_list params c) ->
+          In r params \/ rs # r = rs # (rm # r)) ->
+    match_regsets params c rm rs (update_regset rm rs params).
+  Proof.
+    revert rs; induction params; intros rs Hinv Hwf Hr; simpl.
+    { intros r [Hin | Hused].
+      { inv Hin. }
+      assert (H0: rs # r = rs # (rm # r)).
+      (* { destruct (Hr r) as [HC|?]; auto; inv HC. } *)
+      { admit. }
+      (* assert (H1: rs # (rm # r) = rs ). *)
+      (* { destruct (Hr (rm # r)) as [HC|?]; auto; inv HC. } *)
+      rewrite H0; split; reflexivity. }
+    intros r Hused.
+
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r); subst.
+    { admit. }
+
+    assert (Hused': reg_used params c r).
+    { destruct Hused as [Hin | Hused].
+      - destruct Hin; subst; try congruence.
+        left; auto.
+      - right; auto. }
+    apply IHparams with (rs := rs # (rm # a) <- (rs # a)) in Hused'.
+    2: { eapply rm_inv_cons; eauto. }
+    2: { eapply rm_wf_all_regs_list_cons; eauto. }
+    2: { intros x Hx.
+         destruct (DecidableTypeEx.Positive_as_DT.eq_dec x a); subst.
+         { rewrite PMap.gso.
+           2: { admit. }
+           right.
+           rewrite PMap.gss; reflexivity. }
+         rewrite 2!PMap.gso.
+         2: { admit. }
+         2: { admit. }
+         admit. }
+         (* destruct (Hr x) as [[Heq | Hin] | Heq]; auto; subst; contradiction. } *)
+    rewrite PMap.gso in Hused'; auto.
+    admit.
+  Admitted.
+
+  (* Lemma match_regsets_update_regset c rm rs params : *)
+  (*   rm_inv params c rm -> *)
+  (*   rm_wf rm (all_regs_list params c) -> *)
+  (*   (* NoDup params -> *) *)
+  (*   (forall r, In r params \/ rs # r = rs # (rm # r)) -> *)
+  (*   match_regsets params c rm rs (update_regset rm rs params). *)
+  (* Proof. *)
+  (*   revert rs; induction params; intros rs Hinv Hwf Hr; simpl. *)
+  (*   { intros r [Hin | Hused]. *)
+  (*     { inv Hin. } *)
+  (*     assert (H0: rs # r = rs # (rm # r)). *)
+  (*     { destruct (Hr r) as [HC|?]; auto; inv HC. } *)
+  (*     (* assert (H1: rs # (rm # r) = rs ). *) *)
+  (*     (* { destruct (Hr (rm # r)) as [HC|?]; auto; inv HC. } *) *)
+  (*     rewrite H0; split; reflexivity. } *)
+  (*   intros r Hused. *)
+
+  (*   (* set (rs' := rs # (rm # a) <- (rs # a)). *) *)
+  (*   (* assert (Hrs': forall r, In r params \/ rs' # r = Vundef). *) *)
+  (*   (* { intro x. *) *)
+  (*   (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec x a); subst. *) *)
+      
+    
+  (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r); subst. *)
+  (*   { admit. } *)
+
+  (*   assert (Hused': reg_used params c r). *)
+  (*   { destruct Hused as [Hin | Hused]. *)
+  (*     - destruct Hin; subst; try congruence. *)
+  (*       left; auto. *)
+  (*     - right; auto. } *)
+  (*   apply IHparams with (rs := rs # (rm # a) <- (rs # a)) in Hused'. *)
+  (*   2: { eapply rm_inv_cons; eauto. } *)
+  (*   2: { eapply rm_wf_all_regs_list_cons; eauto. } *)
+  (*   2: { intro x. *)
+  (*        destruct (DecidableTypeEx.Positive_as_DT.eq_dec x a); subst. *)
+  (*        { rewrite PMap.gso. *)
+  (*          2: { admit. } *)
+  (*          right. *)
+  (*          rewrite PMap.gss; reflexivity. } *)
+  (*        rewrite 2!PMap.gso. *)
+  (*        2: { admit. } *)
+  (*        2: { admit. } *)
+  (*        destruct (Hr x) as [[Heq | Hin] | Heq]; auto; subst; contradiction. } *)
+  (*   rewrite PMap.gso in Hused'; auto. *)
+  (*   admit.     *)
+  (* Admitted. *)
+
+
+  (* Lemma match_regsets_update_regset c rm rs params : *)
+  (*   rm_inv params c rm -> *)
+  (*   rm_wf rm (all_regs_list params c) -> *)
+  (*   (* NoDup params -> *) *)
+  (*   (forall r, In r params \/ rs # r = Vundef) -> *)
+  (*   match_regsets params c rm rs (update_regset rm rs params). *)
+  (* Proof. *)
+  (*   revert rs; induction params; intros rs Hinv Hwf Hr; simpl. *)
+  (*   { intros r [Hin | Hused]. *)
+  (*     { inv Hin. } *)
+  (*     assert (H0: rs # r = Vundef). *)
+  (*     { destruct (Hr r) as [HC|?]; auto; inv HC. } *)
+  (*     assert (H1: rs # (rm # r) = Vundef). *)
+  (*     { destruct (Hr (rm # r)) as [HC|?]; auto; inv HC. } *)
+  (*     rewrite H0, H1; split; reflexivity. } *)
+  (*   intros r Hused. *)
+
+  (*   (* set (rs' := rs # (rm # a) <- (rs # a)). *) *)
+  (*   (* assert (Hrs': forall r, In r params \/ rs' # r = Vundef). *) *)
+  (*   (* { intro x. *) *)
+  (*   (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec x a); subst. *) *)
+      
+    
+  (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r); subst. *)
+  (*   { admit. } *)
+
+  (*   assert (Hused': reg_used params c r). *)
+  (*   { destruct Hused as [Hin | Hused]. *)
+  (*     - destruct Hin; subst; try congruence. *)
+  (*       left; auto. *)
+  (*     - right; auto. } *)
+  (*   apply IHparams with (rs := rs # (rm # a) <- (rs # a)) in Hused'. *)
+  (*   2: { eapply rm_inv_cons; eauto. } *)
+  (*   2: { eapply rm_wf_antimonotone; eauto. *)
+  (*        intros x Hx. *)
+  (*        apply in_elements. *)
+  (*        apply in_elements in Hx. *)
+  (*        apply Regset.union_1 in Hx. *)
+  (*        destruct Hx as [Hx | Hx]. *)
+  (*        - apply Regset.union_2. *)
+  (*          apply Regset.add_2; auto. *)
+  (*        - apply Regset.union_3; auto. } *)
+  (*   2: { intro x. *)
+  (*        destruct (DecidableTypeEx.Positive_as_DT.eq_dec x a); subst. *)
+  (*        { rewrite PMap.gso. *)
+  (*          2: { admit. } *)
+           
+  (*        - right. rewrite PMap.gss. *)
+  (*          simpl. *)
+  (*        apply in_elements. *)
+  (*        unfold all_regs. *)
+  (*        unfold all_regs_list. *)
+  (*        | _ =>  *)
+    
+  (* Admitted. *)
+
+  (* Lemma init_regs_params_or_undef params args r : *)
+  (*   In r params \/ (init_regs args params) # r = Vundef. *)
+  (* Proof. *)
+  (*   revert args r; induction params; intros args r; simpl. *)
+  (*   { right; reflexivity. } *)
+  (*   destruct args. *)
+  (*   { right; reflexivity. } *)
+  (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r); subst. *)
+  (*   - left; left; reflexivity. *)
+  (*   - rewrite PMap.gso; auto. *)
+  (*     destruct (IHparams args r) as [Hin | Hundef]. *)
+  (*     + left; right; auto. *)
+  (*     + right; auto. *)
+  (* Qed. *)
+
+  (* Lemma init_regs_params_or_eq rm params c args r : *)
+  (*   rm_wf rm (all_regs_list params c) -> *)
+  (*   In r (all_regs_list params c) -> *)
+  (*   In r params \/ (init_regs args params) # r = (init_regs args params) # (rm # r). *)
+  (* Proof. *)
+  (*   revert args r; induction params; intros args r Hwf Hr; simpl. *)
+  (*   { right; reflexivity. } *)
+  (*   destruct args. *)
+  (*   { right; reflexivity. } *)
+  (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r); subst. *)
+  (*   - left; left; reflexivity. *)
+  (*   - rewrite PMap.gso; auto. *)
+  (*     destruct (IHparams args r) as [Hin | Hundef]. *)
+  (*     + eapply rm_wf_all_regs_list_cons; eauto. *)
+  (*     + eapply in_all_regs_list_cons; eauto. *)
+  (*     + left; right; auto. *)
+  (*     + right; rewrite PMap.gso; auto. *)
+  (*       eapply rm_wf_neq_2_1'; eauto. *)
+  (*       apply param_in_all_regs_list; left; reflexivity. *)
+  (* Qed. *)
+
+  Lemma init_regs_params_or_eq rm params c args r :
+    rm_wf rm (all_regs_list params c) ->
+    In r (all_regs_list params c) ->
+    In r params \/ (init_regs args params) # r = (init_regs args params) # (rm # r).
+  Proof.
+    revert args r; induction params; intros args r Hwf Hin; simpl.
+    { right; reflexivity. }
+    destruct args.
+    { right; reflexivity. }
+    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r); subst.
+    - left; left; reflexivity.
+    - rewrite PMap.gso; auto.
+      destruct (IHparams args r) as [Hin' | Heq].
+      + eapply rm_wf_all_regs_list_cons; eauto.
+      + eapply in_all_regs_list_cons; eauto.
+      + left; right; auto.
+      + right.
+        rewrite PMap.gso; auto.
+        eapply rm_wf_neq_2_1'; eauto.
+        apply param_in_all_regs_list; left; reflexivity.
+  Qed.
 
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
@@ -1803,14 +2054,9 @@ Section PRESERVATION.
             rewrite Forall_forall in COPY_REGS_OK.
             intros r Hin.
             apply in_app_or in Hin; destruct Hin as [Hin|Hin]; auto. }
-          (* apply rm_inv_init_regs; auto. *)
-          (* { inv WT; simpl in *; apply list_norepet_nodup; auto. } *)
-          (* { inv WT; simpl in *. *)
-          (*   apply has_type_list_length in WT_ARGS. *)
-          (*   rewrite <- wt_params in WT_ARGS. *)
-          (*   rewrite list_length_map in WT_ARGS. *)
-          (*   rewrite WT_ARGS; reflexivity. } *)
-          admit.
+          apply match_regsets_update_regset; auto.
+          simpl; intros r Hr.
+          eapply init_regs_params_or_eq; eauto.
 
     - (* exec_function_external *)
       inv Hmatch; inv FUN; simpl in *.
@@ -1841,7 +2087,7 @@ Section PRESERVATION.
           rewrite PMap.gso; auto.
         * eapply match_regsets_update; eauto.
           inv FUN; auto.
-  Admitted.
+  Qed.
 
   Lemma transf_initial_states st1 :
     initial_state prog st1 ->
