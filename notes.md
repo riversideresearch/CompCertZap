@@ -5,5 +5,5 @@
 
 # Configure for x86-64
 ```bash
-.configure x86_64-linux
+./configure x86_64-linux
 ```

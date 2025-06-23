@@ -347,7 +347,6 @@ let maj_vote
   if a == b || a == c || b == c then begin
      raise (Error "ill-formed majority vote")
   end;
-  assert (a <> b && a <> c && b <> c);
   let lbl_done = new_label () in
   let lbl_fix = new_label () in
   side_emit (Plabel lbl_fix);
@@ -379,6 +378,46 @@ let maj_vote_int = maj_vote
 let maj_vote_float = maj_vote
                        (fun x y -> Pmovsd_ff (x, y))
                        (fun x y -> Pcomiss_ff (x, y))
+
+(* let checkpoint *)
+(*       (cmp_j : 'a -> 'a -> label -> instruction list) *)
+(*       (a : 'a) (b : 'a) : unit = *)
+(*   if a == b  then begin *)
+(*     raise (Error "ill-formed checkpoint") *)
+(*   end; *)
+(*   let lbl_done = new_label () in *)
+(*   let lbl_fault = new_label () in *)
+(*   side_emit (Plabel lbl_fault); *)
+(*   (\* side_emit Pnop; (\\* TODO: handle detected fault *\\) *\) *)
+(*   side_emit (Pj_l lbl_done); (\* TODO: maybe remove this? depending on *)
+(*                                 what handler does.. *\) *)
+(*   List.iter emit (cmp_j a b lbl_fault); (\* Compare a and b *\) *)
+(*   emit (Plabel lbl_done)   *)
+
+(** DMR checkpoint. *)
+let checkpoint
+      (cmp : 'a -> 'a -> instruction)
+      (a : 'a) (b : 'a) : unit =
+  if a == b then begin
+     raise (Error "ill-formed majority vote")
+  end;
+  let lbl_done = new_label () in
+  let lbl_fault = new_label () in
+  side_emit (Plabel lbl_fault);
+  side_emit Pnop;
+  side_emit (Pjmp_l lbl_done);
+  emit (cmp a b);
+  emit (Pjcc (Cond_ne, lbl_fix));
+  emit (Plabel lbl_done)
+  
+(** Checkpoint integers. *)
+let checkpoint_int = checkpoint
+                       (fun x y lbl -> [Pbnel (X x, X y, lbl)])
+
+(** Checkpoint floats. *)
+let checkpoint_float = checkpoint
+                         (fun x y lbl -> [Pfeqs (X31, x, y);
+                                          Pbnel (X0, X X31, lbl)])
 
 let expand_builtin_inline name args res =
   match name, args, res with
