@@ -1,4 +1,4 @@
-(** * Add dual-modular redundancy (DMR) to RTL *)
+(** * Add dual-modular redundancy (DMR) to RTL functions. *)
 
 (** In a nutshell, per function:
 
