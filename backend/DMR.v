@@ -257,13 +257,15 @@ Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
   end.
 
 (** Monadic iteration (tail recursive). *)
-Fixpoint iterM' {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
+Fixpoint iterM_rev {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
   match l with
   | [] => ret tt
   | x :: xs =>
       do _ <- f x;
-      iterM' f xs
+      iterM_rev f xs
   end.
+Definition iterM' {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
+  iterM_rev f (rev' l).
 
 (** Monadic fold. *)
 Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
@@ -276,19 +278,22 @@ Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
   end.
 
 (** Monadic fold (tail recursive). *)
-Fixpoint foldM' {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
+Fixpoint foldM_rev {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
   : mon A :=
   match l with
   | [] => ret a
   | x :: xs =>
       do a' <- f a x;
-      foldM' f xs a'
+      foldM_rev f xs a'
   end.
+Definition foldM' {A B : Type} (f : A -> B -> mon A) (l : list B)
+  : A -> mon A :=
+  foldM_rev f (rev' l).
 
 (** Transform function code by transforming the instructions. *)
 Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code)
   : mon unit :=
-  iterM' (transf_instr re rm) (rev' (PTree.elements c)).
+  iterM' (transf_instr re rm) (PTree.elements c).
 
 Definition Regset_of_list (l : list positive) : Regset.t  :=
   fold_right (fun acc p => Regset.add acc p) Regset.empty l.
@@ -357,7 +362,7 @@ Definition replication_map (f : function) : mon (PMap.t reg) :=
   foldM' (fun rm r1 =>
            do r2 <- new_reg;
            ret (PMap.set r1 r2 rm)
-    ) (rev' (fun_regs_list f)) (PMap.init xH).
+    ) (fun_regs_list f) (PMap.init xH).
 
 (** Compute registers that are live-in at the entry point of [f]. *)
 Definition live_regs (f : function) : mon Regset.t :=
@@ -398,7 +403,7 @@ Definition transf_fun (re : regenv) (f : function)
   : mon node :=
   do rm <- replication_map f;
   do live <- live_regs_to_copy f;
-  do entry_point <- copy_all_to_shadows re rm (f.(fn_params) ++ live)
+  do entry_point <- copy_all_to_shadows re rm (app' f.(fn_params) live)
                      f.(fn_entrypoint);
   do _ <- transf_code re rm f.(fn_code);
   ret entry_point.

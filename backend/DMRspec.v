@@ -45,73 +45,75 @@ Proof.
   rewrite rev_append_rev, <- rev_rev', rev_involutive; reflexivity.
 Qed.
 
-Lemma iterM'_app {A : Type} (f : A -> mon unit) (l1 l2 : list A) s :
-  iterM' f (l1 ++ l2) s = (do _ <- iterM' f l1; iterM' f l2) s.
+Lemma iterM_rev_app {A : Type} (f : A -> mon unit) (l1 l2 : list A) s :
+  iterM_rev f (l1 ++ l2) s = (do _ <- iterM_rev f l1; iterM_rev f l2) s.
 Proof.
   unfold RTLgen.bind.
   revert l2 s; induction l1; intros l2 s; simpl.
-  { destruct (iterM' f l2 s); auto.
+  { destruct (iterM_rev f l2 s); auto.
     f_equal; apply proof_irrelevance. }
   unfold RTLgen.bind.
   destruct (f a s); auto.
   rewrite IHl1.
-  destruct (iterM' f l1 s'); auto.
-  destruct (iterM' f l2 s'0); auto.
+  destruct (iterM_rev f l1 s'); auto.
+  destruct (iterM_rev f l2 s'0); auto.
   f_equal; apply proof_irrelevance.
 Qed.
 
-Lemma iterM_iterM'_rev {A : Type} (f : A -> mon unit) (l : list A) s :
-  iterM f l s = iterM' f (rev l) s.
+Lemma iterM_iterM_rev_rev {A : Type} (f : A -> mon unit) (l : list A) s :
+  iterM f l s = iterM_rev f (rev l) s.
 Proof.
   revert s; induction l; intro s; simpl; auto.
   unfold RTLgen.bind.
-  rewrite IHl, iterM'_app.
+  rewrite IHl, iterM_rev_app.
   simpl; unfold RTLgen.bind; simpl.
-  destruct (iterM' f (rev l) s); auto.
+  destruct (iterM_rev f (rev l) s); auto.
   destruct (f a s'); auto.
   destruct u0.
   f_equal; apply proof_irrelevance.
 Qed.
 
-Lemma iterM_iterM'_rev' {A : Type} (f : A -> mon unit) (l : list A) s :
-  iterM f l s = iterM' f (rev' l) s.
+Lemma iterM_iterM' {A : Type} (f : A -> mon unit) (l : list A) s :
+  iterM f l s = iterM' f l s.
 Proof.
+  unfold iterM'.
   rewrite <- rev_rev'.
-  apply iterM_iterM'_rev.
+  apply iterM_iterM_rev_rev.
 Qed.
 
-Lemma foldM'_app {A B : Type} (f : A -> B -> mon A) (l1 l2 : list B) a s :
-  foldM' f (l1 ++ l2) a s = (do a' <- foldM' f l1 a; foldM' f l2 a') s.
+Lemma foldM_rev_app {A B : Type} (f : A -> B -> mon A) (l1 l2 : list B) a s :
+  foldM_rev f (l1 ++ l2) a s = (do a' <- foldM_rev f l1 a; foldM_rev f l2 a') s.
 Proof.
   unfold RTLgen.bind.
   revert l2 s a; induction l1; intros l2 s x; simpl.
-  { destruct (foldM' f l2 x s); auto.
+  { destruct (foldM_rev f l2 x s); auto.
     f_equal; apply proof_irrelevance. }
   unfold RTLgen.bind.
   destruct (f x a s); auto.
   rewrite IHl1.
-  destruct (foldM' f l1 a0 s'); auto.
-  destruct (foldM' f l2 a1 s'0); auto.
+  destruct (foldM_rev f l1 a0 s'); auto.
+  destruct (foldM_rev f l2 a1 s'0); auto.
   f_equal; apply proof_irrelevance.
 Qed.
 
-Lemma foldM_foldM'_rev {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A) s :
-  foldM f l a s = foldM' f (rev l) a s.
+Lemma foldM_foldM_rev_rev {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A) s :
+  foldM f l a s = foldM_rev f (rev l) a s.
 Proof.
   revert a s; induction l; intros x s; simpl; auto.
   unfold RTLgen.bind.
-  rewrite IHl, foldM'_app.
+  rewrite IHl, foldM_rev_app.
   simpl; unfold RTLgen.bind; simpl.
-  destruct (foldM' f (rev l) x s); auto.
+  destruct (foldM_rev f (rev l) x s); auto.
   destruct (f a0 a s'); auto.
   f_equal; apply proof_irrelevance.
 Qed.
 
-Lemma foldM_foldM'_rev' {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A) s :
-  foldM f l a s = foldM' f (rev' l) a s.
+Lemma foldM_foldM' {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A) s :
+  foldM f l a s = foldM' f l a s.
 Proof.
+  unfold foldM'.
   rewrite <- rev_rev'.
-  apply foldM_foldM'_rev.
+  apply foldM_foldM_rev_rev.
 Qed.
 
 Ltac gen_contra :=
@@ -438,13 +440,13 @@ Proof.
 Qed.
 
 Inductive match_function re rm : function -> function -> Prop :=
-| match_fun : forall sig params stacksize c c' entrypoint entrypoint' copy_regs
-                (RM_WF: rm_wf rm (all_regs_list params c))
-                (RM_INV: rm_inv params c rm)
-                (CODE: match_code re rm c c')
-                (COPY_REGS_OK: Forall (fun x => In x (all_regs_list params c)) copy_regs)
-                (* (COPY: copy_allR re rm c' (app' params copy_regs) entrypoint' entrypoint), *)
-                (COPY: copy_allR re rm c' (params ++ copy_regs) entrypoint' entrypoint),
+| match_fun :
+  forall sig params stacksize c c' entrypoint entrypoint' copy_regs
+    (RM_WF: rm_wf rm (all_regs_list params c))
+    (RM_INV: rm_inv params c rm)
+    (CODE: match_code re rm c c')
+    (COPY_REGS_OK: Forall (fun x => In x (all_regs_list params c)) copy_regs)
+    (COPY: copy_allR re rm c' (app' params copy_regs) entrypoint' entrypoint),
     match_function re rm
       ({| fn_sig := sig
         ; fn_params := params
@@ -912,7 +914,7 @@ Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
   match_code re rm c s'.(st_code).
 Proof.
   unfold transf_code; intros Hlt Hc p i Hi.
-  rewrite <- iterM_iterM'_rev' in Hc.
+  rewrite <- iterM_iterM' in Hc.
   eapply iterM_match_instr; eauto.
   apply PTree.elements_correct; eauto.
 Qed.
@@ -1163,7 +1165,7 @@ Lemma replication_map_wf f rm s pf :
   replication_map f (init_state f) = RTLgen.OK rm s pf ->
   rm_wf rm (fun_regs_list f).
 Proof.
-  unfold replication_map; rewrite <- foldM_foldM'_rev'.
+  unfold replication_map; rewrite <- foldM_foldM'.
   intro H; eapply replication_map_wf_aux; eauto.
   apply Forall_forall; intros r Hin.
   apply in_lt_max_reg; auto.
@@ -1320,7 +1322,7 @@ Lemma replication_map_rm_inv' sig params stacksize c entrypoint s pf rm :
   rm_inv params c rm.
 Proof.
   unfold replication_map.
-  rewrite <- foldM_foldM'_rev'.
+  rewrite <- foldM_foldM'.
   intro Hfold.
   apply rm_inv_list_rm_inv.
   set (s0 := init_state
