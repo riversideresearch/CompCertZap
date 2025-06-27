@@ -117,6 +117,18 @@ Module Regsetaux.
     induction (Regset.elements_3w X); constructor;
     auto using SetoidList.In_InA with typeclass_instances.
   Qed.
+  
+  Lemma in_of_list_1 r l : In r l -> Regset.In r (Regsetaux.of_list l).
+  
+  Proof.
+    induction l; simpl.
+    - contradiction.
+    - intros [->|?].
+      + apply Regset.add_1. reflexivity.
+      + apply Regset.add_2.
+        auto.
+  Qed.
+    
 End Regsetaux.
 
 (** Finite/cofinite sets of registers *)

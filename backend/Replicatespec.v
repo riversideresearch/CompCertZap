@@ -500,6 +500,7 @@ Section regs_of_builtin_args.
   Qed.
 End regs_of_builtin_args.
 
+(*
 Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
 | reg_used_Iop_args : forall op args res succ,
     In r args ->
@@ -540,22 +541,109 @@ Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
     reg_used_in_instr r (Ijumptable r tbl)
 | reg_used_Ireturn :
   reg_used_in_instr r (Ireturn (Some r)).
+*)
+Definition reg_used_in_instr (r : reg) (instr : instruction) : Prop :=
+  Regset.In r (instr_regs instr).
 
 Section reg_used_in_instr.
-  Local Hint Constructors reg_used_in_instr : core.
+  (* Local Hint Constructors reg_used_in_instr : core. *)
   Local Hint Resolve params_of_builtin_args_regs_of_builtin_args : core.
 
   Lemma instr_uses_reg_used_in_instr r i :
     In r (instr_uses i) -> reg_used_in_instr r i.
   Proof.
-    destruct i; simpl; intros Hr.
+    unfold reg_used_in_instr.
+    (* rewrite <- Regsetaux.in_elements. *)
+    (* Regsetaux.in_elements:
+  forall (r : reg) (X : Regset.t),
+  In r (Regset.elements X) <-> Regset.In r X *)
+    destruct i; simpl.
+    - contradiction.
+    - rewrite Regsetaux.FM.union_iff.
+      intros H.
+      left.
+      apply Regsetaux.in_of_list_1.
+      assumption.
+    - rewrite Regsetaux.FM.union_iff.
+      intros H.
+      left.
+      apply Regsetaux.in_of_list_1.
+      assumption.
+    - rewrite Regsetaux.FM.union_iff.
+      intros [->|Fred].
+      + right.
+        apply Regset.singleton_2.
+        reflexivity.
+      + left.
+        apply Regsetaux.in_of_list_1.
+        assumption.
+   (* We want to [destruct s0] but [s0] is fragile (because Rocq chose the
+    * name], so instead we match on any hypothesis of the right type, which is
+    * robust, and destruct that. *)
+   - lazymatch goal with
+     | H : reg + ident |- _ => destruct H
+     end.
+     + simpl.
+       intros [->|?].
+       * rewrite Regsetaux.FM.union_iff.
+         left.
+         now apply Regset.add_1.
+       * rewrite Regsetaux.FM.union_iff.
+         left.
+         apply Regset.add_2.
+         now apply Regsetaux.in_of_list_1.
+     + rewrite Regsetaux.FM.union_iff.
+       intros H.
+       left.
+       apply Regsetaux.in_of_list_1.
+       assumption.
+   - lazymatch goal with
+     | H : reg + ident |- _ => destruct H
+     end.
+     + simpl.
+       intros [->|?].
+       * now apply Regset.add_1.
+       * apply Regset.add_2.
+         now apply Regsetaux.in_of_list_1.
+     + apply Regsetaux.in_of_list_1.
+   - rewrite Regsetaux.FM.union_iff.
+     intros H.
+     left.
+     Set Nested Proofs Allowed.
+     Lemma regs_params_of_builtin_args l :
+       regs_of_builtin_args l = params_of_builtin_args l.
+     Proof.
+       unfold params_of_builtin_args.
+       Search fold_right fold_left.
+       unfold regs_of_builtin_args.
+     (* TODO eliminate regs_of_builtin_args and just use params_of_builtin_args.
+        Then this lemma won't be needed *)
+       admit.
+     Admitted.
+     rewrite regs_params_of_builtin_args.
+     apply Regsetaux.in_of_list_1.
+     assumption.
+   - apply Regsetaux.in_of_list_1.
+   - intros [->|?]. Search Regset.In Regset.singleton.
+     + apply Regset.singleton_2.
+       reflexivity.
+     + contradiction.
+   - destruct o.
+     + simpl.
+       intros [->|?].
+       * apply Regset.singleton_2.
+         reflexivity.
+       * contradiction.
+     + contradiction.
+
+  (* If the above have enough patterns, try something like this to compress proof:
     all: repeat lazymatch goal with
     | H : False |- _ => contradiction
     | H : (_ = _) \/ _ |- _ => destruct H as [->|?]
     | H : reg + ident |- _ => destruct H; simpl in Hr
     | H : option reg |- _ => destruct H; simpl in Hr
     | _ => auto
-    end.
+    end. *)
   Qed.
 End reg_used_in_instr.
 
@@ -1516,7 +1604,6 @@ Proof.
   apply in_rev in Hget.
   eapply reg_used_fold_right; eauto.
 Qed.
-
 Lemma reg_used_in_code_max_reg params c r :
   reg_used_in_code c r ->
   r < max_reg (all_regs params c) + 1.
