@@ -25,18 +25,18 @@ Inductive replicate_builtin : Type :=
 Local Open Scope string_scope.
 
 Definition replicate_builtin_table : list (string * replicate_builtin) :=
-  [("__smove_int", BI_smove_int);
-   ("__smove_long", BI_smove_long);
-   ("__smove_single", BI_smove_single);
-   ("__smove_float", BI_smove_float);
-   ("__vote_int", BI_vote_int);
-   ("__vote_long", BI_vote_long);
-   ("__vote_single", BI_vote_single);
-   ("__vote_float", BI_vote_float);
-   ("__check_int", BI_check_int);
-   ("__check_long", BI_check_long);
-   ("__check_single", BI_check_single);
-   ("__check_float", BI_check_float)].
+  [("__builtin_smove_int", BI_smove_int);
+   ("__builtin_smove_long", BI_smove_long);
+   ("__builtin_smove_single", BI_smove_single);
+   ("__builtin_smove_float", BI_smove_float);
+   ("__builtin_vote_int", BI_vote_int);
+   ("__builtin_vote_long", BI_vote_long);
+   ("__builtin_vote_single", BI_vote_single);
+   ("__builtin_vote_float", BI_vote_float);
+   ("__builtin_check_int", BI_check_int);
+   ("__builtin_check_long", BI_check_long);
+   ("__builtin_check_single", BI_check_single);
+   ("__builtin_check_float", BI_check_float)].
 
 Definition replicate_builtin_sig (b: replicate_builtin) : signature :=
   match b with

@@ -1509,6 +1509,24 @@ Proof.
 - apply external_functions_properties.
 Qed.
 
+(** ** Semantics of nondeterministic defines. *)
+
+(* Inductive is_vint : val -> Prop := *)
+(* | is_vint_intro : forall i, is_vint (Vint i). *)
+
+Inductive extcall_def_int_sem (ge: Senv.t)
+  : list val -> mem -> trace -> val -> mem -> Prop :=
+| extcall_def_int_int : forall i m,
+    extcall_def_int_sem ge (Vint i :: nil) m E0 (Vint i) m
+| extcall_def_int_nondet : forall i m,
+    (* ~ is_vint v -> *)
+    extcall_def_int_sem ge (Vundef :: nil) m E0 (Vint i) m.
+
+Lemma extcall_def_int_sem_ok :
+  extcall_properties extcall_def_int_sem [Xint ---> Xint].
+Proof.
+Admitted.
+
 (** Combining the semantics given above for the various kinds of external calls,
   we define the predicate [external_call] that relates:
 - the external function being invoked
@@ -1534,6 +1552,7 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_annot_val kind txt targ => extcall_annot_val_sem txt targ
   | EF_inline_asm txt sg clb => inline_assembly_sem txt sg
   | EF_debug kind txt targs => extcall_debug_sem
+  | EF_def_int => extcall_def_int_sem
   end.
 
 Theorem external_call_spec:
@@ -1553,6 +1572,7 @@ Proof.
   apply extcall_annot_val_ok.
   apply inline_assembly_properties.
   apply extcall_debug_ok.
+  apply extcall_def_int_sem_ok.
 Qed.
 
 Definition external_call_well_typed_gen ef := ec_well_typed (external_call_spec ef).

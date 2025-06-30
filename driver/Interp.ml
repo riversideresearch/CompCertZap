@@ -401,7 +401,7 @@ let do_inline_assembly txt sg ge w args m = None
 (* Implementing external functions producing observable events *)
 
 let rec world ge m =
-  lazy (Determinism.World(world_io ge m, world_vload ge m, world_vstore ge m))
+  lazy (Determinism.World(world_io ge m, world_vload ge m, world_vstore ge m, world_defint ge m))
 
 and world_io ge m id args =
   None
@@ -417,6 +417,8 @@ and world_vstore ge m chunk id ofs ev =
   Cexec.val_of_eventval ge ev (type_of_chunk chunk) >>= fun v ->
   Mem.store chunk m b ofs v >>= fun m' ->
   Some(world ge m')
+
+and world_defint ge m = Some (Integers.Int.zero, world ge m)
 
 let do_event p ge time w ev =
   if !trace >= 1 then

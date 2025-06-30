@@ -44,19 +44,23 @@ Require Import Behaviors.
 CoInductive world: Type :=
   World (io: string -> list eventval -> option (eventval * world))
         (vload: memory_chunk -> ident -> ptrofs -> option (eventval * world))
-        (vstore: memory_chunk -> ident -> ptrofs -> eventval -> option world).
+        (vstore: memory_chunk -> ident -> ptrofs -> eventval -> option world)
+        (defint: option (int * world)).
 
 Definition nextworld_io (w: world) (evname: string) (evargs: list eventval) :
                      option (eventval * world) :=
-  match w with World io vl vs => io evname evargs end.
+  match w with World io vl vs di => io evname evargs end.
 
 Definition nextworld_vload (w: world) (chunk: memory_chunk) (id: ident) (ofs: ptrofs) :
                      option (eventval * world) :=
-  match w with World io vl vs => vl chunk id ofs end.
+  match w with World io vl vs di => vl chunk id ofs end.
 
 Definition nextworld_vstore (w: world) (chunk: memory_chunk) (id: ident) (ofs: ptrofs) (v: eventval):
                      option world :=
-  match w with World io vl vs => vs chunk id ofs v end.
+  match w with World io vl vs di => vs chunk id ofs v end.
+
+Definition nextworld_defint (w: world) : option (int * world) :=
+  match w with World io vl vs di => di end.
 
 (** A trace is possible in a given world if all events correspond
   to non-stuck external calls according to the given world.
@@ -547,5 +551,3 @@ Proof.
 Qed.
 
 End WORLD_SEM.
-
-

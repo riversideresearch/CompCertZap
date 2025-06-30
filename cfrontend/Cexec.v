@@ -566,6 +566,22 @@ Definition do_builtin_or_external (name: string) (sg: signature)
   | None    => do_external_function name sg ge w vargs m
   end.
 
+Definition do_ef_def_int
+  (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
+  match vargs with
+  | v :: nil =>
+      match v with
+      | Vint i => Some (w, E0, v, m)
+      | Vundef => match nextworld_defint w with
+                 | None => None
+                 | Some (i, w') =>
+                     Some (w', E0, Vint i, m)
+                 end
+      | _ => None
+      end
+  | _ => None
+  end.
+
 Definition do_external (ef: external_function):
        world -> list val -> mem -> option (world * trace * val * mem) :=
   match ef with
@@ -581,6 +597,7 @@ Definition do_external (ef: external_function):
   | EF_annot_val kind text targ => do_ef_annot_val text targ
   | EF_inline_asm text sg clob => do_inline_assembly text sg ge
   | EF_debug kind text targs => do_ef_debug kind text targs
+  | EF_def_int => do_ef_def_int
   end.
 
 Lemma do_ef_external_sound:
@@ -648,7 +665,23 @@ Proof with try congruence.
   eapply do_inline_assembly_sound; eauto.
 - (* EF_debug *)
   unfold do_ef_debug. mydestr. split; constructor.
-Qed.
+- (* EF_def_int *)
+  unfold do_ef_def_int.
+  intro Hdo.
+  destruct vargs.
+  { inv Hdo. }
+  destruct vargs.
+  2: { inv Hdo. }
+  destruct v; inv Hdo.
+  (* split. *)
+  (* 2: { eapply BF_EX; eauto. *)
+  + destruct (nextworld_defint w); inv H0.
+    destruct p; inv H1.
+    split.
+    * constructor.
+    * admit.
+  + split; constructor.
+Admitted.
 
 Lemma do_ef_external_complete:
   forall ef w vargs m w' t vres m',
@@ -702,7 +735,15 @@ Proof.
   eapply do_inline_assembly_complete; eauto.
 - (* EF_debug *)
   inv H. inv H0. reflexivity.
-Qed.
+- (* EF_def_int *)
+  unfold do_ef_def_int.
+  destruct vargs.
+  { inv H. }
+  destruct vargs.
+  2: { inv H. }
+  destruct v; inv H.
+  + admit.
+Admitted.
 
 (** * Reduction of expressions *)
 

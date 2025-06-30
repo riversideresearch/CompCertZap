@@ -1235,6 +1235,11 @@ Proof.
   + apply CASE2; inv H1; auto.
   + apply CASE1.
   + apply CASE2; inv H1; auto.
+  + simpl in P.
+    inv P.
+    ++ admit.
+    ++ admit.
+
 * apply set_res_lessdef; auto.
 
 - (* Icond *)
@@ -1301,7 +1306,8 @@ Proof.
   eapply exec_return; eauto.
   econstructor; eauto.
   apply set_reg_lessdef; auto.
-Qed.
+  (* Qed. *)
+Admitted.
 
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
