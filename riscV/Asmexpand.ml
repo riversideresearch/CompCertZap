@@ -615,11 +615,11 @@ let maj_vote_float = maj_vote
                        (fun x y lbl -> [Pfeqs (X31, x, y);
                                         Pbnel (X0, X X31, lbl)])
 
-let checkpoint
+let check
       (cmp_j : 'a -> 'a -> label -> instruction list)
       (a : 'a) (b : 'a) : unit =
   if a == b  then begin
-    raise (Error "ill-formed checkpoint")
+    raise (Error "ill-formed dmr check")
   end;
   let lbl_done = new_label () in
   let lbl_fault = new_label () in
@@ -630,14 +630,12 @@ let checkpoint
   List.iter emit (cmp_j a b lbl_fault); (* Compare a and b *)
   emit (Plabel lbl_done)  
   
-(** Checkpoint integers. *)
-let checkpoint_int = checkpoint
-                       (fun x y lbl -> [Pbnel (X x, X y, lbl)])
+(** Check integers. *)
+let check_int = check (fun x y lbl -> [Pbnel (X x, X y, lbl)])
 
-(** Checkpoint floats. *)
-let checkpoint_float = checkpoint
-                         (fun x y lbl -> [Pfeqs (X31, x, y);
-                                          Pbnel (X0, X X31, lbl)])
+(** Check floats. *)
+let check_float = check (fun x y lbl -> [Pfeqs (X31, x, y);
+                                         Pbnel (X0, X X31, lbl)])
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -765,15 +763,15 @@ let expand_builtin_inline name args res =
   | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
      maj_vote_float a b c res
 
-  (* DMR checkpoints *)
+  (* DMR checks *)
   | "__check_int", [BA(IR a); BA(IR b)], _ ->
-     checkpoint_int a b
+     check_int a b
   | "__check_long", [BA(IR a); BA(IR b)], _ ->
-     checkpoint_int a b
+     check_int a b
   | "__check_single", [BA(FR a); BA(FR b)], _ ->
-     checkpoint_float a b
+     check_float a b
   | "__check_float", [BA(FR a); BA(FR b)], _ ->
-     checkpoint_float a b
+     check_float a b
 
   (* Catch-all *)
   | _ ->

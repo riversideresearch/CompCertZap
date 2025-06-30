@@ -358,62 +358,22 @@ Definition vote_float_sem : builtin_sem Xfloat :=
   mkbuiltin_v3t Xfloat vote_float vote_float_well_typed vote_float_compat_inject.
 
 (** ******************)
-(** DMR checkpoints. *)
+(** DMR checks. *)
 
-(* Definition cmp_int (x y : val) : val := *)
-(*   match (x, y) with *)
-(*   | (Vint a, Vint b) => if Int.eq_dec a b then x else Vundef *)
-(*   | (Vptr a i, Vptr b j) => *)
-(*       if negb Archi.ptr64 && eq_block a b && Ptrofs.eq_dec i j *)
-(*       then x else Vundef *)
-(*   | _ => Vundef *)
-(*   end. *)
+Definition check (x y : val) : val := Vundef.
 
-(* Lemma cmp_int_well_typed x y : *)
-(*   Val.has_rettype (cmp_int x y) Xint. *)
-(* Proof. *)
-(*   unfold Val.has_rettype, cmp_int. *)
-(*   destruct x, y; auto. *)
-(*   - destruct (Int.eq_dec _ _); simpl; auto. *)
-(*   - destruct Archi.ptr64 eqn:Harchi; simpl; auto. *)
-(*     destruct (eq_block _ _); subst; simpl; *)
-(*       try destruct (Ptrofs.eq_dec _ _); simpl; auto. *)
-(* Qed. *)
-
-(* Lemma cmp_int_compat_inject j v1 v1' v2 v2' : *)
-(*   Val.inject j v1 v1' -> *)
-(*   Val.inject j v2 v2' -> *)
-(*   Val.inject j (cmp_int v1 v2) (cmp_int v1' v2'). *)
-(* Proof. *)
-(*   unfold cmp_int. *)
-(*   intros H0 H1. *)
-(*   inv H0; simpl; auto; inv H1; simpl; auto; *)
-(*     (* This is necessary for riscv but not x86_64. Why? *) *)
-(*     try solve [destruct Archi.ptr64 eqn:Harchi; simpl; auto; *)
-(*                repeat ((try destruct (eq_block _ _); subst; simpl); *)
-(*                        (try destruct (Ptrofs.eq_dec _ _); subst; simpl); *)
-(*                        (try solve [econstructor; eauto; congruence]); *)
-(*                        (try congruence))]. *)
-(*   repeat destruct (Int.eq_dec _ _); subst; simpl; auto. *)
-(* Qed. *)
-
-(* Definition cmp_int_sem : builtin_sem Xint := *)
-(*   mkbuiltin_v2t Xint cmp_int cmp_int_well_typed cmp_int_compat_inject. *)
-
-Definition check_int (x y : val) : val := Vundef.
-
-Lemma check_int_well_typed x y :
-  Val.has_rettype (check_int x y) Xvoid.
+Lemma check_well_typed x y :
+  Val.has_rettype (check x y) Xvoid.
 Proof. apply I. Qed.
 
-Lemma check_int_compat_inject j v1 v1' v2 v2' :
+Lemma check_compat_inject j v1 v1' v2 v2' :
   Val.inject j v1 v1' ->
   Val.inject j v2 v2' ->
-  Val.inject j (check_int v1 v2) (check_int v1' v2').
+  Val.inject j (check v1 v2) (check v1' v2').
 Proof. auto. Qed.
 
-Definition check_int_sem : builtin_sem Xvoid :=
-  mkbuiltin_v2t Xvoid check_int check_int_well_typed check_int_compat_inject.
+Definition check_sem : builtin_sem Xvoid :=
+  mkbuiltin_v2t Xvoid check check_well_typed check_compat_inject.
 
 Definition replicate_builtin_sem (b: replicate_builtin)
   : builtin_sem (sig_res (replicate_builtin_sig b)) :=
@@ -426,8 +386,8 @@ Definition replicate_builtin_sem (b: replicate_builtin)
   | BI_vote_long => vote_long_sem
   | BI_vote_single => vote_single_sem
   | BI_vote_float => vote_float_sem
-  | BI_check_int => check_int_sem
-  | BI_check_long => check_int_sem
-  | BI_check_single => check_int_sem
-  | BI_check_float => check_int_sem
+  | BI_check_int => check_sem
+  | BI_check_long => check_sem
+  | BI_check_single => check_sem
+  | BI_check_float => check_sem
   end.
