@@ -1713,6 +1713,14 @@ Section PRESERVATION.
     rewrite IHl1; auto.
   Qed.
 
+  (** Hmmm (Xvoid seems to be disallowed for function params)... *)
+  Lemma vundef_has_type_only_void (x : xtype) :
+    Val.has_argtype Vundef x ->
+    x = Xvoid.
+  Proof.
+    destruct x; simpl; intro; try contradiction; reflexivity.
+  Qed.
+
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
     forall ts1,
