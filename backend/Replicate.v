@@ -229,6 +229,8 @@ Definition regs_of_fn (fn : reg + ident) : list reg :=
   end.
 
 Definition args_of_instruction (instr : instruction) : list reg :=
+  instr_uses instr.
+(*
   match instr with
   | Inop _ => []
   | Iop _ args _ _ => args
@@ -242,6 +244,7 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   | Ireturn (Some r) => [r]
   | Ireturn None => []
   end.
+*)
 
 (** This ignores the recursive cases because according to
     [exec_Ibuiltin] (specifically [regmap_setres]) the result is used
