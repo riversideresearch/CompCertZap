@@ -13,10 +13,10 @@ Inductive replicate_builtin : Type :=
 | BI_smove_long
 | BI_smove_single
 | BI_smove_float
-| BI_vote_int
-| BI_vote_long
-| BI_vote_single
-| BI_vote_float
+(* | BI_vote_int *)
+(* | BI_vote_long *)
+(* | BI_vote_single *)
+(* | BI_vote_float *)
 | BI_check_int
 | BI_check_long
 | BI_check_single
@@ -29,10 +29,10 @@ Definition replicate_builtin_table : list (string * replicate_builtin) :=
    ("__builtin_smove_long", BI_smove_long);
    ("__builtin_smove_single", BI_smove_single);
    ("__builtin_smove_float", BI_smove_float);
-   ("__builtin_vote_int", BI_vote_int);
-   ("__builtin_vote_long", BI_vote_long);
-   ("__builtin_vote_single", BI_vote_single);
-   ("__builtin_vote_float", BI_vote_float);
+   (* ("__builtin_vote_int", BI_vote_int); *)
+   (* ("__builtin_vote_long", BI_vote_long); *)
+   (* ("__builtin_vote_single", BI_vote_single); *)
+   (* ("__builtin_vote_float", BI_vote_float); *)
    ("__builtin_check_int", BI_check_int);
    ("__builtin_check_long", BI_check_long);
    ("__builtin_check_single", BI_check_single);
@@ -48,14 +48,14 @@ Definition replicate_builtin_sig (b: replicate_builtin) : signature :=
       [Xsingle ---> Xsingle]
   | BI_smove_float =>
       [Xfloat ---> Xfloat]
-  | BI_vote_int =>
-      [Xint; Xint; Xint ---> Xint]
-  | BI_vote_long =>
-      [Xlong; Xlong; Xlong ---> Xlong]
-  | BI_vote_single =>
-      [Xsingle; Xsingle; Xsingle ---> Xsingle]
-  | BI_vote_float =>
-      [Xfloat; Xfloat; Xfloat ---> Xfloat]
+  (* | BI_vote_int => *)
+  (*     [Xint; Xint; Xint ---> Xint] *)
+  (* | BI_vote_long => *)
+  (*     [Xlong; Xlong; Xlong ---> Xlong] *)
+  (* | BI_vote_single => *)
+  (*     [Xsingle; Xsingle; Xsingle ---> Xsingle] *)
+  (* | BI_vote_float => *)
+  (*     [Xfloat; Xfloat; Xfloat ---> Xfloat] *)
   | BI_check_int =>
       [Xint; Xint ---> Xvoid]
   | BI_check_long =>
@@ -382,10 +382,10 @@ Definition replicate_builtin_sem (b: replicate_builtin)
   | BI_smove_long => smove_long_sem
   | BI_smove_single => smove_single_sem
   | BI_smove_float => smove_float_sem
-  | BI_vote_int => vote_int_sem
-  | BI_vote_long => vote_long_sem
-  | BI_vote_single => vote_single_sem
-  | BI_vote_float => vote_float_sem
+  (* | BI_vote_int => vote_int_sem *)
+  (* | BI_vote_long => vote_long_sem *)
+  (* | BI_vote_single => vote_single_sem *)
+  (* | BI_vote_float => vote_float_sem *)
   | BI_check_int => check_sem
   | BI_check_long => check_sem
   | BI_check_single => check_sem
