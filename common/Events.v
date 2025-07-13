@@ -1420,26 +1420,6 @@ Qed.
 
 (** ** Semantics of majority vote operations. *)
 
-Definition vote_int (x y z : val) : val :=
-  match (x, y, z) with
-  | (Vint a, Vint b, Vint c) =>
-      if Int.eq_dec a b || Int.eq_dec a c
-      then x
-      else if Int.eq_dec b c
-           then y
-           else Vundef
-  | (Vptr a i, Vptr b j, Vptr c k) =>
-      if negb Archi.ptr64
-      then if (eq_block a b && Ptrofs.eq_dec i j) ||
-                (eq_block a c && Ptrofs.eq_dec i k)
-           then x
-           else if eq_block b c && Ptrofs.eq_dec j k
-                then y
-                else Vundef
-      else Vundef
-  | _ => Vundef
-  end.
-
 (* Definition vote_int (a b c : int) : val := *)
 (*   if Int.eq_dec a b || Int.eq_dec a c *)
 (*   then Vint a *)
@@ -1447,110 +1427,180 @@ Definition vote_int (x y z : val) : val :=
 (*        then Vint b *)
 (*        else Vundef. *)
 
-Inductive vote_int_sem (ge: Senv.t)
-  : list val -> mem -> trace -> val -> mem -> Prop :=
+(* (* | Vptr: block -> ptrofs -> val. *) *)
+(* Definition vote_ptr (a b c : block) (i j k : ptrofs) : val := *)
+(*   if negb Archi.ptr64 *)
+(*   then if (eq_block a b && Ptrofs.eq_dec i j) || *)
+(*             (eq_block a c && Ptrofs.eq_dec i k) *)
+(*        then Vptr a i *)
+(*        else if eq_block b c && Ptrofs.eq_dec j k *)
+(*             then Vptr b j *)
+(*             else Vundef *)
+(*   else Vundef. *)
+  
+(* Inductive vote_int_sem (ge: Senv.t) *)
+(*   : list val -> mem -> trace -> val -> mem -> Prop := *)
 (* | vote_int_sem_eq : forall i m, *)
 (*     vote_int_sem ge (Vint i :: Vint i :: Vint i :: nil) m nil (Vint i) m *)
-(* | vote_int_sem_neq : forall i1 i2 i3 m, *)
-(*     i1 <> i2 \/ i1 <> i3 \/ i2 <> i3 -> *)
-(*     vote_int_sem ge (Vint i1 :: Vint i2 :: Vint i3 :: nil) m *)
-(*       (Event_vote_neq :: nil) (vote_int i1 i2 i3) m *)
-(* TODO: ptr cases and Vundef. Maybe let neq case handle Vundefs as
-well? Just use other vote_int. *)
-(* | vote_int_sem_undef : forall m, *)
-(*     vote_int_sem ge (Vundef :: Vundef :: Vundef :: nil) m nil Vundef m *)
-| vote_int_sem_eq : forall v m,
-    Val.has_type v Tint ->
-    vote_int_sem ge (v :: v :: v :: nil) m nil v m
-| vote_int_sem_neq : forall v1 v2 v3 m,
-    v1 <> v2 \/ v1 <> v3 \/ v2 <> v3 ->
-    vote_int_sem ge (v1 :: v2 :: v3 :: nil) m
-      (Event_vote_neq :: nil) (vote_int v1 v2 v3) m.
+(* | vote_int_sem_neq : forall v1 v2 v3 m, *)
+(*     v1 = Vundef \/ v2 = Vundef \/ v3 = Vundef -> *)
+(*     vote_int_sem ge (v1 :: v2 ::v3 :: nil) m *)
+(*       (Event_vote_neq :: nil) Vundef m *)
+(* (* | vote_int_sem_neq : forall i1 i2 i3 m, *) *)
+(* (*     i1 <> i2 \/ i1 <> i3 \/ i2 <> i3 -> *) *)
+(* (*     vote_int_sem ge (Vint i1 :: Vint i2 :: Vint i3 :: nil) m *) *)
+(* (*       (Event_vote_neq :: nil) (vote_int i1 i2 i3) m *) *)
+(* (* TODO: ptr cases and Vundef. Maybe let neq case handle Vundefs as *)
+(* well? Just use other vote_int. *) *)
+(* (* | vote_int_sem_undef : forall m, *) *)
+(* (*     vote_int_sem ge (Vundef :: Vundef :: Vundef :: nil) m nil Vundef m *) *)
+(* | vote_int_sem_eq : forall v m, *)
+(*     Val.has_type v Tint -> *)
+(*     vote_int_sem ge (v :: v :: v :: nil) m nil v m *)
+(* | vote_int_sem_neq : forall v1 v2 v3 m, *)
+(*     v1 <> v2 \/ v1 <> v3 \/ v2 <> v3 -> *)
+(*     vote_int_sem ge (v1 :: v2 :: v3 :: nil) m *)
+(*       (Event_vote_neq :: nil) (vote_int v1 v2 v3) m. *)
 
-Lemma vote_int_sem_ok:
-    extcall_properties vote_int_sem [Xint; Xint; Xint ---> Xint].
-Proof.
-  constructor; simpl.
-  - intros ge vargs m1 t vres m2 Hvote.
-    inv Hvote; auto.
-    unfold vote_int.
-    destruct v1, v2, v3; auto.
-    + repeat destruct (Int.eq_dec _ _); simpl; auto.
-    + destruct Archi.ptr64; simpl; auto.
-      * repeat destruct (eq_block _ _); simpl;
-          repeat destruct (Ptrofs.eq_dec _ _); simpl; auto.
-  - intros ge1 ge2 vargs m1 t vres m2 Hequiv Hvote.
-    inv Hvote; constructor; auto.
-  - intros ge vargs m1 t vres m2 b Hvote Hb.
-    inv Hvote; auto.
-  - intros ge vargs m1 t vres m2 b ofs p Hvote Hb Hperm.
-    inv Hvote; auto.
-  - intros ge vargs m1 t vres m2 b ofs n bytes Hvote Hb Hbytes H.
-    inv Hvote; auto.
-  - intros ge vargs m1 t vres m2 m1' vargs' Hvote Hmem Hvargs.
-    inv Hvote.
-    unfold Val.has_type in H.
-    destruct vres; try contradiction.
-    + repeat match goal with
-               | [ H: Val.lessdef_list _ _ |- _ ] => inv H
-               end.
+(* Definition vote_int (x y z : val) : val := *)
+(*   match (x, y, z) with *)
+(*   | (Vint a, Vint b, Vint c) => *)
+(*       if Int.eq_dec a b || Int.eq_dec a c *)
+(*       then x *)
+(*       else if Int.eq_dec b c *)
+(*            then y *)
+(*            else Vundef *)
+(*   | (Vptr a i, Vptr b j, Vptr c k) => *)
+(*       if negb Archi.ptr64 *)
+(*       then if (eq_block a b && Ptrofs.eq_dec i j) || *)
+(*                 (eq_block a c && Ptrofs.eq_dec i k) *)
+(*            then x *)
+(*            else if eq_block b c && Ptrofs.eq_dec j k *)
+(*                 then y *)
+(*                 else Vundef *)
+(*       else Vundef *)
+(*   | _ => Vundef *)
+(*   end. *)
+
+(* Inductive vote_int_sem (ge: Senv.t) *)
+(*   : list val -> mem -> trace -> val -> mem -> Prop := *)
+(* | vote_int_sem_eq : forall v m, *)
+(*     Val.has_type v Tint -> *)
+(*     vote_int_sem ge (v :: v :: v :: nil) m nil v m *)
+(* (* Slight overlap here -- first two constructors cover the case in *)
+(*    which all three values are Vundef. *) *)
+(* | vote_int_sem_undef : forall v1 v2 v3 m, *)
+(*     v1 = Vundef \/ v2 = Vundef \/ v3 = Vundef -> *)
+(*     vote_int_sem ge (v1 :: v2 :: v3 :: nil) m nil Vundef m *)
+(* | vote_int_sem_neq : forall v1 v2 v3 m, *)
+(*     v1 <> Vundef -> *)
+(*     v2 <> Vundef -> *)
+(*     v3 <> Vundef -> *)
+(*     v1 <> v2 \/ v1 <> v3 \/ v2 <> v3 -> *)
+(*     vote_int_sem ge (v1 :: v2 :: v3 :: nil) m *)
+(*       (Event_vote_neq :: nil) (vote_int v1 v2 v3) m. *)
+
+(* Lemma vote_int_sem_ok: *)
+(*     extcall_properties vote_int_sem [Xint; Xint; Xint ---> Xint]. *)
+(* Proof. *)
+(*   constructor; simpl. *)
+(*   - intros ge vargs m1 t vres m2 Hvote. *)
+(*     inv Hvote; auto; unfold vote_int. *)
+(*     + destruct v1, v2, v3; auto. *)
+(*       * repeat destruct (Int.eq_dec _ _); simpl; auto. *)
+(*       * destruct Archi.ptr64; simpl; auto. *)
+(*         { repeat destruct (eq_block _ _); simpl; *)
+(*             repeat destruct (Ptrofs.eq_dec _ _); simpl; auto. } *)
+(*     (* + destruct v1, v2, v3; auto. *) *)
+(*     (*   * repeat destruct (Int.eq_dec _ _); simpl; auto. *) *)
+(*     (*   * destruct Archi.ptr64; simpl; auto. *) *)
+(*     (*     { repeat destruct (eq_block _ _); simpl; *) *)
+(*     (*         repeat destruct (Ptrofs.eq_dec _ _); simpl; auto. } *) *)
+(*   - intros ge1 ge2 vargs m1 t vres m2 Hequiv Hvote. *)
+(*     inv Hvote; constructor; auto. *)
+(*   - intros ge vargs m1 t vres m2 b Hvote Hb. *)
+(*     inv Hvote; auto. *)
+(*   - intros ge vargs m1 t vres m2 b ofs p Hvote Hb Hperm. *)
+(*     inv Hvote; auto. *)
+(*   - intros ge vargs m1 t vres m2 b ofs n bytes Hvote Hb Hbytes H. *)
+(*     inv Hvote; auto. *)
+(*   - intros ge vargs m1 t vres m2 m1' vargs' Hvote Hmem Hvargs. *)
+(*     inv Hvote. *)
+(*     unfold Val.has_type in H. *)
+(*     destruct vres; try contradiction. *)
+(*     + repeat match goal with *)
+(*              | [ H: Val.lessdef_list _ _ |- _ ] => inv H *)
+(*              end.
       clear H2 H3 H4.
+ *)
+(*       destruct v2, v0, v3 *)
+(*       ; try solve [exists Vundef, m1'; split; auto using Mem.unchanged_on_refl; constructor; auto]. *)
+(*       * exists (vote_int (Vint i) (Vint i0) (Vint i1)), m1'. *)
+(*         split; auto using Mem.unchanged_on_refl. *)
+
+(*       (* * exists Vundef, m1'; intuition auto using Mem.unchanged_on_refl. *) *)
+(*       (*   constructor; auto. *) *)
+(*       (* * exists Vundef, m1'; intuition auto using Mem.unchanged_on_refl; constructor; auto. *) *)
+        
+(*       (*   (* replace Vundef with (vote_int Vundef Vundef (Vint i)) by reflexivity. *) *) *)
+(*       (*   constructor; intuition. *) *)
+(*       (* *  *) *)
       
-  (*   + exists vres, m1'. *)
-  (*     split. *)
-  (*     { repeat match goal with *)
-  (*              | [ H: Val.lessdef_list _ _ |- _ ] => inv H *)
-  (*              end. *)
-  (*       repeat match goal with *)
-  (*              | [ H: Val.lessdef _ _ |- _ ] => inv H *)
-  (*              end. *)
-  (*       constructor; auto. } *)
-  (*     intuition auto using Mem.unchanged_on_refl. *)
-  (*   + exists (vote_int i1 i2 i3), m1'. *)
-  (*     split. *)
-  (*     { repeat match goal with *)
-  (*              | [ H: Val.lessdef_list _ _ |- _ ] => inv H *)
-  (*              end. *)
-  (*       repeat match goal with *)
-  (*              | [ H: Val.lessdef _ _ |- _ ] => inv H *)
-  (*              end. *)
-  (*       constructor; auto. } *)
-  (*     intuition auto using Mem.unchanged_on_refl. *)
-  (* - intros ge1 ge2 vargs m1 t vres m2 f m1' vargs' Hsym Hvote Hmem Hvargs. *)
-  (*   admit. *)
-  (* - intros ge vargs m t vres m' Hvote. *)
-  (*   admit. *)
-  (* - intros ge vargs m t1 vres1 m1 t2 Hvote Hmatch. *)
-  (*   admit. *)
-  (* - intros ge vargs m t1 vres1 m1 t2 vres2 m2 Hvote1 Hvote2. *)
-  (*   admit. *)
-Admitted.
+(*   (*   + exists vres, m1'. *) *)
+(*   (*     split. *) *)
+(*   (*     { repeat match goal with *) *)
+(*   (*              | [ H: Val.lessdef_list _ _ |- _ ] => inv H *) *)
+(*   (*              end. *) *)
+(*   (*       repeat match goal with *) *)
+(*   (*              | [ H: Val.lessdef _ _ |- _ ] => inv H *) *)
+(*   (*              end. *) *)
+(*   (*       constructor; auto. } *) *)
+(*   (*     intuition auto using Mem.unchanged_on_refl. *) *)
+(*   (*   + exists (vote_int i1 i2 i3), m1'. *) *)
+(*   (*     split. *) *)
+(*   (*     { repeat match goal with *) *)
+(*   (*              | [ H: Val.lessdef_list _ _ |- _ ] => inv H *) *)
+(*   (*              end. *) *)
+(*   (*       repeat match goal with *) *)
+(*   (*              | [ H: Val.lessdef _ _ |- _ ] => inv H *) *)
+(*   (*              end. *) *)
+(*   (*       constructor; auto. } *) *)
+(*   (*     intuition auto using Mem.unchanged_on_refl. *) *)
+(*   (* - intros ge1 ge2 vargs m1 t vres m2 f m1' vargs' Hsym Hvote Hmem Hvargs. *) *)
+(*   (*   admit. *) *)
+(*   (* - intros ge vargs m t vres m' Hvote. *) *)
+(*   (*   admit. *) *)
+(*   (* - intros ge vargs m t1 vres1 m1 t2 Hvote Hmatch. *) *)
+(*   (*   admit. *) *)
+(*   (* - intros ge vargs m t1 vres1 m1 t2 vres2 m2 Hvote1 Hvote2. *) *)
+(*   (*   admit. *) *)
+(* Admitted. *)
 
-(* (** TODO *) *)
-(* Inductive vote_sem (ty : typ) (ge: Senv.t) : *)
-(*   list val -> mem -> trace -> val -> mem -> Prop := *)
-(* | vote_sem_eq: forall v m, *)
-(*     Val.has_type v ty -> *)
-(*     vote_sem ty ge (v :: v :: v :: nil) m nil v m *)
-(* | vote_sem_1: forall v1 v2 m, *)
-(*     Val.has_type v1 ty -> *)
-(*     Val.has_type v2 ty -> *)
-(*     v1 <> v2 -> *)
-(*     vote_sem ty ge (v1 :: v1 :: v2 :: nil) m nil v1 m *)
-(* | vote_sem_2: forall v1 v2 m, *)
-(*     Val.has_type v1 ty -> *)
-(*     Val.has_type v2 ty -> *)
-(*     v1 <> v2 -> *)
-(*     vote_sem ty ge (v1 :: v2 :: v1 :: nil) m nil v1 m *)
-(* | vote_sem_3: forall v1 v2 m, *)
-(*     Val.has_type v1 ty -> *)
-(*     Val.has_type v2 ty -> *)
-(*     v1 <> v2 -> *)
-(*     vote_sem ty ge (v2 :: v1 :: v1 :: nil) m nil v1 m. *)
+(** TODO *)
+Inductive extcall_vote_sem (ty : typ) (ge: Senv.t) :
+  list val -> mem -> trace -> val -> mem -> Prop :=
+| vote_sem_eq: forall v m,
+    Val.has_type v ty ->
+    extcall_vote_sem ty ge (v :: v :: v :: nil) m nil v m
+| vote_sem_1: forall v1 v2 m,
+    Val.has_type v1 ty ->
+    Val.has_type v2 ty ->
+    v1 <> v2 ->
+    extcall_vote_sem ty ge (v1 :: v1 :: v2 :: nil) m nil v1 m
+| vote_sem_2: forall v1 v2 m,
+    Val.has_type v1 ty ->
+    Val.has_type v2 ty ->
+    v1 <> v2 ->
+    extcall_vote_sem ty ge (v1 :: v2 :: v1 :: nil) m nil v1 m
+| vote_sem_3: forall v1 v2 m,
+    Val.has_type v1 ty ->
+    Val.has_type v2 ty ->
+    v1 <> v2 ->
+    extcall_vote_sem ty ge (v2 :: v1 :: v1 :: nil) m nil v1 m.
 
-Lemma vote_sem_ok:
+Lemma extcall_vote_sem_ok:
   forall ty,
-    extcall_properties (vote_sem ty)
+    extcall_properties (extcall_vote_sem ty)
       [inj_type ty; inj_type ty; inj_type ty ---> inj_type ty].
 Proof.
   intro ty.
@@ -1586,9 +1636,9 @@ Proof.
       inv H6.
       inv H7.
       
-    split; auto.
-    split; auto.
-    { apply Mem.unchanged_on_refl. }
+    (* split; auto. *)
+    (* split; auto. *)
+    (* { apply Mem.unchanged_on_refl. } *)
     
 Admitted.
     (* inv Hvote. *)
@@ -1718,7 +1768,7 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_annot_val kind txt targ => extcall_annot_val_sem txt targ
   | EF_inline_asm txt sg clb => inline_assembly_sem txt sg
   | EF_debug kind txt targs => extcall_debug_sem
-  | EF_vote ty => _
+  (* | EF_vote ty => extcall_vote_sem ty *)
   end.
 
 Theorem external_call_spec:
@@ -1738,6 +1788,7 @@ Proof.
   apply extcall_annot_val_ok.
   apply inline_assembly_properties.
   apply extcall_debug_ok.
+  (* apply extcall_vote_sem_ok. *)
 Qed.
 
 Definition external_call_well_typed_gen ef := ec_well_typed (external_call_spec ef).

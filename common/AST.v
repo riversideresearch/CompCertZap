@@ -545,11 +545,11 @@ Inductive external_function : Type :=
          used with caution, as it can invalidate the semantic
          preservation theorem.  Generated only if [-finline-asm] is
          given. *)
-  | EF_debug (kind: positive) (text: ident) (targs: list typ)
+  | EF_debug (kind: positive) (text: ident) (targs: list typ).
      (** Transport debugging information from the front-end to the generated
          assembly.  Takes zero, one or several arguments like [EF_annot].
          Unlike [EF_annot], produces no observable event. *)
-  | EF_vote (ty: typ).
+  (* | EF_vote (ty: typ). *)
 
 (** The type signature of an external function. *)
 
@@ -567,7 +567,7 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_annot_val kind text targ => [inj_type targ ---> inj_type targ]
   | EF_inline_asm text sg clob => sg
   | EF_debug kind text targs => mksignature (List.map inj_type targs) Xvoid cc_default
-  | EF_vote ty => [inj_type ty; inj_type ty; inj_type ty ---> inj_type ty]
+  (* | EF_vote ty => [inj_type ty; inj_type ty; inj_type ty ---> inj_type ty] *)
   end.
 
 (** Whether an external function should be inlined by the compiler. *)
@@ -586,7 +586,7 @@ Definition ef_inline (ef: external_function) : bool :=
   | EF_annot_val kind text rg => true
   | EF_inline_asm text sg clob => true
   | EF_debug kind text targs => true
-  | EF_vote ty => true
+  (* | EF_vote ty => true *)
   end.
 
 (** Whether an external function must reload its arguments. *)
