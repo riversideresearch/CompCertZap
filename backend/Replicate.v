@@ -190,7 +190,7 @@ Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
       ret succ
   end.
 
-(** Emit code for majority voting the list of registers [reg]. [re] is
+(** Emit code for majority voting the list of registers [regs]. [re] is
     the register typing context of the original function. [rm] (the
     replication map) maps registers to their corresponding shadow
     registers. [pc] is the node at which the emitted instructions
@@ -207,6 +207,7 @@ Fixpoint maj_vote_regs
       maj_vote re r1 r2 r3 succ
   end.
 
+(* CLEANUP
 Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
   match arg with
   | BA r => [r]
@@ -214,13 +215,18 @@ Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
   | BA_addptr a1 a2 => regs_of_builtin_arg a1 ++ regs_of_builtin_arg a2
   | _ => []
   end.
+*)
 
 (** Pull out registers from builtin_args. *)
+Definition regs_of_builtin_args (args : list (builtin_arg reg)) : list reg :=
+  params_of_builtin_args args.
+(* CLEANUP
 Fixpoint regs_of_builtin_args (args : list (builtin_arg reg)) : list reg :=
   match args with
   | [] => []
   | ba :: rest => regs_of_builtin_arg ba ++ regs_of_builtin_args rest
   end.
+*)
 
 Definition regs_of_fn (fn : reg + ident) : list reg :=
   match fn with
@@ -230,7 +236,7 @@ Definition regs_of_fn (fn : reg + ident) : list reg :=
 
 Definition args_of_instruction (instr : instruction) : list reg :=
   instr_uses instr.
-(*
+(* CLEANUP
   match instr with
   | Inop _ => []
   | Iop _ args _ _ => args

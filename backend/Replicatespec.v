@@ -398,9 +398,9 @@ Proof.
 Qed.
 
 (** [match_instr re rm c pc i] means that the translated code [c]
-    contains instructions starting at pc] that correspond to
+    contains instructions starting at [pc] that correspond to
     instruction [i] in the original program, wrt. register environment
-    [regenv] and replication map [rm]. *)
+    [re] and replication map [rm]. *)
 Inductive match_instr
   (re : regenv) (rm : replmap) (c : code) (pc : positive)
   : instruction -> Prop :=
@@ -431,14 +431,24 @@ Inductive match_instr
     match_instr re rm c pc (Istore chunk addr args src1 succ)
 | match_Icall :
   forall sig fn args res1 res2 res3 succ n1 n2
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm
+       (* CLEANUP *)
+       (match fn with
+        | inl r => r :: args
+        | inr _ => args
+        end) pc n1)
     (N1 : c ! n1 = Some (Icall sig fn args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm c pc (Icall sig fn args res1 succ)
 | match_Itailcall :
   forall sig fn args n
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm
+       (* CLEANUP *)
+       (match fn with
+        | inl r => r :: args
+        | inr _ => args
+        end) pc n)
     (N : c ! n = Some (Itailcall sig fn args)),
     match_instr re rm c pc (Itailcall sig fn args)
 | match_Ibuiltin_1 :
@@ -481,15 +491,16 @@ Inductive match_instr
 Definition match_code (re : regenv) (rm : replmap) (c c': code) : Prop :=
   forall p i, c ! p = Some i -> match_instr re rm c' p i.
 
+(* CLEANUP
 Section regs_of_builtin_args.
-  Lemma params_of_builin_arg_regs_of_builtin_arg r a :
+  Lemma params_of_builtin_arg_regs_of_builtin_arg r a :
     In r (params_of_builtin_arg a) ->
     In r (regs_of_builtin_arg a).
   Proof.
     revert r. induction a; simpl; auto.
     all: intros r; rewrite !in_app_iff; firstorder.
   Qed.
-  Local Hint Resolve params_of_builin_arg_regs_of_builtin_arg : core.
+  Local Hint Resolve params_of_builtin_arg_regs_of_builtin_arg : core.
 
   Lemma params_of_builtin_args_regs_of_builtin_args r args :
     In r (params_of_builtin_args args) ->
@@ -499,8 +510,9 @@ Section regs_of_builtin_args.
     rewrite !in_app_iff. firstorder.
   Qed.
 End regs_of_builtin_args.
+*)
 
-(*
+(* CLEANUP
 Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
 | reg_used_Iop_args : forall op args res succ,
     In r args ->
@@ -546,17 +558,16 @@ Definition reg_used_in_instr (r : reg) (instr : instruction) : Prop :=
   Regset.In r (instr_regs instr).
 
 Section reg_used_in_instr.
-  (* Local Hint Constructors reg_used_in_instr : core. *)
+  (* CLEANUP
+  Local Hint Constructors reg_used_in_instr : core.
   Local Hint Resolve params_of_builtin_args_regs_of_builtin_args : core.
+  *)
 
   Lemma instr_uses_reg_used_in_instr r i :
     In r (instr_uses i) -> reg_used_in_instr r i.
   Proof.
+    (* CLEANUP *)
     unfold reg_used_in_instr.
-    (* rewrite <- Regsetaux.in_elements. *)
-    (* Regsetaux.in_elements:
-  forall (r : reg) (X : Regset.t),
-  In r (Regset.elements X) <-> Regset.In r X *)
     destruct i; simpl.
     - contradiction.
     - rewrite Regsetaux.FM.union_iff.
@@ -570,7 +581,7 @@ Section reg_used_in_instr.
       apply Regsetaux.in_of_list_1.
       assumption.
     - rewrite Regsetaux.FM.union_iff.
-      intros [->|Fred].
+      intros [->|H].
       + right.
         apply Regset.singleton_2.
         reflexivity.
@@ -587,11 +598,13 @@ Section reg_used_in_instr.
        intros [->|?].
        * rewrite Regsetaux.FM.union_iff.
          left.
-         now apply Regset.add_1.
+         apply Regset.add_1.
+         reflexivity.
        * rewrite Regsetaux.FM.union_iff.
          left.
          apply Regset.add_2.
-         now apply Regsetaux.in_of_list_1.
+         apply Regsetaux.in_of_list_1.
+         assumption.
      + rewrite Regsetaux.FM.union_iff.
        intros H.
        left.
@@ -602,29 +615,19 @@ Section reg_used_in_instr.
      end.
      + simpl.
        intros [->|?].
-       * now apply Regset.add_1.
+       * apply Regset.add_1.
+         reflexivity.
        * apply Regset.add_2.
-         now apply Regsetaux.in_of_list_1.
+         apply Regsetaux.in_of_list_1.
+         assumption.
      + apply Regsetaux.in_of_list_1.
    - rewrite Regsetaux.FM.union_iff.
      intros H.
      left.
-     Set Nested Proofs Allowed.
-     Lemma regs_params_of_builtin_args l :
-       regs_of_builtin_args l = params_of_builtin_args l.
-     Proof.
-       unfold params_of_builtin_args.
-       Search fold_right fold_left.
-       unfold regs_of_builtin_args.
-     (* TODO eliminate regs_of_builtin_args and just use params_of_builtin_args.
-        Then this lemma won't be needed *)
-       admit.
-     Admitted.
-     rewrite regs_params_of_builtin_args.
      apply Regsetaux.in_of_list_1.
      assumption.
    - apply Regsetaux.in_of_list_1.
-   - intros [->|?]. Search Regset.In Regset.singleton.
+   - intros [->|?].
      + apply Regset.singleton_2.
        reflexivity.
      + contradiction.
@@ -636,9 +639,15 @@ Section reg_used_in_instr.
        * contradiction.
      + contradiction.
 
-  (* If the above have enough patterns, try something like this to compress proof:
+  (* Consolidate patterns above to compress proof:
     all: repeat lazymatch goal with
     | H : False |- _ => contradiction
+    | H : In r l |- _ =>
+       rewrite Regsetaux.FM.union_iff.
+       intros H.
+       left.
+       apply Regsetaux.in_of_list_1.
+       assumption.
     | H : (_ = _) \/ _ |- _ => destruct H as [->|?]
     | H : reg + ident |- _ => destruct H; simpl in Hr
     | H : option reg |- _ => destruct H; simpl in Hr
@@ -1151,7 +1160,7 @@ Proof.
       apply maj_vote_regsR_ptree_set; auto.
 
     (* Icall *)
-    + simpl in Htransf'; unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+    + simpl in Htransf'. unfold RTLgen.bind in Htransf'; simpl in Htransf'.
       repeat egen_case.
       unfold copy_to_shadows in H0.
       destruct (rm # r) eqn:Hrmr.
@@ -1198,7 +1207,7 @@ Proof.
       * rewrite PTree.gss; reflexivity.
 
     (* Ibuiltin *)
-    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+    + unfold RTLgen.bind in Htransf'. simpl in Htransf'.
       destruct (reg_of_builtin_res b) eqn:Hb.
       * repeat egen_case.
         unfold update_instr in H2.
@@ -1551,7 +1560,8 @@ Proof.
   revert p i r.
   induction l; simpl; intros p i r Hin Hused; try contradiction.
   destruct Hin as [? | Hin]; subst.
-  - inv Hused; simpl; try destruct fn; apply Regset.union_3;
+  - (* CLEANUP
+    inv Hused; simpl; try destruct fn; apply Regset.union_3.
       try solve [apply Regset.union_3, Regset.singleton_2; reflexivity];
       try solve [apply Regset.union_2, in_regset_of_list; auto];
       try solve [apply in_regset_of_list; assumption];
@@ -1562,6 +1572,22 @@ Proof.
     + apply Regset.add_2, in_regset_of_list; assumption.
   - inv Hused; simpl;
       solve [apply Regset.union_2; eapply IHl; eauto; constructor; auto].
+  *)
+    revert Hused.
+    unfold reg_used_in_instr.
+    destruct i; simpl.
+    1: {rewrite Regsetaux.FM.empty_iff; contradiction. }
+    all: apply Regset.union_3.
+  - (* CLEANUP
+    inv Hused; simpl;
+      solve [apply Regset.union_2; eapply IHl; eauto; constructor; auto].
+    *)
+    apply Regset.union_2.
+    revert Hused.
+    unfold reg_used_in_instr.
+    destruct i; simpl.
+    (* TODO HERE *)
+    apply IHl.
 Qed.
 
 Lemma reg_used_regset_in_all_regs params c r :
