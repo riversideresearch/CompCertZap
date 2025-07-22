@@ -329,8 +329,7 @@ Definition instr_regs (i : instruction) : Regset.t :=
   | Ireturn None => Regset.empty
   end.
 
-(** All registers that appear in the given code (used in
-    instructions). *)
+(** All registers that appear in the given code (in instructions). *)
 Definition code_regs (c : code) : Regset.t :=
   PTree.fold (fun rs _ instr => Regset.union rs (instr_regs instr)) c Regset.empty.
 
@@ -433,7 +432,7 @@ Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
 
 (** Transform a function [f]:
 
-    1) typecheck the function to obtain the register typing context [re],
+    1) typecheck the function to obtain the register type environment [re],
 
     2) Call [transf_fun'] with [re] on [f].
 *)

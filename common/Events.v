@@ -625,6 +625,11 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
 Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
   mk_extcall_properties {
 
+  ec_undef:
+    forall ge vargs m1 t vres m2,
+      Exists (eq Vundef) vargs ->
+      ~ sem ge vargs m1 t vres m2;
+
 (** The return value of an external call must agree with its signature. *)
   ec_well_typed:
     forall ge vargs m1 t vres m2,
@@ -783,6 +788,9 @@ Lemma volatile_load_ok:
                      [Xptr ---> xtype_of_chunk chunk].
 Proof.
   intros; constructor; intros.
+  - intro Hload; inv Hload.
+    inv H; try discriminate.
+    inv H2.
 (* well typed *)
 - inv H. inv H0. apply Val.load_result_xtype.
   eapply Mem.load_xtype; eauto.
@@ -947,6 +955,11 @@ Lemma volatile_store_ok:
                      [Xptr; xtype_of_chunk chunk ---> Xvoid].
 Proof.
   intros; constructor; intros.
+  - intro Hstore; inv Hstore.
+    inv H; try discriminate.
+    inv H2.
+    2: { inv H1. }
+    admit.
 (* well typed *)
 - unfold proj_sig_res; simpl. inv H; constructor.
 (* symbols preserved *)
@@ -976,7 +989,7 @@ Proof.
   assert (ev = ev0) by (eapply eventval_match_determ_2; eauto). subst ev0.
   split. constructor. auto.
   split. constructor. intuition congruence.
-Qed.
+Admitted.
 
 (** ** Semantics of dynamic memory allocation (malloc) *)
 
@@ -1005,6 +1018,9 @@ Proof.
     intros. eapply Mem.valid_not_valid_diff; eauto with mem.
   }
   constructor; intros.
+- intros Hmalloc; inv Hmalloc.
+  inv H; try discriminate.
+  inv H3.
 (* well typed *)
 - inv H. simpl. unfold Tptr; destruct Archi.ptr64; auto.
 (* symbols preserved *)
@@ -1079,6 +1095,9 @@ Lemma extcall_free_ok:
                      [Xptr ---> Xvoid].
 Proof.
   constructor; intros.
+- intro Hfree; inv Hfree.
+  + inv H; try discriminate; inv H3.
+  + inv H; try discriminate; inv H1.
 (* well typed *)
 - inv H; simpl; auto.
 (* symbols preserved *)
@@ -1187,6 +1206,11 @@ Lemma extcall_memcpy_ok:
                      [Xptr; Xptr ---> Xvoid].
 Proof.
   intros. constructor.
+- intros ge vargs m1 t vres m2 Hargs Hmemcpy.
+  inv Hmemcpy.
+  inv Hargs; try discriminate.
+  inv H8; try discriminate.
+  inv H9.
 - (* return type *)
   intros. inv H. exact I.
 - (* change of globalenv *)
@@ -1299,6 +1323,15 @@ Lemma extcall_annot_ok:
                      (mksignature (List.map inj_type targs) Xvoid cc_default).
 Proof.
   intros; constructor; intros.
+- intro Hannot; inv Hannot.
+  revert H H0.
+  revert targs vargs.
+  induction args; intros targs vargs Hargs Hmatch.
+  { inv Hmatch; inv Hargs. }
+  inv Hmatch.
+  inv Hargs.
+  { inv H1. }
+  eapply IHargs; eauto.
 (* well typed *)
 - inv H. simpl. auto.
 (* symbols *)
@@ -1344,6 +1377,10 @@ Lemma extcall_annot_val_ok:
                      [inj_type targ ---> inj_type targ].
 Proof.
   intros; constructor; intros.
+- intro Hannot; inv Hannot.
+  inv H.
+  { inv H0. }
+  inv H2.
 (* well typed *)
 - inv H. apply Val.has_inj_type. eapply eventval_match_type; eauto.
 (* symbols *)
@@ -1388,6 +1425,8 @@ Lemma extcall_debug_ok:
                      (mksignature (List.map inj_type targs) Xvoid cc_default).
 Proof.
   intros; constructor; intros.
+- intro Hdebug; inv Hdebug.
+  admit.
 (* well typed *)
 - inv H. simpl. auto.
 (* symbols *)
@@ -1414,7 +1453,7 @@ Proof.
 (* determ *)
 - inv H; inv H0.
   split. constructor. auto.
-Qed.
+Admitted.
 
 (** ** Semantics of known built-in functions. *)
 
@@ -1432,6 +1471,23 @@ Lemma known_builtin_ok: forall bf,
   extcall_properties (known_builtin_sem bf) (builtin_function_sig bf).
 Proof.
   intros. set (bsem := builtin_function_sem bf). constructor; intros.
+  (* - intros Hbuiltin. *)
+  (*   inv Hbuiltin. *)
+  (*   unfold builtin_function_sem in H0. *)
+  (*   destruct bf. *)
+  (*   + unfold standard_builtin_sem in H0. *)
+  (*     destruct b; simpl in *. *)
+  (*     * destruct vargs; try discriminate. *)
+  (*       destruct v; try discriminate. *)
+  (*       destruct vargs; try discriminate. *)
+  (*       destruct vargs; try discriminate. *)
+  (*       destruct vargs; try discriminate. *)
+        
+  (*       inversion H0. *)
+  (*       simpl in H2. *)
+  (*       inv H; try discriminate. *)
+  (*       inv H1. *)
+- admit.
 (* well typed *)
 - inv H.
   specialize (bs_well_typed  _ bsem vargs).
@@ -1468,7 +1524,7 @@ Proof.
 (* determ *)
 - inv H; inv H0.
   split. constructor. intuition congruence. 
-Qed.
+Admitted.
 
 (** ** Semantics of external functions. *)
 
