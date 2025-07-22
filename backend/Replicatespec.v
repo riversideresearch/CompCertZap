@@ -1576,18 +1576,15 @@ Proof.
     revert Hused.
     unfold reg_used_in_instr.
     destruct i; simpl.
-    1: {rewrite Regsetaux.FM.empty_iff; contradiction. }
+    1: { rewrite Regsetaux.FM.empty_iff; contradiction. }
     all: apply Regset.union_3.
-  - (* CLEANUP
-    inv Hused; simpl;
-      solve [apply Regset.union_2; eapply IHl; eauto; constructor; auto].
-    *)
-    apply Regset.union_2.
+  - apply Regset.union_2.
     revert Hused.
     unfold reg_used_in_instr.
+    unfold reg_used_in_instr in IHl.
     destruct i; simpl.
-    (* TODO HERE *)
-    apply IHl.
+    1: { rewrite Regsetaux.FM.empty_iff; contradiction. }
+    all: intros H; eapply IHl; eauto; constructor; auto.
 Qed.
 
 Lemma reg_used_regset_in_all_regs params c r :
@@ -1974,8 +1971,9 @@ Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
     in_builtin_arg a a2 ->
     in_builtin_arg a (BA_addptr a1 a2).
 
-Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
-  In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.
+(* CLEANUP [regs_of_builtin_arg] -> [params_of_builtin_arg] *)
+Lemma in_params_of_builtin_arg_in_builtin_arg r barg :
+  In r (@params_of_builtin_arg reg barg) <-> in_builtin_arg r barg.
 Proof.
   split.
   - induction barg; simpl; intro Hin; try contradiction;
@@ -1992,10 +1990,10 @@ Proof.
   - induction bargs; simpl; intro Hin; try contradiction.
     apply in_app_or in Hin.
     destruct Hin as [Hin | Hin].
-    + constructor; apply in_regs_of_builtin_arg_in_builtin_arg; auto.
+    + constructor; apply in_params_of_builtin_arg_in_builtin_arg; auto.
     + right; auto.
   - induction bargs; simpl; intro Hin; inv Hin.
     + apply in_or_app; left.
-      apply in_regs_of_builtin_arg_in_builtin_arg; auto.
+      apply in_params_of_builtin_arg_in_builtin_arg; auto.
     + apply in_or_app; right; auto.
 Qed.

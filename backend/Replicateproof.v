@@ -1440,7 +1440,9 @@ Section PRESERVATION.
     inv H1.
     unfold smove in *.
     destruct (re r1) eqn:Hr1; inv H2; inv H3;
-      eexists; eexists; split; eauto; constructor; simpl; auto.
+      eexists; eexists; split; eauto;
+      unfold reg_used_in_instr; simpl; apply Regset.union_2;
+      apply Regset.add_1; auto.
   Qed.
 
   Lemma wt_regset_init_regs re params args :
@@ -1514,7 +1516,9 @@ Section PRESERVATION.
       specialize (CODE pc (Iop op args res pc') H); inv CODE.
       assert (Hargs: Forall (reg_used_in_code c) args).
       { apply Forall_forall; intros x Hx;
-          eexists; eexists; split; eauto; constructor; auto. }
+          eexists; eexists; split; eauto;
+          unfold reg_used_in_instr; simpl; apply Regset.union_2;
+          rewrite <- in_regset_of_list; auto. }
       eexists; split.
       + econstructor.
         * eapply exec_Iop; eauto.
@@ -1524,13 +1528,16 @@ Section PRESERVATION.
           2: { eauto. }
           apply Forall_forall; intros r Hin.
           eexists; eexists; split; eauto.
-          constructor; auto.
+          unfold reg_used_in_instr; simpl; apply Regset.union_2;
+            rewrite <- in_regset_of_list; auto.
         * eapply star_step.
           { eapply exec_Iop; eauto.
             eapply match_regs_1_3_eval_operation.
             { eauto. }
-            { eapply res2_not_in_args3 with (l := fun_regs_list f);
-                eauto; try reg_used1.
+            { eapply res2_not_in_args3 with (l := fun_regs_list f); eauto.
+              eapply reg_used_in_code_in_all_regs_list; eexists; eexists; split;
+                eauto; unfold reg_used_in_instr; simpl; apply Regset.union_3;
+                apply Regset.singleton_2; auto.
               apply Forall_forall.
               intros r Hin.
               eapply match_regs_exists_r1' with (args1:=args); eauto. }
@@ -1540,10 +1547,18 @@ Section PRESERVATION.
           { eapply star_step.
             - eapply exec_Iop; eauto.
               eapply regular_eval_operation; eauto.
-              + eapply res2_not_in_args1 with (l := fun_regs_list f);
-                  eauto; try reg_used1; reg_used2.
-              + eapply res3_not_in_args1 with (l := fun_regs_list f);
-                  eauto; try reg_used1; reg_used2.
+              + eapply res2_not_in_args1 with (l := fun_regs_list f); eauto.
+                eapply reg_used_in_code_in_all_regs_list; eexists; eexists;
+                  split; eauto.
+                * unfold reg_used_in_instr; simpl; apply Regset.union_3;
+                    apply Regset.singleton_2; auto; reg_used2.
+                * reg_used2. 
+              + eapply res3_not_in_args1 with (l := fun_regs_list f); eauto.
+                eapply reg_used_in_code_in_all_regs_list; eexists;
+                  eexists; split; eauto;
+                  unfold reg_used_in_instr; simpl; apply Regset.union_3;
+                  apply Regset.singleton_2; auto.
+                reg_used2.
             - apply star_refl.
             - reflexivity. }
           reflexivity.
@@ -1563,7 +1578,9 @@ Section PRESERVATION.
             - rewrite PMap.gss, PMap.gso; eauto with rm_wf.
               rewrite PMap.gss; reflexivity. }
           { assert (Hresused: reg_used_in_code c res).
-            { eexists; eexists; split; eauto; apply reg_used_Iop_res. }
+            { eexists; eexists; split; eauto.
+               unfold reg_used_in_instr; simpl; apply Regset.union_3;
+                 apply Regset.singleton_2; auto. }
             repeat split.
             - rewrite 3!PMap.gso; eauto with rm_inv.
               rewrite PMap.gso; eauto with rm_inv.
@@ -1590,13 +1607,16 @@ Section PRESERVATION.
       specialize (CODE pc (Iload chunk addr args dst pc') H); inv CODE.
       assert (Hargs: Forall (reg_used_in_code c) args).
       { apply Forall_forall; intros x Hx;
-          eexists; eexists; split; eauto; constructor; auto. }
+          eexists; eexists; split; eauto;
+          unfold reg_used_in_instr; simpl; apply Regset.union_2;
+          rewrite <- in_regset_of_list; auto. }
       (* smoveR_inv. *)
       eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto.
-             constructor; auto. }
+           { eexists; eexists; split; eauto;
+               unfold reg_used_in_instr; simpl; apply Regset.union_2;
+               rewrite <- in_regset_of_list; auto. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -1633,8 +1653,10 @@ Section PRESERVATION.
         destruct (peq dst r); subst.
         * rewrite PMap.gss; auto.
         * rewrite PMap.gso; auto.
-        * eapply match_regsets_update; eauto.
-          eexists; eexists; split; eauto; solve [constructor; auto].
+        * eapply match_regsets_update; eauto;
+            eexists; eexists; split; eauto;
+            unfold reg_used_in_instr; simpl; apply Regset.union_3;
+            apply Regset.singleton_2; auto.
 
     - (* exec_Istore *)
       inv Hmatch; inv FUN; simpl in *.
@@ -1649,7 +1671,9 @@ Section PRESERVATION.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
-             destruct Hin; subst; constructor; assumption. }
+             destruct Hin; subst; unfold reg_used_in_instr; simpl.
+             * apply Regset.union_3, Regset.singleton_2; auto.
+             * apply Regset.union_2; rewrite <- in_regset_of_list; auto. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -1671,10 +1695,13 @@ Section PRESERVATION.
         * erewrite <- rs_map_ext; eauto.
           eapply match_regsets_eval_addressing; eauto.
           apply Forall_forall; intros r Hr; eexists; eexists; split; eauto.
-          constructor; auto.
+          unfold reg_used_in_instr; simpl; apply Regset.union_2;
+            rewrite <- in_regset_of_list; auto.
         * rewrite <- Hrs''.
           eapply match_regsets_storev; eauto.
-          eexists; eexists; split; eauto; solve [constructor].
+          eexists; eexists; split; eauto.
+          unfold reg_used_in_instr; simpl;
+            apply Regset.union_3, Regset.singleton_2; auto.
       + econstructor; eauto.
         * econstructor; eauto.
         * eapply match_regsets_ext_r; eauto.
@@ -1695,10 +1722,23 @@ Section PRESERVATION.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
+             (* CLEANUP TODO Make this assertion a lemma
+                OR consider
+                destruct ros in *; unfold reg_used_in_instr; simpl. *)
+             assert (match ros with
+                     | inl r => r :: args
+                     | inr _ => args
+                     end = (regs_of_fn ros) ++ args).
+             { unfold regs_of_fn. destruct ros; auto. }
+             rewrite H5 in Hin.
              apply in_app_or in Hin; destruct Hin as [Hin|Hin].
              - destruct ros; simpl in *; inv Hin; try contradiction.
-               constructor.
-             - constructor; auto. }
+               unfold reg_used_in_instr; simpl; apply Regset.union_2;
+                 apply Regset.add_1; auto.
+             - unfold reg_used_in_instr; simpl. destruct ros.
+               * apply Regset.union_2, Regset.add_2;
+                   rewrite <- in_regset_of_list; auto.
+               * apply Regset.union_2; rewrite <- in_regset_of_list; auto. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -1737,12 +1777,18 @@ Section PRESERVATION.
             etransitivity.
             2: { rewrite <- Hrs''; reflexivity. }
             eapply match_regsets_get; eauto.
-            right; eexists; eexists; split; eauto; constructor. }
+            right; eexists; eexists; split; eauto.
+            unfold reg_used_in_instr; simpl; apply Regset.union_2, Regset.add_1;
+              auto. }
           eauto. }
         { apply sig_function_translated; auto. }
       + erewrite rs_args_rs'_args; eauto.
         2: { apply Forall_forall; intros r' Hr';
-             eexists; eexists; split; eauto; constructor; auto. }
+             eexists; eexists; split; eauto.
+             unfold reg_used_in_instr; simpl.
+             destruct ros; apply Regset.union_2.
+             * apply Regset.add_2; rewrite <- in_regset_of_list; auto.
+             * rewrite <- in_regset_of_list; auto. }
         erewrite rs_map_ext; eauto.
         constructor; auto.
         { inv WT_FN; simpl in *.
@@ -1751,7 +1797,11 @@ Section PRESERVATION.
           erewrite <- rs_map_ext; eauto.
           erewrite <- rs_args_rs'_args; eauto.
           2: { apply Forall_forall; intros x Hx.
-               eexists; eexists; split; eauto; constructor; auto. }
+               eexists; eexists; split; eauto.
+               unfold reg_used_in_instr; simpl.
+               destruct ros; apply Regset.union_2.
+               * apply Regset.add_2; rewrite <- in_regset_of_list; auto.
+               * rewrite <- in_regset_of_list; auto. }
           apply wt_regset_list; auto. }
         { econstructor; eauto.
           - inv WT_FN.
@@ -1759,7 +1809,9 @@ Section PRESERVATION.
             apply wt_instrs in Hcode.
             inv Hcode; auto.
           - eapply match_regsets_ext_r; eauto.
-          - eexists; eexists; split; eauto; solve [constructor; auto].
+          - eexists; eexists; split; eauto.
+            unfold reg_used_in_instr; simpl.
+            destruct ros; apply Regset.union_3, Regset.singleton_2; auto.
           - econstructor; eauto. }
         { apply transf_function_match_fundef; auto. }
 
@@ -1778,10 +1830,18 @@ Section PRESERVATION.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
+             assert (match ros with
+                     | inl r => r :: args
+                     | inr _ => args
+                     end = (regs_of_fn ros) ++ args).
+             { unfold regs_of_fn. destruct ros; auto. }
+             rewrite H1 in Hin.
              apply in_app_or in Hin; destruct Hin as [Hin|Hin].
              - destruct ros; simpl in *; inv Hin; try contradiction.
-               constructor.
-             - constructor; auto. }
+               unfold reg_used_in_instr; simpl; apply Regset.add_1; auto.
+             - destruct ros; unfold reg_used_in_instr; simpl.
+               * apply Regset.add_2. rewrite <- in_regset_of_list; auto.
+               * rewrite <- in_regset_of_list; auto. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -1820,13 +1880,18 @@ Section PRESERVATION.
             etransitivity.
             2: { rewrite <- Hrs''; reflexivity. }
             eapply match_regsets_get; eauto.
-            right; eexists; eexists; split; eauto; constructor. }
+            right; eexists; eexists; split; eauto.
+            unfold reg_used_in_instr; simpl; apply Regset.add_1; auto. }
           eauto. }
         { apply sig_function_translated; auto. }
         { eauto. }
       + erewrite rs_args_rs'_args; eauto.
         2: { apply Forall_forall; intros r' Hr';
-             eexists; eexists; split; eauto; constructor; auto. }
+             eexists; eexists; split; eauto.
+             unfold reg_used_in_instr; simpl.
+             destruct ros.
+             * apply Regset.add_2; rewrite <- in_regset_of_list; auto.
+             * rewrite <- in_regset_of_list; auto. }
         erewrite rs_map_ext; eauto.
         constructor; auto.
         { inv WT_FN; simpl in *.
@@ -1835,7 +1900,11 @@ Section PRESERVATION.
           erewrite <- rs_map_ext; eauto.
           erewrite <- rs_args_rs'_args; eauto.
           2: { apply Forall_forall; intros x Hx.
-               eexists; eexists; split; eauto; constructor; auto. }
+               eexists; eexists; split; eauto.
+               unfold reg_used_in_instr; simpl.
+               destruct ros.
+               * apply Regset.add_2; rewrite <- in_regset_of_list; auto.
+               * rewrite <- in_regset_of_list; auto. }
           apply wt_regset_list; auto. }
         { eapply match_stackframes_sig_proper.
           2: { eauto. }
@@ -1860,7 +1929,9 @@ Section PRESERVATION.
         eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
-             { eexists; eexists; split; eauto; constructor; auto. }
+             { eexists; eexists; split; eauto.
+               unfold reg_used_in_instr; simpl; apply Regset.union_2;
+                 rewrite <- in_regset_of_list; auto. }
              assert (Heq: rs' # r1 = rs # r1).
              { destruct (rm # r1) eqn:Hr1.
                specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -1887,7 +1958,8 @@ Section PRESERVATION.
                 rewrite <- Hrs''.
                 eapply match_regsets_get; eauto.
                 right; eexists; eexists; split; eauto.
-                constructor.
+                unfold reg_used_in_instr; simpl; apply Regset.union_2.
+                rewrite <- in_regset_of_list. 
                 apply in_regs_of_builtin_args_exists_in_builtin_arg.
                 apply Exists_exists.
                 eexists; split; eauto. }
@@ -1902,7 +1974,9 @@ Section PRESERVATION.
         eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
-             { eexists; eexists; split; eauto; constructor; auto. }
+             { eexists; eexists; split; eauto.
+               unfold reg_used_in_instr; simpl; apply Regset.union_2;
+                 rewrite <- in_regset_of_list; auto. }
              assert (Heq: rs' # r1 = rs # r1).
              { destruct (rm # r1) eqn:Hr1.
                specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -1937,7 +2011,8 @@ Section PRESERVATION.
                 rewrite <- Hrs''.
                 eapply match_regsets_get; eauto.
                 right; eexists; eexists; split; eauto.
-                constructor.
+                unfold reg_used_in_instr; simpl; apply Regset.union_2;
+                  rewrite <- in_regset_of_list.
                 apply in_regs_of_builtin_args_exists_in_builtin_arg.
                 apply Exists_exists.
                 eexists; split; eauto. }
@@ -1953,7 +2028,8 @@ Section PRESERVATION.
           * rewrite PMap.gss; auto.
           * rewrite PMap.gso; auto.
           * eapply match_regsets_update; eauto.
-            eexists; eexists; split; eauto; solve [constructor; auto]. }
+            eexists; eexists; split; eauto.
+            unfold reg_used_in_instr; simpl; apply Regset.union_3, Regset.singleton_2; auto. }
 
     - (* exec_Icond *)
       inv Hmatch.
@@ -1969,7 +2045,8 @@ Section PRESERVATION.
       eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto; constructor; auto. }
+           { eexists; eexists; split; eauto.
+             unfold reg_used_in_instr; simpl; rewrite <- in_regset_of_list; auto. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -1995,7 +2072,8 @@ Section PRESERVATION.
               + erewrite rs_map_ext; eauto.
                 apply lessdef_list_refl.
               + apply Forall_forall; intros x Hx.
-                eexists; eexists; split; eauto; constructor; auto.
+                eexists; eexists; split; eauto.
+                unfold reg_used_in_instr; simpl; rewrite <- in_regset_of_list; auto.
             - apply Memory.Mem.extends_refl. } }
         apply star_refl.
       + econstructor; eauto.
@@ -2013,7 +2091,7 @@ Section PRESERVATION.
       pose proof H as Hcode.
       specialize (CODE pc (Ijumptable arg tbl) Hcode); inv CODE.
       assert (Hused: reg_used_in_code c arg).
-      { eexists; eexists; split; eauto; constructor. }
+      { eexists; eexists; split; eauto; constructor; auto. }
       eapply maj_voteR_step with (rs := rs') in VOTE.
       2: { erewrite <- match_regsets_get; eauto; right; auto. }
       2: { erewrite <- match_regsets_get; eauto.
@@ -2056,7 +2134,7 @@ Section PRESERVATION.
           apply wt_instrs in Hcode; inv Hcode; auto.
       + (* With return value *)
         assert (Hused: reg_used_in_code c arg1).
-        { eexists; eexists; split; eauto; constructor. }
+        { eexists; eexists; split; eauto; constructor; auto. }
         eapply maj_voteR_step with (rs := rs') in VOTE.
         2: { erewrite <- match_regsets_get; eauto; right; auto. }
         2: { erewrite <- match_regsets_get; eauto.
