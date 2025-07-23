@@ -169,6 +169,8 @@ End WT_INSTR.
 
 Record wt_function (f: function) (env: regenv): Prop :=
   mk_wt_function {
+    wt_args_not_void:
+      Forall (fun xty => xty <> Xvoid) (sig_args f.(fn_sig));
     wt_params:
       map env f.(fn_params) = proj_sig_args f.(fn_sig);
     wt_norepet:
@@ -350,12 +352,21 @@ Definition check_params_norepet (params: list reg): res unit :=
   then OK tt
   else Error(msg "duplicate parameters").
 
+Definition check_args_not_void (arg_xtys : list xtype): res unit :=
+  if forallb (fun xty => match xty with
+                      | Xvoid => false
+                      | _ => true
+                      end) arg_xtys
+  then OK tt
+  else Error(msg "void argument type").
+
 Definition type_function : res regenv :=
   do e1 <- type_code S.initial;
   do e2 <- S.set_list e1 f.(fn_params) (proj_sig_args f.(fn_sig));
   do te <- S.solve e2;
   do x1 <- check_params_norepet f.(fn_params);
   do x2 <- check_successor f.(fn_entrypoint);
+  do _ <- check_args_not_void (sig_args f.(fn_sig));
   OK te.
 
 (** ** Soundness proof *)
@@ -583,6 +594,12 @@ Proof.
   assert (SAT0: S.satisf env x0) by (eapply S.solve_sound; eauto).
   assert (SAT1: S.satisf env x) by (eauto with ty).
   constructor.
+  - unfold check_args_not_void in EQ4.
+    eapply Forall_impl.
+    2: { apply Forall_forall.
+         apply forallb_forall.
+         destruct (forallb _ _) eqn:Hforall; try discriminate; eauto. }
+    simpl; intros [] Ha; discriminate.
 - (* type of parameters *)
   eapply S.set_list_sound; eauto.
 - (* parameters are unique *)
@@ -754,6 +771,19 @@ Proof.
   apply H; auto.
 Qed.
 
+Lemma check_args_not_void_complete:
+  Forall (fun xty : xtype => xty <> Xvoid) (sig_args (fn_sig f)) ->
+  check_args_not_void (sig_args (fn_sig f)) = OK tt.
+Proof.
+  intro Hforall.
+  unfold check_args_not_void.
+  eapply Forall_impl in Hforall.
+  { rewrite Forall_forall in Hforall.
+    apply forallb_forall in Hforall.
+    rewrite Hforall; reflexivity. }
+  intros [] Ha; auto.
+Qed.
+
 Theorem type_function_complete:
   forall te, wt_function f te -> exists te, type_function = OK te.
 Proof.
@@ -765,7 +795,8 @@ Proof.
   exists te'; unfold type_function.
   rewrite A; simpl. rewrite C; simpl. rewrite E; simpl.
   unfold check_params_norepet. rewrite pred_dec_true; auto. simpl.
-  rewrite check_successor_complete by auto. auto.
+  rewrite check_successor_complete by auto.
+  rewrite check_args_not_void_complete; auto.
 Qed.
 
 End INFERENCE.
@@ -1000,5 +1031,3 @@ Proof.
 Qed.
 
 End SUBJECT_REDUCTION.
-
-

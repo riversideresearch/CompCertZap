@@ -168,6 +168,23 @@ Section PRESERVATION.
     destruct (transf_fun x0 f _); inv EQ1; auto.
   Qed.
 
+  Lemma find_function_wt_fundef ros rs fd :
+    find_function ge ros rs = Some fd ->
+    wt_fundef fd.
+  Proof.
+    unfold find_function.
+    intro H; destruct ros.
+    - apply functions_translated in H.
+      destruct H as (cu & tf & Hfind & Htransf & Hlink).
+      apply transf_function_match_fundef in Htransf.
+      destruct Htransf; econstructor; eauto.
+    - destruct (Genv.find_symbol ge i); try discriminate.
+      apply function_ptr_translated in H.
+      destruct H as (cu & tf & Hfind & Htransf & Hlink).
+      apply transf_function_match_fundef in Htransf.
+      destruct Htransf; econstructor; eauto.
+  Qed.
+
   Lemma stacksize_translated f tf :
     transf_function f = OK tf -> tf.(fn_stacksize) = f.(fn_stacksize).
   Proof.

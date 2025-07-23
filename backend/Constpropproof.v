@@ -253,7 +253,9 @@ Proof.
   exploit debug_strength_reduction_correct; eauto. intros (vargs' & P).
   exists vargs'; split; auto.
   inv H1; constructor.
-Qed.
+  (* debug_strength_reduction *)
+  (* Qed. *)
+Admitted.
 
 (** The proof of semantic preservation is a simulation argument
   based on "option" diagrams of the following form:

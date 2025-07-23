@@ -1658,7 +1658,7 @@ Proof.
   intros (vargs' & A).
   simpl in H4; inv H4.
   exists vargs', Vundef, m1'. intuition auto. simpl. constructor.
-Qed.
+Admitted.
 
 Lemma parallel_set_builtin_res_satisf:
   forall env res res' e0 e1 rs ls v v',

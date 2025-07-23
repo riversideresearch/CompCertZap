@@ -369,6 +369,7 @@ Proof.
   econstructor.
   constructor. eexact E1. constructor.
   simpl; constructor.
+  { 
   simpl; auto.
   traceEq.
 - eapply star_step; eauto.

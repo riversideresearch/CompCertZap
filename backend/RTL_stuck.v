@@ -4,6 +4,7 @@ Require Import
   Coqlib
   Errors
   Events
+  Globalenvs
   Integers
   Maps
   Op
@@ -14,17 +15,18 @@ Require Import
   RTLtyping
   Liveness
   Replicate
+  Replicateproof
+  Replicatespec
   Values
 .
 Import ListNotations.
 
-(* Inductive step: state -> trace -> state -> Prop := *)
-
-(* Lemma vundef_arg_stuck ge (s s' : RTL.state) (t : trace) pc : *)  
-(* ~ RTL.step ge s t s'. *)
-
 Section stuck.
-  Variable ge : genv.
+  Variable prog: program.
+  Variable tprog: program.
+  Hypothesis TRANSF: match_prog prog tprog.
+  Let ge := Genv.globalenv prog.
+  Let tge := Genv.globalenv tprog.
 
   Lemma eval_addressing_vundef sp addr rs args :
     Exists (fun arg => rs # arg = Vundef) args ->
@@ -35,7 +37,7 @@ Section stuck.
     unfold eval_addressing.
     destruct Archi.ptr64.
     - unfold eval_addressing64.
-      destruct addr; auto; repeat (destruct args; simpl; auto).
+      destruct addr; auto; repeat (destruct args; simpl; auto); try solve [inv Hargs].
       + inv Hargs; auto.
         2: { inv H0. }
         unfold Val.addl.
@@ -56,8 +58,6 @@ Section stuck.
         { unfold Val.addl; rewrite H1; simpl.
           destruct (rs # p); auto. }
         inv H1.
-      + inv Hargs.
-      + inv Hargs.
     - unfold eval_addressing32.
       destruct addr; repeat (destruct args; simpl; auto).
       + inv Hargs; auto.
@@ -82,7 +82,7 @@ Section stuck.
           destruct (rs # p); auto. }
         inv H1.
   Qed.
-        
+
   Lemma vundef_iload_stuck stk sp rs m f pc chunk addr args dst pc' t s' :
     (fn_code f)!pc = Some (Iload chunk addr args dst pc') ->
     Exists (fun arg => rs # arg = Vundef) args ->
@@ -95,10 +95,9 @@ Section stuck.
     eapply eval_addressing_vundef in Hargs.
     destruct Hargs as [Heval | Heval].
     { rewrite Heval in H8; discriminate. }
-    rewrite Heval in H8; inv H8.
-    inv H9.
+    rewrite Heval in H8; inv H8; inv H9.
   Qed.
-  
+
   Lemma vundef_istore_stuck stk sp rs m f pc chunk addr args src pc' t s' :
     (fn_code f)!pc = Some (Istore chunk addr args src pc') ->
     Exists (fun arg => rs # arg = Vundef) args \/ rs # src = Vundef ->
@@ -110,21 +109,51 @@ Section stuck.
     - eapply eval_addressing_vundef in Hargs.
       destruct Hargs as [Heval | Heval].
       { rewrite Heval in H8; discriminate. }
-      rewrite Heval in H8; inv H8.
-      inv H9.
+      rewrite Heval in H8; inv H8; inv H9.
     - unfold Memory.Mem.storev in H9.
       destruct a; try congruence.
       (* STUCK *)
   Abort.
 
-  Lemma vundef_function_internal_stuck s f args m t s'  :
+  Lemma exists_vundef_not_has_argtype_list args xtys :
+    Exists (eq Vundef) args ->
+    Forall (fun xty => xty <> Xvoid) xtys ->
+    ~ Val.has_argtype_list args xtys.
+  Proof.
+    revert xtys; induction args; intros xtys Hex Hall Hty.
+    { inv Hex. }
+    inv Hex.
+    - inv Hty.
+      destruct b1; try contradiction.
+      rewrite Forall_forall in Hall.
+      eapply Hall; eauto.
+      left; reflexivity.
+    - inv Hty; auto.
+      inv Hall.
+      eapply IHargs; eauto.
+  Qed.
+
+  Lemma wt_function_vundef_arg re f args :
+    wt_function f re ->
+    Exists (eq Vundef) args ->
+    ~ Val.has_argtype_list args (sig_args (fn_sig f)).
+  Proof.
+    intros Hwt Hex Hargs.
+    eapply exists_vundef_not_has_argtype_list.
+    3: { eauto. }
+    { auto. }
+    destruct Hwt; auto.
+  Qed.
+
+  Lemma vundef_function_internal_stuck re s f args m t s'  :
+    wt_function f re ->
     Exists (eq Vundef) args ->
     step ge (Callstate s (Internal f) args m) t s' ->
     False.
   Proof.
-    intros Hargs Hstep; inv Hstep.
-    (* STUCK *)
-  Admitted.
+    intros Hwt Hargs Hstep; inv Hstep.
+    eapply wt_function_vundef_arg; eauto.
+  Qed.
 
   Lemma vundef_function_external_stuck s ef args m t s'  :
     Exists (eq Vundef) args ->
@@ -138,7 +167,25 @@ Section stuck.
     auto.
   Qed.
 
-  Lemma vundef_icall_stuck stk sp rs m f pc sig ros args res pc' t s' t' s'' :
+  Lemma vundef_icall_stuck stk sp rs m f pc sig ros args res pc' t s' :
+    (fn_code f)!pc = Some (Icall sig ros args res pc') ->
+    (Exists (fun arg => rs # arg = Vundef) args \/
+       exists r, ros = inl r /\ rs # r = Vundef) ->
+    step ge (State stk f sp pc rs m) t s' ->
+    False.
+  Proof.
+    intros Hpc [Hargs | [r Hros]] Hstep; inv Hstep; try congruence;
+      rewrite Hpc in H7; inv H7.
+    - (* STUCK *)
+      admit.
+    - destruct Hros as [? Hr]; subst.
+      simpl in H8.
+      unfold Globalenvs.Genv.find_funct in H8.
+      rewrite Hr in H8; discriminate.
+  Abort.
+
+  Lemma vundef_icall_stuck' stk sp rs m f pc sig ros args res pc' t s' t' s'' :
+    (* wt_function f re -> *)
     (fn_code f)!pc = Some (Icall sig ros args res pc') ->
     (Exists (fun arg => rs # arg = Vundef) args \/
        exists r, ros = inl r /\ rs # r = Vundef) ->
@@ -148,24 +195,38 @@ Section stuck.
   Proof.
     intros Hpc [Hargs | [r Hros]] Hstep1 Hstep2; inv Hstep1; try congruence;
       rewrite Hpc in H7; inv H7.
-    - destruct fd.
-      + eapply vundef_function_internal_stuck.
-        2: { eauto. }
-        apply Exists_map.
+    - assert (Exists (eq Vundef) rs ## args0).
+      { apply Exists_map.
         eapply Exists_impl; eauto.
-        intros; simpl; auto.
-      + eapply vundef_function_external_stuck.
-        2: { eauto. }
-        apply Exists_map.
-        eapply Exists_impl; eauto.
-        intros; simpl; auto.
+        intros; simpl; auto. }
+      eapply find_function_wt_fundef in H8; eauto.
+      destruct fd.
+      + inv H8; eapply vundef_function_internal_stuck; eauto.
+      + eapply vundef_function_external_stuck; eauto.
     - destruct Hros as [? Hr]; subst.
       simpl in H8.
       unfold Globalenvs.Genv.find_funct in H8.
       rewrite Hr in H8; discriminate.
   Qed.
 
-  Lemma vundef_itailcall_stuck stk sp rs m f pc sig ros args t s' t' s'' :
+  Lemma vundef_itailcall_stuck stk sp rs m f pc sig ros args t s' :
+    (fn_code f)!pc = Some (Itailcall sig ros args) ->
+    (Exists (fun arg => rs # arg = Vundef) args \/
+       exists r, ros = inl r /\ rs # r = Vundef) ->
+    step ge (State stk f sp pc rs m) t s' ->
+    False.
+  Proof.
+    intros Hpc [Hargs | [r Hros]] Hstep; inv Hstep; try congruence;
+      rewrite Hpc in H7; inv H7.
+    - (* STUCK *)
+      admit.
+    - destruct Hros as [? Hr]; subst.
+      simpl in H8.
+      unfold Globalenvs.Genv.find_funct in H8.
+      rewrite Hr in H8; discriminate.
+  Abort.
+
+  Lemma vundef_itailcall_stuck' stk sp rs m f pc sig ros args t s' t' s'' :
     (fn_code f)!pc = Some (Itailcall sig ros args) ->
     (Exists (fun arg => rs # arg = Vundef) args \/
        exists r, ros = inl r /\ rs # r = Vundef) ->
@@ -175,21 +236,18 @@ Section stuck.
   Proof.
     intros Hpc [Hargs | [r Hros]] Hstep1 Hstep2; inv Hstep1; try congruence;
       rewrite Hpc in H7; inv H7.
-    - inv Hstep2.
-      + admit.
-        (* wt_function *)
-        (* Val.has_argtype_list *)
-      + destruct (external_call_spec ef).
-        eapply ec_undef.
-        2: { eauto. }
-        apply Exists_map.
+    - assert (Exists (eq Vundef) rs ## args0).
+      { apply Exists_map.
         eapply Exists_impl; eauto.
-        intros; simpl; auto.        
+        intros; simpl; auto. }
+      destruct fd.
+      + eapply vundef_function_internal_stuck; eauto.
+      + eapply vundef_function_external_stuck; eauto.
     - destruct Hros as [? Hr]; subst.
       simpl in H8.
       unfold Globalenvs.Genv.find_funct in H8.
       rewrite Hr in H8; discriminate.
-  Admitted.
+  Qed.
 
   Inductive builtin_arg_vundef (rs : regset) : builtin_arg reg -> Prop :=
   | builtin_arg_vundef_BA : forall r,
@@ -220,13 +278,10 @@ Section stuck.
       rewrite H4.
       unfold Val.longofwords.
       destruct vhi; reflexivity.
-    - destruct Archi.ptr64.
-      + admit.
-      + admit.
-    - destruct Archi.ptr64.
-      + admit.
-      + admit.
-  Admitted.
+    - destruct Archi.ptr64; apply IHa1 in H2; auto; rewrite H2; reflexivity.
+    - destruct Archi.ptr64; apply IHa2 in H4; auto; rewrite H4;
+        unfold Val.addl; destruct v1; reflexivity.
+  Qed.
 
   Lemma eval_builtin_args_vundef rs args vargs sp m :
     Exists (fun arg => builtin_arg_vundef rs arg) args ->
@@ -240,8 +295,7 @@ Section stuck.
     inv Hargs.
     - left; symmetry.
       eapply eval_builtin_arg_vundef; eauto.
-    - right.
-      apply IHargs; auto.
+    - right; apply IHargs; auto.
   Qed.
 
   Lemma vundef_ibuiltin_stuck stk sp rs m f pc ef args res pc' t s' :
@@ -290,17 +344,17 @@ Section stuck.
     (* STUCK *)
   Abort.
 
-  (* Lemma vundef_ireturn_stuck stk sp rs m f pc r t s' t' s'' : *)
-  (*   (fn_code f)!pc = Some (Ireturn (Some r)) -> *)
-  (*   rs # r = Vundef -> *)
-  (*   step ge (State stk f sp pc rs m) t s' -> *)
-  (*   step ge s' t' s'' -> *)
-  (*   False. *)
-  (* Proof. *)
-  (*   intros Hpc Hargs Hstep1 Hstep2; inv Hstep1; try congruence. *)
-  (*   rewrite Hpc in H7; inv H7. *)
-  (*   inv Hstep2. *)
-  
-End stuck.
+  (** I don't think we want this to get stuck because vres is allowed
+      to be Vundef for void functions. See [regmap_optget or Vundef
+      rs] in exec_Ireturn rule in RTL.v. We want to get stuck on
+      exec_Ireturn when it returns [Some Vundef], but not when it
+      returns None which then becomes Vundef in the Returnstate. *)
+  Lemma vundef_return_stuck f res sp pc rs stk vres m r t s' :
+    rs # r = Vundef ->
+    step ge (Returnstate (Stackframe res f sp pc rs :: stk) vres m) t s' ->
+    False.
+  Proof.
+    intros Hargs Hstep; inv Hstep; try congruence.
+  Abort.
 
-Search Regset.empty.
+End stuck.

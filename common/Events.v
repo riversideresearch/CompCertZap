@@ -1417,7 +1417,30 @@ Qed.
 Inductive extcall_debug_sem (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_debug_sem_intro: forall vargs m,
+      Forall (fun varg => varg <> Vundef) vargs ->
       extcall_debug_sem ge vargs m E0 Vundef m.
+
+Lemma lessdef_list_forall_not_vundef vargs vargs' :
+  Val.lessdef_list vargs vargs' ->
+  Forall (fun varg : val => varg <> Vundef) vargs ->
+  Forall (fun varg : val => varg <> Vundef) vargs'.
+Proof.
+  revert vargs'; induction vargs; intros vargs' Hlessdef Hall;
+    inv Hlessdef; auto; inv Hall.
+  constructor; auto.
+  inv H1; auto.
+Qed.
+
+Lemma inject_list_forall_not_vundef f vargs vargs' :
+  Val.inject_list f vargs vargs' ->
+  Forall (fun varg : val => varg <> Vundef) vargs ->
+  Forall (fun varg : val => varg <> Vundef) vargs'.
+Proof.
+  revert vargs'; induction vargs; intros vargs' Hlessdef Hall;
+    inv Hlessdef; auto; inv Hall.
+  constructor; auto.
+  inv H1; auto; congruence.
+Qed.
 
 Lemma extcall_debug_ok:
   forall targs,
@@ -1426,7 +1449,11 @@ Lemma extcall_debug_ok:
 Proof.
   intros; constructor; intros.
 - intro Hdebug; inv Hdebug.
-  admit.
+  apply Forall_Exists_neg in H0.
+  apply H0.
+  eapply Exists_impl.
+  2: { eauto. }
+  auto.
 (* well typed *)
 - inv H. simpl. auto.
 (* symbols *)
@@ -1441,19 +1468,20 @@ Proof.
 - inv H.
   exists Vundef; exists m1'; intuition auto with mem.
   econstructor; eauto.
+  eapply lessdef_list_forall_not_vundef; eauto.
 (* mem injects *)
 - inv H0.
   exists f; exists Vundef; exists m1'; intuition auto with mem.
-  econstructor; eauto.
+  econstructor; eauto; eapply inject_list_forall_not_vundef; eauto.
   red; intros; congruence.
 (* trace length *)
 - inv H; simpl; lia.
 (* receptive *)
-- inv H; inv H0. exists Vundef, m1; constructor.
+- inv H; inv H0. exists Vundef, m1; constructor; auto.
 (* determ *)
 - inv H; inv H0.
   split. constructor. auto.
-Admitted.
+Qed.
 
 (** ** Semantics of known built-in functions. *)
 
