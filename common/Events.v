@@ -622,6 +622,18 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
   f b1 = None -> f' b1 = Some(b2, delta) ->
   ~Mem.valid_block m1 b1 /\ ~Mem.valid_block m2 b2.
 
+(* Inductive ec_undef (sem: extcall_sem) : Prop := *)
+(* | ec_undef_stuck : *)
+(*   (forall ge vargs m1 t vres m2, *)
+(*       Exists (eq Vundef) vargs -> *)
+(*       ~ sem ge vargs m1 t vres m2) -> *)
+(*   ec_undef sem *)
+(* | ec_undef_identity : *)
+(*   (forall ge vargs m1 t vres m2, *)
+(*       sem ge vargs m1 t vres m2 -> *)
+(*       t = E0 /\ vres = Vundef /\ m2 = m1) -> *)
+(*   ec_undef sem. *)
+
 Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
   mk_extcall_properties {
 

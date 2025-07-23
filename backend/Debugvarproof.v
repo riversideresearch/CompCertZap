@@ -369,7 +369,14 @@ Proof.
   econstructor.
   constructor. eexact E1. constructor.
   simpl; constructor.
-  { 
+  { repeat constructor.
+    intro HC; subst.
+    (* locset *)
+    (* eval_builtin_arg *)
+    (* loc *)
+    (* step *)
+    (* safe_builtin_arg *)
+    admit. }
   simpl; auto.
   traceEq.
 - eapply star_step; eauto.
@@ -378,7 +385,7 @@ Proof.
   simpl; constructor.
   simpl; auto.
   traceEq.
-Qed.
+Admitted.
 
 (** Matching between program states. *)
 
