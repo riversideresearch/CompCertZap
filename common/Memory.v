@@ -535,16 +535,38 @@ Qed.
   Return the updated memory store, or [None] if the accessed bytes
   are not writable. *)
 
+(* Program Definition store (chunk: memory_chunk) (m: mem) (b: block) (ofs: Z) (v: val): option mem := *)
+(*   if valid_access_dec m chunk b ofs Writable then *)
+(*     Some (mkmem (PMap.set b *)
+(*                           (setN (encode_val chunk v) ofs (m.(mem_contents)#b)) *)
+(*                           m.(mem_contents)) *)
+(*                 m.(mem_access) *)
+(*                 m.(nextblock) *)
+(*                 _ _ _) *)
+(*   else *)
+(*     None. *)
+(* Next Obligation. apply access_max. Qed. *)
+(* Next Obligation. apply nextblock_noaccess; auto. Qed. *)
+(* Next Obligation. *)
+(*   rewrite PMap.gsspec. destruct (peq b0 b). *)
+(*   rewrite setN_default. apply contents_default. *)
+(*   apply contents_default. *)
+(* Qed. *)
+
 Program Definition store (chunk: memory_chunk) (m: mem) (b: block) (ofs: Z) (v: val): option mem :=
-  if valid_access_dec m chunk b ofs Writable then
-    Some (mkmem (PMap.set b
-                          (setN (encode_val chunk v) ofs (m.(mem_contents)#b))
-                          m.(mem_contents))
+  match v with
+  | Vundef => None
+  | _ =>
+      if valid_access_dec m chunk b ofs Writable then
+        Some (mkmem (PMap.set b
+                       (setN (encode_val chunk v) ofs (m.(mem_contents)#b))
+                       m.(mem_contents))
                 m.(mem_access)
-                m.(nextblock)
-                _ _ _)
-  else
-    None.
+                    m.(nextblock)
+                        _ _ _)
+      else
+        None
+  end.
 Next Obligation. apply access_max. Qed.
 Next Obligation. apply nextblock_noaccess; auto. Qed.
 Next Obligation.
@@ -962,14 +984,15 @@ Qed.
 
 Theorem valid_access_store:
   forall m1 chunk b ofs v,
+    v <> Vundef ->
   valid_access m1 chunk b ofs Writable ->
   { m2: mem | store chunk m1 b ofs v = Some m2 }.
 Proof.
   intros.
   unfold store.
-  destruct (valid_access_dec m1 chunk b ofs Writable).
-  eauto.
-  contradiction.
+  destruct v;
+    destruct (valid_access_dec m1 chunk b ofs Writable);
+    eauto; contradiction.
 Defined.
 
 Local Hint Resolve valid_access_store: mem.
@@ -981,26 +1004,31 @@ Variable b: block.
 Variable ofs: Z.
 Variable v: val.
 Variable m2: mem.
+Hypothesis Hv: v <> Vundef.
 Hypothesis STORE: store chunk m1 b ofs v = Some m2.
 
 Lemma store_access: mem_access m2 = mem_access m1.
 Proof.
-  unfold store in STORE. destruct ( valid_access_dec m1 chunk b ofs Writable); inv STORE.
-  auto.
+  unfold store in STORE.
+  destruct v;
+    destruct ( valid_access_dec m1 chunk b ofs Writable); inv STORE;
+    auto.
 Qed.
 
 Lemma store_mem_contents:
   mem_contents m2 = PMap.set b (setN (encode_val chunk v) ofs m1.(mem_contents)#b) m1.(mem_contents).
 Proof.
-  unfold store in STORE. destruct (valid_access_dec m1 chunk b ofs Writable); inv STORE.
-  auto.
+  unfold store in STORE.
+  destruct v;
+    destruct (valid_access_dec m1 chunk b ofs Writable); inv STORE;
+    auto.
 Qed.
 
 Theorem perm_store_1:
   forall b' ofs' k p, perm m1 b' ofs' k p -> perm m2 b' ofs' k p.
 Proof.
   intros.
- unfold perm in *. rewrite store_access; auto.
+  unfold perm in *. rewrite store_access; auto.
 Qed.
 
 Theorem perm_store_2:
@@ -1015,8 +1043,10 @@ Theorem nextblock_store:
   nextblock m2 = nextblock m1.
 Proof.
   intros.
-  unfold store in STORE. destruct ( valid_access_dec m1 chunk b ofs Writable); inv STORE.
-  auto.
+  unfold store in STORE.
+  destruct v;
+    destruct ( valid_access_dec m1 chunk b ofs Writable); inv STORE;
+    auto.
 Qed.
 
 Theorem store_valid_block_1:
@@ -1050,9 +1080,11 @@ Qed.
 Theorem store_valid_access_3:
   valid_access m1 chunk b ofs Writable.
 Proof.
-  unfold store in STORE. destruct (valid_access_dec m1 chunk b ofs Writable).
-  auto.
-  congruence.
+  unfold store in STORE.
+  destruct v;
+    destruct (valid_access_dec m1 chunk b ofs Writable);
+    auto;
+    congruence.
 Qed.
 
 Local Hint Resolve store_valid_access_1 store_valid_access_2 store_valid_access_3: mem.
@@ -1186,6 +1218,7 @@ Local Hint Resolve store_valid_access_1 store_valid_access_2
 
 Lemma load_store_overlap:
   forall chunk m1 b ofs v m2 chunk' ofs' v',
+    v <> Vundef ->
   store chunk m1 b ofs v = Some m2 ->
   load chunk' m2 b ofs' = Some v' ->
   ofs' + size_chunk chunk' > ofs ->
@@ -1221,7 +1254,7 @@ Proof.
 + left; split. lia. unfold c'. simpl. apply setN_in.
   assert (Z.of_nat (length (mv1 :: mvl)) = size_chunk chunk).
   { rewrite <- ENC; rewrite encode_val_length. rewrite size_chunk_conv; auto. }
-  simpl length in H3. rewrite Nat2Z.inj_succ in H3. lia.
+  simpl length in H4. rewrite Nat2Z.inj_succ in H4. lia.
 (* If ofs > ofs':  the load reads (at ofs) the first byte from the write.
        ofs'   ofs   ofs'+|chunk'|
                [-------------------]  write

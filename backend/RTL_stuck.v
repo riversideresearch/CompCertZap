@@ -112,6 +112,7 @@ Section stuck.
       rewrite Heval in H8; inv H8; inv H9.
     - unfold Memory.Mem.storev in H9.
       destruct a; try congruence.
+      
       (* STUCK *)
   Abort.
 

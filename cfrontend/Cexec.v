@@ -557,8 +557,16 @@ Definition do_ef_annot_val (text: string) (targ: typ)
 
 Definition do_ef_debug (kind: positive) (text: ident) (targs: list typ)
   (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
-  (* if existsb (Val.eq Vundef) vargs then None else *)
-  Some(w, E0, Vundef, m).
+  (* if existsb (fun v => match v with *)
+  (*                   | Vundef => true *)
+  (*                   | _ => false *)
+  (*                   end) vargs then None else *)
+  if forallb (fun v => match v with
+                    | Vundef => false
+                    | _ => true
+                    end) vargs
+  then Some(w, E0, Vundef, m)
+  else None.
 
 Definition do_builtin_or_external (name: string) (sg: signature)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
@@ -583,6 +591,15 @@ Definition do_external (ef: external_function):
   | EF_inline_asm text sg clob => do_inline_assembly text sg ge
   | EF_debug kind text targs => do_ef_debug kind text targs
   end.
+
+(* Lemma existsb_negb_forallb {A : Type} (f : A -> bool) (l : list A) : *)
+(*   existsb f l = negb (forallb (fun x => negb (f x)) l). *)
+(* Proof. *)
+(*   induction l; simpl; auto. *)
+(*   rewrite negb_andb. *)
+(*   rewrite negb_involutive. *)
+(*   f_equal; auto. *)
+(* Qed. *)
 
 Lemma do_ef_external_sound:
   forall ef w vargs m w' t vres m',
@@ -649,8 +666,10 @@ Proof with try congruence.
   eapply do_inline_assembly_sound; eauto.
 - (* EF_debug *)
   unfold do_ef_debug. mydestr. split; constructor.
-  admit.
-Admitted.
+  rewrite forallb_forall in Heqb.
+  apply Forall_forall; intuition; subst.
+  apply Heqb in H; discriminate.
+Qed.
 
 Lemma do_ef_external_complete:
   forall ef w vargs m w' t vres m',
@@ -703,7 +722,13 @@ Proof.
 - (* EF_inline_asm *)
   eapply do_inline_assembly_complete; eauto.
 - (* EF_debug *)
-  inv H. inv H0. reflexivity.
+  inv H. inv H0.
+  unfold do_ef_debug.
+  eapply Forall_impl in H1.
+  { rewrite Forall_forall in H1.
+    apply forallb_forall in H1.
+    rewrite H1. reflexivity. }
+  intuition; destruct a; auto.
 Qed.
 
 (** * Reduction of expressions *)
