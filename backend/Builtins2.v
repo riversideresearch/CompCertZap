@@ -273,9 +273,9 @@ Lemma vote_long_compat_inject j v1 v1' v2 v2' v3 v3' :
 Proof.
   unfold vote_long.
   intros H0 H1 H2.
-  inv H0; simpl; auto; inv H1; inv H2; simpl; auto.
-  - repeat destruct (Int64.eq_dec _ _); subst; simpl; auto.
-  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
+  inv H0; simpl; auto; inv H1; inv H2; simpl; auto;
+    repeat destruct (Int64.eq_dec _ _); subst; simpl; auto;
+    destruct Archi.ptr64 eqn:Harchi; simpl; auto;
     repeat ((try destruct (eq_block _ _); subst; simpl);
             (try destruct (Ptrofs.eq_dec _ _); subst; simpl);
             (try solve [econstructor; eauto; congruence]);

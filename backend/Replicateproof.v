@@ -824,14 +824,23 @@ Section PRESERVATION.
         rewrite <- Hr3, <- Hr2.
         destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
         2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Int64.eq_dec i i); simpl; try congruence.
-          rewrite PMap.gss; reflexivity.
-        * destruct Archi.ptr64 eqn:Harchi; simpl.
-          2: { simpl in Hact; congruence. }
-          destruct (eq_block _ _); simpl; try congruence.
-          destruct (Ptrofs.eq_dec _ _); simpl; try congruence.
+        (* destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]. *)
+        (* * rewrite PMap.gss; reflexivity. *)
+        (* * destruct (Int64.eq_dec i i); simpl; try congruence. *)
+        (*   rewrite PMap.gss; reflexivity. *)
+        (* * destruct Archi.ptr64 eqn:Harchi; simpl. *)
+        (*   2: { simpl in Hact; congruence. } *)
+        (*   destruct (eq_block _ _); simpl; try congruence. *)
+        (*   destruct (Ptrofs.eq_dec _ _); simpl; try congruence. *)
+        (*   rewrite PMap.gss; reflexivity. } *)
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
+          try solve[rewrite PMap.gss; reflexivity];
+          try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
+                     rewrite PMap.gss; reflexivity];
+          destruct Archi.ptr64 eqn:Harchi; simpl;
+          try solve[simpl in Hact; congruence];
+          destruct (eq_block _ _); simpl; try congruence;
+          destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
           rewrite PMap.gss; reflexivity. }
     { inv H0.
       eexists; split.
@@ -931,7 +940,7 @@ Section PRESERVATION.
       + repeat constructor.
       + constructor; simpl.
         unfold Val.has_type in Hty.
-        destruct (rs # src); try contradiction; auto.
+        destruct (rs # src); try contradiction; auto;
         rewrite Hty; reflexivity.
     - eapply exec_Ibuiltin; eauto.
       + repeat constructor.
