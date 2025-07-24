@@ -398,7 +398,9 @@ Axiom loadbytes_split:
   is valid for writing. *)
 
 Axiom nextblock_store:
-  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2,
+    v <> Vundef ->
+    store chunk m1 b ofs v = Some m2 ->
   nextblock m2 = nextblock m1.
 Axiom store_valid_block_1:
   forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
