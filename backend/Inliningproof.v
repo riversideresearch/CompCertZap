@@ -1129,6 +1129,14 @@ Proof.
   destruct X as [m1' FREE].
   left; econstructor; split.
   eapply plus_one. eapply exec_Ireturn; eauto.
+  { unfold option_map.
+    destruct or; auto.
+    unfold agree_regs in AG.
+    destruct AG as [AG1 AG2].
+    destruct (Plt_Ple_dec (mreg ctx) r).
+    - apply AG2 in p; congruence.
+    - apply AG1 in p.
+      intro HC; rewrite HC in p; inv p; congruence. }
   econstructor; eauto.
   eapply match_stacks_bound with (bound := sp').
   eapply match_stacks_invariant; eauto.
@@ -1141,7 +1149,7 @@ Proof.
   (* show that no valid location points into the stack block being freed *)
   intros. inversion FB; subst.
   assert (PRIV': range_private F m' m'0 sp' (dstk ctx) f'.(fn_stacksize)).
-    rewrite H8 in PRIV. eapply range_private_free_left; eauto.
+    rewrite H9 in PRIV. eapply range_private_free_left; eauto.
   rewrite DSTK in PRIV'. exploit (PRIV' (ofs + delta)). lia. intros [A B].
   eelim B; eauto. replace (ofs + delta - delta) with ofs by lia.
   apply Mem.perm_max with k. apply Mem.perm_implies with p; auto with mem.
@@ -1153,7 +1161,7 @@ Proof.
     intros. eapply Mem.perm_free_3; eauto.
   destruct or; simpl. apply agree_val_reg; auto. auto.
   eapply Mem.free_left_inject; eauto.
-  inv FB. rewrite H4 in PRIV. eapply range_private_free_left; eauto.
+  inv FB. rewrite H5 in PRIV. eapply range_private_free_left; eauto.
 
 - (* internal function, not inlined *)
   assert (A: exists f', tr_function cunit f f' /\ fd' = Internal f').

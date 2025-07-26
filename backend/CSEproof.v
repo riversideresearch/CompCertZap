@@ -1272,6 +1272,9 @@ Proof.
   exploit Mem.free_parallel_extends; eauto. intros [m'' [A B]].
   econstructor; split.
   eapply exec_Ireturn; eauto.
+  { destruct or; auto.
+    specialize (RLD r).
+    intro HC; rewrite HC in RLD; inv RLD; congruence. }
   econstructor; eauto.
   destruct or; simpl; auto.
 

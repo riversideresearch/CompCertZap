@@ -2403,7 +2403,7 @@ Proof.
 
 (* return *)
 - destruct (transf_function_inv _ _ FUN).
-  exploit Mem.free_parallel_extends; eauto. rewrite H10. intros [m'' [P Q]].
+  exploit Mem.free_parallel_extends; eauto. rewrite H11. intros [m'' [P Q]].
   inv WTI; MonadInv.
 + (* without an argument *)
   exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].
@@ -2413,25 +2413,25 @@ Proof.
   econstructor. eauto. eauto. traceEq.
   simpl. econstructor; eauto.
   apply return_regs_agree_callee_save.
-  constructor.
+  (* constructor. *)
 + (* with an argument *)
   exploit (exec_moves mv); eauto. intros [ls1 [A1 B1]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_right. eexact A1.
   econstructor. eauto. eauto. traceEq.
-  simpl. econstructor; eauto. rewrite <- H11.
+  simpl. econstructor; eauto. rewrite <- H12.
   replace (Locmap.getpair (map_rpair R (loc_result (RTL.fn_sig f)))
                           (return_regs (parent_locset ts) ls1))
   with (Locmap.getpair (map_rpair R (loc_result (RTL.fn_sig f))) ls1).
   eapply add_equations_res_lessdef; eauto.
-  rewrite <- H14. apply WTRS.
+  rewrite <- H15. apply WTRS.
   generalize (loc_result_caller_save (RTL.fn_sig f)).
   destruct (loc_result (RTL.fn_sig f)); simpl.
   intros A; rewrite A; auto.
   intros [A B]; rewrite A, B; auto.
   apply return_regs_agree_callee_save.
-  rewrite <- H11, <- H14. apply WTRS.
+  rewrite <- H12, <- H15. apply WTRS.
 
 (* internal function *)
 - monadInv FUN. simpl in *.

@@ -2371,8 +2371,8 @@ Section PRESERVATION.
           { apply star_refl. }
           reflexivity.
         * econstructor; eauto.
-          inv WT_FN; simpl in *.
-          apply wt_instrs in Hcode; inv Hcode; auto.
+          (* inv WT_FN; simpl in *. *)
+          (* apply wt_instrs in Hcode; inv Hcode; auto. *)
       + (* With return value *)
         assert (Hused: reg_used_in_code c arg1).
         { eexists; eexists; split; eauto; constructor. }
@@ -2389,14 +2389,18 @@ Section PRESERVATION.
           2: { reflexivity. }
           econstructor.
           3: { rewrite Events.E0_right; reflexivity. }
-          { eapply exec_Ireturn; eauto. }
+          { eapply exec_Ireturn; eauto.
+            simpl; intro HC. rewrite <- Hrs'' in HC.
+            apply H1; rewrite <- HC.
+            eapply match_regsets_get; eauto.
+            right; assumption. }
         apply star_refl.
         * simpl; rewrite <- Hrs''.
           erewrite match_regsets_get; eauto.
           { econstructor; eauto.
             inv WT_FN; simpl in *.
             apply wt_instrs in Hcode; inv Hcode.
-            simpl in H3; rewrite <- H3.
+            simpl in H4; rewrite <- H4.
             erewrite <- match_regsets_get; eauto; right; auto. }
           right; auto.
 

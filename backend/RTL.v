@@ -265,6 +265,10 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s f stk pc rs m or m',
       (fn_code f)!pc = Some(Ireturn or) ->
       Mem.free m stk 0 f.(fn_stacksize) = Some m' ->
+      (match or with
+       | Some r => rs # r <> Vundef
+       | _ => True
+       end) ->
       step (State s f (Vptr stk Ptrofs.zero) pc rs m)
         E0 (Returnstate s (regmap_optget or Vundef rs) m')
   | exec_function_internal:

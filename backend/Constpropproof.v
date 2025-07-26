@@ -552,6 +552,9 @@ Opaque builtin_strength_reduction.
   exploit Mem.free_parallel_extends; eauto. intros [m2' [A B]].
   left; exists O; exists (Returnstate s' (regmap_optget or Vundef rs') m2'); split.
   eapply exec_Ireturn; eauto. TransfInstr; auto.
+  { destruct or; auto.
+    specialize (REGS r).
+    intro HC; rewrite HC in REGS; inv REGS; congruence. }
   constructor; auto.
   destruct or; simpl; auto.
 

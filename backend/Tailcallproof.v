@@ -509,6 +509,10 @@ Proof.
   TransfInstr.
   left. exists (Returnstate s' (regmap_optget or Vundef rs') m'1); split.
   apply exec_Ireturn; auto. rewrite stacksize_preserved; auto.
+  { destruct or; auto.
+    intro HC; subst.
+    specialize (RLD r); rewrite HC in RLD.
+    inv RLD; congruence. }
   constructor. auto.
   destruct or; simpl. apply RLD. constructor.
   auto.

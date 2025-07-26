@@ -1076,6 +1076,15 @@ Ltac UseTransfer :=
   econstructor; split.
   eapply exec_Ireturn; eauto.
   erewrite stacksize_translated by eauto. eexact A.
+  { destruct or; auto.
+    specialize (ENV r).
+    intro HC; rewrite HC in ENV.
+    simpl in ENV.
+    unfold vagree in ENV.
+    unfold add_need_all in ENV.
+    rewrite NE.gsspec in ENV.
+    rewrite peq_true in ENV.
+    inv ENV; congruence. }
   constructor; auto.
   destruct or; simpl; eauto 2 with na.
   eapply magree_extends; eauto. apply nlive_all.

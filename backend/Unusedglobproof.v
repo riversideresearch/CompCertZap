@@ -1002,6 +1002,11 @@ Proof.
   exploit Mem.free_parallel_inject; eauto. rewrite ! Z.add_0_r. intros (tm' & C & D).
   econstructor; split.
   eapply exec_Ireturn; eauto.
+  { destruct or; auto.
+    unfold regset_inject in REGINJ.
+    specialize (REGINJ r).
+    intro HC; rewrite HC in REGINJ.
+    inv REGINJ; congruence. }
   econstructor; eauto.
   apply match_stacks_bound with stk tsp; auto.
   apply Plt_Ple.

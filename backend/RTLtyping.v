@@ -998,7 +998,7 @@ Proof.
   econstructor; eauto.
   (* Ireturn *)
   econstructor; eauto.
-  inv WTI; simpl. auto. rewrite <- H3. auto.
+  inv WTI; simpl. auto. rewrite <- H4. auto.
   (* internal function *)
   simpl in *. inv H6.
   econstructor; eauto.
