@@ -693,7 +693,6 @@ Remark store_zeros_nextblock:
 Proof.
   intros until n. functional induction (store_zeros m b p n); intros.
   inv H; auto.
-  assert (Vzero <> Vundef) by discriminate.
   rewrite IHo; eauto with mem.
   congruence.
 Qed.
@@ -707,10 +706,9 @@ Proof.
   intros. congruence.
   caseEq (store_init_data m b p a); try congruence. intros.
   transitivity (Mem.nextblock m0). eauto.
-  destruct a; simpl in H; try (eapply Mem.nextblock_store; eauto; discriminate; fail).
+  destruct a; simpl in H; try (eapply Mem.nextblock_store; eauto; fail).
   congruence.
-  destruct (find_symbol ge i); try congruence.
-  eapply Mem.nextblock_store; eauto; discriminate.
+  destruct (find_symbol ge i); try congruence. eapply Mem.nextblock_store; eauto.
 Qed.
 
 Remark alloc_global_nextblock:
@@ -755,7 +753,6 @@ Remark store_zeros_perm:
 Proof.
   intros until n. functional induction (store_zeros m b p n); intros.
   inv H; tauto.
-  assert (Vzero <> Vundef) by discriminate.
   destruct (IHo _ H); intros. split; eauto with mem.
   congruence.
 Qed.
@@ -769,12 +766,11 @@ Proof.
   assert (forall chunk v,
           Mem.store chunk m b p v = Some m' ->
           (Mem.perm m b' q k prm <-> Mem.perm m' b' q k prm)).
-  { intros; split; eauto with mem. admit. admit. }
+    intros; split; eauto with mem.
   destruct i; simpl in H; eauto.
   inv H; tauto.
   destruct (find_symbol ge i); try discriminate. eauto.
-  (* Qed. *)
-Admitted.
+Qed.
 
 Remark store_init_data_list_perm:
   forall k prm b' q idl b m p m',
@@ -845,8 +841,7 @@ Proof.
   intros until n. functional induction (store_zeros m b p n); intros.
 - inv H; apply Mem.unchanged_on_refl.
 - apply Mem.unchanged_on_trans with m'.
-  + eapply Mem.store_unchanged_on; eauto; try discriminate.
-    simpl. intros. apply H0. lia.
++ eapply Mem.store_unchanged_on; eauto. simpl. intros. apply H0. lia.
 + apply IHo; auto. intros; apply H0; lia.
 - discriminate.
 Qed.
@@ -857,14 +852,13 @@ Remark store_init_data_unchanged:
   (forall ofs, p <= ofs < p + init_data_size i -> ~ P b ofs) ->
   Mem.unchanged_on P m m'.
 Proof.
-(*   intros. destruct i; simpl in *; *)
-(*   try (eapply Mem.store_unchanged_on; eauto; fail). *)
-(*   inv H; apply Mem.unchanged_on_refl. *)
-(*   destruct (find_symbol ge i); try congruence. *)
-(*   eapply Mem.store_unchanged_on; eauto; *)
-(*   unfold Mptr; destruct Archi.ptr64; eauto. *)
-  (* Qed. *)
-Admitted.
+  intros. destruct i; simpl in *;
+  try (eapply Mem.store_unchanged_on; eauto; fail).
+  inv H; apply Mem.unchanged_on_refl.
+  destruct (find_symbol ge i); try congruence.
+  eapply Mem.store_unchanged_on; eauto;
+  unfold Mptr; destruct Archi.ptr64; eauto.
+Qed.
 
 Remark store_init_data_list_unchanged:
   forall (P: block -> Z -> Prop) b il m p m',
@@ -907,7 +901,7 @@ Proof.
     intros; lia.
     replace (Byte Byte.zero :: nil) with (encode_val Mint8unsigned Vzero).
     change 1 with (size_chunk Mint8unsigned).
-    eapply Mem.loadbytes_store_same; eauto; try discriminate.
+    eapply Mem.loadbytes_store_same; eauto.
     unfold encode_val; unfold encode_int; unfold rev_if_be; destruct Archi.big_endian; reflexivity.
     eapply IHo; eauto. lia. lia. lia. lia.
   + eapply IHo; eauto. lia. lia.
@@ -942,17 +936,16 @@ Lemma store_init_data_loadbytes:
   readbytes_as_zero m b p (init_data_size i) ->
   Mem.loadbytes m' b p (init_data_size i) = Some (bytes_of_init_data i).
 Proof.
-(*   intros; destruct i; simpl in H; try apply (Mem.loadbytes_store_same _ _ _ _ _ _ H). *)
-(* - inv H. simpl. *)
-(*   assert (EQ: Z.of_nat (Z.to_nat z) = Z.max z 0). *)
-(*   { destruct (zle 0 z). rewrite Z2Nat.id; extlia. destruct z; try discriminate. simpl. extlia. } *)
-(*   rewrite <- EQ. apply H0. lia. simpl. lia. *)
-(* - rewrite init_data_size_addrof. simpl. *)
-(*   destruct (find_symbol ge i) as [b'|]; try discriminate. *)
-(*   rewrite (Mem.loadbytes_store_same _ _ _ _ _ _ H). *)
-(*   unfold encode_val, Mptr; destruct Archi.ptr64; reflexivity. *)
-  (* Qed. *)
-Admitted.
+  intros; destruct i; simpl in H; try apply (Mem.loadbytes_store_same _ _ _ _ _ _ H).
+- inv H. simpl.
+  assert (EQ: Z.of_nat (Z.to_nat z) = Z.max z 0).
+  { destruct (zle 0 z). rewrite Z2Nat.id; extlia. destruct z; try discriminate. simpl. extlia. }
+  rewrite <- EQ. apply H0. lia. simpl. lia.
+- rewrite init_data_size_addrof. simpl.
+  destruct (find_symbol ge i) as [b'|]; try discriminate.
+  rewrite (Mem.loadbytes_store_same _ _ _ _ _ _ H).
+  unfold encode_val, Mptr; destruct Archi.ptr64; reflexivity.
+Qed.
 
 Fixpoint bytes_of_init_data_list (il: list init_data): list memval :=
   match il with
@@ -1070,7 +1063,7 @@ Proof.
     eapply store_init_data_list_unchanged; eauto. intros; lia.
     intros; tauto.
     eapply Mem.load_store_same; eauto.
-    destruct v; discriminate. }
+  }
   induction il; simpl.
 - auto.
 - intros. destruct (store_init_data m b p a) as [m1|] eqn:?; try congruence.
@@ -1361,8 +1354,7 @@ Lemma store_zeros_neutral:
 Proof.
   intros until n. functional induction (store_zeros m b p n); intros.
   inv H1; auto.
-  apply IHo; auto. eapply Mem.store_inject_neutral; eauto; try discriminate.
-  constructor.
+  apply IHo; auto. eapply Mem.store_inject_neutral; eauto. constructor.
   inv H1.
 Qed.
 
@@ -1373,15 +1365,14 @@ Lemma store_init_data_neutral:
   store_init_data ge m b p id = Some m' ->
   Mem.inject_neutral thr m'.
 Proof.
-(*   intros. *)
-(*   destruct id; simpl in H1; try (eapply Mem.store_inject_neutral; eauto; fail). *)
-(*   congruence. *)
-(*   destruct (find_symbol ge i) as [b'|] eqn:E; try discriminate. *)
-(*   eapply Mem.store_inject_neutral; eauto. *)
-(*   econstructor. unfold Mem.flat_inj. apply pred_dec_true; auto. eauto. *)
-(*   rewrite Ptrofs.add_zero. auto. *)
-  (* Qed. *)
-Admitted.
+  intros.
+  destruct id; simpl in H1; try (eapply Mem.store_inject_neutral; eauto; fail).
+  congruence.
+  destruct (find_symbol ge i) as [b'|] eqn:E; try discriminate.
+  eapply Mem.store_inject_neutral; eauto.
+  econstructor. unfold Mem.flat_inj. apply pred_dec_true; auto. eauto.
+  rewrite Ptrofs.add_zero. auto.
+Qed.
 
 Lemma store_init_data_list_neutral:
   forall b idl m p m',
@@ -1497,8 +1488,7 @@ Proof.
     Mem.store chunk m b p v = Some m' ->
     align_chunk chunk = init_data_alignment i ->
     (init_data_alignment i | p)).
-  { intros. apply Mem.store_valid_access_3 in H0. destruct H0. congruence.
-    destruct v; discriminate. }
+  { intros. apply Mem.store_valid_access_3 in H0. destruct H0. congruence. }
   destruct i; simpl in H; eauto.
   simpl. apply Z.divide_1_l.
   destruct (find_symbol ge i); try discriminate. eapply DFL. eassumption.
@@ -1565,10 +1555,8 @@ Lemma store_zeros_exists:
 Proof.
   intros until n. functional induction (store_zeros m b p n); intros PERM.
 - exists m; auto.
-- apply IHo. red; intros. eapply Mem.perm_store_1; eauto; try discriminate.
-  apply PERM. lia.
+- apply IHo. red; intros. eapply Mem.perm_store_1; eauto. apply PERM. lia.
 - destruct (Mem.valid_access_store m Mint8unsigned b p Vzero) as (m' & STORE).
-  discriminate.
   split. red; intros. apply Mem.perm_cur. apply PERM. simpl in H. lia.
   simpl. apply Z.divide_1_l.
   congruence.
@@ -1587,15 +1575,14 @@ Proof.
           init_data_alignment i = align_chunk chunk ->
           exists m', Mem.store chunk m b p v = Some m').
   { intros. destruct (Mem.valid_access_store m chunk b p v) as (m' & STORE).
-(*     split. rewrite <- H2; auto. rewrite <- H3; auto. *)
-(*     exists m'; auto. } *)
-(*   destruct i; eauto. *)
-(*   simpl. exists m; auto. *)
-(*   simpl. exploit H1; eauto. intros (b1 & FS). rewrite FS. eapply DFL. *)
-(*   unfold init_data_size, Mptr. destruct Archi.ptr64; auto. *)
-(*   unfold init_data_alignment, Mptr. destruct Archi.ptr64; auto. *)
-    (* Qed. *)
-Admitted.
+    split. rewrite <- H2; auto. rewrite <- H3; auto.
+    exists m'; auto. }
+  destruct i; eauto.
+  simpl. exists m; auto.
+  simpl. exploit H1; eauto. intros (b1 & FS). rewrite FS. eapply DFL.
+  unfold init_data_size, Mptr. destruct Archi.ptr64; auto.
+  unfold init_data_alignment, Mptr. destruct Archi.ptr64; auto.
+Qed.
 
 Lemma store_init_data_list_exists:
   forall b il m p,

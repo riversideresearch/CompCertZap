@@ -535,38 +535,16 @@ Qed.
   Return the updated memory store, or [None] if the accessed bytes
   are not writable. *)
 
-(* Program Definition store (chunk: memory_chunk) (m: mem) (b: block) (ofs: Z) (v: val): option mem := *)
-(*   if valid_access_dec m chunk b ofs Writable then *)
-(*     Some (mkmem (PMap.set b *)
-(*                           (setN (encode_val chunk v) ofs (m.(mem_contents)#b)) *)
-(*                           m.(mem_contents)) *)
-(*                 m.(mem_access) *)
-(*                 m.(nextblock) *)
-(*                 _ _ _) *)
-(*   else *)
-(*     None. *)
-(* Next Obligation. apply access_max. Qed. *)
-(* Next Obligation. apply nextblock_noaccess; auto. Qed. *)
-(* Next Obligation. *)
-(*   rewrite PMap.gsspec. destruct (peq b0 b). *)
-(*   rewrite setN_default. apply contents_default. *)
-(*   apply contents_default. *)
-(* Qed. *)
-
 Program Definition store (chunk: memory_chunk) (m: mem) (b: block) (ofs: Z) (v: val): option mem :=
-  match v with
-  | Vundef => None
-  | _ =>
-      if valid_access_dec m chunk b ofs Writable then
-        Some (mkmem (PMap.set b
-                       (setN (encode_val chunk v) ofs (m.(mem_contents)#b))
-                       m.(mem_contents))
+  if valid_access_dec m chunk b ofs Writable then
+    Some (mkmem (PMap.set b
+                          (setN (encode_val chunk v) ofs (m.(mem_contents)#b))
+                          m.(mem_contents))
                 m.(mem_access)
-                    m.(nextblock)
-                        _ _ _)
-      else
-        None
-  end.
+                m.(nextblock)
+                _ _ _)
+  else
+    None.
 Next Obligation. apply access_max. Qed.
 Next Obligation. apply nextblock_noaccess; auto. Qed.
 Next Obligation.
@@ -984,15 +962,14 @@ Qed.
 
 Theorem valid_access_store:
   forall m1 chunk b ofs v,
-    v <> Vundef ->
   valid_access m1 chunk b ofs Writable ->
   { m2: mem | store chunk m1 b ofs v = Some m2 }.
 Proof.
   intros.
   unfold store.
-  destruct v;
-    destruct (valid_access_dec m1 chunk b ofs Writable);
-    eauto; contradiction.
+  destruct (valid_access_dec m1 chunk b ofs Writable).
+  eauto.
+  contradiction.
 Defined.
 
 Local Hint Resolve valid_access_store: mem.
@@ -1004,31 +981,26 @@ Variable b: block.
 Variable ofs: Z.
 Variable v: val.
 Variable m2: mem.
-Hypothesis Hv: v <> Vundef.
 Hypothesis STORE: store chunk m1 b ofs v = Some m2.
 
 Lemma store_access: mem_access m2 = mem_access m1.
 Proof.
-  unfold store in STORE.
-  destruct v;
-    destruct ( valid_access_dec m1 chunk b ofs Writable); inv STORE;
-    auto.
+  unfold store in STORE. destruct ( valid_access_dec m1 chunk b ofs Writable); inv STORE.
+  auto.
 Qed.
 
 Lemma store_mem_contents:
   mem_contents m2 = PMap.set b (setN (encode_val chunk v) ofs m1.(mem_contents)#b) m1.(mem_contents).
 Proof.
-  unfold store in STORE.
-  destruct v;
-    destruct (valid_access_dec m1 chunk b ofs Writable); inv STORE;
-    auto.
+  unfold store in STORE. destruct (valid_access_dec m1 chunk b ofs Writable); inv STORE.
+  auto.
 Qed.
 
 Theorem perm_store_1:
   forall b' ofs' k p, perm m1 b' ofs' k p -> perm m2 b' ofs' k p.
 Proof.
   intros.
-  unfold perm in *. rewrite store_access; auto.
+ unfold perm in *. rewrite store_access; auto.
 Qed.
 
 Theorem perm_store_2:
@@ -1043,10 +1015,8 @@ Theorem nextblock_store:
   nextblock m2 = nextblock m1.
 Proof.
   intros.
-  unfold store in STORE.
-  destruct v;
-    destruct ( valid_access_dec m1 chunk b ofs Writable); inv STORE;
-    auto.
+  unfold store in STORE. destruct ( valid_access_dec m1 chunk b ofs Writable); inv STORE.
+  auto.
 Qed.
 
 Theorem store_valid_block_1:
@@ -1080,11 +1050,9 @@ Qed.
 Theorem store_valid_access_3:
   valid_access m1 chunk b ofs Writable.
 Proof.
-  unfold store in STORE.
-  destruct v;
-    destruct (valid_access_dec m1 chunk b ofs Writable);
-    auto;
-    congruence.
+  unfold store in STORE. destruct (valid_access_dec m1 chunk b ofs Writable).
+  auto.
+  congruence.
 Qed.
 
 Local Hint Resolve store_valid_access_1 store_valid_access_2 store_valid_access_3: mem.
@@ -1218,7 +1186,6 @@ Local Hint Resolve store_valid_access_1 store_valid_access_2
 
 Lemma load_store_overlap:
   forall chunk m1 b ofs v m2 chunk' ofs' v',
-    v <> Vundef ->
   store chunk m1 b ofs v = Some m2 ->
   load chunk' m2 b ofs' = Some v' ->
   ofs' + size_chunk chunk' > ofs ->
@@ -1254,7 +1221,7 @@ Proof.
 + left; split. lia. unfold c'. simpl. apply setN_in.
   assert (Z.of_nat (length (mv1 :: mvl)) = size_chunk chunk).
   { rewrite <- ENC; rewrite encode_val_length. rewrite size_chunk_conv; auto. }
-  simpl length in H4. rewrite Nat2Z.inj_succ in H4. lia.
+  simpl length in H3. rewrite Nat2Z.inj_succ in H3. lia.
 (* If ofs > ofs':  the load reads (at ofs) the first byte from the write.
        ofs'   ofs   ofs'+|chunk'|
                [-------------------]  write
@@ -1288,7 +1255,6 @@ Qed.
 
 Theorem load_pointer_store:
   forall chunk m1 b ofs v m2 chunk' b' ofs' v_b v_o,
-    v <> Vundef ->
   store chunk m1 b ofs v = Some m2 ->
   load chunk' m2 b' ofs' = Some(Vptr v_b v_o) ->
   (v = Vptr v_b v_o /\ compat_pointer_chunks chunk chunk' /\ b' = b /\ ofs' = ofs)
@@ -1306,18 +1272,18 @@ Proof.
   subst. inv ENC.
   assert (chunk = Mint32 \/ chunk = Many32 \/ chunk = Mint64 \/ chunk = Many64)
   by (destruct chunk; auto || contradiction).
-  left; split. rewrite H4.
-  destruct H5 as [P|[P|[P|P]]]; subst chunk'; destruct v0; simpl in H4;
+  left; split. rewrite H3.
+  destruct H4 as [P|[P|[P|P]]]; subst chunk'; destruct v0; simpl in H3;
   try congruence; destruct Archi.ptr64; congruence.
   split. apply compat_pointer_chunks_true; auto.
   auto.
 - (* ofs' > ofs *)
   inv ENC.
-  + exploit H11; eauto. intros (j & P & Q). inv P. congruence.
-  + exploit H9; eauto. intros (n & P); congruence.
-  + exploit H3; eauto. congruence.
+  + exploit H10; eauto. intros (j & P & Q). inv P. congruence.
+  + exploit H8; eauto. intros (n & P); congruence.
+  + exploit H2; eauto. congruence.
 - (* ofs' < ofs *)
-  exploit H8; eauto. intros (j & P & Q). subst mv1. inv ENC. congruence.
+  exploit H7; eauto. intros (j & P & Q). subst mv1. inv ENC. congruence.
 Qed.
 
 Theorem load_store_pointer_overlap:
@@ -1330,7 +1296,7 @@ Theorem load_store_pointer_overlap:
   v = Vundef.
 Proof.
   intros.
-  exploit load_store_overlap; eauto; try discriminate.
+  exploit load_store_overlap; eauto.
   intros (mv1 & mvl & mv1' & mvl' & ENC & DEC & CASES).
   destruct CASES as [(A & B) | [(A & B) | (A & B)]].
 - congruence.
@@ -1352,7 +1318,7 @@ Theorem load_store_pointer_mismatch:
   v = Vundef.
 Proof.
   intros.
-  exploit load_store_overlap; eauto; try discriminate.
+  exploit load_store_overlap; eauto.
   generalize (size_chunk_pos chunk'); lia.
   generalize (size_chunk_pos chunk); lia.
   intros (mv1 & mvl & mv1' & mvl' & ENC & DEC & CASES).
@@ -1362,89 +1328,64 @@ Proof.
 - contradiction.
 Qed.
 
-(* Lemma idfgfd chunk1 chunk2 v : *)
-(*   encode_val chunk1 Vundef = encode_val chunk2 v -> *)
-(*   v = Vundef. *)
-(* Proof. *)
-(*   unfold encode_val; simpl; intro H. *)
-(*   destruct v; auto. *)
-(*   destruct chunk1, chunk2; eauto. *)
-
 Lemma store_similar_chunks:
   forall chunk1 chunk2 v1 v2 m b ofs,
-    v1 <> Vundef ->
-    v2 <> Vundef ->
   encode_val chunk1 v1 = encode_val chunk2 v2 ->
   align_chunk chunk1 = align_chunk chunk2 ->
   store chunk1 m b ofs v1 = store chunk2 m b ofs v2.
 Proof.
   intros. unfold store.
   assert (size_chunk chunk1 = size_chunk chunk2).
-  { repeat rewrite size_chunk_conv.
+    repeat rewrite size_chunk_conv.
     rewrite <- (encode_val_length chunk1 v1).
     rewrite <- (encode_val_length chunk2 v2).
-    congruence. }
-  destruct v1, v2; auto; try congruence;
-    destruct (valid_access_dec m chunk1 b ofs Writable);
-    destruct (valid_access_dec m chunk2 b ofs Writable); auto;
-    f_equal; try apply mkmem_ext; auto; try congruence;
-    try solve [elim n; apply valid_access_compat with chunk1; auto; lia];
-    elim n; apply valid_access_compat with chunk2; auto; lia.
+    congruence.
+  unfold store.
+  destruct (valid_access_dec m chunk1 b ofs Writable);
+  destruct (valid_access_dec m chunk2 b ofs Writable); auto.
+  f_equal. apply mkmem_ext; auto. congruence.
+  elim n. apply valid_access_compat with chunk1; auto. lia.
+  elim n. apply valid_access_compat with chunk2; auto. lia.
 Qed.
 
 Theorem store_bool_unsigned_8:
   forall m b ofs v,
-    v <> Vundef ->
   store Mbool m b ofs v = store Mint8unsigned m b ofs v.
 Proof. intros. apply store_similar_chunks; auto. Qed.
 
 Theorem store_signed_unsigned_8:
   forall m b ofs v,
-    v <> Vundef ->
   store Mint8signed m b ofs v = store Mint8unsigned m b ofs v.
-Proof. intros. apply store_similar_chunks; auto. Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int8_signed_unsigned. auto. Qed.
 
 Theorem store_signed_unsigned_16:
   forall m b ofs v,
-    v <> Vundef ->
   store Mint16signed m b ofs v = store Mint16unsigned m b ofs v.
-Proof. intros. apply store_similar_chunks; auto. Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int16_signed_unsigned. auto. Qed.
 
 Theorem store_int8_zero_ext:
   forall m b ofs n,
   store Mint8unsigned m b ofs (Vint (Int.zero_ext 8 n)) =
   store Mint8unsigned m b ofs (Vint n).
-Proof.
-  intros. apply store_similar_chunks; try discriminate.
-  apply encode_val_int8_zero_ext. auto.
-Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int8_zero_ext. auto. Qed.
 
 Theorem store_int8_sign_ext:
   forall m b ofs n,
   store Mint8signed m b ofs (Vint (Int.sign_ext 8 n)) =
   store Mint8signed m b ofs (Vint n).
-Proof.
-  intros. apply store_similar_chunks; try discriminate.
-  apply encode_val_int8_sign_ext. auto.
-Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int8_sign_ext. auto. Qed.
 
 Theorem store_int16_zero_ext:
   forall m b ofs n,
   store Mint16unsigned m b ofs (Vint (Int.zero_ext 16 n)) =
   store Mint16unsigned m b ofs (Vint n).
-Proof.
-  intros. apply store_similar_chunks; try discriminate.
-  apply encode_val_int16_zero_ext. auto.
-Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int16_zero_ext. auto. Qed.
 
 Theorem store_int16_sign_ext:
   forall m b ofs n,
   store Mint16signed m b ofs (Vint (Int.sign_ext 16 n)) =
   store Mint16signed m b ofs (Vint n).
-Proof.
-  intros. apply store_similar_chunks; try discriminate.
-  apply encode_val_int16_sign_ext. auto.
-Qed.
+Proof. intros. apply store_similar_chunks. apply encode_val_int16_sign_ext. auto. Qed.
 
 (*
 Theorem store_float64al32:
@@ -1481,49 +1422,29 @@ Defined.
 
 Theorem storebytes_store:
   forall m1 b ofs chunk v m2,
-    v <> Vundef ->
   storebytes m1 b ofs (encode_val chunk v) = Some m2 ->
   (align_chunk chunk | ofs) ->
   store chunk m1 b ofs v = Some m2.
 Proof.
   unfold storebytes, store. intros.
-  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length (encode_val chunk v))) Cur Writable); inv H0.
-  destruct v; try congruence;
-    destruct (valid_access_dec m1 chunk b ofs Writable);
-    f_equal; try apply mkmem_ext; auto;
-    elim n; constructor; auto;
-    rewrite encode_val_length in r; rewrite size_chunk_conv; auto.
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length (encode_val chunk v))) Cur Writable); inv H.
+  destruct (valid_access_dec m1 chunk b ofs Writable).
+  f_equal. apply mkmem_ext; auto.
+  elim n. constructor; auto.
+  rewrite encode_val_length in r. rewrite size_chunk_conv. auto.
 Qed.
-
-(* Theorem store_storebytes: *)
-(*   forall m1 b ofs chunk v m2, *)
-(*   store chunk m1 b ofs v = Some m2 -> *)
-(*   storebytes m1 b ofs (encode_val chunk v) = Some m2. *)
-(* Proof. *)
-(*   unfold storebytes, store. intros. *)
-(*   destruct (valid_access_dec m1 chunk b ofs Writable); inv H. *)
-(*   destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length (encode_val chunk v))) Cur Writable). *)
-(*   f_equal. apply mkmem_ext; auto. *)
-(*   destruct v0.  elim n. *)
-(*   rewrite encode_val_length. rewrite <- size_chunk_conv. auto. *)
-(* Qed. *)
 
 Theorem store_storebytes:
   forall m1 b ofs chunk v m2,
-    v <> Vundef ->
-    store chunk m1 b ofs v = Some m2 ->
-    storebytes m1 b ofs (encode_val chunk v) = Some m2.
+  store chunk m1 b ofs v = Some m2 ->
+  storebytes m1 b ofs (encode_val chunk v) = Some m2.
 Proof.
   unfold storebytes, store. intros.
-  destruct (valid_access_dec m1 chunk b ofs Writable); inv H0.
-  { destruct v; try congruence;
-      destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat _) Cur Writable);
-      f_equal; try apply mkmem_ext; auto;
-      destruct v0; elim n;
-      rewrite encode_val_length; rewrite <- size_chunk_conv; auto. }
-  destruct v;
-    destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat _) Cur Writable);
-    f_equal; try apply mkmem_ext; auto; elim n; congruence.
+  destruct (valid_access_dec m1 chunk b ofs Writable); inv H.
+  destruct (range_perm_dec m1 b ofs (ofs + Z.of_nat (length (encode_val chunk v))) Cur Writable).
+  f_equal. apply mkmem_ext; auto.
+  destruct v0.  elim n.
+  rewrite encode_val_length. rewrite <- size_chunk_conv. auto.
 Qed.
 
 Section STOREBYTES.
@@ -1729,48 +1650,39 @@ Proof.
 Qed.
 
 Theorem store_int64_split:
-  forall m b ofs v m' n,
-    v = Vlong n ->
+  forall m b ofs v m',
   store Mint64 m b ofs v = Some m' -> Archi.ptr64 = false ->
   exists m1,
      store Mint32 m b ofs (if Archi.big_endian then Val.hiword v else Val.loword v) = Some m1
   /\ store Mint32 m1 b (ofs + 4) (if Archi.big_endian then Val.loword v else Val.hiword v) = Some m'.
 Proof.
   intros.
-  assert (Hv: v <> Vundef) by discriminate.
-  exploit store_valid_access_3; eauto; try congruence. intros [A B]. simpl in *.
-  exploit store_storebytes. exact Hv. eexact H0. intros SB.
+  exploit store_valid_access_3; eauto. intros [A B]. simpl in *.
+  exploit store_storebytes. eexact H. intros SB.
   rewrite encode_val_int64 in SB by auto.
   exploit storebytes_split. eexact SB. intros [m1 [SB1 SB2]].
   rewrite encode_val_length in SB2. simpl in SB2.
   exists m1; split.
-  subst; apply storebytes_store.
-  { destruct Archi.big_endian; simpl; discriminate. }
-  exact SB1.
+  apply storebytes_store. exact SB1.
   simpl. apply Z.divide_trans with 8; auto. exists 2; auto.
-  subst; apply storebytes_store.
-  { destruct Archi.big_endian; simpl; discriminate. }
-  exact SB2.
+  apply storebytes_store. exact SB2.
   simpl. apply Z.divide_add_r. apply Z.divide_trans with 8; auto. exists 2; auto. exists 1; auto.
 Qed.
 
 Theorem storev_int64_split:
-  forall m a v m' n,
-    v = Vlong n ->
+  forall m a v m',
   storev Mint64 m a v = Some m' -> Archi.ptr64 = false ->
   exists m1,
      storev Mint32 m a (if Archi.big_endian then Val.hiword v else Val.loword v) = Some m1
   /\ storev Mint32 m1 (Val.add a (Vint (Int.repr 4))) (if Archi.big_endian then Val.loword v else Val.hiword v) = Some m'.
 Proof.
-  intros.
-  assert (Hv: v <> Vundef) by discriminate.
-  destruct a; simpl in H0; inv H0. rewrite H3.
+  intros. destruct a; simpl in H; inv H. rewrite H2.
   exploit store_int64_split; eauto. intros [m1 [A B]].
   exists m1; split.
   exact A.
-  unfold storev, Val.add. rewrite H1.
+  unfold storev, Val.add. rewrite H0.
   rewrite addressing_int64_split; auto.
-  exploit store_valid_access_3. exact Hv. eexact H3. intros [P Q]. exact Q.
+  exploit store_valid_access_3. eexact H2. intros [P Q]. exact Q.
 Qed.
 
 (** ** Properties related to [alloc]. *)
@@ -2489,7 +2401,6 @@ Definition meminj_no_overlap (f: meminj) (m: mem) : Prop :=
 
 Lemma store_mapped_inj:
   forall f chunk m1 b1 ofs v1 n1 m2 b2 delta v2,
-    v1 <> Vundef ->
   mem_inj f m1 m2 ->
   store chunk m1 b1 ofs v1 = Some n1 ->
   meminj_no_overlap f m1 ->
@@ -2501,27 +2412,21 @@ Lemma store_mapped_inj:
 Proof.
   intros.
   assert (valid_access m2 chunk b2 (ofs + delta) Writable).
-  { eapply valid_access_inj; eauto with mem. }
-  assert (Hv2: v2 <> Vundef).
-  { intro; subst.
-    inv H4; congruence. }
-  destruct (valid_access_store _ _ _ _ v2 Hv2 H5) as [n2 STORE].
+    eapply valid_access_inj; eauto with mem.
+  destruct (valid_access_store _ _ _ _ v2 H4) as [n2 STORE].
   exists n2; split. auto.
   constructor.
 (* perm *)
-  intros. eapply perm_store_1.
-  apply Hv2.
-  eexact STORE.
+  intros. eapply perm_store_1; [eexact STORE|].
   eapply mi_perm; eauto.
-  eapply perm_store_2; auto.
-  apply H. eauto. auto.
+  eapply perm_store_2; eauto.
 (* align *)
   intros. eapply mi_align with (ofs := ofs0) (p := p); eauto.
   red; intros; eauto with mem.
 (* mem_contents *)
   intros.
-  rewrite (store_mem_contents _ _ _ _ _ _ H H1).
-  rewrite (store_mem_contents _ _ _ _ _ _ Hv2 STORE).
+  rewrite (store_mem_contents _ _ _ _ _ _ H0).
+  rewrite (store_mem_contents _ _ _ _ _ _ STORE).
   rewrite ! PMap.gsspec.
   destruct (peq b0 b1). subst b0.
   (* block = b1, block = b2 *)
@@ -2535,17 +2440,16 @@ Proof.
   rewrite setN_other. eapply mi_memval; eauto. eauto with mem.
   rewrite encode_val_length. rewrite <- size_chunk_conv. intros.
   assert (b2 <> b2 \/ ofs0 + delta0 <> (r - delta) + delta).
-    eapply H2; eauto. eauto 6 with mem.
-    exploit store_valid_access_3. exact H. eexact H1. intros [A B].
+    eapply H1; eauto. eauto 6 with mem.
+    exploit store_valid_access_3. eexact H0. intros [A B].
     eapply perm_implies. apply perm_cur_max. apply A. lia. auto with mem.
-  destruct H9. congruence. lia.
+  destruct H8. congruence. lia.
   (* block <> b1, block <> b2 *)
   eapply mi_memval; eauto. eauto with mem.
 Qed.
 
 Lemma store_unmapped_inj:
   forall f chunk m1 b1 ofs v1 n1 m2,
-    v1 <> Vundef ->
   mem_inj f m1 m2 ->
   store chunk m1 b1 ofs v1 = Some n1 ->
   f b1 = None ->
@@ -2559,14 +2463,13 @@ Proof.
   red; intros; eauto with mem.
 (* mem_contents *)
   intros.
-  rewrite (store_mem_contents _ _ _ _ _ _ H H1).
+  rewrite (store_mem_contents _ _ _ _ _ _ H0).
   rewrite PMap.gso. eapply mi_memval; eauto with mem.
   congruence.
 Qed.
 
 Lemma store_outside_inj:
   forall f m1 m2 chunk b ofs v m2',
-    v <> Vundef ->
   mem_inj f m1 m2 ->
   (forall b' delta ofs',
     f b' = Some(b, delta) ->
@@ -2575,20 +2478,20 @@ Lemma store_outside_inj:
   store chunk m2 b ofs v = Some m2' ->
   mem_inj f m1 m2'.
 Proof.
-  intros. inv H0. constructor.
+  intros. inv H. constructor.
 (* perm *)
   eauto with mem.
 (* access *)
   intros; eapply mi_align0; eauto.
 (* mem_contents *)
   intros.
-  rewrite (store_mem_contents _ _ _ _ _ _ H H2).
+  rewrite (store_mem_contents _ _ _ _ _ _ H1).
   rewrite PMap.gsspec. destruct (peq b2 b). subst b2.
   rewrite setN_outside. auto.
   rewrite encode_val_length. rewrite <- size_chunk_conv.
   destruct (zlt (ofs0 + delta) ofs); auto.
   destruct (zle (ofs + size_chunk chunk) (ofs0 + delta)). lia.
-  byContradiction. eapply H1; eauto. lia.
+  byContradiction. eapply H0; eauto. lia.
   eauto with mem.
 Qed.
 
@@ -3014,7 +2917,6 @@ Qed.
 
 Theorem store_within_extends:
   forall chunk m1 m2 b ofs v1 m1' v2,
-    v1 <> Vundef ->
   extends m1 m2 ->
   store chunk m1 b ofs v1 = Some m1' ->
   Val.lessdef v1 v2 ->
@@ -3022,41 +2924,37 @@ Theorem store_within_extends:
      store chunk m2 b ofs v2 = Some m2'
   /\ extends m1' m2'.
 Proof.
-  intros. inversion H0.
+  intros. inversion H.
   exploit store_mapped_inj; eauto.
-    unfold inject_id; red; intros. inv H4; inv H5. auto.
+    unfold inject_id; red; intros. inv H3; inv H4. auto.
     unfold inject_id; reflexivity.
     rewrite val_inject_id. eauto.
   intros [m2' [A B]].
   exists m2'; split.
   replace (ofs + 0) with ofs in A by lia. auto.
-  assert (Hv2: v2 <> Vundef).
-  { intro; subst; inv H2; discriminate. }
   constructor; auto.
-  rewrite (nextblock_store _ _ _ _ _ _ H H1).
-  rewrite (nextblock_store _ _ _ _ _ _ Hv2 A).
+  rewrite (nextblock_store _ _ _ _ _ _ H0).
+  rewrite (nextblock_store _ _ _ _ _ _ A).
   auto.
   intros. exploit mext_perm_inv0; intuition eauto using perm_store_1, perm_store_2.
 Qed.
 
 Theorem store_outside_extends:
   forall chunk m1 m2 b ofs v m2',
-    v <> Vundef ->
   extends m1 m2 ->
   store chunk m2 b ofs v = Some m2' ->
   (forall ofs', perm m1 b ofs' Cur Readable -> ofs <= ofs' < ofs + size_chunk chunk -> False) ->
   extends m1 m2'.
 Proof.
-  intros. inversion H0. constructor.
-  rewrite (nextblock_store _ _ _ _ _ _ H H1). auto.
+  intros. inversion H. constructor.
+  rewrite (nextblock_store _ _ _ _ _ _ H0). auto.
   eapply store_outside_inj; eauto.
-  unfold inject_id; intros. inv H3. eapply H2; eauto. lia.
+  unfold inject_id; intros. inv H2. eapply H1; eauto. lia.
   intros. eauto using perm_store_2.
 Qed.
 
 Theorem storev_extends:
   forall chunk m1 m2 addr1 v1 m1' addr2 v2,
-    v1 <> Vundef ->
   extends m1 m2 ->
   storev chunk m1 addr1 v1 = Some m1' ->
   Val.lessdef addr1 addr2 ->
@@ -3065,7 +2963,7 @@ Theorem storev_extends:
      storev chunk m2 addr2 v2 = Some m2'
   /\ extends m1' m2'.
 Proof.
-  unfold storev; intros. inv H2.
+  unfold storev; intros. inv H1.
   destruct addr2; try congruence. eapply store_within_extends; eauto.
   congruence.
 Qed.
@@ -3624,7 +3522,6 @@ Qed.
 
 Theorem store_mapped_inject:
   forall f chunk m1 b1 ofs v1 n1 m2 b2 delta v2,
-    v1 <> Vundef ->
   inject f m1 m2 ->
   store chunk m1 b1 ofs v1 = Some n1 ->
   f b1 = Some (b2, delta) ->
@@ -3633,13 +3530,8 @@ Theorem store_mapped_inject:
     store chunk m2 b2 (ofs + delta) v2 = Some n2
     /\ inject f n1 n2.
 Proof.
-  intros. inversion H0.
-  assert (Hv2: v2 <> Vundef).
-  { intro; subst; inv H3; discriminate. }
-  exploit store_mapped_inj.
-  { exact H. }
-  eauto. eauto. auto. eauto. eauto.
-  intros [n2 [STORE MI]].
+  intros. inversion H.
+  exploit store_mapped_inj; eauto. intros [n2 [STORE MI]].
   exists n2; split. eauto. constructor.
 (* inj *)
   auto.
@@ -3650,44 +3542,40 @@ Proof.
 (* no overlap *)
   red; intros. eauto with mem.
 (* representable *)
-  { intros.
-    eapply mi_representable; try eassumption.
-    destruct H5; eauto with mem. }
-  (* perm inv *)
-  intros. exploit mi_perm_inv0; eauto.
-  eapply perm_store_2; eauto.
+  intros. eapply mi_representable; try eassumption.
+  destruct H4; eauto with mem.
+(* perm inv *)
+  intros. exploit mi_perm_inv0; eauto using perm_store_2.
   intuition eauto using perm_store_1, perm_store_2.
 Qed.
 
 Theorem store_unmapped_inject:
   forall f chunk m1 b1 ofs v1 n1 m2,
-    v1 <> Vundef ->
   inject f m1 m2 ->
   store chunk m1 b1 ofs v1 = Some n1 ->
   f b1 = None ->
   inject f n1 m2.
 Proof.
-  intros. inversion H0.
+  intros. inversion H.
   constructor.
 (* inj *)
-  { eapply store_unmapped_inj; eauto. }
+  eapply store_unmapped_inj; eauto.
 (* freeblocks *)
-  { eauto with mem. }
+  eauto with mem.
 (* mappedblocks *)
-  { eauto with mem. }
+  eauto with mem.
 (* no overlap *)
-  { red; intros. eauto with mem. }
+  red; intros. eauto with mem.
 (* representable *)
-  { intros. eapply mi_representable; try eassumption.
-    destruct H4; eauto with mem. }
+  intros. eapply mi_representable; try eassumption.
+  destruct H3; eauto with mem.
 (* perm inv *)
-  { intros. exploit mi_perm_inv0; eauto using perm_store_2.
-    intuition eauto using perm_store_1, perm_store_2. }
+  intros. exploit mi_perm_inv0; eauto using perm_store_2.
+  intuition eauto using perm_store_1, perm_store_2.
 Qed.
 
 Theorem store_outside_inject:
   forall f m1 m2 chunk b ofs v m2',
-    v <> Vundef ->
   inject f m1 m2 ->
   (forall b' delta ofs',
     f b' = Some(b, delta) ->
@@ -3696,7 +3584,7 @@ Theorem store_outside_inject:
   store chunk m2 b ofs v = Some m2' ->
   inject f m1 m2'.
 Proof.
-  intros. inversion H0. constructor.
+  intros. inversion H. constructor.
 (* inj *)
   eapply store_outside_inj; eauto.
 (* freeblocks *)
@@ -3713,7 +3601,6 @@ Qed.
 
 Theorem storev_mapped_inject:
   forall f chunk m1 a1 v1 n1 m2 a2 v2,
-    v1 <> Vundef ->
   inject f m1 m2 ->
   storev chunk m1 a1 v1 = Some n1 ->
   Val.inject f a1 a2 ->
@@ -3721,7 +3608,7 @@ Theorem storev_mapped_inject:
   exists n2,
     storev chunk m2 a2 v2 = Some n2 /\ inject f n1 n2.
 Proof.
-  intros. inv H2; simpl in H1; try discriminate.
+  intros. inv H1; simpl in H0; try discriminate.
   unfold storev.
   replace (Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)))
     with (Ptrofs.unsigned ofs1 + delta).
@@ -4401,7 +4288,6 @@ Qed.
 
 Theorem store_inject_neutral:
   forall chunk m b ofs v m' thr,
-    v <> Vundef ->
   store chunk m b ofs v = Some m' ->
   inject_neutral thr m ->
   Plt b thr ->
@@ -4409,7 +4295,7 @@ Theorem store_inject_neutral:
   inject_neutral thr m'.
 Proof.
   intros; red.
-  exploit store_mapped_inj. eauto. eauto. eauto. apply flat_inj_no_overlap.
+  exploit store_mapped_inj. eauto. eauto. apply flat_inj_no_overlap.
   unfold flat_inj. apply pred_dec_true; auto. eauto.
   replace (ofs + 0) with ofs by lia.
   intros [m'' [A B]]. congruence.
@@ -4550,20 +4436,19 @@ Qed.
 
 Lemma store_unchanged_on:
   forall chunk m b ofs v m',
-    v <> Vundef ->
   store chunk m b ofs v = Some m' ->
   (forall i, ofs <= i < ofs + size_chunk chunk -> ~ P b i) ->
   unchanged_on m m'.
 Proof.
   intros; constructor; intros.
-- rewrite (nextblock_store _ _ _ _ _ _ H H0). apply Ple_refl.
+- rewrite (nextblock_store _ _ _ _ _ _ H). apply Ple_refl.
 - split; intros; eauto with mem.
 - erewrite store_mem_contents; eauto. rewrite PMap.gsspec.
   destruct (peq b0 b); auto. subst b0. apply setN_outside.
   rewrite encode_val_length. rewrite <- size_chunk_conv.
   destruct (zlt ofs0 ofs); auto.
   destruct (zlt ofs0 (ofs + size_chunk chunk)); auto.
-  elim (H1 ofs0). lia. auto.
+  elim (H0 ofs0). lia. auto.
 Qed.
 
 Lemma storebytes_unchanged_on:

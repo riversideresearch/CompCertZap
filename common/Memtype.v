@@ -398,54 +398,53 @@ Axiom loadbytes_split:
   is valid for writing. *)
 
 Axiom nextblock_store:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   nextblock m2 = nextblock m1.
 Axiom store_valid_block_1:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall b', valid_block m1 b' -> valid_block m2 b'.
 Axiom store_valid_block_2:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall b', valid_block m2 b' -> valid_block m1 b'.
 
 Axiom perm_store_1:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall b' ofs' k p, perm m1 b' ofs' k p -> perm m2 b' ofs' k p.
 Axiom perm_store_2:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall b' ofs' k p, perm m2 b' ofs' k p -> perm m1 b' ofs' k p.
 
 Axiom valid_access_store:
   forall m1 chunk b ofs v,
-    v <> Vundef ->
   valid_access m1 chunk b ofs Writable ->
   { m2: mem | store chunk m1 b ofs v = Some m2 }.
 Axiom store_valid_access_1:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall chunk' b' ofs' p,
   valid_access m1 chunk' b' ofs' p -> valid_access m2 chunk' b' ofs' p.
 Axiom store_valid_access_2:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall chunk' b' ofs' p,
   valid_access m2 chunk' b' ofs' p -> valid_access m1 chunk' b' ofs' p.
 Axiom store_valid_access_3:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   valid_access m1 chunk b ofs Writable.
 
 (** Load-store properties. *)
 
 Axiom load_store_similar:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall chunk',
   size_chunk chunk' = size_chunk chunk ->
   align_chunk chunk' <= align_chunk chunk ->
   exists v', load chunk' m2 b ofs = Some v' /\ decode_encode_val v chunk chunk' v'.
 
 Axiom load_store_same:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   load chunk m2 b ofs = Some (Val.load_result chunk v).
 
 Axiom load_store_other:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall chunk' b' ofs',
   b' <> b
   \/ ofs' + size_chunk chunk' <= ofs
@@ -477,7 +476,6 @@ Axiom load_store_pointer_mismatch:
   v = Vundef.
 Axiom load_pointer_store:
   forall chunk m1 b ofs v m2 chunk' b' ofs' v_b v_o,
-    v <> Vundef ->
   store chunk m1 b ofs v = Some m2 ->
   load chunk' m2 b' ofs' = Some(Vptr v_b v_o) ->
   (v = Vptr v_b v_o /\ compat_pointer_chunks chunk chunk' /\ b' = b /\ ofs' = ofs)
@@ -486,10 +484,10 @@ Axiom load_pointer_store:
 (** Load-store properties for [loadbytes]. *)
 
 Axiom loadbytes_store_same:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   loadbytes m2 b ofs (size_chunk chunk) = Some(encode_val chunk v).
 Axiom loadbytes_store_other:
-  forall chunk m1 b ofs v m2, v <> Vundef -> store chunk m1 b ofs v = Some m2 ->
+  forall chunk m1 b ofs v m2, store chunk m1 b ofs v = Some m2 ->
   forall b' ofs' n,
   b' <> b \/ n <= 0 \/ ofs' + n <= ofs \/ ofs + size_chunk chunk <= ofs' ->
   loadbytes m2 b' ofs' n = loadbytes m1 b' ofs' n.
@@ -499,15 +497,12 @@ Axiom loadbytes_store_other:
 
 Axiom store_bool_unsigned_8:
   forall m b ofs v,
-    v <> Vundef ->
   store Mbool m b ofs v = store Mint8unsigned m b ofs v.
 Axiom store_signed_unsigned_8:
   forall m b ofs v,
-    v <> Vundef ->
   store Mint8signed m b ofs v = store Mint8unsigned m b ofs v.
 Axiom store_signed_unsigned_16:
   forall m b ofs v,
-    v <> Vundef ->
   store Mint16signed m b ofs v = store Mint16unsigned m b ofs v.
 Axiom store_int8_zero_ext:
   forall m b ofs n,
@@ -567,14 +562,12 @@ Axiom storebytes_valid_block_2:
 
 Axiom storebytes_store:
   forall m1 b ofs chunk v m2,
-    v <> Vundef ->
   storebytes m1 b ofs (encode_val chunk v) = Some m2 ->
   (align_chunk chunk | ofs) ->
   store chunk m1 b ofs v = Some m2.
 
 Axiom store_storebytes:
   forall m1 b ofs chunk v m2,
-    v <> Vundef ->
   store chunk m1 b ofs v = Some m2 ->
   storebytes m1 b ofs (encode_val chunk v) = Some m2.
 
@@ -851,7 +844,6 @@ Axiom loadbytes_extends:
 
 Axiom store_within_extends:
   forall chunk m1 m2 b ofs v1 m1' v2,
-    v1 <> Vundef ->
   extends m1 m2 ->
   store chunk m1 b ofs v1 = Some m1' ->
   Val.lessdef v1 v2 ->
@@ -861,7 +853,6 @@ Axiom store_within_extends:
 
 Axiom store_outside_extends:
   forall chunk m1 m2 b ofs v m2',
-    v <> Vundef ->
   extends m1 m2 ->
   store chunk m2 b ofs v = Some m2' ->
   (forall ofs', perm m1 b ofs' Cur Readable -> ofs <= ofs' < ofs + size_chunk chunk -> False) ->
@@ -869,7 +860,6 @@ Axiom store_outside_extends:
 
 Axiom storev_extends:
   forall chunk m1 m2 addr1 v1 m1' addr2 v2,
-    v1 <> Vundef ->
   extends m1 m2 ->
   storev chunk m1 addr1 v1 = Some m1' ->
   Val.lessdef addr1 addr2 ->
@@ -1080,7 +1070,6 @@ Axiom loadbytes_inject:
 
 Axiom store_mapped_inject:
   forall f chunk m1 b1 ofs v1 n1 m2 b2 delta v2,
-    v1 <> Vundef ->
   inject f m1 m2 ->
   store chunk m1 b1 ofs v1 = Some n1 ->
   f b1 = Some (b2, delta) ->
@@ -1091,7 +1080,6 @@ Axiom store_mapped_inject:
 
 Axiom store_unmapped_inject:
   forall f chunk m1 b1 ofs v1 n1 m2,
-    v1 <> Vundef ->
   inject f m1 m2 ->
   store chunk m1 b1 ofs v1 = Some n1 ->
   f b1 = None ->
@@ -1099,7 +1087,6 @@ Axiom store_unmapped_inject:
 
 Axiom store_outside_inject:
   forall f m1 m2 chunk b ofs v m2',
-    v <> Vundef ->
   inject f m1 m2 ->
   (forall b' delta ofs',
     f b' = Some(b, delta) ->
@@ -1110,7 +1097,6 @@ Axiom store_outside_inject:
 
 Axiom storev_mapped_inject:
   forall f chunk m1 a1 v1 n1 m2 a2 v2,
-    v1 <> Vundef ->
   inject f m1 m2 ->
   storev chunk m1 a1 v1 = Some n1 ->
   Val.inject f a1 a2 ->
@@ -1246,7 +1232,6 @@ Axiom alloc_inject_neutral:
 
 Axiom store_inject_neutral:
   forall chunk m b ofs v m' thr,
-    v <> Vundef ->
   store chunk m b ofs v = Some m' ->
   inject_neutral thr m ->
   Plt b thr ->
