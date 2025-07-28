@@ -43,10 +43,10 @@ Local Open Scope string_scope.
 
 Definition smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
-  | Tint => Some ("__smove_int", BI_smove_int)
-  | Tlong => Some ("__smove_long", BI_smove_long)
-  | Tsingle => Some ("__smove_single", BI_smove_single)
-  | Tfloat => Some ("__smove_float", BI_smove_float)
+  | Tint => Some ("__builtin_smove_int", BI_smove_int)
+  | Tlong => Some ("__builtin_smove_long", BI_smove_long)
+  | Tsingle => Some ("__builtin_smove_single", BI_smove_single)
+  | Tfloat => Some ("__builtin_smove_float", BI_smove_float)
   | _ => None
   end.
 
@@ -61,19 +61,19 @@ Definition smove (ty : typ) (src dst : reg)
 
 Definition maj_vote3_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
-  | Tint => Some ("__vote_int3", BI_vote_int)
-  | Tlong => Some ("__vote_long3", BI_vote_long)
-  | Tsingle => Some ("__vote_single3", BI_vote_single)
-  | Tfloat => Some ("__vote_float3", BI_vote_float)
+  | Tint => Some ("__builtin_vote_int3", BI_vote_int)
+  | Tlong => Some ("__builtin_vote_long3", BI_vote_long)
+  | Tsingle => Some ("__builtin_vote_single3", BI_vote_single)
+  | Tfloat => Some ("__builtin_vote_float3", BI_vote_float)
   | _ => None
   end.
 
 Definition maj_vote_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
-  | Tint => Some ("__vote_int", BI_vote_int)
-  | Tlong => Some ("__vote_long", BI_vote_long)
-  | Tsingle => Some ("__vote_single", BI_vote_single)
-  | Tfloat => Some ("__vote_float", BI_vote_float)
+  | Tint => Some ("__builtin_vote_int", BI_vote_int)
+  | Tlong => Some ("__builtin_vote_long", BI_vote_long)
+  | Tsingle => Some ("__builtin_vote_single", BI_vote_single)
+  | Tfloat => Some ("__builtin_vote_float", BI_vote_float)
   | _ => None
   end.
 

@@ -403,13 +403,11 @@ Section three.
          |}).
 
   Inductive match_fundef : fundef -> fundef -> Prop :=
-  | match_internal :
-    forall re rm f tf
+  | match_internal : forall re rm f tf
       (WT: wt_function f re)
       (FUN : match_function re rm f tf),
       match_fundef (Internal f) (Internal tf)
-  | match_external :
-    forall f,
+  | match_external : forall f,
       match_fundef (External f) (External f).
 
   Lemma rm_l_map_rm rm l :

@@ -167,6 +167,7 @@ BACKEND=\
   Unusedglob.v Unusedglobproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v \
   Replicate.v Replicatespec.v Replicateproof.v Builtins2.v \
+  RTLfault.v RTLcolor.v RTLtolerant.v \
   Allocation.v Allocproof.v \
   Tunneling.v Tunnelingproof.v \
   Linear.v Lineartyping.v \

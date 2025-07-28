@@ -46,11 +46,11 @@ Qed.
 
 Local Open Scope positive_scope.
 
-Definition match_prog v (prog tprog: program) :=
-  match_program (fun cu f tf => transf_fundef v f = OK tf) eq prog tprog.
+Definition match_prog three (prog tprog: program) :=
+  match_program (fun cu f tf => transf_fundef three f = OK tf) eq prog tprog.
 
 Lemma transf_program_match:
-  forall v prog tprog, transf_program v prog = OK tprog -> match_prog v prog tprog.
+  forall three prog tprog, transf_program three prog = OK tprog -> match_prog three prog tprog.
 Proof.
   intros. eapply match_transform_partial_program_contextual; eauto.
 Qed.
@@ -827,15 +827,6 @@ Section PRESERVATION.
         rewrite <- Hr3, <- Hr2.
         destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
         2: { rewrite PMap.gso; auto. }
-        (* destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]. *)
-        (* * rewrite PMap.gss; reflexivity. *)
-        (* * destruct (Int64.eq_dec i i); simpl; try congruence. *)
-        (*   rewrite PMap.gss; reflexivity. *)
-        (* * destruct Archi.ptr64 eqn:Harchi; simpl. *)
-        (*   2: { simpl in Hact; congruence. } *)
-        (*   destruct (eq_block _ _); simpl; try congruence. *)
-        (*   destruct (Ptrofs.eq_dec _ _); simpl; try congruence. *)
-        (*   rewrite PMap.gss; reflexivity. } *)
         destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
           try solve[rewrite PMap.gss; reflexivity];
           try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
@@ -938,15 +929,6 @@ Section PRESERVATION.
         rewrite <- Hr3, <- Hr2.
         destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
         2: { rewrite PMap.gso; auto. }
-        (* destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]. *)
-        (* * rewrite PMap.gss; reflexivity. *)
-        (* * destruct (Int64.eq_dec i i); simpl; try congruence. *)
-        (*   rewrite PMap.gss; reflexivity. *)
-        (* * destruct Archi.ptr64 eqn:Harchi; simpl. *)
-        (*   2: { simpl in Hact; congruence. } *)
-        (*   destruct (eq_block _ _); simpl; try congruence. *)
-        (*   destruct (Ptrofs.eq_dec _ _); simpl; try congruence. *)
-        (*   rewrite PMap.gss; reflexivity. } *)
         destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
           try solve[rewrite PMap.gss; reflexivity];
           try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
