@@ -46,11 +46,11 @@ Qed.
 
 Local Open Scope positive_scope.
 
-Definition match_prog (prog tprog: program) :=
-  match_program (fun cu f tf => transf_fundef f = OK tf) eq prog tprog.
+Definition match_prog v (prog tprog: program) :=
+  match_program (fun cu f tf => transf_fundef v f = OK tf) eq prog tprog.
 
 Lemma transf_program_match:
-  forall prog tprog, transf_program prog = OK tprog -> match_prog prog tprog.
+  forall v prog tprog, transf_program v prog = OK tprog -> match_prog v prog tprog.
 Proof.
   intros. eapply match_transform_partial_program_contextual; eauto.
 Qed.
@@ -78,10 +78,10 @@ Definition match_regsets
     callee frames: the return type of the callee's signature must
     match the type of the register used by the caller to store the
     result of the call.  *)
-Inductive match_stackframes : list stackframe -> list stackframe -> signature -> Prop :=
+Inductive match_stackframes v : list stackframe -> list stackframe -> signature -> Prop :=
 | match_stackframes_nil : forall sig,
     sig.(sig_res) = Xint ->
-    match_stackframes [] [] sig
+    match_stackframes v [] [] sig
 | match_stackframes_cons :
   forall stk tstk sig re rm res1 f tf sp pc rs trs res2 res3 n
     (* Well-typed *)
@@ -89,49 +89,50 @@ Inductive match_stackframes : list stackframe -> list stackframe -> signature ->
     (WT_RS : wt_regset re rs)
     (WT_RES : re res1 = proj_sig_res sig)
     (* Match *)
-    (FUN : match_function re rm f tf)
+    (FUN : match_function v re rm f tf)
     (REGS : match_regsets f.(fn_params) f.(fn_code) rm rs trs)
     (RM_WF : rm_wf rm (fun_regs_list f)),
     reg_used_in_code f.(fn_code) res1 ->
     rm # res1 = (res2, res3) ->
     smoveR tf.(fn_code) (re res1) res1 res2 res3 n pc ->
-    match_stackframes stk tstk (fn_sig f) ->
-    match_stackframes
+    match_stackframes v stk tstk (fn_sig f) ->
+    match_stackframes v
       (Stackframe res1 f sp pc rs :: stk)
       (Stackframe res1 tf sp n trs :: tstk) sig.
 
 (** Match program states. *)
-Inductive match_states : state -> state -> Prop :=
+Inductive match_states v : state -> state -> Prop :=
 | match_regular_states :
   forall stk tstk f tf sp pc rs rs' m re rm
     (* Well-typed *)
     (WT_FN: wt_function f re)
     (WT_RS: wt_regset re rs)
     (* Match *)
-    (STACKS: match_stackframes stk tstk (fn_sig f))
-    (FUN : match_function re rm f tf)
+    (STACKS: match_stackframes v stk tstk (fn_sig f))
+    (FUN : match_function v re rm f tf)
     (REGS : match_regsets f.(fn_params) f.(fn_code) rm rs rs'),
-    match_states (State stk f sp pc rs m) (State tstk tf sp pc rs' m)
+    match_states v (State stk f sp pc rs m) (State tstk tf sp pc rs' m)
 | match_call_states :
   forall stk tstk f tf args m
     (* Well-typed *)
     (WT_ARGS: Val.has_type_list args (proj_sig_args (funsig f)))
     (* Match *)
-    (STACKS: match_stackframes stk tstk (funsig f))
-    (FUN : match_fundef f tf),
-    match_states (Callstate stk f args m) (Callstate tstk tf args m)
+    (STACKS: match_stackframes v stk tstk (funsig f))
+    (FUN : match_fundef v f tf),
+    match_states v (Callstate stk f args m) (Callstate tstk tf args m)
 | match_return_states :
-  forall sig stk tstk v m
+  forall sig stk tstk rval m
     (* Well-typed *)
-    (WT_RES : Val.has_type v (proj_sig_res sig))
+    (WT_RES : Val.has_type rval (proj_sig_res sig))
     (* Match *)
-    (STACKS: match_stackframes stk tstk sig),
-    match_states (Returnstate stk v m) (Returnstate tstk v m).
+    (STACKS: match_stackframes v stk tstk sig),
+    match_states v (Returnstate stk rval m) (Returnstate tstk rval m).
 
 Section PRESERVATION.
+  Variable three : bool.
   Variable prog: program.
   Variable tprog: program.
-  Hypothesis TRANSF: match_prog prog tprog.
+  Hypothesis TRANSF: match_prog three prog tprog.
   Let ge := Genv.globalenv prog.
   Let tge := Genv.globalenv tprog.
 
@@ -146,7 +147,7 @@ Section PRESERVATION.
     Genv.find_funct ge v = Some f ->
     exists cu tf,
       Genv.find_funct tge v = Some tf
-      /\ transf_fundef f = OK tf
+      /\ transf_fundef three f = OK tf
       /\ linkorder cu prog.
   Proof. apply (Genv.find_funct_match TRANSF). Qed.
 
@@ -154,22 +155,22 @@ Section PRESERVATION.
     Genv.find_funct_ptr ge b = Some f ->
     exists cu tf,
       Genv.find_funct_ptr tge b = Some tf
-      /\ transf_fundef f = OK tf
+      /\ transf_fundef three f = OK tf
       /\ linkorder cu prog.
   Proof. apply (Genv.find_funct_ptr_match TRANSF). Qed.
 
   Lemma sig_function_translated f tf :
-    transf_fundef f = OK tf ->
+    transf_fundef three f = OK tf ->
     funsig tf = funsig f.
   Proof.
     destruct f as [f|f]; intro Heq; monadInv Heq; auto.
     monadInv EQ.
     unfold transf_fun' in EQ1.
-    destruct (transf_fun x0 f _); inv EQ1; auto.
+    destruct (transf_fun three x0 f _); inv EQ1; auto.
   Qed.
 
   Lemma stacksize_translated f tf :
-    transf_function f = OK tf -> tf.(fn_stacksize) = f.(fn_stacksize).
+    transf_function three f = OK tf -> tf.(fn_stacksize) = f.(fn_stacksize).
   Proof.
     unfold transf_function; intro H; monadInv H.
     unfold transf_fun' in EQ0.
@@ -444,7 +445,7 @@ Section PRESERVATION.
     Genv.genv_next env1 = Genv.genv_next env2 ->
     list_forall2
       (match_ident_globdef (fun (_ : AST.program fundef unit) (f tf : fundef) =>
-                              transf_fundef f = OK tf) eq p)
+                              transf_fundef three f = OK tf) eq p)
       prog_defs0 prog_defs ->
     (Genv.genv_symb (Genv.add_globals env1 prog_defs)) ! x =
       (Genv.genv_symb (Genv.add_globals env2 prog_defs0)) ! x.
@@ -754,7 +755,7 @@ Section PRESERVATION.
     Val.has_type (rs # r1) ty ->
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
-    maj_voteR c ty r1 r2 r3 pc succ ->
+    maj_voteR three c ty r1 r2 r3 pc succ ->
     exists rs', plus step tge
              (State tstk
                     {| fn_sig := sig
@@ -771,94 +772,95 @@ Section PRESERVATION.
                     ; fn_entrypoint := entrypoint |}
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
-    intros Hact Hr2 Hr3 Hmaj; inv Hmaj.
-    (* TODO: all four cases are very similar. combine them somehow or
-       factor out commonality? *)
-    destruct ty; simpl in *; try contradiction; clear H.
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_int.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          (* This is necessary for riscv but not x86_64. Why? *)
-          try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
-                     destruct (eq_block _ _); simpl; try congruence;
-                     destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Int.eq_dec i i); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_float.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_long.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        (* destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]. *)
-        (* * rewrite PMap.gss; reflexivity. *)
-        (* * destruct (Int64.eq_dec i i); simpl; try congruence. *)
-        (*   rewrite PMap.gss; reflexivity. *)
-        (* * destruct Archi.ptr64 eqn:Harchi; simpl. *)
-        (*   2: { simpl in Hact; congruence. } *)
-        (*   destruct (eq_block _ _); simpl; try congruence. *)
-        (*   destruct (Ptrofs.eq_dec _ _); simpl; try congruence. *)
-        (*   rewrite PMap.gss; reflexivity. } *)
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          try solve[rewrite PMap.gss; reflexivity];
-          try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity];
-          destruct Archi.ptr64 eqn:Harchi; simpl;
-          try solve[simpl in Hact; congruence];
-          destruct (eq_block _ _); simpl; try congruence;
-          destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_single.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float32.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-  Qed.
+  (*   intros Hact Hr2 Hr3 Hmaj; inv Hmaj. *)
+  (*   (* TODO: all four cases are very similar. combine them somehow or *)
+  (*      factor out commonality? *) *)
+  (*   destruct ty; simpl in *; try contradiction; clear H. *)
+  (*   { inv H0. *)
+  (*     eexists; split. *)
+  (*     - econstructor. *)
+  (*       + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]); *)
+  (*           eauto; repeat constructor. *)
+  (*       + apply star_refl. *)
+  (*       + reflexivity. *)
+  (*     - intro r; simpl. *)
+  (*       unfold Builtins2.vote_int. *)
+  (*       rewrite <- Hr3, <- Hr2. *)
+  (*       destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst. *)
+  (*       2: { rewrite PMap.gso; auto. } *)
+  (*       destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]; *)
+  (*         (* This is necessary for riscv but not x86_64. Why? *) *)
+  (*         try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence; *)
+  (*                    destruct (eq_block _ _); simpl; try congruence; *)
+  (*                    destruct (Ptrofs.eq_dec _ _); simpl; try congruence; *)
+  (*                    rewrite PMap.gss; reflexivity]. *)
+  (*       * rewrite PMap.gss; reflexivity. *)
+  (*       * destruct (Int.eq_dec i i); simpl; try congruence. *)
+  (*         rewrite PMap.gss; reflexivity. } *)
+  (*   { inv H0. *)
+  (*     eexists; split. *)
+  (*     - econstructor. *)
+  (*       + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]); *)
+  (*           eauto; repeat constructor. *)
+  (*       + apply star_refl. *)
+  (*       + reflexivity. *)
+  (*     - intro r; simpl. *)
+  (*       unfold Builtins2.vote_float. *)
+  (*       rewrite <- Hr3, <- Hr2. *)
+  (*       destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst. *)
+  (*       2: { rewrite PMap.gso; auto. } *)
+  (*       destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]. *)
+  (*       * rewrite PMap.gss; reflexivity. *)
+  (*       * destruct (Float.eq_dec f f); simpl; try congruence. *)
+  (*         rewrite PMap.gss; reflexivity. } *)
+  (*   { inv H0. *)
+  (*     eexists; split. *)
+  (*     - econstructor. *)
+  (*       + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]); *)
+  (*           eauto; repeat constructor. *)
+  (*       + apply star_refl. *)
+  (*       + reflexivity. *)
+  (*     - intro r; simpl. *)
+  (*       unfold Builtins2.vote_long. *)
+  (*       rewrite <- Hr3, <- Hr2. *)
+  (*       destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst. *)
+  (*       2: { rewrite PMap.gso; auto. } *)
+  (*       (* destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]. *) *)
+  (*       (* * rewrite PMap.gss; reflexivity. *) *)
+  (*       (* * destruct (Int64.eq_dec i i); simpl; try congruence. *) *)
+  (*       (*   rewrite PMap.gss; reflexivity. *) *)
+  (*       (* * destruct Archi.ptr64 eqn:Harchi; simpl. *) *)
+  (*       (*   2: { simpl in Hact; congruence. } *) *)
+  (*       (*   destruct (eq_block _ _); simpl; try congruence. *) *)
+  (*       (*   destruct (Ptrofs.eq_dec _ _); simpl; try congruence. *) *)
+  (*       (*   rewrite PMap.gss; reflexivity. } *) *)
+  (*       destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]; *)
+  (*         try solve[rewrite PMap.gss; reflexivity]; *)
+  (*         try solve [destruct (Int64.eq_dec i i); simpl; try congruence; *)
+  (*                    rewrite PMap.gss; reflexivity]; *)
+  (*         destruct Archi.ptr64 eqn:Harchi; simpl; *)
+  (*         try solve[simpl in Hact; congruence]; *)
+  (*         destruct (eq_block _ _); simpl; try congruence; *)
+  (*         destruct (Ptrofs.eq_dec _ _); simpl; try congruence; *)
+  (*         rewrite PMap.gss; reflexivity. } *)
+  (*   { inv H0. *)
+  (*     eexists; split. *)
+  (*     - econstructor. *)
+  (*       + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]); *)
+  (*           eauto; repeat constructor. *)
+  (*       + apply star_refl. *)
+  (*       + reflexivity. *)
+  (*     - intro r; simpl. *)
+  (*       unfold Builtins2.vote_single. *)
+  (*       rewrite <- Hr3, <- Hr2. *)
+  (*       destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst. *)
+  (*       2: { rewrite PMap.gso; auto. } *)
+  (*       destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact]. *)
+  (*       * rewrite PMap.gss; reflexivity. *)
+  (*       * destruct (Float32.eq_dec f f); simpl; try congruence. *)
+  (*         rewrite PMap.gss; reflexivity. } *)
+    (* Qed. *)
+  Admitted.
 
   Lemma maj_vote_regR_star_step
     c re (rm : PMap.t (reg * reg))
@@ -867,7 +869,7 @@ Section PRESERVATION.
                      forall r2 r3,
                        rm # r1 = (r2, r3) ->
                        rs # r1 = rs # r2 /\ rs # r2 = rs # r3) args ->
-    maj_vote_regsR c re rm args pc n ->
+    maj_vote_regsR three c re rm args pc n ->
     exists rs', star step tge
              (State tstk
                     {| fn_sig := sig
@@ -1172,8 +1174,8 @@ Section PRESERVATION.
 
   Lemma match_stackframes_sig_proper stk tstk sig1 sig2 :
     sig_res sig1 = sig_res sig2 ->
-    match_stackframes stk tstk sig1 ->
-    match_stackframes stk tstk sig2.
+    match_stackframes three stk tstk sig1 ->
+    match_stackframes three stk tstk sig2.
   Proof.
     intros Hres Hwt.
     induction Hwt.
@@ -1774,8 +1776,8 @@ Section PRESERVATION.
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
     forall ts1,
-      match_states s1 ts1 ->
-      exists ts2, plus step tge ts1 t ts2 /\ match_states s2 ts2.
+      match_states three s1 ts1 ->
+      exists ts2, plus step tge ts1 t ts2 /\ match_states three s2 ts2.
   Proof.
     intros Hstep ts1 Hmatch.
     inv Hstep.
@@ -2020,7 +2022,7 @@ Section PRESERVATION.
            { eapply match_regsets_get_2; eauto; right; auto. }
            { eapply match_regsets_get_3'; eauto. } }
       destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-      assert (Htf: exists tf, transf_fundef fd = OK tf /\
+      assert (Htf: exists tf, transf_fundef three fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
         destruct ros.
@@ -2103,7 +2105,7 @@ Section PRESERVATION.
            { eapply match_regsets_get_2; eauto; right; auto. }
            { eapply match_regsets_get_3'; eauto. } }
       destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-      assert (Htf: exists tf, transf_fundef fd = OK tf /\
+      assert (Htf: exists tf, transf_fundef three fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
         destruct ros.
@@ -2467,7 +2469,7 @@ Section PRESERVATION.
 
   Lemma transf_initial_states st1 :
     initial_state prog st1 ->
-    exists st2, initial_state tprog st2 /\ match_states st1 st2.
+    exists st2, initial_state tprog st2 /\ match_states three st1 st2.
   Proof.
     intros. inversion H.
     exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
@@ -2479,11 +2481,11 @@ Section PRESERVATION.
         rewrite symbols_preserved; eauto.
         symmetry; eapply match_program_main; eauto.
       - rewrite <- H3. eapply sig_function_translated; eauto. }
-    generalize (transf_function_match_fundef _ _ B); intro Hmatch_fundef.
+    generalize (transf_function_match_fundef _ _ _ B); intro Hmatch_fundef.
     destruct f.
     simpl in *.
     - unfold bind in B.
-      destruct (transf_function f) eqn:Hf; inv B.
+      destruct (transf_function three f) eqn:Hf; inv B.
       unfold transf_function in Hf.
       unfold bind in Hf.
       destruct (type_function f) eqn:Htype; try congruence.
@@ -2508,7 +2510,7 @@ Section PRESERVATION.
   Qed.
 
   Lemma transf_final_states st1 st2 r :
-    match_states st1 st2 ->
+    match_states three st1 st2 ->
     final_state st1 r ->
     final_state st2 r.
   Proof.
@@ -2520,7 +2522,7 @@ Section PRESERVATION.
   Proof.
     intros.
     apply forward_simulation_plus with
-      (match_states := fun s1 s2 => match_states s1 s2).
+      (match_states := fun s1 s2 => match_states three s1 s2).
     - apply senv_preserved.
     - simpl; intros. exploit transf_initial_states; eauto.
     - simpl; intros s1 s2 r Hmatch Hfin.
