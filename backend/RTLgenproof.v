@@ -1313,20 +1313,23 @@ Proof.
   econstructor; eauto. constructor.
 
   (* skip return *)
-  inv TS.
-  assert ((fn_code tf)!ncont = Some(Ireturn rret)
-          /\ match_stacks k cs).
+  { inv TS.
+    assert ((fn_code tf)!ncont = Some(Ireturn rret)
+            /\ match_stacks k cs).
     inv TK; simpl in H; try contradiction; auto.
-  destruct H1.
-  assert (fn_stacksize tf = fn_stackspace f).
+    destruct H1.
+    assert (fn_stacksize tf = fn_stackspace f).
     inv TF. auto.
-  edestruct Mem.free_parallel_extends as [tm' []]; eauto.
-  econstructor; split.
-  left; apply plus_one. eapply exec_Ireturn. eauto.
-  rewrite H3. eauto.
-  { destruct rret; auto.
+    edestruct Mem.free_parallel_extends as [tm' []]; eauto.
+    econstructor; split.
+    left; apply plus_one. eapply exec_Ireturn. eauto.
+    rewrite H3. eauto.
+    { (* is_call_cont *)
+      (*   tr_fun *)
+      (*     tr_cont *)
+      destruct rret; auto.
     admit. }
-  constructor; auto.
+  constructor; auto. }
 
   (* assign *)
   inv TS.
