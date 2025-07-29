@@ -26,6 +26,10 @@ Inductive zap : RTL.state -> RTL.state -> Prop :=
     val_compat (rs # r) v ->
     zap (State stk f sp pc rs m) (State stk f sp pc (rs # r <- v) m).
 
+(* TODO: may need to do this the way Dave did in the other faulty
+   semantics, where there's a single step rule with a maybe_fault
+   condition. That way, a single step in this semantics always
+   coincides with a single step in the nonfaulty semantics. *)
 Inductive fstep (ge : genv) : fstate -> trace -> fstate -> Prop :=
 | fstep_step : forall s t s' b,
     RTL.step ge s t s' ->

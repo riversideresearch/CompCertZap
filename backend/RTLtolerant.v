@@ -15,6 +15,7 @@ Require Import
   Values
 .
 
+Import ListNotations.
 Local Open Scope string_scope.
 
 Definition not_builtin (i : instruction) : Prop :=
@@ -23,19 +24,35 @@ Definition not_builtin (i : instruction) : Prop :=
   | _ => True
   end.
 
+Inductive match_builtins : string -> string -> Prop :=
+| match_builtins_int :
+  match_builtins "__builtin_vote_int3" "__builtin_vote_int"
+| match_builtins_long :
+  match_builtins "__builtin_vote_long3" "__builtin_vote_long"
+| match_builtins_single :
+  match_builtins "__builtin_vote_single3" "__builtin_vote_single"
+| match_builtins_float :
+  match_builtins "__builtin_vote_float3" "__builtin_vote_float"
+| match_builtins_other : forall nm,
+    ~ In nm ["__builtin_vote_int3"; "__builtin_vote_int";
+             "__builtin_vote_long3"; "__builtin_vote_long";
+             "__builtin_vote_single3"; "__builtin_vote_single";
+             "__builtin_vote_float3"; "__builtin_vote_float"] ->
+    match_builtins nm nm.
+
 Inductive match_votes_instruction : instruction -> instruction -> Prop :=
 | match_votes_builtin : forall nm1 nm2 sig args res succ,
-    (nm1 = "__builtin_vote_int3" <-> nm2 = "__builtin_vote_int") ->
-    (nm1 = "__builtin_vote_long3" <-> nm2 = "__builtin_vote_long") ->
-    (nm1 = "__builtin_vote_single3" <-> nm2 = "__builtin_vote_single") ->
-    (nm1 = "__builtin_vote_float3" <-> nm2 = "__builtin_vote_float") ->
+    (* (nm1 = "__builtin_vote_int3" <-> nm2 = "__builtin_vote_int") -> *)
+    (* (nm1 = "__builtin_vote_long3" <-> nm2 = "__builtin_vote_long") -> *)
+    (* (nm1 = "__builtin_vote_single3" <-> nm2 = "__builtin_vote_single") -> *)
+    (* (nm1 = "__builtin_vote_float3" <-> nm2 = "__builtin_vote_float") -> *)
+    match_builtins nm1 nm2 ->
     match_votes_instruction
       (Ibuiltin (EF_builtin nm1 sig) args res succ)
       (Ibuiltin (EF_builtin nm2 sig) args res succ)
 | match_votes_other : forall i,
     not_builtin i ->
-    match_votes_instruction i i
-.
+    match_votes_instruction i i.
 
 Inductive liftOpt {A B : Type} (R : A -> B -> Prop) : option A -> option B -> Prop :=
 | liftOpt_None :
@@ -49,6 +66,7 @@ Definition match_votes_code (c c' : code) : Prop :=
 
 Inductive match_votes_function : function -> function -> Prop :=
 | match_votes_fun : forall sig params stacksize c c' entrypoint,
+    match_votes_code c c' ->
     match_votes_function {| fn_sig := sig
                           ; fn_params := params
                           ; fn_stacksize := stacksize
@@ -92,6 +110,9 @@ Admitted.
 Section match_states.
   Variable col : reg -> color.
 
+  (* TODO: need to know that the values of the faulted color registers
+     are at still the same kind (either both undef, ints, floats,
+     etc.). *)
   Definition match_rs (b : bool) (rs1 rs2 : regset) : Prop :=
     if b then
       exists c, basic_color c /\ forall r, col r <> c -> Val.lessdef (rs1 # r) (rs2 # r)
@@ -114,16 +135,19 @@ Section match_states.
       Forall2 (match_stackframes b) stk1 stk2 ->
       match_votes_function f1 f2 ->
       match_rs b rs1 rs2 ->
-      match_states (State stk1 f1 sp pc rs1 m) (mkfstate (State stk2 f2 sp pc rs2 m) b)
+      match_states (State stk1 f1 sp pc rs1 m)
+                   {| fs_state := State stk2 f2 sp pc rs2 m; fault := b |}
   | match_states_Callstate : forall stk1 stk2 fd1 fd2 args1 args2 m b,
       Forall2 (match_stackframes b) stk1 stk2 ->
       match_votes_fundef fd1 fd2 ->
       Forall2 Val.lessdef args1 args2 ->
-      match_states (Callstate stk1 fd1 args1 m) (mkfstate (Callstate stk2 fd2 args2 m) b)
+      match_states (Callstate stk1 fd1 args1 m)
+                   {| fs_state := Callstate stk2 fd2 args2 m; fault := b |}
   | match_state_Returnstate : forall stk1 stk2 v1 v2 m b,
       Forall2 (match_stackframes b) stk1 stk2 ->
       Val.lessdef v1 v2 ->
-      match_states (Returnstate stk1 v1 m) (mkfstate (Returnstate stk2 v2 m) b).
+      match_states (Returnstate stk1 v1 m)
+        {| fs_state := Returnstate stk2 v2 m; fault := b |}.
 
 End match_states.
 
@@ -149,6 +173,40 @@ Section TOLERANCE.
     fstep ge2 s2 t2 s2' ->
     t1 = t2 /\ match_states col s1' s2'.
   Proof.
+    intros Hmatch Hstep Hfstep.
+    inv Hstep.
+    - inv Hmatch.
+      inv H8.
+      simpl in *.
+      generalize (H0 pc); intro Hmatchvote.
+      inv Hmatchvote; try congruence.
+      inv H3; try congruence.
+      inv Hfstep.
+      + inv H10; simpl in *; try congruence.
+        split; auto.
+        rewrite H in H1.
+        inv H1.
+        rewrite <- H2 in H15.
+        inv H15.
+        repeat constructor; auto.
+      + split; auto.
+        inv H10.
+
+        (* rewrite  *)
+        (* rewrite H1 in H2. *)
+        
   Admitted.
 
 End TOLERANCE.
+
+(** TODO: top level theorem(s). Probably at least analogues of
+    transf_c_program_preservation and transf_c_program_is_refinement
+    from driver/Complements.v. Maybe also
+    transf_c_program_preserves_spec and
+    transf_c_program_preserves_initial_trace. *)
+
+(** Do we need to state these in terms of the original c programs, or
+    is it sufficient to prove them just at the target language between
+    non-faulty and faulty executions? They should compose, but it's a
+    question of whether we want to explicitly (formally) do that or
+    not. *)
