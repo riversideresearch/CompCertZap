@@ -1,5 +1,6 @@
 Require Import
   AST
+  Behaviors
   Builtins2
   Coqlib
   Events
@@ -276,35 +277,53 @@ End TOLERANCE.
     question of whether we want to explicitly (formally) do that or
     not. *)
 
-(* Theorem transf_c_program_to_rtl_preservation: *)
-(*   forall p tp beh, *)
-(*   transf_c_program p = OK tp -> *)
-(*   program_behaves (RTL.semantics tp) beh -> *)
-(*   exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh. *)
-(* Proof. *)
-(* (*   intros. eapply backward_simulation_behavior_improves; eauto. *) *)
-(* (*   apply transf_c_program_correct; auto. *) *)
-(*   (* Qed. *) *)
-(* Admitted. *)
+Lemma rtl_state_behaves_faulty_improves p1 p2 (s : RTL.state) (fs : fstate) beh1 beh2 :
+  match_votes_program p1 p2 ->
+  RTL.initial_state p1 s ->
+  initial_state (faulty_semantics p2) fs ->
+  state_behaves (RTL.semantics p1) s beh1 ->
+  state_behaves (faulty_semantics p2) fs beh2 ->
+  behavior_improves beh1 beh2.
+Proof.
+  intros Hmatchvotes Hinit1 Hinit2 Hbeh1 Hbeh2.
+  inv Hbeh1.
+  - left.
+    inv Hbeh2.
+    + admit.
+    + admit. (* contra *)
+    + admit. (* contra *)
+    + admit. (* contra *)
+  - left.
+    admit.
+  - left.
+    admit.
+  - right.
+    exists t; split; auto.
+    admit.
+Admitted.
 
-(* Theorem rtl_fault_tolerance: *)
-(*   forall p1 p2 beh beh', *)
-(*     match_votes_program p1 p2 -> *)
-(*     program_behaves (RTL.semantics p1) beh1 -> *)
-(*     program_behaves_faulty (RTL.semantics p2) beh2 -> *)
-(*     behavior_improves beh1 beh2. *)
-(* Proof. *)
-(*   intros. eapply backward_simulation_behavior_improves; eauto. *)
-(*   apply transf_c_program_correct; auto. *)
-(* Qed. *)
+Lemma match_votes_program_initial_state p1 p2 s :
+  match_votes_program p1 p2 ->
+  RTL.initial_state p1 s <-> RTL.initial_state p2 s.
+Admitted.
 
-(* Theorem transf_c_program_to_rtl_fault_tolerance: *)
-(*   forall p tp beh beh', *)
-(*   transf_c_program_to_rtl p = OK tp -> *)
-(*   program_behaves (Csem.semantics p) c_beh -> *)
-(*   program_behaves_faulty (RTL.semantics p) rtl_beh -> *)
-(*   behavior_improves c_beh rtl_beh. *)
-(* Proof. *)
-(*   intros. eapply backward_simulation_behavior_improves; eauto. *)
-(*   apply transf_c_program_correct; auto. *)
-(* Qed. *)
+Theorem rtl_fault_tolerance p1 p2 beh1 beh2 :
+  match_votes_program p1 p2 ->
+  program_behaves (RTL.semantics p1) beh1 ->
+  program_behaves (faulty_semantics p2) beh2 ->
+  behavior_improves beh1 beh2.
+Proof.
+  intros Hmatchvotes Hbeh1 Hbeh2.
+  inv Hbeh1.
+  - inv Hbeh2.
+    2: { exfalso; apply (H1 {| fs_state := s; fault := false |}).
+         constructor.
+         rewrite <- match_votes_program_initial_state; eauto.
+         apply H. }
+    eapply rtl_state_behaves_faulty_improves; eauto.
+  - inv Hbeh2.
+    { inv H0.
+      exfalso; apply (H s0).
+      eapply match_votes_program_initial_state; eauto. }
+    constructor; reflexivity.
+Qed.

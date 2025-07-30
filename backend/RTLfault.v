@@ -1,5 +1,7 @@
 Require Import
   Events
+  Globalenvs
+  Integers
   (* List *)
   Registers
   RTL
@@ -72,3 +74,14 @@ Inductive fstep (ge : genv) : fstate -> trace -> fstate -> Prop :=
     (STEP: RTL.step ge s t s')
     (ZAP: maybe_zap s' b s'' b'),
     fstep ge (mkfstate s b) t (mkfstate s'' b').
+
+Inductive initial_state (p : program) : fstate -> Prop :=
+| initial_state_intro : forall s,
+    RTL.initial_state p s ->
+    initial_state p {| fs_state := s; fault := false |}.
+
+Definition final_state (s : fstate) (r : int) : Prop :=
+  RTL.final_state s.(fs_state) r.
+
+Definition faulty_semantics (p : program) :=
+  Semantics fstep (initial_state p) final_state (Genv.globalenv p).

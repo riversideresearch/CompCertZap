@@ -17,6 +17,7 @@ Require Import Coqlib Errors.
 Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
+Require Import RTLfault RTLtolerant.
 
 (** * Preservation of whole-program behaviors *)
 
@@ -37,6 +38,52 @@ Proof.
   intros. eapply backward_simulation_behavior_improves; eauto.
   apply transf_c_program_correct; auto.
 Qed.
+
+Theorem transf_c_program_to_rtl_preservation:
+  forall p tp beh,
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (RTL.semantics tp) beh ->
+  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh.
+Proof.
+  intros. eapply backward_simulation_behavior_improves; eauto.
+  apply transf_c_program_to_rtl_correct; auto.
+Qed.
+
+(* Theorem transf_c_program_to_rtl_preservation_faulty: *)
+(*   forall p tp beh, *)
+(*   transf_c_program_to_rtl p = OK tp -> *)
+(*   program_behaves (faulty_semantics tp) beh -> *)
+(*   exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh. *)
+(* Proof. *)
+(*   (* TODO: compose transf_c_program_to_rtl_preservation with *)
+(*      RTLtolerant.rtl_fault_tolerance. *) *)
+(* Admitted. *)
+
+(* Lemma idfg p tp : *)
+(*   transf_c_program_to_rtl p = OK tp -> *)
+(*   exists tp', transf_c_program_to_rtl' p = OK tp' /\ match_votes_program tp' tp. *)
+
+Theorem transf_c_program_to_rtl_preservation_faulty:
+  forall p tp beh,
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (RTL.semantics tp) beh ->
+  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh /\
+            forall fbeh, program_behaves (faulty_semantics tp) fbeh -> behavior_improves beh' fbeh.
+Proof.
+  intros p tp beh Hp Hbeh.
+  pose proof Hbeh as H.
+  eapply backward_simulation_behavior_improves in H.
+  destruct H as (beh1 & Hbeh1 & Himp).
+  exists beh1; repeat split.
+  - eauto.
+  - auto.
+  - intros fbeh Hfbeh.
+    eapply behavior_improves_trans; eauto.
+    eapply rtl_fault_tolerance. eauto.
+  (* apply transf_c_program_to_rtl_correct; auto. *)
+  (* TODO: compose transf_c_program_to_rtl_preservation with
+     RTLtolerant.rtl_fault_tolerance. *)
+Admitted.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is
