@@ -49,21 +49,6 @@ Proof.
   eapply transf_c_program_to_rtl_correct; eauto.
 Qed.
 
-(* Theorem transf_c_program_to_rtl_preservation_faulty: *)
-(*   forall p tp beh, *)
-(*   transf_c_program_to_rtl p = OK tp -> *)
-(*   program_behaves (faulty_semantics tp) beh -> *)
-(*   exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh. *)
-(* Proof. *)
-(*   (* TODO: compose transf_c_program_to_rtl_preservation with *)
-(*      RTLtolerant.rtl_fault_tolerance. *) *)
-(* Admitted. *)
-
-(* Lemma transf_c_program_to_rtl_false_true p tp : *)
-(*   transf_c_program_to_rtl false p = OK tp -> *)
-(*   exists tp', transf_c_program_to_rtl true p = OK tp' /\ match_votes_program tp' tp. *)
-(* Admitted. *)
-
 Lemma transf_c_program_to_rtl_false_true_behaves p tp beh :
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
   program_behaves (RTL.semantics tp) beh ->
@@ -86,22 +71,19 @@ Theorem transf_c_program_to_rtl_preservation_faulty:
 Proof.
   intros p tp beh Hp Hbeh.
   pose proof Hp as Hp'.
-  (* apply transf_c_program_to_rtl_false_true in Hp'. *)
-  (* destruct Hp' as (tp' & Hp' & Hmatchvotes). *)
-  (* pose proof Hbeh as H. *)
-  (* eapply backward_simulation_behavior_improves in H. *)
-  (* destruct H as (beh1 & Hbeh1 & Himp). *)
-  (* exists beh1; repeat split. *)
-  (* - eauto. *)
-  (* - auto. *)
-  (* - intros fbeh Hfbeh. *)
-  (*   eapply behavior_improves_trans; eauto. *)
-  (*   eapply rtl_fault_tolerance. eauto; eauto. *)
-  
-  (* apply transf_c_program_to_rtl_correct; auto. *)
-  (* TODO: compose transf_c_program_to_rtl_preservation with
-     RTLtolerant.rtl_fault_tolerance. *)
-Admitted.
+  eapply transf_c_program_to_rtl_false_true_behaves in Hp'; eauto.
+  destruct Hp' as (tp' & Hp' & Hbeh').
+  generalize (transf_c_program_to_rtl_false_true_match_votes _ _ _ Hp Hp').
+  intro Hmatchvotes.
+  pose proof Hbeh' as H.
+  eapply backward_simulation_behavior_improves in H.
+  2: { eapply transf_c_program_to_rtl_correct; eauto. }
+  destruct H as (beh1 & Hbeh1 & Himp).
+  exists beh1; repeat split; auto.
+  intros fbeh Hfbeh.
+  eapply behavior_improves_trans; eauto.
+  eapply rtl_fault_tolerance; eauto.
+Qed.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is

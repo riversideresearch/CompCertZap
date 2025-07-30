@@ -266,18 +266,6 @@ Section TOLERANCE.
 
 End TOLERANCE.
 
-(** TODO: top level theorem(s). Probably at least analogues of
-    transf_c_program_preservation and transf_c_program_is_refinement
-    from driver/Complements.v. Maybe also
-    transf_c_program_preserves_spec and
-    transf_c_program_preserves_initial_trace. *)
-
-(** Do we need to state these in terms of the original c programs, or
-    is it sufficient to prove them just at the target language between
-    non-faulty and faulty executions? They should compose, but it's a
-    question of whether we want to explicitly (formally) do that or
-    not. *)
-
 Lemma rtl_state_behaves_faulty_improves p1 p2 (s : RTL.state) (fs : fstate) beh1 beh2 :
   match_votes_program p1 p2 ->
   RTL.initial_state p1 s ->
@@ -303,10 +291,41 @@ Proof.
     admit.
 Admitted.
 
-Lemma match_votes_program_initial_state p1 p2 s :
-  match_votes_program p1 p2 ->
-  RTL.initial_state p1 s <-> RTL.initial_state p2 s.
-Admitted.
+(* Lemma match_votes_program_initial_state p1 p2 s : *)
+(*   match_votes_program p1 p2 -> *)
+(*   RTL.initial_state p1 s <-> RTL.initial_state p2 s. *)
+(* Proof. *)
+(*   intro Hmatchvotes. *)
+
+(*   (* destruct Hmatchvotes as (Hdefs & Hmain & Hpub). *) *)
+(*   split; intro Hinit. *)
+(*   - inv Hinit; simpl. *)
+(*     econstructor; auto. *)
+(*     + eapply Genv.init_mem_match in Hmatchvotes; eauto. *)
+(*     + rewrite <- H0. *)
+(*       pose proof Hmatchvotes as H'. *)
+(*       eapply match_program_main in H'. *)
+(*       rewrite H'. *)
+(*       eapply Genv.find_symbol_match in Hmatchvotes; eauto. *)
+(*     + eapply Genv.find_funct_ptr_match in Hmatchvotes. *)
+(*       2: { eauto. } *)
+(*       destruct Hmatchvotes as (cunit & tf & Hptr & Hmatch & Hlink). *)
+      
+(*       rewrite Hmatchvotes. *)
+(*       unfold match_votes_program in Hmatchvotes. *)
+(*       unfold match_program in Hmatchvotes. *)
+(*       apply Hmatchvotes. *)
+(*     unfold Genv.init_mem. *)
+    
+(*     unfold Genv.alloc_globals. *)
+(* Admitted. *)
+
+(* TODO: conversion between 2-vote and 3-vote versions of functions. *)
+
+(* IDEA: implement a single version of the compiler that first
+   generates 3-vote code and then in a second pass replaces them with
+   2-votes. Maybe that wont' work because we will want to have asm
+   programs with 3-votes to do the proof at asm. *)
 
 Theorem rtl_fault_tolerance p1 p2 beh1 beh2 :
   match_votes_program p1 p2 ->
@@ -317,14 +336,16 @@ Proof.
   intros Hmatchvotes Hbeh1 Hbeh2.
   inv Hbeh1.
   - inv Hbeh2.
-    2: { exfalso; apply (H1 {| fs_state := s; fault := false |}).
-         constructor.
-         rewrite <- match_votes_program_initial_state; eauto.
-         apply H. }
+    2: { (* exfalso; apply (H1 {| fs_state := s; fault := false |}). *)
+         (* constructor. *)
+         (* rewrite <- match_votes_program_initial_state; eauto. *)
+      (* apply H. } *)
+      admit. }
     eapply rtl_state_behaves_faulty_improves; eauto.
   - inv Hbeh2.
-    { inv H0.
-      exfalso; apply (H s0).
-      eapply match_votes_program_initial_state; eauto. }
+    { (* inv H0. *)
+      (* exfalso; apply (H s0). *)
+      (* eapply match_votes_program_initial_state; eauto. *)
+    admit. }
     constructor; reflexivity.
-Qed.
+Admitted.
