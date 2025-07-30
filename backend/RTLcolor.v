@@ -10,6 +10,11 @@ Require Import
   Values
 .
 
+(** TODO: need color to be position dependent. Clear is a temporary
+    color that gets reset to red after a use. So, red registers are
+    variously red or clear throughout the function, but green and blue
+    registers never change colors. *)
+
 Inductive color : Type :=
 | Red
 | Green
@@ -25,7 +30,7 @@ Inductive basic_color : color -> Prop :=
 
 Section wc.
   (** Everything in this section is wrt. a given register coloring [col]. *)
-  Variable col : reg -> color.
+  Variable col : node -> reg -> color.
   
   (** An instruction is well-colored wrt. coloring [col]. *)
   Inductive wc_instruction : instruction -> Prop :=
@@ -48,7 +53,7 @@ Section wc.
 
   Record wc_function (f : function) : Prop :=
     mk_wc_function {
-        wc_fn_params : Forall (fun param => col param = Red) f.(fn_params);
+        wc_fn_params : Forall (fun param => col f.(fn_entrypoint) param = Red) f.(fn_params);
         wc_fn_code : wc_code f.(fn_code)
       }.
   
@@ -66,7 +71,7 @@ End wc.
 Axiom infer_coloring : function -> option (reg -> color).
 
 Section color_checker.
-  Variable col : reg -> color.
+  Variable col : node -> reg -> color.
 
   Definition check_function (f : function) : bool := false.
 

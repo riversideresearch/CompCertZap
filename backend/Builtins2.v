@@ -182,6 +182,40 @@ Next Obligation.
   inv H2; auto.
 Qed.
 
+(* Definition vote_int (a b c : val) : val := *)
+(*   if Val.has_type_dec a Tint && (Val.eq a b || Val.eq a c) *)
+(*   then a *)
+(*   else if Val.has_type_dec b Tint && Val.eq b c *)
+(*        then b *)
+(*        else Vundef. *)
+
+(* Lemma vote_int_well_typed a b c : *)
+(*   Val.has_rettype (vote_int a b c) Xint. *)
+(* Proof. *)
+(*   unfold Val.has_rettype, vote_int. *)
+(*   repeat destruct (Val.eq _ _); subst; simpl; auto; try contradiction; *)
+(*     try destruct a; try destruct b; try destruct c; *)
+(*     simpl; auto; destruct (bool_dec _ _) eqn:Hb; simpl; auto. *)
+(* Qed. *)
+
+(* Lemma vote_int_compat_inject j v1 v1' v2 v2' v3 v3' : *)
+(*   Val.inject j v1 v1' -> *)
+(*   Val.inject j v2 v2' -> *)
+(*   Val.inject j v3 v3' -> *)
+(*   Val.inject j (vote_int v1 v2 v3) (vote_int v1' v2' v3'). *)
+(* Proof. *)
+(*   unfold vote_int. *)
+(*   intros H0 H1 H2. *)
+(*   inv H0; inv H1; inv H2; *)
+(*     repeat destruct (Val.eq _ _); simpl; trivial; try congruence; inv e. *)
+(*   - destruct (bool_dec _ _) eqn:Hb; simpl; auto. *)
+(*   - destruct (Val.has_type_dec _ _); simpl; auto. *)
+(*   - destruct (Val.has_type_dec _ _); simpl; auto. *)
+(* Qed. *)
+
+(* Definition vote_int_sem : builtin_sem Xint := *)
+(*   mkbuiltin_v3t Xint vote_int vote_int_well_typed vote_int_compat_inject. *)
+
 Definition vote_int (x y z : val) : val :=
   match (x, y, z) with
   | (Vint a, Vint b, Vint c) =>
