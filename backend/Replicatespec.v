@@ -273,15 +273,15 @@ Proof.
   - right; intro H; inv H.
 Qed.
 
-Section three.
-  Variable three : bool.
+Section vote.
+  Variable vtype : vote_type.
 
   Inductive maj_voteR
     (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop :=
   | maj_vote_1 :
     forall vote,
       is_actual_type ty ->
-      maj_vote_of_typ three ty r1 r2 r3 = Some vote ->
+      maj_vote_of_typ vtype ty r1 r2 r3 = Some vote ->
       c ! pc = Some (vote succ) ->
       maj_voteR c ty r1 r2 r3 pc succ.
 
@@ -539,20 +539,20 @@ Section three.
   Qed.
 
   Lemma maj_vote_of_typ_is_actual_type ty r1 r2 r3 i :
-    maj_vote_of_typ three ty r1 r2 r3 = Some i ->
+    maj_vote_of_typ vtype ty r1 r2 r3 = Some i ->
     is_actual_type ty.
   Proof.
     unfold maj_vote_of_typ.
-    destruct three, ty; simpl; intro Hmaj; auto; inv Hmaj.
+    destruct vtype, ty; simpl; intro Hmaj; auto; inv Hmaj.
   Qed.
 
   Lemma maj_vote_maj_voteR re r1 r2 r3 pc succ s s' pf :
     pc < s.(st_nextnode) ->
-    maj_vote three re r1 r2 r3 pc s = RTLgen.OK succ s' pf ->
+    maj_vote vtype re r1 r2 r3 pc s = RTLgen.OK succ s' pf ->
     maj_voteR s'.(st_code) (re r1) r1 r2 r3 pc succ.
   Proof.
     unfold maj_vote, RTLgen.bind; simpl; intros Hlt Hmaj.
-    destruct (maj_vote_of_typ three (re r1) r1 r2 r3) eqn:Hty.
+    destruct (maj_vote_of_typ vtype (re r1) r1 r2 r3) eqn:Hty.
     2: { inv Hmaj. }
     repeat egen_case.
     unfold update_instr in *; simpl in *.
@@ -594,7 +594,7 @@ Section three.
 
   Lemma maj_vote_regs_maj_vote_regsR re rm regs pc succ s s' pf :
     pc < s.(st_nextnode) ->
-    maj_vote_regs three re rm regs pc s = RTLgen.OK succ s' pf ->
+    maj_vote_regs vtype re rm regs pc s = RTLgen.OK succ s' pf ->
     maj_vote_regsR s'.(st_code) re rm regs pc succ.
   Proof.
     revert pc succ s s' pf.
@@ -603,7 +603,7 @@ Section three.
     unfold RTLgen.bind in Hmaj.
     gen_case H0.
     destruct (rm # a) eqn:Ha.
-    destruct (maj_vote three re a r r0 n s'0) eqn:Hm; gen_contra; gen_inv.
+    destruct (maj_vote vtype re a r r0 n s'0) eqn:Hm; gen_contra; gen_inv.
     pose proof H0 as H0'.
     apply maj_vote_regs_succ_lt_nextnode in H0'; auto.
     apply IHregs in H0; auto.
@@ -668,7 +668,7 @@ Section three.
     p i (l : list (positive * instruction)) re rm s s' pf u :
     p < s.(st_nextnode) ->
     In (p, i) l ->
-    iterM (transf_instr three re rm) l s = RTLgen.OK u s' pf ->
+    iterM (transf_instr vtype re rm) l s = RTLgen.OK u s' pf ->
     match_instr re rm (st_code s') p i.
   Proof.
     revert s s' pf; induction l; simpl; intros s s' pf Hlt Hin Htransf.
@@ -727,9 +727,9 @@ Section three.
         simpl in Htransf'.
         gen_case Hmaj.
         gen_case Hupd.
-        replace ((do succ <- maj_vote_regs three re rm l0 p;
-                     let (r2, r3) := rm # r in maj_vote three re r r2 r3 succ) s'0)
-          with (maj_vote_regs three re rm (r :: l0) p s'0) in Hmaj by auto.
+        replace ((do succ <- maj_vote_regs vtype re rm l0 p;
+                     let (r2, r3) := rm # r in maj_vote vtype re r r2 r3 succ) s'0)
+          with (maj_vote_regs vtype re rm (r :: l0) p s'0) in Hmaj by auto.
         apply maj_vote_regs_maj_vote_regsR in Hmaj.
         2: { clear Hiter; inv s0; unfold Ple in *; lia. }
         unfold update_instr in Hupd.
@@ -888,7 +888,7 @@ Section three.
 
   Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
     (forall p i, c ! p = Some i -> p < st_nextnode s) ->
-    transf_code three re rm c s = RTLgen.OK u s' pf ->
+    transf_code vtype re rm c s = RTLgen.OK u s' pf ->
     match_code re rm c s'.(st_code).
   Proof.
     intros Hlt Hc p i Hi.
@@ -910,7 +910,7 @@ Section three.
 
   Lemma transf_fun_code_matches
     rm (f : function) (re : regenv) entrypoint s s1 s' pf pf1 :
-    transf_fun three re f s = RTLgen.OK entrypoint s' pf ->
+    transf_fun vtype re f s = RTLgen.OK entrypoint s' pf ->
     replication_map f s = RTLgen.OK rm s1 pf1 ->
     (forall p i, (fn_code f) ! p = Some i -> p < st_nextnode s) ->
     match_code re rm f.(fn_code) s'.(st_code).
@@ -967,18 +967,18 @@ Section three.
   Proof. intro Hget; eapply lt_ptree_fold_max; eauto. Qed.
 
   Lemma transf_fun'_code_matches rm (f tf : function) (re : regenv) s pf :
-    transf_fun' three re f = OK tf ->
+    transf_fun' vtype re f = OK tf ->
     replication_map f (init_state f) = RTLgen.OK rm s pf ->
     match_code re rm f.(fn_code) tf.(fn_code).
   Proof.
     unfold transf_fun'.
-    destruct (transf_fun three re f (init_state f)) eqn:Hf; intros H Hrm; inv H; simpl.
+    destruct (transf_fun vtype re f (init_state f)) eqn:Hf; intros H Hrm; inv H; simpl.
     eapply transf_fun_code_matches; eauto.
     intros; eapply lt_nextnode_init_state'; eauto.
   Qed.
 
   Lemma transf_function_code_matches rm (f tf : function) s pf :
-    transf_function three f = OK tf ->
+    transf_function vtype f = OK tf ->
     replication_map f (init_state f) = RTLgen.OK rm s pf ->
     exists re, match_code re rm f.(fn_code) tf.(fn_code).
   Proof.
@@ -1360,7 +1360,7 @@ Section three.
   Qed.
 
   Lemma transf_function_match_fundef (f tf : fundef) :
-    transf_fundef three f = OK tf ->
+    transf_fundef vtype f = OK tf ->
     match_fundef f tf.
   Proof.
     intro Htransf.
@@ -1448,4 +1448,5 @@ Section three.
         apply in_regs_of_builtin_arg_in_builtin_arg; auto.
       + apply in_or_app; right; auto.
   Qed.
-End three.
+
+End vote.

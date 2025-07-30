@@ -138,7 +138,7 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print (print_RTL 7)
   @@@ time "Unused globals" Unusedglob.transform_program
   @@ print (print_RTL 8)
-  @@@ time "Replication" (Replicate.transf_program false)
+  @@@ time "Replication" (Replicate.transf_program Replicate.Two)
   @@ print (print_RTL 9)
    @@ time "Renumbering" Renumber.transf_program
    @@ print (print_RTL 10)
@@ -172,7 +172,8 @@ Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
   @@@ time "Clight generation" SimplExpr.transl_program
   @@@ transf_clight_program.
 
-Definition transf_rtl_program_to_rtl (f: RTL.program) : res RTL.program :=
+Definition transf_rtl_program_to_rtl (vtype: Replicate.vote_type) (f: RTL.program)
+  : res RTL.program :=
    OK f
    @@ print (print_RTL 0)
    @@ total_if Compopts.optim_tailcalls (time "Tail calls" Tailcall.transf_program)
@@ -190,31 +191,39 @@ Definition transf_rtl_program_to_rtl (f: RTL.program) : res RTL.program :=
   @@@ partial_if Compopts.optim_redundancy (time "Redundancy elimination" Deadcode.transf_program)
    @@ print (print_RTL 7)
   @@@ time "Unused globals" Unusedglob.transform_program
-  @@ print (print_RTL 8)
-  @@@ time "Replication" (Replicate.transf_program false)
-  @@ print (print_RTL 9)
+   @@ print (print_RTL 8)
+  @@@ time "Replication" (Replicate.transf_program vtype)
+   @@ print (print_RTL 9)
    @@ time "Renumbering" Renumber.transf_program
    @@ print (print_RTL 10).
 
-Definition transf_cminor_program_to_rtl (p: Cminor.program) : res RTL.program :=
+Definition transf_cminor_program_to_rtl (vtype: Replicate.vote_type) (p: Cminor.program)
+  : res RTL.program :=
    OK p
    @@ print print_Cminor
   @@@ time "Instruction selection" Selection.sel_program
   @@@ time "RTL generation" RTLgen.transl_program
-  @@@ transf_rtl_program_to_rtl.
+  @@@ transf_rtl_program_to_rtl vtype.
 
-Definition transf_clight_program_to_rtl (p: Clight.program) : res RTL.program :=
+Definition transf_clight_program_to_rtl (vtype: Replicate.vote_type) (p: Clight.program)
+  : res RTL.program :=
   OK p
    @@ print print_Clight
   @@@ time "Simplification of locals" SimplLocals.transf_program
   @@@ time "C#minor generation" Cshmgen.transl_program
   @@@ time "Cminor generation" Cminorgen.transl_program
-  @@@ transf_cminor_program_to_rtl.
+  @@@ transf_cminor_program_to_rtl vtype.
 
-Definition transf_c_program_to_rtl (p: Csyntax.program) : res RTL.program :=
+Definition transf_c_program_to_rtl (vtype: Replicate.vote_type) (p: Csyntax.program)
+  : res RTL.program :=
   OK p
   @@@ time "Clight generation" SimplExpr.transl_program
-  @@@ transf_clight_program_to_rtl.
+  @@@ transf_clight_program_to_rtl vtype.
+
+(* Definition transf_c_program_to_rtl' (p: Csyntax.program) : res RTL.program := *)
+(*   OK p *)
+(*   @@@ time "Clight generation" SimplExpr.transl_program *)
+(*   @@@ transf_clight_program_to_rtl true. *)
 
 (** Force [Initializers] and [Cexec] to be extracted as well. *)
 
@@ -293,7 +302,7 @@ Definition CompCert's_passes :=
   ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog)
   ::: mkpass (match_if Compopts.optim_redundancy Deadcodeproof.match_prog)
   ::: mkpass Unusedglobproof.match_prog
-  ::: mkpass (Replicateproof.match_prog false)
+  ::: mkpass (Replicateproof.match_prog Replicate.Two)
   ::: mkpass Renumberproof.match_prog
   ::: mkpass Allocproof.match_prog
   ::: mkpass Tunnelingproof.match_prog
@@ -304,7 +313,7 @@ Definition CompCert's_passes :=
   ::: mkpass Asmgenproof.match_prog
   ::: pass_nil _.
 
-Definition to_rtl_passes :=
+Definition to_rtl_passes (vtype: Replicate.vote_type) :=
       mkpass SimplExprproof.match_prog
   ::: mkpass SimplLocalsproof.match_prog
   ::: mkpass Cshmgenproof.match_prog
@@ -319,7 +328,7 @@ Definition to_rtl_passes :=
   ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog)
   ::: mkpass (match_if Compopts.optim_redundancy Deadcodeproof.match_prog)
   ::: mkpass Unusedglobproof.match_prog
-  ::: mkpass (Replicateproof.match_prog false)
+  ::: mkpass (Replicateproof.match_prog vtype)
   ::: mkpass Renumberproof.match_prog
   ::: pass_nil _.
 
@@ -330,8 +339,8 @@ Definition to_rtl_passes :=
 Definition match_prog: Csyntax.program -> Asm.program -> Prop :=
   pass_match (compose_passes CompCert's_passes).
 
-Definition match_prog_rtl: Csyntax.program -> RTL.program -> Prop :=
-  pass_match (compose_passes to_rtl_passes).
+Definition match_prog_rtl (vtype: Replicate.vote_type) : Csyntax.program -> RTL.program -> Prop :=
+  pass_match (compose_passes (to_rtl_passes vtype)).
 
 (** The [transf_c_program] function, when successful, produces
   assembly code that is in the [match_prog] relation with the source C program. *)
@@ -360,7 +369,7 @@ Proof.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  destruct (Replicate.transf_program false p14) as [p15'|e] eqn:P15; simpl in T; try discriminate.
+  destruct (Replicate.transf_program Replicate.Two p14) as [p15'|e] eqn:P15; simpl in T; try discriminate.
   set (p15 := Renumber.transf_program p15') in *.
   destruct (Allocation.transf_program p15) as [p16|e] eqn:P16; simpl in T; try discriminate.
   set (p17 := Tunneling.tunnel_program p16) in *.
@@ -396,11 +405,11 @@ Proof.
 Qed.
 
 Theorem transf_c_program_to_rtl_match:
-  forall p tp,
-  transf_c_program_to_rtl p = OK tp ->
-  match_prog_rtl p tp.
+  forall p tp vtype,
+  transf_c_program_to_rtl vtype p = OK tp ->
+  match_prog_rtl vtype p tp.
 Proof.
-  intros p tp T.
+  intros p tp three T.
   unfold transf_c_program_to_rtl, time in T. simpl in T.
   destruct (SimplExpr.transl_program p) as [p1|e] eqn:P1; simpl in T; try discriminate.
   unfold transf_clight_program_to_rtl, time in T. rewrite ! compose_print_identity in T. simpl in T.
@@ -419,7 +428,7 @@ Proof.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  destruct (Replicate.transf_program false p14) as [p15'|e] eqn:P15; simpl in T; try discriminate.
+  destruct (Replicate.transf_program three p14) as [p15'|e] eqn:P15; simpl in T; try discriminate.
   set (p15 := Renumber.transf_program p15') in *.
   unfold match_prog_rtl; simpl.
   exists p1; split. apply SimplExprproof.transf_program_match; auto.
@@ -547,12 +556,12 @@ Qed.
 Axiom RTL_semantics_determinate : forall p, determinate (RTL.semantics p).
 
 Theorem cstrategy_semantic_preservation_rtl:
-  forall p tp,
-  match_prog_rtl p tp ->
+  forall p tp three,
+  match_prog_rtl three p tp ->
   forward_simulation (Cstrategy.semantics p) (RTL.semantics tp)
   /\ backward_simulation (atomic (Cstrategy.semantics p)) (RTL.semantics tp).
 Proof.
-  intros p tp M. unfold match_prog_rtl, pass_match in M; simpl in M.
+  intros p tp three M. unfold match_prog_rtl, pass_match in M; simpl in M.
   repeat DestructM. subst tp.
   assert (F: forward_simulation (Cstrategy.semantics p) (RTL.semantics p16)).
   {
@@ -611,8 +620,8 @@ Proof.
 Qed.
 
 Theorem c_semantic_preservation_rtl:
-  forall p tp,
-  match_prog_rtl p tp ->
+  forall p tp three,
+  match_prog_rtl three p tp ->
   backward_simulation (Csem.semantics p) (RTL.semantics tp).
 Proof.
   intros.
@@ -622,7 +631,7 @@ Proof.
   apply Cstrategy.strategy_simulation.
   apply Csem.semantics_single_events.
   eapply ssr_well_behaved; eapply Cstrategy.semantics_strongly_receptive.
-  exact (proj2 (cstrategy_semantic_preservation_rtl _ _ H)).
+  exact (proj2 (cstrategy_semantic_preservation_rtl _ _ _ H)).
 Qed.
 
 (** * Correctness of the CompCert compiler *)
@@ -646,11 +655,12 @@ Proof.
 Qed.
 
 Theorem transf_c_program_to_rtl_correct:
-  forall p tp,
-  transf_c_program_to_rtl p = OK tp ->
+  forall p tp three,
+  transf_c_program_to_rtl three p = OK tp ->
   backward_simulation (Csem.semantics p) (RTL.semantics tp).
 Proof.
-  intros. apply c_semantic_preservation_rtl. apply transf_c_program_to_rtl_match; auto.
+  intros. eapply c_semantic_preservation_rtl.
+  apply transf_c_program_to_rtl_match; eauto.
 Qed.
 
 (** Here is the separate compilation case.  Consider a nonempty list [c_units]
@@ -683,18 +693,20 @@ Proof.
 Qed.
 
 Theorem separate_transf_c_program_to_rtl_correct:
-  forall c_units rtl_units c_program,
-  nlist_forall2 (fun cu tcu => transf_c_program_to_rtl cu = OK tcu) c_units rtl_units ->
+  forall c_units rtl_units c_program three,
+  nlist_forall2 (fun cu tcu => transf_c_program_to_rtl three cu = OK tcu) c_units rtl_units ->
   link_list c_units = Some c_program ->
   exists rtl_program,
       link_list rtl_units = Some rtl_program
    /\ backward_simulation (Csem.semantics c_program) (RTL.semantics rtl_program).
 Proof.
   intros.
-  assert (nlist_forall2 match_prog_rtl c_units rtl_units).
-  { eapply nlist_forall2_imply. eauto. simpl; intros. apply transf_c_program_to_rtl_match; auto. }
-  assert (exists rtl_program, link_list rtl_units = Some rtl_program /\ match_prog_rtl c_program rtl_program).
+  assert (nlist_forall2 (match_prog_rtl three) c_units rtl_units).
+  { eapply nlist_forall2_imply. eauto. simpl; intros.
+    apply transf_c_program_to_rtl_match; auto. }
+  assert (exists rtl_program, link_list rtl_units = Some rtl_program /\
+                           match_prog_rtl three c_program rtl_program).
   { eapply link_list_compose_passes; eauto. }
   destruct H2 as (rtl_program & P & Q).
-  exists rtl_program; split; auto. apply c_semantic_preservation_rtl; auto.
+  exists rtl_program; split; auto. eapply c_semantic_preservation_rtl; eauto.
 Qed.

@@ -8,6 +8,7 @@ Require Import
   Linking
   Maps
   Registers
+  Replicate
   Replicatespec
   RTL
   RTLcolor
@@ -76,8 +77,8 @@ Inductive match_votes_function : function -> function -> Prop :=
                           ; fn_entrypoint := entrypoint |}.
 
 Lemma match_function_match_votes_function re rm f tf1 tf2 :
-      match_function true re rm f tf1 ->
-      match_function false re rm f tf2 ->
+      match_function Three re rm f tf1 ->
+      match_function Two re rm f tf2 ->
       match_votes_function tf1 tf2.
 Proof.
   intros H0 H1.

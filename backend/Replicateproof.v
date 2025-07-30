@@ -129,10 +129,10 @@ Inductive match_states v : state -> state -> Prop :=
     match_states v (Returnstate stk rval m) (Returnstate tstk rval m).
 
 Section PRESERVATION.
-  Variable three : bool.
+  Variable vtype : vote_type.
   Variable prog: program.
   Variable tprog: program.
-  Hypothesis TRANSF: match_prog three prog tprog.
+  Hypothesis TRANSF: match_prog vtype prog tprog.
   Let ge := Genv.globalenv prog.
   Let tge := Genv.globalenv tprog.
 
@@ -147,7 +147,7 @@ Section PRESERVATION.
     Genv.find_funct ge v = Some f ->
     exists cu tf,
       Genv.find_funct tge v = Some tf
-      /\ transf_fundef three f = OK tf
+      /\ transf_fundef vtype f = OK tf
       /\ linkorder cu prog.
   Proof. apply (Genv.find_funct_match TRANSF). Qed.
 
@@ -155,22 +155,22 @@ Section PRESERVATION.
     Genv.find_funct_ptr ge b = Some f ->
     exists cu tf,
       Genv.find_funct_ptr tge b = Some tf
-      /\ transf_fundef three f = OK tf
+      /\ transf_fundef vtype f = OK tf
       /\ linkorder cu prog.
   Proof. apply (Genv.find_funct_ptr_match TRANSF). Qed.
 
   Lemma sig_function_translated f tf :
-    transf_fundef three f = OK tf ->
+    transf_fundef vtype f = OK tf ->
     funsig tf = funsig f.
   Proof.
     destruct f as [f|f]; intro Heq; monadInv Heq; auto.
     monadInv EQ.
     unfold transf_fun' in EQ1.
-    destruct (transf_fun three x0 f _); inv EQ1; auto.
+    destruct (transf_fun vtype x0 f _); inv EQ1; auto.
   Qed.
 
   Lemma stacksize_translated f tf :
-    transf_function three f = OK tf -> tf.(fn_stacksize) = f.(fn_stacksize).
+    transf_function vtype f = OK tf -> tf.(fn_stacksize) = f.(fn_stacksize).
   Proof.
     unfold transf_function; intro H; monadInv H.
     unfold transf_fun' in EQ0.
@@ -445,7 +445,7 @@ Section PRESERVATION.
     Genv.genv_next env1 = Genv.genv_next env2 ->
     list_forall2
       (match_ident_globdef (fun (_ : AST.program fundef unit) (f tf : fundef) =>
-                              transf_fundef three f = OK tf) eq p)
+                              transf_fundef vtype f = OK tf) eq p)
       prog_defs0 prog_defs ->
     (Genv.genv_symb (Genv.add_globals env1 prog_defs)) ! x =
       (Genv.genv_symb (Genv.add_globals env2 prog_defs0)) ! x.
@@ -757,7 +757,7 @@ Section PRESERVATION.
     Val.has_type (rs # r1) ty ->
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
-    maj_voteR true c ty r1 r2 r3 pc succ ->
+    maj_voteR Three c ty r1 r2 r3 pc succ ->
     exists rs', plus step tge
              (State tstk
                     {| fn_sig := sig
@@ -859,7 +859,7 @@ Section PRESERVATION.
     Val.has_type (rs # r1) ty ->
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
-    maj_voteR false c ty r1 r2 r3 pc succ ->
+    maj_voteR Two c ty r1 r2 r3 pc succ ->
     exists rs', plus step tge
              (State tstk
                     {| fn_sig := sig
@@ -961,7 +961,7 @@ Section PRESERVATION.
     Val.has_type (rs # r1) ty ->
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
-    maj_voteR three c ty r1 r2 r3 pc succ ->
+    maj_voteR vtype c ty r1 r2 r3 pc succ ->
     exists rs', plus step tge
              (State tstk
                     {| fn_sig := sig
@@ -979,7 +979,7 @@ Section PRESERVATION.
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
     intros Hact Hr2 Hr3 Hmaj.
-    destruct three.
+    destruct vtype.
     - eapply maj_voteR_three_step; eauto.
     - eapply maj_voteR_two_step; eauto.
   Qed.
@@ -991,7 +991,7 @@ Section PRESERVATION.
                      forall r2 r3,
                        rm # r1 = (r2, r3) ->
                        rs # r1 = rs # r2 /\ rs # r2 = rs # r3) args ->
-    maj_vote_regsR three c re rm args pc n ->
+    maj_vote_regsR vtype c re rm args pc n ->
     exists rs', star step tge
              (State tstk
                     {| fn_sig := sig
@@ -1296,8 +1296,8 @@ Section PRESERVATION.
 
   Lemma match_stackframes_sig_proper stk tstk sig1 sig2 :
     sig_res sig1 = sig_res sig2 ->
-    match_stackframes three stk tstk sig1 ->
-    match_stackframes three stk tstk sig2.
+    match_stackframes vtype stk tstk sig1 ->
+    match_stackframes vtype stk tstk sig2.
   Proof.
     intros Hres Hwt.
     induction Hwt.
@@ -1898,8 +1898,8 @@ Section PRESERVATION.
   Theorem step_simulation s1 t s2 :
     step ge s1 t s2 ->
     forall ts1,
-      match_states three s1 ts1 ->
-      exists ts2, plus step tge ts1 t ts2 /\ match_states three s2 ts2.
+      match_states vtype s1 ts1 ->
+      exists ts2, plus step tge ts1 t ts2 /\ match_states vtype s2 ts2.
   Proof.
     intros Hstep ts1 Hmatch.
     inv Hstep.
@@ -2144,7 +2144,7 @@ Section PRESERVATION.
            { eapply match_regsets_get_2; eauto; right; auto. }
            { eapply match_regsets_get_3'; eauto. } }
       destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-      assert (Htf: exists tf, transf_fundef three fd = OK tf /\
+      assert (Htf: exists tf, transf_fundef vtype fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
         destruct ros.
@@ -2227,7 +2227,7 @@ Section PRESERVATION.
            { eapply match_regsets_get_2; eauto; right; auto. }
            { eapply match_regsets_get_3'; eauto. } }
       destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
-      assert (Htf: exists tf, transf_fundef three fd = OK tf /\
+      assert (Htf: exists tf, transf_fundef vtype fd = OK tf /\
                            find_function tge ros rs = Some tf).
       { unfold find_function in *.
         destruct ros.
@@ -2591,7 +2591,7 @@ Section PRESERVATION.
 
   Lemma transf_initial_states st1 :
     initial_state prog st1 ->
-    exists st2, initial_state tprog st2 /\ match_states three st1 st2.
+    exists st2, initial_state tprog st2 /\ match_states vtype st1 st2.
   Proof.
     intros. inversion H.
     exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
@@ -2607,7 +2607,7 @@ Section PRESERVATION.
     destruct f.
     simpl in *.
     - unfold bind in B.
-      destruct (transf_function three f) eqn:Hf; inv B.
+      destruct (transf_function vtype f) eqn:Hf; inv B.
       unfold transf_function in Hf.
       unfold bind in Hf.
       destruct (type_function f) eqn:Htype; try congruence.
@@ -2632,7 +2632,7 @@ Section PRESERVATION.
   Qed.
 
   Lemma transf_final_states st1 st2 r :
-    match_states three st1 st2 ->
+    match_states vtype st1 st2 ->
     final_state st1 r ->
     final_state st2 r.
   Proof.
@@ -2644,7 +2644,7 @@ Section PRESERVATION.
   Proof.
     intros.
     apply forward_simulation_plus with
-      (match_states := fun s1 s2 => match_states three s1 s2).
+      (match_states := fun s1 s2 => match_states vtype s1 s2).
     - apply senv_preserved.
     - simpl; intros. exploit transf_initial_states; eauto.
     - simpl; intros s1 s2 r Hmatch Hfin.
