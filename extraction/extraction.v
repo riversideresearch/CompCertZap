@@ -23,6 +23,8 @@ Require Ctypes Csyntax Ctyping Clight.
 Require Compiler.
 Require Parser.
 Require Initializers.
+Require ImportPrelude.
+Require ImportProgram.
 
 (* Standard lib *)
 From Coq Require Import ExtrOcamlBasic ExtrOcamlString.
@@ -128,6 +130,9 @@ Extract Constant Cabs.loc =>
 Extract Inlined Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
+(* ImportPrelude *)
+Extract Constant ImportPrelude.intern => "ImportIdent.intern_coqstring".
+
 (* Processor-specific extraction directives *)
 
 Load extractionMachdep.
@@ -143,9 +148,10 @@ Set Extraction AccessOpaque.
 Cd "extraction".
 
 Separate Extraction
+   ImportProgram.prog
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
-   Ctypes.merge_attributes Ctypes.remove_attributes 
+   Ctypes.merge_attributes Ctypes.remove_attributes
    Ctypes.build_composite_env Ctypes.layout_struct
    Initializers.transl_init Initializers.constval
    Csyntax.Eindex Csyntax.Epreincr Csyntax.Eselection

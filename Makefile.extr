@@ -45,7 +45,7 @@ cparser/pre_parser_messages.ml:
 
 DIRS=extraction \
   lib common $(ARCH) backend cfrontend cparser driver \
-  export debug
+  export debug import
 
 INCLUDES=$(patsubst %,-I %, $(DIRS))
 
@@ -85,7 +85,7 @@ endif
 
 COMPFLAGS+=-g -strict-sequence -safe-string \
   $(INCLUDES) -I "$(MENHIR_DIR)" -I +str -I +unix \
-  $(WARN_ERRORS) 
+  $(WARN_ERRORS)
 
 # Using .opt compilers if available
 
@@ -146,6 +146,22 @@ clightgen: clightgen.byte
 endif
 
 clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
+	@echo "Linking $@"
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
+
+CMINORIMPORT_OBJS:=$(shell $(MODORDER) import/ImportDriver.cmx)
+
+ifeq ($(OCAML_NATIVE_COMP),true)
+vcomp: $(CMINORIMPORT_OBJS)
+	@echo "Linking $@"
+	@$(OCAMLOPT) -o $@ $(LIBS) $(LINK_OPT) $+
+else
+vcomp: vcomp.byte
+	@echo "Copying to $@"
+	@$(COPY) $+ $@
+endif
+
+vcomp.byte: $(CMINORIMPORT_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
 	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 

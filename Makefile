@@ -34,6 +34,8 @@ ifeq ($(CLIGHTGEN),true)
 DIRS += export
 endif
 
+DIRS += import
+
 COQINCLUDES := $(foreach d, $(DIRS), -R $(d) compcert.$(d))
 
 ifeq ($(LIBRARY_FLOCQ),local)
@@ -219,10 +221,14 @@ else
 EXPORTLIB=
 endif
 
+# .v files assumed by vcomp
+
+IMPORT=ImportPrelude.v ImportProgram.v
+
 # All source files
 
 FILES=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
-  $(MENHIRLIB) $(PARSER) $(EXPORTLIB)
+  $(MENHIRLIB) $(PARSER) $(EXPORTLIB) $(IMPORT)
 
 # Generated source files
 
@@ -242,6 +248,7 @@ endif
 ifeq ($(CLIGHTGEN),true)
 	$(MAKE) clightgen
 endif
+	$(MAKE) vcomp
 ifeq ($(INSTALL_COQDEV),true)
 	$(MAKE) compcert.config
 endif
@@ -272,6 +279,11 @@ clightgen: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen
 clightgen.byte: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen.byte
+
+vcomp: .depend.extr compcert.ini driver/Version.ml FORCE
+	$(MAKE) -f Makefile.extr vcomp
+vcomp.byte: .depend.extr compcert.ini driver/Version.ml FORCE
+	$(MAKE) -f Makefile.extr vcomp.byte
 
 runtime:
 	$(MAKE) -C runtime
@@ -378,6 +390,7 @@ install:
 ifeq ($(CLIGHTGEN),true)
 	install -m 0755 ./clightgen $(DESTDIR)$(BINDIR)
 endif
+	install -m 0755 ./vcomp $(DESTDIR)$(BINDIR)
 ifeq ($(INSTALL_COQDEV),true)
 	install -d $(DESTDIR)$(COQDEVDIR)
 	for d in $(DIRS); do \
@@ -407,6 +420,7 @@ clean:
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(GENERATED) .depend
 	rm -f .lia.cache
+	rm -f vcomp
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 

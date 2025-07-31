@@ -25,6 +25,8 @@
 /ccomp.prof
 /clightgen
 /clightgen.byte
+/vcomp
+/vcomp.byte
 /tools/ndfun
 /tools/modorder
 /Makefile.config
@@ -32,6 +34,7 @@
 /_CoqProject
 /compile.pl
 # Generated files
+/ImportProgram.*
 /.depend
 /.depend.extr
 /compcert.ini
