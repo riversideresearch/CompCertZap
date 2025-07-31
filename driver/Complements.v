@@ -17,7 +17,7 @@ Require Import Coqlib Errors.
 Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
-Require Import RTLfault RTLtolerant.
+Require Import RTLcolor RTLfault RTLtolerant.
 
 (** * Preservation of whole-program behaviors *)
 
@@ -62,6 +62,11 @@ Lemma transf_c_program_to_rtl_false_true_match_votes p tp tp' :
   match_votes_program tp' tp.
 Admitted.
 
+Lemma transf_c_program_to_rtl_wc_program p tp :
+  transf_c_program_to_rtl Replicate.Three p = OK tp ->
+  exists col, wc_program col tp.
+Admitted.
+
 Theorem transf_c_program_to_rtl_preservation_faulty:
   forall p tp beh,
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
@@ -82,6 +87,8 @@ Proof.
   exists beh1; repeat split; auto.
   intros fbeh Hfbeh.
   eapply behavior_improves_trans; eauto.
+  apply transf_c_program_to_rtl_wc_program in Hp'.
+  destruct Hp' as [col Hwc].
   eapply rtl_fault_tolerance; eauto.
 Qed.
 
