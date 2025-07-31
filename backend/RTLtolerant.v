@@ -264,32 +264,112 @@ Section TOLERANCE.
     - admit.
   Admitted.
 
-End TOLERANCE.
+  Lemma initial_states_match s fs :
+    initial_state (RTL.semantics prog1) s ->
+    initial_state (faulty_semantics prog2) fs ->
+    match_states col s fs.
+  Proof.
+    simpl; intros Hs Hfs.
+    inv Hs; inv Hfs; inv H3.
+    replace (prog_main prog1) with (prog_main prog2) in * by
+        (eapply match_program_main in PROG; auto).
+    replace b0 with b in *.
+    2: { eapply Genv.find_symbol_match in PROG.
+         unfold ge, ge0 in *.
+         rewrite H0, H5 in PROG; inv PROG; reflexivity. }
+    pose proof PROG as Hmatchvote.
+    eapply Genv.init_mem_match in PROG; eauto.
+    rewrite PROG in H4; inv H4.
+    constructor; auto.
+    unfold match_votes_program in Hmatchvote.
+    eapply Genv.find_funct_ptr_match in Hmatchvote.
+    - destruct Hmatchvote as (cunit & tf & Htf & Hmatch & Hlink).
+      unfold ge0 in *.
+      rewrite H6 in Htf.
+      inv Htf; eauto.
+    - auto.
+  Qed.
 
-Lemma rtl_state_behaves_faulty_improves p1 p2 (s : RTL.state) (fs : fstate) beh1 beh2 :
-  match_votes_program p1 p2 ->
-  RTL.initial_state p1 s ->
-  initial_state (faulty_semantics p2) fs ->
-  state_behaves (RTL.semantics p1) s beh1 ->
-  state_behaves (faulty_semantics p2) fs beh2 ->
-  behavior_improves beh1 beh2.
-Proof.
-  intros Hmatchvotes Hinit1 Hinit2 Hbeh1 Hbeh2.
-  inv Hbeh1.
-  - left.
-    inv Hbeh2.
-    + admit.
-    + admit. (* contra *)
-    + admit. (* contra *)
-    + admit. (* contra *)
-  - left.
-    admit.
-  - left.
-    admit.
-  - right.
-    exists t; split; auto.
-    admit.
-Admitted.
+  (* TODO: final_state s -> match_states s fs -> final_state fs *)
+
+  Lemma match_votes_terminates_diverges_False t t' s s' fs fs' r :
+    match_votes_program prog1 prog2 ->
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    final_state (RTL.semantics prog1) s' r ->
+    Star (faulty_semantics prog2) fs t' fs' ->
+    Forever_silent (faulty_semantics prog2) fs' ->
+    False.
+  Proof.
+    intros Hvote H Hstar; revert H.
+    revert r fs fs' t'.
+    induction Hstar; intros r fs fs' t' Hmatch Hfin Hstar' Hsil.
+    - admit. (* contra because s matches fs and s is final, so fs
+                can't become forever silent. Might require induction
+                on Hstar'. *)
+    - inv Hstar'.
+      + admit. (* contra *)
+      + eapply IHHstar.
+        3: { apply H2. }
+        { assert (t1 = t0 /\ match_states col s2 s4).
+          { eapply faulty_step_simulation; eauto. }
+          destruct H0 as [? Hmatch']; subst; auto. }
+        eauto.
+        auto.
+  Admitted.
+
+  Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
+    match_votes_program prog1 prog2 ->
+    RTL.initial_state prog1 s ->
+    initial_state (faulty_semantics prog2) fs ->
+    state_behaves (RTL.semantics prog1) s beh1 ->
+    state_behaves (faulty_semantics prog2) fs beh2 ->
+    behavior_improves beh1 beh2.
+  Proof.
+    intros Hmatchvotes Hinit1 Hinit2 Hbeh1 Hbeh2.
+    inv Hbeh1.
+    - left.
+      inv Hbeh2.
+      + admit.
+      + exfalso; eapply match_votes_terminates_diverges_False; eauto.
+        apply initial_states_match; auto.
+      + admit. (* contra *)
+      + admit. (* contra *)
+    - left.
+      admit.
+    - left.
+      admit.
+    - right.
+      exists t; split; auto.
+      admit.
+  Admitted.
+
+  (* TODO: conversion between 2-vote and 3-vote versions of functions. *)
+
+  Theorem rtl_fault_tolerance beh1 beh2 :
+    match_votes_program prog1 prog2 ->
+    program_behaves (RTL.semantics prog1) beh1 ->
+    program_behaves (faulty_semantics prog2) beh2 ->
+    behavior_improves beh1 beh2.
+  Proof.
+    intros Hmatchvotes Hbeh1 Hbeh2.
+    inv Hbeh1.
+    - inv Hbeh2.
+      2: { (* exfalso; apply (H1 {| fs_state := s; fault := false |}). *)
+        (* constructor. *)
+        (* rewrite <- match_votes_program_initial_state; eauto. *)
+        (* apply H. } *)
+        admit. }
+      eapply rtl_state_behaves_faulty_improves; eauto.
+    - inv Hbeh2.
+      { (* inv H0. *)
+        (* exfalso; apply (H s0). *)
+        (* eapply match_votes_program_initial_state; eauto. *)
+        admit. }
+      constructor; reflexivity.
+  Admitted.
+
+End TOLERANCE.
 
 (* Lemma match_votes_program_initial_state p1 p2 s : *)
 (*   match_votes_program p1 p2 -> *)
@@ -320,32 +400,7 @@ Admitted.
 (*     unfold Genv.alloc_globals. *)
 (* Admitted. *)
 
-(* TODO: conversion between 2-vote and 3-vote versions of functions. *)
-
 (* IDEA: implement a single version of the compiler that first
    generates 3-vote code and then in a second pass replaces them with
    2-votes. Maybe that wont' work because we will want to have asm
    programs with 3-votes to do the proof at asm. *)
-
-Theorem rtl_fault_tolerance p1 p2 beh1 beh2 :
-  match_votes_program p1 p2 ->
-  program_behaves (RTL.semantics p1) beh1 ->
-  program_behaves (faulty_semantics p2) beh2 ->
-  behavior_improves beh1 beh2.
-Proof.
-  intros Hmatchvotes Hbeh1 Hbeh2.
-  inv Hbeh1.
-  - inv Hbeh2.
-    2: { (* exfalso; apply (H1 {| fs_state := s; fault := false |}). *)
-         (* constructor. *)
-         (* rewrite <- match_votes_program_initial_state; eauto. *)
-      (* apply H. } *)
-      admit. }
-    eapply rtl_state_behaves_faulty_improves; eauto.
-  - inv Hbeh2.
-    { (* inv H0. *)
-      (* exfalso; apply (H s0). *)
-      (* eapply match_votes_program_initial_state; eauto. *)
-    admit. }
-    constructor; reflexivity.
-Admitted.
