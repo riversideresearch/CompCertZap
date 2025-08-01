@@ -346,7 +346,7 @@ Section TOLERANCE.
 
   (* TODO: conversion between 2-vote and 3-vote versions of functions. *)
 
-  Theorem rtl_fault_tolerance beh1 beh2 :
+  Theorem match_votes_behavior_improves beh1 beh2 :
     match_votes_program prog1 prog2 ->
     program_behaves (RTL.semantics prog1) beh1 ->
     program_behaves (faulty_semantics prog2) beh2 ->
