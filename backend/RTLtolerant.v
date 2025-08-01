@@ -62,19 +62,25 @@ Inductive liftOpt {A B : Type} (R : A -> B -> Prop) : option A -> option B -> Pr
 Definition match_votes_code (c c' : code) : Prop :=
   forall pc, liftOpt match_votes_instruction (c ! pc) (c' ! pc).
 
+(* Inductive match_votes_function : function -> function -> Prop := *)
+(* | match_votes_fun : forall sig params stacksize c c' entrypoint *)
+(*     (CODE: match_votes_code c c'), *)
+(*     match_votes_function {| fn_sig := sig *)
+(*                           ; fn_params := params *)
+(*                           ; fn_stacksize := stacksize *)
+(*                           ; fn_code := c *)
+(*                           ; fn_entrypoint := entrypoint |} *)
+(*                          {| fn_sig := sig *)
+(*                           ; fn_params := params *)
+(*                           ; fn_stacksize := stacksize *)
+(*                           ; fn_code := c' *)
+(*                           ; fn_entrypoint := entrypoint |}. *)
+
 Inductive match_votes_function : function -> function -> Prop :=
-| match_votes_fun : forall sig params stacksize c c' entrypoint
-    (CODE: match_votes_code c c'),
-    match_votes_function {| fn_sig := sig
-                          ; fn_params := params
-                          ; fn_stacksize := stacksize
-                          ; fn_code := c
-                          ; fn_entrypoint := entrypoint |}
-                         {| fn_sig := sig
-                          ; fn_params := params
-                          ; fn_stacksize := stacksize
-                          ; fn_code := c'
-                          ; fn_entrypoint := entrypoint |}.
+| match_votes_fun :
+  forall f1 f2
+    (CODE: match_votes_code f1.(fn_code) f2.(fn_code)),
+    match_votes_function f1 f2.
 
 Lemma match_function_match_votes_function re rm f tf1 tf2 :
       match_function Three re rm f tf1 ->
@@ -150,7 +156,7 @@ Section match_states.
       all registers. When a fault has occurred, it should hold between
       all registers except those of the affected color. *)
   Inductive match_states : RTL.state -> fstate -> Prop :=
-  (* TODO:  need lessdef on memories. *)
+  (* TODO: need lessdef on memories. *)
   | match_states_State :
     forall stk1 stk2 f1 f2 sp pc rs1 rs2 m (b : bool)
       (STK: Forall2 (match_stackframes b) stk1 stk2)
@@ -189,6 +195,58 @@ Section TOLERANCE.
 
   (* Corollary wc_prog2 : wc_program col prog2. *)
   (* Proof. eapply match_votes_wc; eauto. Qed. *)
+
+  Lemma match_votes_function_not_builtin f1 f2 pc i :
+    not_builtin i ->
+    (fn_code f1) ! pc = Some i ->
+    match_votes_function f1 f2 ->
+    (fn_code f2) ! pc = Some i.
+  Proof.
+    intros Hi Hpc Hmatch.
+    inv Hmatch.
+    specialize (CODE pc).
+    inv CODE; try congruence.
+    inv HR; try congruence.
+    rewrite <- H0 in Hpc; inv Hpc.
+    inv Hi.
+  Qed.
+
+  Theorem faulty_step_exists s1 t1 s1' s2 :
+    match_states col s1 s2 ->
+    RTL.step ge1 s1 t1 s1' ->
+    exists t2 s2', fstep ge2 s2 t2 s2'.
+  Proof.
+    intros Hmatch Hstep.
+    inv Hstep.
+    - destruct s2.
+      inv Hmatch.
+      eexists; eexists.
+      econstructor.
+      + apply exec_Inop.
+        eapply match_votes_function_not_builtin; eauto; constructor.
+      + constructor.
+    - destruct s2.
+      inv Hmatch.
+      eexists; eexists.
+      econstructor.
+      + eapply exec_Iop.
+        eapply match_votes_function_not_builtin; eauto; constructor.
+        (* By RS, in rs2 all the args are at least as defined as (and
+           compatible with) their values in rs.  *)
+        admit.
+      + constructor.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+  Admitted.
 
   Theorem faulty_step_simulation s1 t1 s1' s2 t2 s2' :
     match_states col s1 s2 ->
@@ -292,8 +350,49 @@ Section TOLERANCE.
 
   (* TODO: final_state s -> match_states s fs -> final_state fs *)
 
-  Lemma match_votes_terminates_diverges_False t t' s s' fs fs' r :
-    match_votes_program prog1 prog2 ->
+  Lemma final_state_no_faulty_step s fs r :
+    match_states col s fs ->
+    final_state (RTL.semantics prog1) s r ->
+    Nostep (faulty_semantics prog2) fs.
+  Proof.
+    intros Hmatch Hfin.
+    inv Hfin; inv Hmatch.
+    intros t fs' Hfstep.
+    inv Hfstep; inv STK; inv STEP.
+  Qed.
+
+  (* Lemma asdf t s s' fs  r : *)
+  (*   match_states col s fs -> *)
+  (*   Star (RTL.semantics prog1) s t s' -> *)
+  (*   final_state (RTL.semantics prog1) s' r -> *)
+  (*   exists fs', Star (faulty_semantics prog2) fs t fs' /\ *)
+  (*            Nostep (faulty_semantics prog2) fs' /\ *)
+  (*            match_states col s' fs'. *)
+  (* Proof. *)
+  (* Admitted. *)
+
+  (* TODO: should be able to prove
+     [match s fs => (star s t s' /\ fstar fs t' fs') => t <= t' \/ t' <= t]. *)
+
+  Lemma star_final_not_forever_silent t s s' fs r :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    final_state (RTL.semantics prog1) s' r ->
+    Forever_silent (faulty_semantics prog2) fs ->
+    False.
+  Proof.
+    intros H Hstar.
+    revert H.
+    revert fs r.
+    induction Hstar; intros fs r Hmatch Hfin Hsil; inv Hsil.
+    - eapply final_state_no_faulty_step in Hfin; eauto.
+      eapply Hfin; eauto.
+    - eapply faulty_step_simulation in H; eauto.
+      destruct H as [? Hmatch']; subst.
+      eapply IHHstar; eauto.
+  Qed.
+
+  Lemma terminates_diverges_False t t' s s' fs fs' r :
     match_states col s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
@@ -301,40 +400,131 @@ Section TOLERANCE.
     Forever_silent (faulty_semantics prog2) fs' ->
     False.
   Proof.
-    intros Hvote H Hstar; revert H.
-    revert r fs fs' t'.
-    induction Hstar; intros r fs fs' t' Hmatch Hfin Hstar' Hsil.
-    - admit. (* contra because s matches fs and s is final, so fs
-                can't become forever silent. Might require induction
-                on Hstar'. *)
-    - inv Hstar'.
-      + admit. (* contra *)
-      + eapply IHHstar.
-        3: { apply H2. }
-        { assert (t1 = t0 /\ match_states col s2 s4).
-          { eapply faulty_step_simulation; eauto. }
-          destruct H0 as [? Hmatch']; subst; auto. }
-        eauto.
-        auto.
-  Admitted.
+    intros Hmatch Hstar Hfin Hstar' Hsil.
+    revert Hmatch Hstar Hfin Hsil.
+    revert s t s' r.
+    induction Hstar'; intros s0 t' s' r Hmatch Hstar Hfin Hsil.
+    - eapply star_final_not_forever_silent; eauto.
+    - inv Hstar.
+      + eapply final_state_no_faulty_step in Hfin; eauto.
+        eapply Hfin; eauto.
+      + eapply faulty_step_simulation in H; eauto.
+        destruct H as [? Hmatch']; subst.
+        eapply IHHstar'; eauto.
+  Qed.
+  
+  (* Lemma terminates_diverges_False t t' s s' fs fs' r : *)
+  (*   match_states col s fs -> *)
+  (*   Star (RTL.semantics prog1) s t s' -> *)
+  (*   final_state (RTL.semantics prog1) s' r -> *)
+  (*   Star (faulty_semantics prog2) fs t' fs' -> *)
+  (*   Forever_silent (faulty_semantics prog2) fs' -> *)
+  (*   False. *)
+  (* Proof. *)
+  (*   intros H Hstar; revert H. *)
+  (*   revert r fs fs' t'. *)
+  (*   induction Hstar; intros r fs fs' t' Hmatch Hfin Hstar' Hsil. *)
+  (*   - inv Hstar'; inv Hsil; *)
+  (*       eapply final_state_no_faulty_step in Hfin; eauto; eapply Hfin; eauto. *)
+  (*   - inv Hstar'. *)
+  (*     + eapply star_final_not_forever_silent. *)
+  (*       3: { eauto. } *)
+  (*       3: { eauto. } *)
+  (*       eauto. *)
+  (*       eapply star_step; eauto. *)
+  (*     + eapply IHHstar. *)
+  (*       3: { apply H2. } *)
+  (*       { assert (t1 = t0 /\ match_states col s2 s4). *)
+  (*         { eapply faulty_step_simulation; eauto. } *)
+  (*         destruct H0 as [? Hmatch']; subst; auto. } *)
+  (*       eauto. *)
+  (*       auto. *)
+  (* Qed. *)
+
+  Lemma star_final_not_forever_reactive t s s' fs r T :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    final_state (RTL.semantics prog1) s' r ->
+    Forever_reactive (faulty_semantics prog2) fs T ->
+    False.
+  Proof.
+    intros H Hstar.
+    revert H.
+    revert fs r T.
+    induction Hstar; intros fs r T Hmatch Hfin Hreact; inv Hreact.
+    - inv H; try congruence.
+      eapply final_state_no_faulty_step in Hfin; eauto.
+      eapply Hfin; eauto.
+    - inv H1; try congruence.
+      eapply faulty_step_simulation in H; eauto.
+      destruct H as [? Hmatch']; subst.
+      eapply IHHstar; eauto.
+      eapply star_forever_reactive; eauto.
+  Qed.
+
+  (* Lemma terminates_reacts_False t t' s s' fs fs' r T : *)
+  (*   match_states col s fs -> *)
+  (*   Star (RTL.semantics prog1) s t s' -> *)
+  (*   final_state (RTL.semantics prog1) s' r -> *)
+  (*   Star (faulty_semantics prog2) fs t' fs' -> *)
+  (*   Forever_reactive (faulty_semantics prog2) fs' T -> *)
+  (*   False. *)
+  (* Proof. *)
+  (*   intros Hmatch Hstar Hfin Hstar' Hsil. *)
+  (*   revert Hmatch Hstar Hfin Hsil. *)
+  (*   revert s t s' r. *)
+  (*   induction Hstar'; intros s0 t' s' r Hmatch Hstar Hfin Hsil. *)
+  (*   - eapply star_final_not_forever_reactive; eauto. *)
+  (*   - inv Hstar. *)
+  (*     + eapply final_state_no_faulty_step in Hfin; eauto. *)
+  (*       eapply Hfin; eauto. *)
+  (*     + eapply faulty_step_simulation in H; eauto. *)
+  (*       destruct H as [? Hmatch']; subst. *)
+  (*       eapply IHHstar'; eauto. *)
+  (* Qed. *)
+
+  (* Lemma star_final_nostep_final t s s' fs r : *)
+  (*   match_states col s fs -> *)
+  (*   Star (RTL.semantics prog1) s t s' -> *)
+  (*   final_state (RTL.semantics prog1) s' r -> *)
+  (*   Nostep (faulty_semantics prog2) fs -> *)
+  (*   final_state (faulty_semantics prog2) fs r. *)
+  (* Proof. *)
+  (*   intros H Hstar. *)
+  (*   revert H. *)
+  (*   revert fs r. *)
+  (*   induction Hstar; intros fs r Hmatch Hfin Hnostep. *)
+  (*   - inv H; try congruence. *)
+  (*     eapply final_state_no_faulty_step in Hfin; eauto. *)
+  (*     eapply Hfin; eauto. *)
+  (*   - inv H1; try congruence. *)
+  (*     eapply faulty_step_simulation in H; eauto. *)
+  (*     destruct H as [? Hmatch']; subst. *)
+  (*     eapply IHHstar; eauto. *)
+  (*     eapply star_forever_reactive; eauto. *)
+  (* Qed. *)
 
   Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
-    match_votes_program prog1 prog2 ->
     RTL.initial_state prog1 s ->
     initial_state (faulty_semantics prog2) fs ->
     state_behaves (RTL.semantics prog1) s beh1 ->
     state_behaves (faulty_semantics prog2) fs beh2 ->
     behavior_improves beh1 beh2.
   Proof.
-    intros Hmatchvotes Hinit1 Hinit2 Hbeh1 Hbeh2.
+    intros Hinit1 Hinit2 Hbeh1 Hbeh2.
     inv Hbeh1.
     - left.
       inv Hbeh2.
       + admit.
-      + exfalso; eapply match_votes_terminates_diverges_False; eauto.
+      + exfalso; eapply terminates_diverges_False; eauto.
         apply initial_states_match; auto.
-      + admit. (* contra *)
-      + admit. (* contra *)
+      + exfalso; eapply star_final_not_forever_reactive; eauto.
+        apply initial_states_match; auto.
+      + exfalso.
+        (* eapply H3. *)
+        (* eauto. *)
+    (* final_state *)
+        admit.
     - left.
       admit.
     - left.
@@ -346,13 +536,12 @@ Section TOLERANCE.
 
   (* TODO: conversion between 2-vote and 3-vote versions of functions. *)
 
-  Theorem match_votes_behavior_improves beh1 beh2 :
-    match_votes_program prog1 prog2 ->
+  Theorem faulty_behavior_improves beh1 beh2 :
     program_behaves (RTL.semantics prog1) beh1 ->
     program_behaves (faulty_semantics prog2) beh2 ->
     behavior_improves beh1 beh2.
   Proof.
-    intros Hmatchvotes Hbeh1 Hbeh2.
+    intros Hbeh1 Hbeh2.
     inv Hbeh1.
     - inv Hbeh2.
       2: { (* exfalso; apply (H1 {| fs_state := s; fault := false |}). *)

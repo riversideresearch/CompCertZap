@@ -89,7 +89,7 @@ Proof.
   eapply behavior_improves_trans; eauto.
   apply transf_c_program_to_rtl_wc_program in Hp'.
   destruct Hp' as [col Hwc].
-  eapply match_votes_behavior_improves; eauto.
+  eapply faulty_behavior_improves; eauto.
 Qed.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of

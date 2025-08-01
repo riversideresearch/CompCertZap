@@ -73,7 +73,7 @@ Inductive fstep (ge : genv) : fstate -> trace -> fstate -> Prop :=
   forall s b t s' b' s''
     (STEP: RTL.step ge s t s')
     (ZAP: maybe_zap s' b s'' b'),
-    fstep ge (mkfstate s b) t (mkfstate s'' b').
+    fstep ge {| fs_state := s; fault := b |} t {| fs_state := s''; fault := b'|}.
 
 Inductive initial_state (p : program) : fstate -> Prop :=
 | initial_state_intro : forall s,
