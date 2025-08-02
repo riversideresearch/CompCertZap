@@ -49,14 +49,14 @@ Proof.
   eapply transf_c_program_to_rtl_correct; eauto.
 Qed.
 
-Lemma transf_c_program_to_rtl_false_true_behaves p tp beh :
+Lemma transf_c_program_to_rtl_behaves p tp beh :
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
   program_behaves (RTL.semantics tp) beh ->
   exists tp', transf_c_program_to_rtl Replicate.Three p = OK tp' /\
            program_behaves (RTL.semantics tp') beh.
 Admitted.
 
-Lemma transf_c_program_to_rtl_false_true_match_votes p tp tp' :
+Lemma transf_c_program_to_rtl_match_votes p tp tp' :
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
   transf_c_program_to_rtl Replicate.Three p = OK tp' ->
   match_votes_program tp' tp.
@@ -76,9 +76,9 @@ Theorem transf_c_program_to_rtl_preservation_faulty:
 Proof.
   intros p tp beh Hp Hbeh.
   pose proof Hp as Hp'.
-  eapply transf_c_program_to_rtl_false_true_behaves in Hp'; eauto.
+  eapply transf_c_program_to_rtl_behaves in Hp'; eauto.
   destruct Hp' as (tp' & Hp' & Hbeh').
-  generalize (transf_c_program_to_rtl_false_true_match_votes _ _ _ Hp Hp').
+  generalize (transf_c_program_to_rtl_match_votes _ _ _ Hp Hp').
   intro Hmatchvotes.
   pose proof Hbeh' as H.
   eapply backward_simulation_behavior_improves in H.
