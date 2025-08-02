@@ -211,21 +211,21 @@ Section TOLERANCE.
     inv Hi.
   Qed.
 
-  Theorem faulty_step_exists s1 t1 s1' s2 :
-    match_states col s1 s2 ->
-    RTL.step ge1 s1 t1 s1' ->
-    exists t2 s2', fstep ge2 s2 t2 s2'.
+  Theorem faulty_step_exists s t s' fs :
+    match_states col s fs ->
+    Step (RTL.semantics prog1) s t s' ->
+    exists t' fs', Step (faulty_semantics prog2) fs t' fs'.
   Proof.
     intros Hmatch Hstep.
     inv Hstep.
-    - destruct s2.
+    - destruct fs.
       inv Hmatch.
       eexists; eexists.
       econstructor.
       + apply exec_Inop.
         eapply match_votes_function_not_builtin; eauto; constructor.
       + constructor.
-    - destruct s2.
+    - destruct fs.
       inv Hmatch.
       eexists; eexists.
       econstructor.
@@ -248,11 +248,11 @@ Section TOLERANCE.
     - admit.
   Admitted.
 
-  Theorem faulty_step_simulation s1 t1 s1' s2 t2 s2' :
-    match_states col s1 s2 ->
-    RTL.step ge1 s1 t1 s1' ->
-    fstep ge2 s2 t2 s2' ->
-    t1 = t2 /\ match_states col s1' s2'.
+  Theorem faulty_step_simulation s t s' fs t' fs' :
+    match_states col s fs ->
+    Step (RTL.semantics prog1) s t s' ->
+    Step (faulty_semantics prog2) fs t' fs' ->
+    t = t' /\ match_states col s' fs'.
   Proof.
     intros Hmatch Hstep Hfstep.
     inv Hstep.
@@ -310,6 +310,28 @@ Section TOLERANCE.
     (* exec_return *)
     - admit.
   Admitted.
+
+  Corollary faulty_star_step_exists s t s' fs :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    exists fs', Star (faulty_semantics prog2) fs t fs' /\ match_states col s' fs'.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs.
+    induction Hstar; intros fs Hmatch.
+    { exists fs; split; auto; apply star_refl. }
+    subst.
+    pose proof H as Hstep.
+    eapply faulty_step_exists in Hstep; eauto.
+    destruct Hstep as (t' & fs' & Hfstep).
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    eapply IHHstar in Hmatch'.
+    destruct Hmatch' as (fs'' & Hstar'' & Hmatch'').
+    exists fs''; split; auto.
+    eapply star_step; eauto.
+  Qed.
 
   Lemma initial_states_match s fs :
     initial_state (RTL.semantics prog1) s ->
@@ -458,7 +480,68 @@ Section TOLERANCE.
       + eapply faulty_step_simulation in H1; eauto.
         destruct H1 as [? Hmatch']; subst.
         eapply IHHstar; eauto.
-    Qed.
+  Qed.
+
+  (* Can't do other direction. *)
+  Lemma match_states_forever_silent s fs :
+    match_states col s fs ->
+    Forever_silent (RTL.semantics prog1) s ->
+      Forever_silent (faulty_semantics prog2) fs.
+  Proof.
+    revert s fs.
+    cofix CH.
+    intros s fs Hmatch Hsil.
+    inv Hsil.
+    pose proof H as Hstep.
+    eapply faulty_step_exists in Hstep; eauto.
+    destruct Hstep as (t' & fs' & Hfstep).
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    econstructor; eauto.
+  Qed.
+
+  (* Can't do other direction. *)
+  Lemma match_states_forever_reactive s fs T :
+    match_states col s fs ->
+    Forever_reactive (RTL.semantics prog1) s T ->
+      Forever_reactive (faulty_semantics prog2) fs T.
+  Proof.
+    revert s fs T.
+    cofix CH.
+    intros s fs T Hmatch Hreact.
+    inv Hreact.
+    pose proof H as Hstar.
+    eapply faulty_star_step_exists in Hstar; eauto.
+    destruct Hstar as (t' & fs' & Hstar').
+    econstructor; eauto.
+  Qed.
+
+  Lemma star_faulty_silent_trace s fs t fs' :
+    match_states col s fs ->
+    Forever_silent (RTL.semantics prog1) s ->
+    Star (faulty_semantics prog2) fs t fs' ->
+    t = E0.
+  Proof.
+    intros Hmatch Hsil Hstar.
+    revert Hmatch Hsil.
+    revert s.
+    induction Hstar; intros s0 Hmatch Hsil; auto.
+    inv Hsil.
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst; simpl.
+    eapply IHHstar; eauto.
+  Qed.
+
+  Lemma silent_not_reactive s fs T :
+    match_states col s fs ->
+    Forever_silent (RTL.semantics prog1) s ->
+    Forever_reactive (faulty_semantics prog2) fs T ->
+    False.
+  Proof.
+    intros Hmatch Hsil Hreact.
+    inv Hreact.
+    eapply star_faulty_silent_trace in H; eauto.
+  Qed.
 
   Lemma star_silent_not_reactive t s s' fs T :
     match_states col s fs ->
@@ -471,17 +554,15 @@ Section TOLERANCE.
     revert Hmatch.
     revert fs T.
     induction Hstar; intros fs T Hmatch Hsil Hreact.
-    - admit.
+    - eapply silent_not_reactive; eauto.
     - subst.
-      inv Hsil.
-      eapply IHHstar.
-    (*   + eapply final_state_no_step in Hfin; eauto. *)
-    (*     eapply Hfin; eauto. *)
-    (*   + eapply faulty_step_simulation in H1; eauto. *)
-    (*     destruct H1 as [? Hmatch']; subst. *)
-    (*     eapply IHHstar; eauto. *)
-    (* Qed. *)
-  Admitted.
+      inv Hreact.
+      inv H0; try congruence.
+      eapply faulty_step_simulation in H3; eauto.
+      destruct H3 as [? Hmatch']; subst.
+      eapply IHHstar; eauto.
+      eapply star_forever_reactive; eauto.
+  Qed.
 
   Lemma star_final_not_reactive t s s' fs r T :
     match_states col s fs ->
@@ -599,7 +680,7 @@ Section TOLERANCE.
       eapply faulty_step_simulation; eauto.
   Qed.
 
-  Lemma star_silent_silent s t s' fs :
+  Lemma star_silent_trace s t s' fs :
     match_states col s fs ->
     Star (RTL.semantics prog1) s t s' ->
     Forever_silent (faulty_semantics prog2) fs ->
@@ -608,12 +689,11 @@ Section TOLERANCE.
     intros Hmatch Hstar.
     revert Hmatch.
     revert fs.
-    induction Hstar; intros fs Hmatch Hsil.
-    - split; auto.
-    - inv Hsil.
-      eapply faulty_step_simulation in H; eauto.
-      destruct H as [? Hmatch']; subst; simpl.
-      eapply IHHstar; eauto.
+    induction Hstar; intros fs Hmatch Hsil; auto.
+    inv Hsil.
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst; simpl.
+    eapply IHHstar; eauto.
   Qed.
 
   Lemma star_silent_star_silent s t s' fs t' fs' :
@@ -628,7 +708,7 @@ Section TOLERANCE.
     revert Hmatch Hstar Hsil.
     revert s t s'.
     induction Hstar'; intros s0 t' s' Hmatch Hstar Hsil Hsil'.
-    { eapply star_silent_silent; eauto. }
+    { eapply star_silent_trace; eauto. }
     subst.
     inv Hstar.
     - inv Hsil.
@@ -639,6 +719,51 @@ Section TOLERANCE.
     - eapply faulty_step_simulation in H0; eauto.
       destruct H0 as [? Hmatch']; subst; f_equal.
       eapply IHHstar'; eauto.
+  Qed.
+
+  Lemma silent_not_star_stuck s fs t fs' :
+    match_states col s fs ->
+    Forever_silent (RTL.semantics prog1) s ->
+    Star (faulty_semantics prog2) fs t fs' ->
+    Nostep (faulty_semantics prog2) fs' ->
+    False.
+  Proof.
+    intros Hmatch Hsil Hstar.
+    revert Hmatch Hsil.
+    revert s.
+    induction Hstar; intros s0 Hmatch Hsil Hnostep.
+    { inv Hsil.
+      eapply faulty_step_exists in H; eauto.
+      destruct H as (t' & fs' & Hfstep).
+      eapply Hnostep; eauto. }
+    subst.
+    inv Hsil.
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    eapply IHHstar; eauto.
+  Qed.
+
+  Lemma star_silent_star_not_stuck s t s' fs t' fs' :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    Forever_silent (RTL.semantics prog1) s' ->
+    Star (faulty_semantics prog2) fs t' fs' ->
+    Nostep (faulty_semantics prog2) fs' ->
+    False.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs t' fs'.
+    induction Hstar; intros fs t' fs' Hmatch Hsil Hstar' Hnostep.
+    { eapply silent_not_star_stuck; eauto. }
+    subst.
+    inv Hstar'.
+    { eapply faulty_step_exists in H; eauto.
+      destruct H as (t' & fs'' & Hfstep).
+      eapply Hnostep; eauto. }
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    eapply IHHstar; eauto.
   Qed.
 
   Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
@@ -660,8 +785,7 @@ Section TOLERANCE.
       + exfalso; eapply diverges_terminates_False; eauto.
       + f_equal; eapply star_silent_star_silent; eauto.
       + exfalso; eapply star_silent_not_reactive; eauto.
-      + exfalso.
-        admit.
+      + exfalso; eapply star_silent_star_not_stuck; eauto.
     - left; inv Hbeh2.
       + exfalso.
         admit.
