@@ -287,37 +287,26 @@ Section TOLERANCE.
 
     (* exec_Iop *)
     - admit.
-
     (* exec_Iload *)
     - admit.
-
     (* exec_Istore *)
     - admit.
-
     (* exec_Icall *)
     - admit.
-
     (* exec_Itailcall *)
     - admit.
-
     (* exec_Ibuiltin *)
     - admit.
-
     (* exec_Icond *)
     - admit.
-
     (* exec_Ijumptable *)
     - admit.
-
     (* exec_Ireturn *)
     - admit.
-
     (* exec_function_internal *)
     - admit.
-
     (* exec_function_external *)
     - admit.
-
     (* exec_return *)
     - admit.
   Admitted.
@@ -382,7 +371,7 @@ Section TOLERANCE.
   (* TODO: should be able to prove
      [match s fs => (star s t s' /\ fstar fs t' fs') => t <= t' \/ t' <= t]. *)
 
-  Lemma star_final_not_forever_silent t s s' fs r :
+  Lemma star_final_prog1_not_forever_silent t s s' fs r :
     match_states col s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
@@ -412,7 +401,7 @@ Section TOLERANCE.
     revert Hmatch Hstar Hfin Hsil.
     revert s t s' r.
     induction Hstar'; intros s0 t' s' r Hmatch Hstar Hfin Hsil.
-    - eapply star_final_not_forever_silent; eauto.
+    - eapply star_final_prog1_not_forever_silent; eauto.
     - inv Hstar.
       + eapply final_state_no_faulty_step in Hfin; eauto.
         eapply Hfin; eauto.
@@ -421,7 +410,80 @@ Section TOLERANCE.
         eapply IHHstar'; eauto.
   Qed.
 
-  Lemma star_final_not_forever_reactive t s s' fs r T :
+  (* This isn't true because RTL.final_state requires that the result
+     value be a Vint, but here it could be Vundef. *)
+  (* Lemma faulty_final_state_final s fs r : *)
+  (*   match_states col s fs -> *)
+  (*   final_state (faulty_semantics prog2) fs r -> *)
+  (*   final_state (RTL.semantics prog1) s r. *)
+  (* Proof. *)
+  (*   intros Hmatch Hfin. *)
+  (*   inv Hfin; inv Hmatch; simpl in *; try congruence. *)
+  (*   inv H0; inv STK. *)    
+
+  Lemma star_final_prog2_not_silent t s fs fs' r :
+    match_states col s fs ->
+    Forever_silent (RTL.semantics prog1) s ->
+    Star (faulty_semantics prog2) fs t fs' ->
+    final_state (faulty_semantics prog2) fs' r ->
+    False.
+  Proof.
+    intros Hmatch Hsil Hstar.
+    revert Hmatch Hsil.
+    revert s r.
+    induction Hstar; intros s0 r Hmatch Hsil Hfin; inv Hsil.
+    - eapply final_state_no_step in Hfin; eauto.
+      eapply Hfin; eauto.
+    - eapply faulty_step_simulation in H1; eauto.
+      destruct H1 as [? Hmatch']; subst.
+      eapply IHHstar; eauto.
+  Qed.
+
+  Lemma diverges_terminates_False t t' s s' fs fs' r :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    Forever_silent (RTL.semantics prog1) s' ->
+    Star (faulty_semantics prog2) fs t' fs' ->
+    final_state (faulty_semantics prog2) fs' r ->
+    False.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs t' fs' r.
+    induction Hstar; intros fs t' fs' r Hmatch Hsil Hstar' Hfin.
+    - eapply star_final_prog2_not_silent; eauto.
+    - inv Hstar'.
+      + eapply final_state_no_step in Hfin; eauto.
+        eapply Hfin; eauto.
+      + eapply faulty_step_simulation in H1; eauto.
+        destruct H1 as [? Hmatch']; subst.
+        eapply IHHstar; eauto.
+    Qed.
+
+  Lemma star_silent_not_reactive t s s' fs T :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    Forever_silent (RTL.semantics prog1) s' ->
+    Forever_reactive (faulty_semantics prog2) fs T ->
+    False.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs T.
+    induction Hstar; intros fs T Hmatch Hsil Hreact.
+    - admit.
+    - subst.
+      inv Hsil.
+      eapply IHHstar.
+    (*   + eapply final_state_no_step in Hfin; eauto. *)
+    (*     eapply Hfin; eauto. *)
+    (*   + eapply faulty_step_simulation in H1; eauto. *)
+    (*     destruct H1 as [? Hmatch']; subst. *)
+    (*     eapply IHHstar; eauto. *)
+    (* Qed. *)
+  Admitted.
+
+  Lemma star_final_not_reactive t s s' fs r T :
     match_states col s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
@@ -537,6 +599,48 @@ Section TOLERANCE.
       eapply faulty_step_simulation; eauto.
   Qed.
 
+  Lemma star_silent_silent s t s' fs :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    Forever_silent (faulty_semantics prog2) fs ->
+    t = E0.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs.
+    induction Hstar; intros fs Hmatch Hsil.
+    - split; auto.
+    - inv Hsil.
+      eapply faulty_step_simulation in H; eauto.
+      destruct H as [? Hmatch']; subst; simpl.
+      eapply IHHstar; eauto.
+  Qed.
+
+  Lemma star_silent_star_silent s t s' fs t' fs' :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    Forever_silent (RTL.semantics prog1) s' ->
+    Star (faulty_semantics prog2) fs t' fs' ->
+    Forever_silent (faulty_semantics prog2) fs' ->
+    t = t'.
+  Proof.
+    intros Hmatch Hstar Hsil Hstar'.
+    revert Hmatch Hstar Hsil.
+    revert s t s'.
+    induction Hstar'; intros s0 t' s' Hmatch Hstar Hsil Hsil'.
+    { eapply star_silent_silent; eauto. }
+    subst.
+    inv Hstar.
+    - inv Hsil.
+      eapply faulty_step_simulation in H0; eauto.
+      destruct H0 as [? Hmatch']; subst; simpl.
+      eapply IHHstar'; eauto.
+      apply star_refl.
+    - eapply faulty_step_simulation in H0; eauto.
+      destruct H0 as [? Hmatch']; subst; f_equal.
+      eapply IHHstar'; eauto.
+  Qed.
+
   Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
     RTL.initial_state prog1 s ->
     initial_state (faulty_semantics prog2) fs ->
@@ -550,15 +654,12 @@ Section TOLERANCE.
     - left; inv Hbeh2.
       + f_equal; eapply star_final_star_final; eauto.
       + exfalso; eapply terminates_diverges_False; eauto.
-      + exfalso; eapply star_final_not_forever_reactive; eauto.
+      + exfalso; eapply star_final_not_reactive; eauto.
       + exfalso; eapply H3, star_final_star_nostep_final; eauto.
     - left; inv Hbeh2.
-      + exfalso.
-        admit.
-      + f_equal.
-        admit.
-      + exfalso.
-        admit.
+      + exfalso; eapply diverges_terminates_False; eauto.
+      + f_equal; eapply star_silent_star_silent; eauto.
+      + exfalso; eapply star_silent_not_reactive; eauto.
       + exfalso.
         admit.
     - left; inv Hbeh2.

@@ -56,6 +56,14 @@ Lemma transf_c_program_to_rtl_behaves p tp beh :
            program_behaves (RTL.semantics tp') beh.
 Admitted.
 
+(* (* This is stronger and should probably also be true. *) *)
+(* Lemma transf_c_program_to_rtl_behaves' p tp : *)
+(*   transf_c_program_to_rtl Replicate.Two p = OK tp -> *)
+(*   exists tp', transf_c_program_to_rtl Replicate.Three p = OK tp' /\ *)
+(*            forall beh, program_behaves (RTL.semantics tp) beh <-> *)
+(*                     program_behaves (RTL.semantics tp') beh. *)
+(* Admitted. *)
+
 Lemma transf_c_program_to_rtl_match_votes p tp tp' :
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
   transf_c_program_to_rtl Replicate.Three p = OK tp' ->
