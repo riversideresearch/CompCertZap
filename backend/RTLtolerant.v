@@ -119,6 +119,22 @@ Definition match_rs (col : reg -> color) (faulted : bool) (rs1 rs2 : regset) : P
   else
     forall r, Val.lessdef (rs1 # r) (rs2 # r).
 
+
+Lemma reactive_prefix_exists_star sem s t T :
+  Forever_reactive sem s T ->
+  traceinf_prefix t T ->
+  exists s', Star sem s t s'.
+Proof.
+  (* revert s T. *)
+  (* induction t; intros s T Hreact Hpre. *)
+  (* { exists s; apply star_refl. } *)
+  (* destruct Hpre as [T' Hpre]. *)
+  (* destruct T. *)
+  (* inv Hpre. *)
+  (* inv Hreact. *)
+  (* inv H0; try congruence. *)
+Admitted.
+
 Section match_states.
   Variable col : node -> reg -> color.
 
@@ -847,26 +863,131 @@ Section TOLERANCE.
     eapply star_forever_reactive; eauto.
   Qed.
 
-  Lemma reactive_reactive s fs T T' :
-    match_states col s fs ->
-    Forever_reactive (RTL.semantics prog1) s T ->
-    Forever_reactive (faulty_semantics prog2) fs T' ->
-    traceinf_sim T T'.
+  (* Lemma iodfg T1 T2 : *)
+  (*   ~ traceinf_sim T1 T2 -> *)
+  (*   exists t1 t2, *)
+  (*     traceinf_prefix t1 T1 /\ *)
+  (*       traceinf_prefix t2 T2 /\ *)
+  (*       t1 <> t2. *)
+  (* Admitted. *)
+
+  (* Lemma reactive_reactive s fs T : *)
+  (*   match_states col s fs -> *)
+  (*   Forever_reactive (RTL.semantics prog1) s T -> *)
+  (*   exists T', Forever_reactive (faulty_semantics prog2) fs T' /\ *)
+  (*           traceinf_sim T T'. *)
+  (* Proof. *)
+  (*   intros Hmatch Hreact. *)
+
+  Lemma prefixes_comparable_traceinf_sim T1 T2 :
+    (forall t1 t2, traceinf_prefix t1 T1 ->
+              traceinf_prefix t2 T2 ->
+              trace_prefix t1 t2 \/ trace_prefix t2 t1) ->
+    traceinf_sim T1 T2.
   Proof.
-    intros H0 H1 H2.
-    eapply traceinf_sim'_sim.
-    revert H0 H1 H2.
-    revert s fs T T'.
+    revert T1 T2.
     cofix CH.
-    intros s fs T T' Hmatch Hreact Hreact'.
-    inv Hreact.
-    inv Hreact'.
-    (* forever_reactive *)
-    (* inv H; try congruence. *)
-    (* inv H2; try congruence. *)
-    (* eapply faulty_step_ *)
-    (* traceinf_sim *)
-  Admitted.
+    intros T1 T2 Ht.
+    destruct T1, T2.
+    replace e0 with e in *.
+    2: { specialize (Ht [e] [e0]).
+         assert (H0: traceinf_prefix [e] (Econsinf e T1)).
+         { exists T1; reflexivity. }
+         assert (H1: traceinf_prefix [e0] (Econsinf e0 T2)).
+         { exists T2; reflexivity. }
+         destruct (Ht H0 H1) as [Ht' | Ht'].
+         - destruct Ht' as [t' Ht'].
+           inv Ht'; auto.
+         - destruct Ht' as [t' Ht'].
+           inv Ht'; auto. }
+    constructor.
+    apply CH; auto.
+    intros t1 t2 Ht1 Ht2.
+    specialize (Ht (e :: t1) (e :: t2)).
+    assert (H0: traceinf_prefix (e :: t1) (Econsinf e T1)).
+    { unfold traceinf_prefix; simpl.
+      destruct Ht1 as [T1' Ht1].
+      exists T1'; f_equal; auto. }
+    assert (H1: traceinf_prefix (e :: t2) (Econsinf e T2)).
+    { unfold traceinf_prefix; simpl.
+      destruct Ht2 as [T2' Ht2].
+      exists T2'; f_equal; auto. }
+    destruct (Ht H0 H1) as [Ht' | Ht'].
+    - destruct Ht' as [T' Ht'].
+      simpl in Ht'.
+      inv Ht'.
+      left; exists T'; reflexivity.
+    - destruct Ht' as [T' Ht'].
+      simpl in Ht'.
+      inv Ht'.
+      right; exists T'; reflexivity.
+  Qed.
+  
+  (* Require Import Classical. *)
+
+  Lemma star_prefix s s' fs fs' t1 t2 :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t1 s' ->
+    Star (faulty_semantics prog2) fs t2 fs' ->
+    trace_prefix t1 t2 \/ trace_prefix t2 t1.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs fs' t2.
+    induction Hstar; intros fs fs' t2' Hmatch Hstar'.
+    { left; eexists; reflexivity. }
+    subst.
+    inv Hstar'.
+    { right; eexists; reflexivity. }
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    cut (trace_prefix t2 t3 \/ trace_prefix t3 t2).
+    { intros [[t' H] | [t' H]]; subst.
+      - left; eexists; rewrite Eapp_assoc; reflexivity.
+      - right; eexists; rewrite Eapp_assoc; reflexivity. }
+    eapply IHHstar; eauto.
+  Qed.
+
+  Lemma reactive_reactive s fs T1 T2 :
+    match_states col s fs ->
+    Forever_reactive (RTL.semantics prog1) s T1 ->
+    Forever_reactive (faulty_semantics prog2) fs T2 ->
+    traceinf_sim T1 T2.
+  Proof.
+    intros Hmatch Hreact Hreact'.
+    apply prefixes_comparable_traceinf_sim.
+    intros t1 t2 Ht1 Ht2.
+    eapply reactive_prefix_exists_star in Hreact; eauto.
+    eapply reactive_prefix_exists_star in Hreact'; eauto.
+    destruct Hreact as [s' Hstar].
+    destruct Hreact' as [fs' Hstar'].
+    eapply star_prefix; eauto.
+  Qed.
+
+  (*   intros Hmatch Hreact Hreact'. *)
+  (*   destruct (classic (traceinf_sim T T')); auto. *)
+  (*   exfalso. *)
+  (*   apply iodfg in H. *)
+  (*   destruct H as (t1 & t2 & Ht1 & Ht2 & Hneq). *)
+    
+  (*   intros H0 H1 H2. *)
+  (*   eapply traceinf_sim'_sim. *)
+  (*   revert H0 H1 H2. *)
+  (*   revert s fs T T'. *)
+  (*   cofix CH. *)
+  (*   intros s fs T T' Hmatch Hreact Hreact'. *)
+  (*   inv Hreact. *)
+  (*   inv Hreact'. *)
+  (*   replace t0 with t in * by admit. *)
+  (*   constructor; auto. *)
+  (*   eapply faulty_step_ *)
+  (*   eapply CH; eauto. *)
+  (*   (* forever_reactive *) *)
+  (*   (* inv H; try congruence. *) *)
+  (*   (* inv H2; try congruence. *) *)
+  (*   (* eapply faulty_step_ *) *)
+  (*   (* traceinf_sim *) *)
+  (* Admitted. *)
 
   Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
     RTL.initial_state prog1 s ->
