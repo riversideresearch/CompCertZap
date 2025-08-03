@@ -183,57 +183,6 @@ Proof.
   eapply traceinf_prefix_trace_prefix; eauto.
 Qed.
 
-(* Lemma reactive_prefix_exists_star sem s t T : *)
-(*   Forever_reactive sem s T -> *)
-(*   traceinf_prefix t T -> *)
-(*   exists s', Star sem s t s'. *)
-(* Proof. *)
-(*   intros Hreact [T' Hpre]; subst. *)
-(*   rename T' into T. *)
-(*   apply forever_reactive_forever_reactive' in Hreact. *)
-(*   unfold forever_reactive' in Hreact.   *)
-
-(* (*   (* inv Hreact. *) *) *)
-(* (*   (* inv H0; try congruence. *) *) *)
-  
-(* (*   revert s T Hreact. *) *)
-(* (*   induction t; simpl; intros s T Hreact. *) *)
-(* (*   { exists s; apply star_refl. } *) *)
-(* (*   inv Hreact. *) *)
-(* (*   (* inv H0; try congruence. *) *) *)
-
-(* (*   assert (Forever_reactive sem s (t *** T) *) *)
-  
-(* (*   replace (Econsinf a (t *** T)) with ([a] *** t *** T) in H by auto. *) *)
-(* (*   rewrite <- Eappinf_assoc in H. *) *)
-(* (*   apply Eappinf_eq_trace_prefix in H. *) *)
-(* (*   destruct H as [H | H]. *) *)
-(* (*   - simpl in *. *) *)
-(* (*     destruct H as [t' H]. *) *)
-(* (*     rewrite H. *) *)
-
-(* (*     (* assert (Forever_reactive sem s (t2 *** T)) *) *) *)
-    
-(* (*     eexists. *) *)
-(* (*     eapply star_trans. *) *)
-(* (*     { apply H0. } *) *)
-(* (*     2: { reflexivity. } *) *)
-    
-(* (* - *) *)
-  
-(* (*   revert s T. *) *)
-(* (*   induction t; intros s T Hreact Hpre. *) *)
-(* (*   { exists s; apply star_refl. } *) *)
-(* (*   inv Hreact. *) *)
-(* (*   inv H; try congruence. *) *)
-(* (*   eapply IHt in H1. *) *)
-(* (*   (* destruct Hpre as [T' Hpre]. *) *) *)
-(* (*   (* destruct T. *) *) *)
-(* (*   (* inv Hpre. *) *) *)
-(* (*   (* inv Hreact. *) *) *)
-(* (*   (* inv H0; try congruence. *) *) *)
-(* Admitted. *)
-
 Section match_states.
   Variable col : node -> reg -> color.
 
