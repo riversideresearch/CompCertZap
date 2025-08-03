@@ -359,7 +359,7 @@ Section TOLERANCE.
     - auto.
   Qed.
 
-  Lemma final_state_no_faulty_step s fs r :
+  Lemma final_state_faulty_nostep s fs r :
     match_states col s fs ->
     final_state (RTL.semantics prog1) s r ->
     Nostep (faulty_semantics prog2) fs.
@@ -370,7 +370,7 @@ Section TOLERANCE.
     inv Hfstep; inv STK; inv STEP.
   Qed.
 
-  Lemma final_state_no_step s fs r :
+  Lemma final_state_nostep s fs r :
     match_states col s fs ->
     final_state (faulty_semantics prog2) fs r ->
     Nostep (RTL.semantics prog1) s.
@@ -404,7 +404,7 @@ Section TOLERANCE.
     revert H.
     revert fs r.
     induction Hstar; intros fs r Hmatch Hfin Hsil; inv Hsil.
-    - eapply final_state_no_faulty_step in Hfin; eauto.
+    - eapply final_state_faulty_nostep in Hfin; eauto.
       eapply Hfin; eauto.
     - eapply faulty_step_simulation in H; eauto.
       destruct H as [? Hmatch']; subst.
@@ -425,7 +425,7 @@ Section TOLERANCE.
     induction Hstar'; intros s0 t' s' r Hmatch Hstar Hfin Hsil.
     - eapply star_final_prog1_not_forever_silent; eauto.
     - inv Hstar.
-      + eapply final_state_no_faulty_step in Hfin; eauto.
+      + eapply final_state_faulty_nostep in Hfin; eauto.
         eapply Hfin; eauto.
       + eapply faulty_step_simulation in H; eauto.
         destruct H as [? Hmatch']; subst.
@@ -454,7 +454,7 @@ Section TOLERANCE.
     revert Hmatch Hsil.
     revert s r.
     induction Hstar; intros s0 r Hmatch Hsil Hfin; inv Hsil.
-    - eapply final_state_no_step in Hfin; eauto.
+    - eapply final_state_nostep in Hfin; eauto.
       eapply Hfin; eauto.
     - eapply faulty_step_simulation in H1; eauto.
       destruct H1 as [? Hmatch']; subst.
@@ -475,11 +475,83 @@ Section TOLERANCE.
     induction Hstar; intros fs t' fs' r Hmatch Hsil Hstar' Hfin.
     - eapply star_final_prog2_not_silent; eauto.
     - inv Hstar'.
-      + eapply final_state_no_step in Hfin; eauto.
+      + eapply final_state_nostep in Hfin; eauto.
         eapply Hfin; eauto.
       + eapply faulty_step_simulation in H1; eauto.
         destruct H1 as [? Hmatch']; subst.
         eapply IHHstar; eauto.
+  Qed.
+
+  Lemma reacts_terminates_False t s fs fs' r T :
+    match_states col s fs ->
+    Forever_reactive (RTL.semantics prog1) s T ->
+    Star (faulty_semantics prog2) fs t fs' ->
+    final_state (faulty_semantics prog2) fs' r ->
+    False.
+  Proof.
+    intros Hmatch Hreact Hstar.
+    revert Hmatch Hreact.
+    revert s r T.
+    induction Hstar; intros s0 r T Hmatch Hreact Hfin.
+    { inv Hreact.
+      inv H; try congruence.
+      eapply final_state_nostep in Hfin; eauto.
+      eapply Hfin; eauto. }
+    subst.
+    inv Hreact.
+    inv H0; try congruence.
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    eapply IHHstar; eauto.
+    eapply star_forever_reactive; eauto.
+  Qed.
+
+  Lemma star_silent_trace s t s' fs :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' -> 
+    Forever_silent (faulty_semantics prog2) fs ->
+    t = E0.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs.
+    induction Hstar; intros fs Hmatch Hsil; auto.
+    inv Hsil.
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst; simpl.
+    eapply IHHstar; eauto.
+  Qed.
+
+  Lemma reactive_not_silent s fs T :
+    match_states col s fs ->
+    Forever_reactive (RTL.semantics prog1) s T ->
+    Forever_silent (faulty_semantics prog2) fs ->
+    False.
+  Proof.
+    intros Hmatch Hreact Hsil.
+    inv Hreact.
+    eapply star_silent_trace in H; eauto.
+  Qed.
+
+  Lemma reacts_diverges_False t s fs fs' T :
+    match_states col s fs ->
+    Forever_reactive (RTL.semantics prog1) s T ->
+    Star (faulty_semantics prog2) fs t fs' ->
+    Forever_silent (faulty_semantics prog2) fs' ->
+    False.
+  Proof.
+    intros Hmatch Hreact Hstar.
+    revert Hmatch Hreact.
+    revert s T.
+    induction Hstar; intros s0 T Hmatch Hreact Hfin.
+    { eapply reactive_not_silent; eauto. }
+    subst.
+    inv Hreact.
+    inv H0; try congruence.
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    eapply IHHstar; eauto.
+    eapply star_forever_reactive; eauto.
   Qed.
 
   (* Can't do other direction. *)
@@ -576,7 +648,7 @@ Section TOLERANCE.
     revert fs r T.
     induction Hstar; intros fs r T Hmatch Hfin Hreact; inv Hreact.
     - inv H; try congruence.
-      eapply final_state_no_faulty_step in Hfin; eauto.
+      eapply final_state_faulty_nostep in Hfin; eauto.
       eapply Hfin; eauto.
     - inv H1; try congruence.
       eapply faulty_step_simulation in H; eauto.
@@ -655,7 +727,7 @@ Section TOLERANCE.
     - split; auto.
       inv Hfin; inv Hfin'; inv Hmatch.
       inv H0; inv LESSDEF; reflexivity.
-    - exfalso; eapply final_state_no_step; eauto.
+    - exfalso; eapply final_state_nostep; eauto.
   Qed.
 
   Lemma star_final_star_final s t s' r fs t' fs' r' :
@@ -672,28 +744,12 @@ Section TOLERANCE.
     induction Hstar'; intros s0 t' s' r r' Hmatch Hstar Hfin Hfin'.
     { eapply star_final_final; eauto. }
     inv Hstar.
-    - exfalso; eapply final_state_no_faulty_step; eauto.
+    - exfalso; eapply final_state_faulty_nostep; eauto.
     - cut (t3 = t2 /\ r = r').
       { intros [? ?]; subst; split; auto; f_equal.
         eapply faulty_step_simulation; eauto. }
       eapply IHHstar'; eauto.
       eapply faulty_step_simulation; eauto.
-  Qed.
-
-  Lemma star_silent_trace s t s' fs :
-    match_states col s fs ->
-    Star (RTL.semantics prog1) s t s' ->
-    Forever_silent (faulty_semantics prog2) fs ->
-    t = E0.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs.
-    induction Hstar; intros fs Hmatch Hsil; auto.
-    inv Hsil.
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst; simpl.
-    eapply IHHstar; eauto.
   Qed.
 
   Lemma star_silent_star_silent s t s' fs t' fs' :
@@ -766,6 +822,52 @@ Section TOLERANCE.
     eapply IHHstar; eauto.
   Qed.
 
+  Lemma reactive_star_not_stuck s fs t' fs' T :
+    match_states col s fs ->
+    Forever_reactive (RTL.semantics prog1) s T ->
+    Star (faulty_semantics prog2) fs t' fs' ->
+    Nostep (faulty_semantics prog2) fs' ->
+    False.
+  Proof.
+    intros Hmatch Hreact Hstar.
+    revert Hmatch Hreact.
+    revert s T.
+    induction Hstar; intros s0 T Hmatch Hreact Hnostep.
+    { inv Hreact.
+      inv H; try congruence.
+      eapply faulty_step_exists in H2; eauto.
+      destruct H2 as (t' & fs' & Hfstep).
+      eapply Hnostep; eauto. }
+    subst.
+    inv Hreact.
+    inv H0; try congruence.
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    eapply IHHstar; eauto.
+    eapply star_forever_reactive; eauto.
+  Qed.
+
+  Lemma reactive_reactive s fs T T' :
+    match_states col s fs ->
+    Forever_reactive (RTL.semantics prog1) s T ->
+    Forever_reactive (faulty_semantics prog2) fs T' ->
+    traceinf_sim T T'.
+  Proof.
+    intros H0 H1 H2.
+    eapply traceinf_sim'_sim.
+    revert H0 H1 H2.
+    revert s fs T T'.
+    cofix CH.
+    intros s fs T T' Hmatch Hreact Hreact'.
+    inv Hreact.
+    inv Hreact'.
+    (* forever_reactive *)
+    (* inv H; try congruence. *)
+    (* inv H2; try congruence. *)
+    (* eapply faulty_step_ *)
+    (* traceinf_sim *)
+  Admitted.
+
   Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
     RTL.initial_state prog1 s ->
     initial_state (faulty_semantics prog2) fs ->
@@ -787,14 +889,11 @@ Section TOLERANCE.
       + exfalso; eapply star_silent_not_reactive; eauto.
       + exfalso; eapply star_silent_star_not_stuck; eauto.
     - left; inv Hbeh2.
-      + exfalso.
-        admit.
-      + exfalso.
-        admit.
-      + f_equal.
-        admit. (* might be weird... extensionality axiom for traceinf_sim? *)
-      + exfalso.
-        admit.
+      + exfalso; eapply reacts_terminates_False; eauto.
+      + exfalso; eapply reacts_diverges_False; eauto.
+      + f_equal; eapply reactive_reactive in H; eauto.
+        apply traceinf_sim_ext; assumption.
+      + exfalso; eapply reactive_star_not_stuck; eauto.
     - right.
       exists t; split; auto.
       admit.
@@ -823,6 +922,13 @@ Section TOLERANCE.
         admit. }
       constructor; reflexivity.
   Admitted.
+
+  (* Alternate formulation that might avoid the need for traceinf_sim
+     extensionality. *)
+  (* Theorem faulty_behavior_improves' beh2 : *)
+  (*   program_behaves (faulty_semantics prog2) beh2 -> *)
+  (*   exists beh1, program_behaves (RTL.semantics prog1) beh1 /\ behavior_improves beh1 beh2. *)
+  (* Admitted. *)
 
 End TOLERANCE.
 

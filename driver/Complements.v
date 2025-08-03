@@ -97,6 +97,12 @@ Proof.
   eapply behavior_improves_trans; eauto.
   apply transf_c_program_to_rtl_wc_program in Hp'.
   destruct Hp' as [col Hwc].
+
+  (* eapply faulty_behavior_improves' in Hfbeh; eauto. *)
+  (* destruct Hfbeh as (beh1' & Hbeh1' & Himp'). *)
+  (* (* Need to know that beh and beh1' are equal (RTL.semantics *)
+  (*    determinate, I guess). *) *)
+  
   eapply faulty_behavior_improves; eauto.
 Qed.
 

@@ -170,6 +170,8 @@ Proof.
   cofix COINDHYP;intros. inv H; inv H0; constructor; eauto.
 Qed.
 
+Axiom traceinf_sim_ext : forall T1 T2, traceinf_sim T1 T2 -> T1 = T2.
+
 CoInductive traceinf_sim': traceinf -> traceinf -> Prop :=
   | traceinf_sim'_cons: forall t T1 T2,
       t <> E0 -> traceinf_sim' T1 T2 -> traceinf_sim' (t *** T1) (t *** T2).
