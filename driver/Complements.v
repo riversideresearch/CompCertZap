@@ -70,18 +70,19 @@ Lemma transf_c_program_to_rtl_match_votes p tp tp' :
   match_votes_program tp' tp.
 Admitted.
 
-Lemma transf_c_program_to_rtl_wc_program p tp :
-  transf_c_program_to_rtl Replicate.Three p = OK tp ->
-  exists col, wc_program col tp.
-Admitted.
+(* Lemma transf_c_program_to_rtl_wc_program p tp : *)
+(*   transf_c_program_to_rtl Replicate.Three p = OK tp -> *)
+(*   exists col, wc_program col tp. *)
+(* Admitted. *)
 
 Theorem transf_c_program_to_rtl_preservation_faulty:
   forall p tp beh,
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
   program_behaves (RTL.semantics tp) beh ->
   exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh
-          /\ forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
-                    behavior_improves beh' fbeh.
+          /\ (check_program tp = true ->
+             forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
+                     behavior_improves beh' fbeh).
 Proof.
   intros p tp beh Hp Hbeh.
   pose proof Hp as Hp'.
@@ -94,18 +95,27 @@ Proof.
   2: { eapply transf_c_program_to_rtl_correct; eauto. }
   destruct H as (beh1 & Hbeh1 & Himp).
   exists beh1; repeat split; auto.
-  intros fbeh Hfbeh.
+  
+  (* intros fbeh Hfbeh. *)
+  (* eapply behavior_improves_trans; eauto. *)
+  (* apply transf_c_program_to_rtl_wc_program in Hp'. *)
+  (* destruct Hp' as [col Hwc]. *)
+
+  intros Hcheck fbeh Hfbeh.
   eapply behavior_improves_trans; eauto.
-  apply transf_c_program_to_rtl_wc_program in Hp'.
-  destruct Hp' as [col Hwc].
+  (* apply transf_c_program_to_rtl_wc_program in Hp'. *)
+  (* destruct Hp' as [col Hwc]. *)
 
   (* eapply faulty_behavior_improves' in Hfbeh; eauto. *)
   (* destruct Hfbeh as (beh1' & Hbeh1' & Himp'). *)
   (* (* Need to know that beh and beh1' are equal (RTL.semantics *)
-  (*    determinate, I guess). *) *)
+  (* determinate, I guess). Aaand that's where the extensionality axiom *)
+  (* is needed. *) *)
   
   eapply faulty_behavior_improves; eauto.
-Qed.
+  apply check_program_sound in Hcheck.
+  (* TODO: match_votes_program tp' tp -> wc_program tp -> wc_program tp' *)
+Admitted.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is

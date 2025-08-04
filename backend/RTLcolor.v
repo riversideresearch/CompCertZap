@@ -1,8 +1,10 @@
 Require Import
   AST
-  (* Coqlib *)
+  Errors
+  Coqlib
   (* Events *)
   (* Globalenvs *)
+  Integers
   List
   Maps
   Registers
@@ -31,7 +33,7 @@ Inductive basic_color : color -> Prop :=
 Section wc.
   (** Everything in this section is wrt. a given register coloring [col]. *)
   Variable col : node -> reg -> color.
-  
+
   (** An instruction is well-colored wrt. coloring [col]. *)
   Inductive wc_instruction : instruction -> Prop :=
   | wc_Inop : forall succ, wc_instruction (Inop succ)
@@ -56,39 +58,76 @@ Section wc.
         wc_fn_params : Forall (fun param => col f.(fn_entrypoint) param = Red) f.(fn_params);
         wc_fn_code : wc_code f.(fn_code)
       }.
-  
-  Inductive wc_fundef: fundef -> Prop :=
-  | wc_fundef_external: forall ef,
-      wc_fundef (External ef)
-  | wc_function_internal: forall f,
-      wc_function f ->
-      wc_fundef (Internal f).
 
-  Definition wc_program (p : program) : Prop :=
-    forall i f, In (i, Gfun f) (prog_defs p) -> wc_fundef f.
 End wc.
 
-Axiom infer_coloring : function -> option (reg -> color).
+Inductive wc_fundef: fundef -> Prop :=
+| wc_fundef_external: forall ef,
+    wc_fundef (External ef)
+| wc_function_internal: forall col f,
+    wc_function col f ->
+    wc_fundef (Internal f).
+
+Definition wc_program (p : program) : Prop :=
+  forall i f, In (i, Gfun f) (prog_defs p) -> wc_fundef f.
+
+Axiom infer_coloring : function -> option (node -> reg -> color).
 
 Section color_checker.
   Variable col : node -> reg -> color.
 
-  Definition check_function (f : function) : bool := false.
+  (* Coq is too clever about telling whether this definition depends
+     on col. *)
+  Definition check_col_function (f : function) : bool :=
+    match col 1%positive 1%positive with
+    | Red => true
+    | _ => false
+    end.
 
-  Lemma check_function_sound (f : function) :
-    check_function f = true -> wc_function col f.
+  Lemma check_col_function_sound (f : function) :
+    check_col_function f = true -> wc_function col f.
   Admitted.
 
-  Lemma check_function_complete (f : function) :
-    wc_function col f -> check_function f = true.
+  (* Maybe not necessary but should be true anyway. *)
+  Lemma check_col_function_complete (f : function) :
+    wc_function col f -> check_col_function f = true.
   Admitted.
 
-  Theorem check_function_iff (f : function) :
-    check_function f = true <-> wc_function col f.
+  Theorem check_col_function_iff (f : function) :
+    check_col_function f = true <-> wc_function col f.
   Proof.
     split.
-    - apply check_function_sound.
-    - apply check_function_complete.
+    - apply check_col_function_sound.
+    - apply check_col_function_complete.
   Qed.
-  
+
 End color_checker.
+
+Definition check_function (f : function) : bool :=
+  match infer_coloring f with
+  | None => false
+  | Some col => check_col_function col f
+  end.
+
+Lemma check_function_sound (f : function) :
+  check_function f = true -> exists col, wc_function col f.
+Proof.
+  unfold check_function.
+  destruct (infer_coloring f) as [col|]; try congruence.
+  intro Hcheck; exists col.
+  apply check_col_function_sound; assumption.
+Qed.
+
+(* check_function_complete not possible because we don't assume
+   anything about infer_coloring. *)
+
+Definition check_program (p : program) : bool :=
+  forallb (fun def => match snd def with
+                   | Gfun (Internal f) => check_function f
+                   | _ => true
+                   end) p.(prog_defs).
+
+Lemma check_program_sound (p : program) :
+  check_program p = true -> wc_program p.
+Proof.
+Admitted.  

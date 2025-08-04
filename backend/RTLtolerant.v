@@ -105,16 +105,18 @@ Inductive match_votes_fundef : fundef -> fundef -> Prop :=
 Definition match_votes_program (prog3 prog2 : program) :=
   match_program (fun cu f1 f2 => match_votes_fundef f1 f2) eq prog3 prog2.
 
-Lemma match_votes_wc (col : node -> reg -> color) (p1 p2 : program) :
+Lemma match_votes_wc (p1 p2 : program) :
   match_votes_program p1 p2 ->
-  wc_program col p1 ->
-  wc_program col p2.
+  wc_program p1 ->
+  wc_program p2.
 Admitted.
 
 Definition match_rs (col : reg -> color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
     exists c, basic_color c /\
            forall r, (col r <> c -> Val.lessdef (rs1 # r) (rs2 # r)) /\
+                  (* TODO: remove this second condition? Need to use
+                     more permissive vote semantics. *)
                   (col r = c -> val_compat (rs1 # r) (rs2 # r))
   else
     forall r, Val.lessdef (rs1 # r) (rs2 # r).
@@ -184,11 +186,10 @@ Proof.
 Qed.
 
 Section match_states.
-  Variable col : node -> reg -> color.
 
   (** When a fault has occurred elsewhere and regsets [rs1] and [rs2]
       are unchanged, they still match. *)
-  Lemma match_rs_fault (pc : node) (rs1 rs2 : regset) :
+  Lemma match_rs_fault col (pc : node) (rs1 rs2 : regset) :
     match_rs (col pc) false rs1 rs2 ->
     match_rs (col pc) true rs1 rs2.
   Proof.
@@ -198,9 +199,10 @@ Section match_states.
 
   Inductive match_stackframes (faulted : bool)
     : RTL.stackframe -> RTL.stackframe -> Prop :=
-  | match_stackframes_Stackframe : forall res f1 f2 sp pc rs1 rs2,
-      match_votes_function f1 f2 ->
-      match_rs (col pc) faulted rs1 rs2 ->
+  | match_stackframes_Stackframe : forall col res f1 f2 sp pc rs1 rs2
+      (MATCH: match_votes_function f1 f2)
+      (WC: wc_function col f1)
+      (RS: match_rs (col pc) faulted rs1 rs2),
       match_stackframes faulted
         (Stackframe res f1 sp pc rs1)
         (Stackframe res f2 sp pc rs2).
@@ -212,7 +214,7 @@ Section match_states.
     match_stackframes true sf1 sf2.
   Proof.
     intro H; inv H.
-    constructor; auto.
+    econstructor; eauto.
     apply match_rs_fault; auto.
   Qed.
 
@@ -222,9 +224,10 @@ Section match_states.
   Inductive match_states : RTL.state -> fstate -> Prop :=
   (* TODO: need lessdef on memories. *)
   | match_states_State :
-    forall stk1 stk2 f1 f2 sp pc rs1 rs2 m (b : bool)
+    forall col stk1 stk2 f1 f2 sp pc rs1 rs2 m (b : bool)
       (STK: Forall2 (match_stackframes b) stk1 stk2)
       (VOTE: match_votes_function f1 f2)
+      (WC: wc_function col f1)
       (RS: match_rs (col pc) b rs1 rs2),
       match_states (State stk1 f1 sp pc rs1 m)
                    {| fs_state := State stk2 f2 sp pc rs2 m; fault := b |}
@@ -254,8 +257,7 @@ Section TOLERANCE.
   (* Assume prog1 is well-colored (which should also imply through
      match_votes_prog that prog2 is well-colored). Maybe the same for
      well-typedness, but that shouldn't be necessary... *)
-  Variable col : node -> reg -> color.
-  Hypothesis WC : wc_program col prog1.
+  Hypothesis WC : wc_program prog1.
 
   (* Corollary wc_prog2 : wc_program col prog2. *)
   (* Proof. eapply match_votes_wc; eauto. Qed. *)
@@ -277,7 +279,7 @@ Section TOLERANCE.
   Qed.
 
   Theorem faulty_step_exists s t s' fs :
-    match_states col s fs ->
+    match_states s fs ->
     Step (RTL.semantics prog1) s t s' ->
     exists t' fs', Step (faulty_semantics prog2) fs t' fs'.
   Proof.
@@ -314,10 +316,10 @@ Section TOLERANCE.
   Admitted.
 
   Theorem faulty_step_simulation s t s' fs t' fs' :
-    match_states col s fs ->
+    match_states s fs ->
     Step (RTL.semantics prog1) s t s' ->
     Step (faulty_semantics prog2) fs t' fs' ->
-    t = t' /\ match_states col s' fs'.
+    t = t' /\ match_states s' fs'.
   Proof.
     intros Hmatch Hstep Hfstep.
     inv Hstep.
@@ -341,10 +343,12 @@ Section TOLERANCE.
         split; auto.
         rewrite H in H1; inv H1.
         rewrite <- H2 in H11; inv H11.
-        repeat constructor; auto.
+        econstructor; eauto.
+        (* repeat econstructor; eauto. *)
         { eapply Forall2_impl.
           2: { eauto. }
           intros; apply match_stackframes_fault; auto. }
+        { constructor; auto. }
         unfold match_rs.
         exists (col pc0 r); split.
         * admit.
@@ -377,9 +381,9 @@ Section TOLERANCE.
   Admitted.
 
   Corollary faulty_star_step_exists s t s' fs :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
-    exists fs', Star (faulty_semantics prog2) fs t fs' /\ match_states col s' fs'.
+    exists fs', Star (faulty_semantics prog2) fs t fs' /\ match_states s' fs'.
   Proof.
     intros Hmatch Hstar.
     revert Hmatch.
@@ -401,7 +405,7 @@ Section TOLERANCE.
   Lemma initial_states_match s fs :
     initial_state (RTL.semantics prog1) s ->
     initial_state (faulty_semantics prog2) fs ->
-    match_states col s fs.
+    match_states s fs.
   Proof.
     simpl; intros Hs Hfs.
     inv Hs; inv Hfs; inv H3.
@@ -425,7 +429,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma final_state_faulty_nostep s fs r :
-    match_states col s fs ->
+    match_states s fs ->
     final_state (RTL.semantics prog1) s r ->
     Nostep (faulty_semantics prog2) fs.
   Proof.
@@ -436,7 +440,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma final_state_nostep s fs r :
-    match_states col s fs ->
+    match_states s fs ->
     final_state (faulty_semantics prog2) fs r ->
     Nostep (RTL.semantics prog1) s.
   Proof.
@@ -446,7 +450,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_final_prog1_not_forever_silent t s s' fs r :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
     Forever_silent (faulty_semantics prog2) fs ->
@@ -464,7 +468,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma terminates_diverges_False t t' s s' fs fs' r :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
     Star (faulty_semantics prog2) fs t' fs' ->
@@ -496,7 +500,7 @@ Section TOLERANCE.
   (*   inv H0; inv STK. *)    
 
   Lemma star_final_prog2_not_silent t s fs fs' r :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_silent (RTL.semantics prog1) s ->
     Star (faulty_semantics prog2) fs t fs' ->
     final_state (faulty_semantics prog2) fs' r ->
@@ -514,7 +518,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma diverges_terminates_False t t' s s' fs fs' r :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     Forever_silent (RTL.semantics prog1) s' ->
     Star (faulty_semantics prog2) fs t' fs' ->
@@ -535,7 +539,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma reacts_terminates_False t s fs fs' r T :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_reactive (RTL.semantics prog1) s T ->
     Star (faulty_semantics prog2) fs t fs' ->
     final_state (faulty_semantics prog2) fs' r ->
@@ -559,7 +563,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_silent_trace s t s' fs :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' -> 
     Forever_silent (faulty_semantics prog2) fs ->
     t = E0.
@@ -575,7 +579,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma reactive_not_silent s fs T :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_reactive (RTL.semantics prog1) s T ->
     Forever_silent (faulty_semantics prog2) fs ->
     False.
@@ -586,7 +590,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma reacts_diverges_False t s fs fs' T :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_reactive (RTL.semantics prog1) s T ->
     Star (faulty_semantics prog2) fs t fs' ->
     Forever_silent (faulty_semantics prog2) fs' ->
@@ -608,7 +612,7 @@ Section TOLERANCE.
 
   (* Can't do other direction because prog1 can get stuck. *)
   Lemma match_states_forever_silent s fs :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_silent (RTL.semantics prog1) s ->
       Forever_silent (faulty_semantics prog2) fs.
   Proof.
@@ -626,7 +630,7 @@ Section TOLERANCE.
 
   (* Can't do other direction because prog1 can get stuck. *)
   Lemma match_states_forever_reactive s fs T :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_reactive (RTL.semantics prog1) s T ->
       Forever_reactive (faulty_semantics prog2) fs T.
   Proof.
@@ -641,7 +645,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_faulty_silent_trace s fs t fs' :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_silent (RTL.semantics prog1) s ->
     Star (faulty_semantics prog2) fs t fs' ->
     t = E0.
@@ -657,7 +661,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma silent_not_reactive s fs T :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_silent (RTL.semantics prog1) s ->
     Forever_reactive (faulty_semantics prog2) fs T ->
     False.
@@ -668,7 +672,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_silent_not_reactive t s s' fs T :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     Forever_silent (RTL.semantics prog1) s' ->
     Forever_reactive (faulty_semantics prog2) fs T ->
@@ -689,7 +693,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_final_not_reactive t s s' fs r T :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
     Forever_reactive (faulty_semantics prog2) fs T ->
@@ -710,7 +714,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma match_states_final s fs r :
-    match_states col s fs ->
+    match_states s fs ->
     final_state (RTL.semantics prog1) s r ->
     final_state (faulty_semantics prog2) fs r.
   Proof.
@@ -729,7 +733,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_final_nostep_final s t s' r fs :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
     Nostep (faulty_semantics prog2) fs ->
@@ -744,7 +748,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_final_star_nostep_final s t s' r fs t' fs' :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
     Star (faulty_semantics prog2) fs t' fs' ->
@@ -768,7 +772,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_final_final s t s' r fs r' :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
     final_state (faulty_semantics prog2) fs r' ->
@@ -783,7 +787,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_final_star_final s t s' r fs t' fs' r' :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     final_state (RTL.semantics prog1) s' r ->
     Star (faulty_semantics prog2) fs t' fs' ->
@@ -805,7 +809,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_silent_star_silent s t s' fs t' fs' :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     Forever_silent (RTL.semantics prog1) s' ->
     Star (faulty_semantics prog2) fs t' fs' ->
@@ -830,7 +834,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma silent_not_star_stuck s fs t fs' :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_silent (RTL.semantics prog1) s ->
     Star (faulty_semantics prog2) fs t fs' ->
     Nostep (faulty_semantics prog2) fs' ->
@@ -852,7 +856,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_silent_star_not_stuck s t s' fs t' fs' :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     Forever_silent (RTL.semantics prog1) s' ->
     Star (faulty_semantics prog2) fs t' fs' ->
@@ -875,7 +879,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma reactive_star_not_stuck s fs t' fs' T :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_reactive (RTL.semantics prog1) s T ->
     Star (faulty_semantics prog2) fs t' fs' ->
     Nostep (faulty_semantics prog2) fs' ->
@@ -948,7 +952,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_prefix s s' fs fs' t1 t2 :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t1 s' ->
     Star (faulty_semantics prog2) fs t2 fs' ->
     trace_prefix t1 t2 \/ trace_prefix t2 t1.
@@ -1001,7 +1005,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma reactive_reactive s fs T1 T2 :
-    match_states col s fs ->
+    match_states s fs ->
     Forever_reactive (RTL.semantics prog1) s T1 ->
     Forever_reactive (faulty_semantics prog2) fs T2 ->
     traceinf_sim T1 T2.
@@ -1024,7 +1028,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_final_state_trace_prefix s s' fs fs' t1 t2 r :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t1 s' ->
     Star (faulty_semantics prog2) fs t2 fs' ->
     final_state (faulty_semantics prog2) fs' r ->
@@ -1047,7 +1051,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_silent_trace_prefix s s' fs fs' t1 t2 :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t1 s' ->
     Star (faulty_semantics prog2) fs t2 fs' ->
     Forever_silent (faulty_semantics prog2) fs' ->
@@ -1072,7 +1076,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_nostep_trace_prefix s s' fs fs' t1 t2 :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t1 s' ->
     Star (faulty_semantics prog2) fs t2 fs' ->
     Nostep (faulty_semantics prog2) fs' ->
@@ -1095,7 +1099,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma star_reactive_trace_prefix s s' fs t T :
-    match_states col s fs ->
+    match_states s fs ->
     Star (RTL.semantics prog1) s t s' ->
     Forever_reactive (faulty_semantics prog2) fs T ->
     traceinf_prefix t T.
@@ -1170,8 +1174,6 @@ Section TOLERANCE.
         exists (Goes_wrong t'); reflexivity.
   Qed.
 
-  (* TODO: conversion from 2-vote to 3-vote version of function. *)
-
   Theorem faulty_behavior_improves beh1 beh2 :
     program_behaves (RTL.semantics prog1) beh1 ->
     program_behaves (faulty_semantics prog2) beh2 ->
@@ -1218,44 +1220,12 @@ Section TOLERANCE.
   Qed.
 
   (* Alternate formulation that might avoid the need for traceinf_sim
-     extensionality. *)
+     extensionality. EDIT: actually no, it just pushes the need for
+     extensionality to the higher-level theorem in
+     driver/Complements.v. *)
   (* Theorem faulty_behavior_improves' beh2 : *)
   (*   program_behaves (faulty_semantics prog2) beh2 -> *)
   (*   exists beh1, program_behaves (RTL.semantics prog1) beh1 /\ behavior_improves beh1 beh2. *)
   (* Admitted. *)
 
 End TOLERANCE.
-
-(* Lemma match_votes_program_initial_state p1 p2 s : *)
-(*   match_votes_program p1 p2 -> *)
-(*   RTL.initial_state p1 s <-> RTL.initial_state p2 s. *)
-(* Proof. *)
-(*   intro Hmatchvotes. *)
-
-(*   (* destruct Hmatchvotes as (Hdefs & Hmain & Hpub). *) *)
-(*   split; intro Hinit. *)
-(*   - inv Hinit; simpl. *)
-(*     econstructor; auto. *)
-(*     + eapply Genv.init_mem_match in Hmatchvotes; eauto. *)
-(*     + rewrite <- H0. *)
-(*       pose proof Hmatchvotes as H'. *)
-(*       eapply match_program_main in H'. *)
-(*       rewrite H'. *)
-(*       eapply Genv.find_symbol_match in Hmatchvotes; eauto. *)
-(*     + eapply Genv.find_funct_ptr_match in Hmatchvotes. *)
-(*       2: { eauto. } *)
-(*       destruct Hmatchvotes as (cunit & tf & Hptr & Hmatch & Hlink). *)
-      
-(*       rewrite Hmatchvotes. *)
-(*       unfold match_votes_program in Hmatchvotes. *)
-(*       unfold match_program in Hmatchvotes. *)
-(*       apply Hmatchvotes. *)
-(*     unfold Genv.init_mem. *)
-    
-(*     unfold Genv.alloc_globals. *)
-(* Admitted. *)
-
-(* IDEA: implement a single version of the compiler that first
-   generates 3-vote code and then in a second pass replaces them with
-   2-votes. Maybe that wont' work because we will want to have asm
-   programs with 3-votes to do the proof at asm. *)
