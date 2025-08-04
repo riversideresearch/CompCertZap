@@ -30,9 +30,8 @@ Inductive basic_color : color -> Prop :=
 | basic_blue : basic_color Blue
 .
 
-Section wc.
-  (** Everything in this section is wrt. a given register coloring [col]. *)
-  Variable col : node -> reg -> color.
+Section wc_instruction.
+  Variable col : reg -> color.
 
   (** An instruction is well-colored wrt. coloring [col]. *)
   Inductive wc_instruction : instruction -> Prop :=
@@ -50,6 +49,11 @@ Section wc.
 (*   | Ijumptable: reg -> list node -> instruction *)
 (*   | Ireturn: option reg -> instruction. *)
 
+End wc_instruction.
+
+Section wc_function.
+  Variable col : node -> reg -> color.
+
   Definition wc_code (c : code) : Prop :=
     forall pc i, c ! pc = Some i -> wc_instruction i.
 
@@ -59,17 +63,22 @@ Section wc.
         wc_fn_code : wc_code f.(fn_code)
       }.
 
-End wc.
+  (* TODO: extra conditions on the coloring, enforcing transfer
+     consistency across instructions. Maybe a coloring validation pass
+     before the color checker, so those extra conditions are an input
+     assumption about [col] here. *)
+  
+End wc_function.
 
-Inductive wc_fundef: fundef -> Prop :=
-| wc_fundef_external: forall ef,
-    wc_fundef (External ef)
-| wc_function_internal: forall col f,
-    wc_function col f ->
-    wc_fundef (Internal f).
+(* Inductive wc_fundef: fundef -> Prop := *)
+(* | wc_fundef_external: forall ef, *)
+(*     wc_fundef (External ef) *)
+(* | wc_function_internal: forall col f, *)
+(*     wc_function col f -> *)
+(*     wc_fundef (Internal f). *)
 
 Definition wc_program (p : program) : Prop :=
-  forall i f, In (i, Gfun f) (prog_defs p) -> wc_fundef f.
+  forall i f, In (i, Gfun (Internal f)) (prog_defs p) -> exists col, wc_function col f.
 
 Axiom infer_coloring : function -> option (node -> reg -> color).
 
@@ -130,4 +139,9 @@ Definition check_program (p : program) : bool :=
 Lemma check_program_sound (p : program) :
   check_program p = true -> wc_program p.
 Proof.
-Admitted.  
+  intros Hp i f Hin.
+  unfold check_program in Hp.
+  rewrite forallb_forall in Hp.
+  apply Hp in Hin.
+  apply check_function_sound; auto.
+Qed.

@@ -114,8 +114,8 @@ Proof.
   
   eapply faulty_behavior_improves; eauto.
   apply check_program_sound in Hcheck.
-  (* TODO: match_votes_program tp' tp -> wc_program tp -> wc_program tp' *)
-Admitted.
+  eapply match_votes_program_wc'; eauto.
+Qed.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is

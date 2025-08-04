@@ -105,11 +105,36 @@ Inductive match_votes_fundef : fundef -> fundef -> Prop :=
 Definition match_votes_program (prog3 prog2 : program) :=
   match_program (fun cu f1 f2 => match_votes_fundef f1 f2) eq prog3 prog2.
 
-Lemma match_votes_wc (p1 p2 : program) :
+Lemma match_votes_program_wc (p1 p2 : program) :
   match_votes_program p1 p2 ->
   wc_program p1 ->
   wc_program p2.
 Admitted.
+
+Lemma match_votes_function_wc' col (f1 f2 : function) :
+  match_votes_function f1 f2 ->
+  wc_function col f2 ->
+  wc_function col f1.
+Proof.
+  (* TODO: need to finish defining color system *)
+Admitted.
+
+Lemma match_votes_program_wc' (p1 p2 : program) :
+  match_votes_program p1 p2 ->
+  wc_program p2 ->
+  wc_program p1.
+Proof.
+  intros Hmatch Hwc i f Hin.
+  destruct Hmatch as (Hdefs & Hmain & Hpub).
+  apply list_forall2_in_left with (x1 := (i, Gfun (Internal f))) in Hdefs; auto.
+  destruct Hdefs as ([j f'] & Hin' & ? & Hmatch).
+  simpl in *; subst.
+  inv Hmatch.
+  inv H1.
+  apply Hwc in Hin'.
+  destruct Hin' as [col Hwc'].
+  exists col; eapply match_votes_function_wc'; eauto.
+Qed.
 
 Definition match_rs (col : reg -> color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
