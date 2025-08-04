@@ -62,25 +62,25 @@ Inductive liftOpt {A B : Type} (R : A -> B -> Prop) : option A -> option B -> Pr
 Definition match_votes_code (c c' : code) : Prop :=
   forall pc, liftOpt match_votes_instruction (c ! pc) (c' ! pc).
 
-(* Inductive match_votes_function : function -> function -> Prop := *)
-(* | match_votes_fun : forall sig params stacksize c c' entrypoint *)
-(*     (CODE: match_votes_code c c'), *)
-(*     match_votes_function {| fn_sig := sig *)
-(*                           ; fn_params := params *)
-(*                           ; fn_stacksize := stacksize *)
-(*                           ; fn_code := c *)
-(*                           ; fn_entrypoint := entrypoint |} *)
-(*                          {| fn_sig := sig *)
-(*                           ; fn_params := params *)
-(*                           ; fn_stacksize := stacksize *)
-(*                           ; fn_code := c' *)
-(*                           ; fn_entrypoint := entrypoint |}. *)
-
 Inductive match_votes_function : function -> function -> Prop :=
-| match_votes_fun :
-  forall f1 f2
-    (CODE: match_votes_code f1.(fn_code) f2.(fn_code)),
-    match_votes_function f1 f2.
+| match_votes_fun : forall sig params stacksize c c' entrypoint
+    (CODE: match_votes_code c c'),
+    match_votes_function {| fn_sig := sig
+                          ; fn_params := params
+                          ; fn_stacksize := stacksize
+                          ; fn_code := c
+                          ; fn_entrypoint := entrypoint |}
+                         {| fn_sig := sig
+                          ; fn_params := params
+                          ; fn_stacksize := stacksize
+                          ; fn_code := c'
+                          ; fn_entrypoint := entrypoint |}.
+
+(* Inductive match_votes_function : function -> function -> Prop := *)
+(* | match_votes_fun : *)
+(*   forall f1 f2 *)
+(*     (CODE: match_votes_code f1.(fn_code) f2.(fn_code)), *)
+(*     match_votes_function f1 f2. *)
 
 Lemma match_function_match_votes_function re rm f tf1 tf2 :
       match_function Three re rm f tf1 ->
@@ -268,6 +268,7 @@ Section TOLERANCE.
   Proof.
     intros Hi Hpc Hmatch.
     inv Hmatch.
+    simpl in *.
     specialize (CODE pc).
     inv CODE; try congruence.
     inv HR; try congruence.
@@ -422,6 +423,35 @@ Section TOLERANCE.
       inv Htf; eauto.
     - auto.
   Qed.
+
+  (* Lemma initial_states_rtl_faulty s : *)
+  (*   initial_state (RTL.semantics prog1) s -> *)
+  (*   initial_state (faulty_semantics prog2) {| fs_state := s; fault := false |}. *)
+  (* Proof. *)
+  (*   simpl; intros Hs. *)
+  (*   inv Hs. *)
+  (*   replace (prog_main prog1) with (prog_main prog2) in * by *)
+  (*       (eapply match_program_main in PROG; auto). *)
+  (*   pose proof PROG as Hmatchvote. *)
+  (*   eapply Genv.init_mem_match in PROG; eauto. *)
+  (*   (* rewrite PROG in H; inv H. *) *)
+  (*   constructor. *)
+  (*   econstructor; auto. *)
+  (*   unfold match_votes_program in Hmatchvote. *)
+  (*   { eapply Genv.find_symbol_match in Hmatchvote. *)
+  (*     rewrite Hmatchvote; eauto. } *)
+  (* (*   Genv.find_funct_ptr_transf *) *)
+  (* (*   eapply Genv.find_funct_ptr_match in Hmatchvote; eauto. *) *)
+  (* (*   destruct Hmatchvote as (cunit & tf & Htf & Hmatch & Hlink). *) *)
+  (* (*   unfold ge in *. *) *)
+  (* (*   rewrite Htf. *) *)
+  (* (*     admit. *) *)
+  (* (*   -  *) *)
+  (* (*     rewrite H1 in Htf. *) *)
+  (* (*     inv Htf; eauto. *) *)
+  (* (*   - auto. *) *)
+  (*   (* Qed. *) *)
+  (* Admitted. *)
 
   Lemma final_state_faulty_nostep s fs r :
     match_states col s fs ->
@@ -1035,6 +1065,99 @@ Section TOLERANCE.
       eapply trace_prefix_trans; eauto.
   Qed.
 
+  Lemma star_final_state_trace_prefix s s' fs fs' t1 t2 r :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t1 s' ->
+    Star (faulty_semantics prog2) fs t2 fs' ->
+    final_state (faulty_semantics prog2) fs' r ->
+    trace_prefix t1 t2.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs fs' t2 r.
+    induction Hstar; intros fs fs' t2' r Hmatch Hstar' Hfin.
+    { eexists; reflexivity. }
+    subst.
+    inv Hstar'.
+    { eapply faulty_step_exists in H; eauto.
+      destruct H as (t' & fs'' & Hfstep).
+      exfalso; eapply faulty_final_state_nostep; eauto. }
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    apply trace_prefix_app.
+    eapply IHHstar; eauto.
+  Qed.
+
+  Lemma star_silent_trace_prefix s s' fs fs' t1 t2 :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t1 s' ->
+    Star (faulty_semantics prog2) fs t2 fs' ->
+    Forever_silent (faulty_semantics prog2) fs' ->
+    trace_prefix t1 t2.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs fs' t2.
+    induction Hstar; intros fs fs' t2' Hmatch Hstar' Hsil.
+    { eexists; reflexivity. }
+    subst.
+    inv Hstar'.
+    { inv Hsil.
+      eapply faulty_step_simulation in H; eauto.
+      destruct H as [? Hmatch']; subst; simpl.
+      eapply IHHstar; eauto.
+      apply star_refl. }
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    apply trace_prefix_app.
+    eapply IHHstar; eauto.
+  Qed.
+
+  Lemma star_nostep_trace_prefix s s' fs fs' t1 t2 :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t1 s' ->
+    Star (faulty_semantics prog2) fs t2 fs' ->
+    Nostep (faulty_semantics prog2) fs' ->
+    trace_prefix t1 t2.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs fs' t2.
+    induction Hstar; intros fs fs' t2' Hmatch Hstar' Hnostep.
+    { eexists; reflexivity. }
+    subst.
+    inv Hstar'.
+    { eapply faulty_step_exists in H; eauto.
+      destruct H as (t' & fs'' & Hfstep).
+      exfalso; eapply Hnostep; eauto. }
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    apply trace_prefix_app.
+    eapply IHHstar; eauto.
+  Qed.
+
+  Lemma star_reactive_trace_prefix s s' fs t T :
+    match_states col s fs ->
+    Star (RTL.semantics prog1) s t s' ->
+    Forever_reactive (faulty_semantics prog2) fs T ->
+    traceinf_prefix t T.
+  Proof.
+    intros Hmatch Hstar.
+    revert Hmatch.
+    revert fs T.
+    induction Hstar; intros fs T Hmatch Hreact.
+    { eexists; reflexivity. }
+    subst.
+    inv Hreact.
+    inv H0; try congruence.
+    eapply faulty_step_simulation in H; eauto.
+    destruct H as [? Hmatch']; subst.
+    rewrite Eappinf_assoc.
+    apply traceinf_prefix_app.
+    eapply IHHstar; eauto.
+    eapply star_forever_reactive; eauto.
+  Qed.
+
   Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
     RTL.initial_state prog1 s ->
     initial_state (faulty_semantics prog2) fs ->
@@ -1063,10 +1186,33 @@ Section TOLERANCE.
       + exfalso; eapply reactive_star_not_stuck; eauto.
     - right.
       exists t; split; auto.
-      admit.
-  Admitted.
+      pose proof H as Hstar.
+      eapply faulty_star_step_exists in Hstar; eauto.
+      destruct Hstar as (fs' & Hstar' & Hmatch').
+      destruct beh2.
+      + assert (Hpre: trace_prefix t t0).
+        { clear Hmatch'; inv Hbeh2.
+          eapply star_final_state_trace_prefix; eauto. }
+        destruct Hpre as [t' ?]; subst.
+        exists (Terminates t' i); reflexivity.
+      + assert (Hpre: trace_prefix t t0).
+        { clear Hmatch'; inv Hbeh2.
+          eapply star_silent_trace_prefix; eauto. }
+        destruct Hpre as [t' ?]; subst.
+        exists (Diverges t'); reflexivity.
+      + assert (Hpre: traceinf_prefix t t0).
+        { clear Hmatch'; inv Hbeh2.
+          eapply star_reactive_trace_prefix; eauto. }
+        destruct Hpre as [t' ?]; subst.
+        exists (Reacts t'); reflexivity.
+      + assert (Hpre: trace_prefix t t0).
+        { clear Hmatch'; inv Hbeh2.
+          eapply star_nostep_trace_prefix; eauto. }
+        destruct Hpre as [t' ?]; subst.
+        exists (Goes_wrong t'); reflexivity.
+  Qed.
 
-  (* TODO: conversion between 2-vote and 3-vote versions of functions. *)
+  (* TODO: conversion from 2-vote to 3-vote version of function. *)
 
   Theorem faulty_behavior_improves beh1 beh2 :
     program_behaves (RTL.semantics prog1) beh1 ->
@@ -1076,16 +1222,25 @@ Section TOLERANCE.
     intros Hbeh1 Hbeh2.
     inv Hbeh1.
     - inv Hbeh2.
-      2: { (* exfalso; apply (H1 {| fs_state := s; fault := false |}). *)
-        (* constructor. *)
-        (* rewrite <- match_votes_program_initial_state; eauto. *)
-        (* apply H. } *)
-        admit. }
+      2: { exfalso.
+           inv H.
+           simpl in *.
+           pose proof PROG as Hmatch.
+           eapply Genv.find_funct_ptr_match in Hmatch; eauto.
+           destruct Hmatch as (cunt & tf & Htf & Hmatch & Hlink).
+           apply (H1 {| fs_state := Callstate [] tf [] m0; fault := false |}).
+           constructor; econstructor; eauto.
+           - eapply Genv.init_mem_match in PROG; eauto.
+           - replace (prog_main prog2) with (prog_main prog1) in * by
+                 (eapply match_program_main in PROG; auto).
+             eapply Genv.find_symbol_match in PROG.
+             rewrite PROG; eauto.
+           - inv Hmatch; auto.
+             inv FUN; simpl in *; auto. }
       eapply rtl_state_behaves_faulty_improves; eauto.
     - inv Hbeh2.
-      { (* inv H0. *)
-        (* exfalso; apply (H s0). *)
-        (* eapply match_votes_program_initial_state; eauto. *)
+      { exfalso.
+        (* Need to go backwards... *)
         admit. }
       constructor; reflexivity.
   Admitted.

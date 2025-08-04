@@ -79,8 +79,9 @@ Theorem transf_c_program_to_rtl_preservation_faulty:
   forall p tp beh,
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
   program_behaves (RTL.semantics tp) beh ->
-  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh /\
-            forall fbeh, program_behaves (faulty_semantics tp) fbeh -> behavior_improves beh' fbeh.
+  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh
+          /\ forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
+                    behavior_improves beh' fbeh.
 Proof.
   intros p tp beh Hp Hbeh.
   pose proof Hp as Hp'.
