@@ -424,35 +424,6 @@ Section TOLERANCE.
     - auto.
   Qed.
 
-  (* Lemma initial_states_rtl_faulty s : *)
-  (*   initial_state (RTL.semantics prog1) s -> *)
-  (*   initial_state (faulty_semantics prog2) {| fs_state := s; fault := false |}. *)
-  (* Proof. *)
-  (*   simpl; intros Hs. *)
-  (*   inv Hs. *)
-  (*   replace (prog_main prog1) with (prog_main prog2) in * by *)
-  (*       (eapply match_program_main in PROG; auto). *)
-  (*   pose proof PROG as Hmatchvote. *)
-  (*   eapply Genv.init_mem_match in PROG; eauto. *)
-  (*   (* rewrite PROG in H; inv H. *) *)
-  (*   constructor. *)
-  (*   econstructor; auto. *)
-  (*   unfold match_votes_program in Hmatchvote. *)
-  (*   { eapply Genv.find_symbol_match in Hmatchvote. *)
-  (*     rewrite Hmatchvote; eauto. } *)
-  (* (*   Genv.find_funct_ptr_transf *) *)
-  (* (*   eapply Genv.find_funct_ptr_match in Hmatchvote; eauto. *) *)
-  (* (*   destruct Hmatchvote as (cunit & tf & Htf & Hmatch & Hlink). *) *)
-  (* (*   unfold ge in *. *) *)
-  (* (*   rewrite Htf. *) *)
-  (* (*     admit. *) *)
-  (* (*   -  *) *)
-  (* (*     rewrite H1 in Htf. *) *)
-  (* (*     inv Htf; eauto. *) *)
-  (* (*   - auto. *) *)
-  (*   (* Qed. *) *)
-  (* Admitted. *)
-
   Lemma final_state_faulty_nostep s fs r :
     match_states col s fs ->
     final_state (RTL.semantics prog1) s r ->
@@ -473,19 +444,6 @@ Section TOLERANCE.
     inv Hfin; inv Hmatch; simpl in *; try congruence.
     inv H0; inv STK; inv LESSDEF; inv Hstep.
   Qed.
-
-  (* Lemma asdf t s s' fs  r : *)
-  (*   match_states col s fs -> *)
-  (*   Star (RTL.semantics prog1) s t s' -> *)
-  (*   final_state (RTL.semantics prog1) s' r -> *)
-  (*   exists fs', Star (faulty_semantics prog2) fs t fs' /\ *)
-  (*            Nostep (faulty_semantics prog2) fs' /\ *)
-  (*            match_states col s' fs'. *)
-  (* Proof. *)
-  (* Admitted. *)
-
-  (* TODO: should be able to prove
-     [match s fs => (star s t s' /\ fstar fs t' fs') => t <= t' \/ t' <= t]. *)
 
   Lemma star_final_prog1_not_forever_silent t s s' fs r :
     match_states col s fs ->
@@ -648,7 +606,7 @@ Section TOLERANCE.
     eapply star_forever_reactive; eauto.
   Qed.
 
-  (* Can't do other direction. *)
+  (* Can't do other direction because prog1 can get stuck. *)
   Lemma match_states_forever_silent s fs :
     match_states col s fs ->
     Forever_silent (RTL.semantics prog1) s ->
@@ -666,7 +624,7 @@ Section TOLERANCE.
     econstructor; eauto.
   Qed.
 
-  (* Can't do other direction. *)
+  (* Can't do other direction because prog1 can get stuck. *)
   Lemma match_states_forever_reactive s fs T :
     match_states col s fs ->
     Forever_reactive (RTL.semantics prog1) s T ->
@@ -1240,10 +1198,24 @@ Section TOLERANCE.
       eapply rtl_state_behaves_faulty_improves; eauto.
     - inv Hbeh2.
       { exfalso.
-        (* Need to go backwards... *)
-        admit. }
+        inv H0.
+        inv H2.
+        simpl in *.
+        pose proof PROG as Hmatch.
+        rename f into tf.
+        eapply Genv.find_funct_ptr_match' in Hmatch; eauto.
+        destruct Hmatch as (cunt & f & Hf & Hmatch & Hlink).
+        apply (H (Callstate [] f [] m0)).
+        econstructor; eauto.
+        - eapply Genv.init_mem_match' in PROG; eauto.
+        - replace (prog_main prog1) with (prog_main prog2) in * by
+              (eapply match_program_main in PROG; auto).
+          eapply Genv.find_symbol_match in PROG.
+          rewrite <- PROG; eauto.
+        - inv Hmatch; auto.
+          inv FUN; simpl in *; auto. }
       constructor; reflexivity.
-  Admitted.
+  Qed.
 
   (* Alternate formulation that might avoid the need for traceinf_sim
      extensionality. *)

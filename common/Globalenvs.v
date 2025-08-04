@@ -1729,6 +1729,16 @@ Proof.
   exists y; auto.
 Qed.
 
+Theorem find_def_match':
+  forall b tg,
+  find_def (globalenv tp) b = Some tg ->
+  exists g,
+  find_def (globalenv p) b = Some g /\ match_globdef match_fundef match_varinfo ctx g tg.
+Proof.
+  intros. generalize (find_def_match_2 b). rewrite H; intros R; inv R.
+  exists x; auto.
+Qed.
+
 Theorem find_funct_ptr_match:
   forall b f,
   find_funct_ptr (globalenv p) b = Some f ->
@@ -1738,6 +1748,17 @@ Proof.
   intros. rewrite find_funct_ptr_iff in *. apply find_def_match in H.
   destruct H as (tg & P & Q). inv Q.
   exists ctx', f2; intuition auto. apply find_funct_ptr_iff; auto.
+Qed.
+
+Theorem find_funct_ptr_match':
+  forall b tf,
+  find_funct_ptr (globalenv tp) b = Some tf ->
+  exists cunit f,
+  find_funct_ptr (globalenv p) b = Some f /\ match_fundef cunit f tf /\ linkorder cunit ctx.
+Proof.
+  intros. rewrite find_funct_ptr_iff in *. apply find_def_match' in H.
+  destruct H as (tg & P & Q). inv Q.
+  exists ctx', f1; intuition auto. apply find_funct_ptr_iff; auto.
 Qed.
 
 Theorem find_funct_match:
@@ -1799,6 +1820,19 @@ Proof.
   rewrite X. auto.
 Qed.
 
+Lemma store_init_data_list_match':
+  forall idl m b ofs m',
+  store_init_data_list (globalenv tp) m b ofs idl = Some m' ->
+  store_init_data_list (globalenv p) m b ofs idl = Some m'.
+Proof.
+  induction idl; simpl; intros.
+- auto.
+- destruct (store_init_data (globalenv tp) m b ofs a) as [m1|] eqn:S; try discriminate.
+  assert (X: store_init_data (globalenv p) m b ofs a = Some m1).
+  { destruct a; auto. simpl; rewrite <- find_symbol_match; auto. }
+  rewrite X. auto.
+Qed.
+
 Lemma alloc_globals_match:
   forall gl1 gl2, list_forall2 (match_ident_globdef match_fundef match_varinfo ctx) gl1 gl2 ->
   forall m m',
@@ -1822,11 +1856,41 @@ Proof.
   rewrite X; eauto.
 Qed.
 
+Lemma alloc_globals_match':
+  forall gl1 gl2, list_forall2 (match_ident_globdef match_fundef match_varinfo ctx) gl1 gl2 ->
+    forall m m',
+      alloc_globals (globalenv tp) m gl2 = Some m' ->
+      alloc_globals (globalenv p) m gl1 = Some m'.
+Proof.
+  induction 1; simpl; intros.
+- auto.
+- destruct (alloc_global (globalenv tp) m b1) as [m1|] eqn:?; try discriminate.
+  assert (X: alloc_global (globalenv p) m a1 = Some m1).
+  { destruct a1 as [id1 g1]; destruct b1 as [id2 g2]; destruct H; simpl in *.
+    subst id2. inv H2.
+  - auto.
+  - inv H; simpl in *.
+    set (sz := init_data_list_size init) in *.
+    destruct (Mem.alloc m 0 sz) as [m2 b] eqn:?.
+    destruct (store_zeros m2 b 0 sz) as [m3|] eqn:?; try discriminate.
+    destruct (store_init_data_list (globalenv tp) m3 b 0 init) as [m4|] eqn:?; try discriminate.
+    erewrite store_init_data_list_match'; eauto.
+  }
+  rewrite X; eauto.
+Qed.
+
 Theorem init_mem_match:
   forall m, init_mem p = Some m -> init_mem tp = Some m.
 Proof.
   unfold init_mem; intros.
   eapply alloc_globals_match; eauto. apply progmatch.
+Qed.
+
+Theorem init_mem_match':
+  forall m, init_mem tp = Some m -> init_mem p = Some m.
+Proof.
+  unfold init_mem; intros.
+  eapply alloc_globals_match'; eauto. apply progmatch.
 Qed.
 
 End MATCH_PROGRAMS.

@@ -83,7 +83,7 @@ Section color_checker.
     wc_function col f -> check_function f = true.
   Admitted.
 
-  Lemma check_function_iff (f : function) :
+  Theorem check_function_iff (f : function) :
     check_function f = true <-> wc_function col f.
   Proof.
     split.

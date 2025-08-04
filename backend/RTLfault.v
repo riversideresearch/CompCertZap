@@ -11,8 +11,8 @@ Require Import
 (* Import ListNotations. *)
 
 Record fstate : Type :=
-  mkfstate { fs_state: RTL.state
-           ; fault: bool }.
+  mkfstate { fs_state : RTL.state
+           ; fault : bool }.
 
 Inductive val_compat : val -> val -> Prop :=
 | val_compat_undef : forall v, val_compat Vundef v
