@@ -64,6 +64,10 @@ Admitted.
 (*                     program_behaves (RTL.semantics tp') beh. *)
 (* Admitted. *)
 
+(* This won't be provable at the asm level. But the property is
+   checkable, so we can implement a Boolean decider to check it
+   (unfortunately that means repeating the entire compilation to have
+   the other version of the program to check against). *)
 Lemma transf_c_program_to_rtl_match_votes p tp tp' :
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
   transf_c_program_to_rtl Replicate.Three p = OK tp' ->
