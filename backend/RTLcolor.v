@@ -12,6 +12,12 @@ Require Import
   Values
 .
 
+Definition optionP {A : Type} (pred : A -> Prop) (o : option A) : Prop :=
+  match o with
+  | None => True
+  | Some a => pred a
+  end.
+
 (** TODO: need color to be position dependent. Clear is a temporary
     color that gets reset to red after a use. So, red registers are
     variously red or clear throughout the function, but green and blue
@@ -24,11 +30,17 @@ Inductive color : Type :=
 | Clear
 .
 
-Inductive basic_color : color -> Prop :=
-| basic_red : basic_color Red
-| basic_green : basic_color Green
-| basic_blue : basic_color Blue
+Inductive is_basic : color -> Prop :=
+| is_basic_red : is_basic Red
+| is_basic_green : is_basic Green
+| is_basic_blue : is_basic Blue
 .
+
+Inductive is_red : color -> Prop :=
+| is_red_red : is_red Red.
+
+Inductive is_clear : color -> Prop :=
+| is_clear_clear : is_clear Clear.
 
 Section wc_instruction.
   Variable col : reg -> color.
@@ -36,7 +48,35 @@ Section wc_instruction.
   (** An instruction is well-colored wrt. coloring [col]. *)
   Inductive wc_instruction : instruction -> Prop :=
   | wc_Inop : forall succ, wc_instruction (Inop succ)
-  (* | wc_Iop *)
+  | wc_Iop : forall op args res succ,
+      is_basic (col res) ->
+      Forall (fun arg => col arg = col res) args ->
+      wc_instruction (Iop op args res succ)
+  | wc_Iload : forall chunk addr args res succ,
+      Forall (fun arg => is_clear (col arg)) args ->
+      is_red (col res) ->
+      wc_instruction (Iload chunk addr args res succ)
+  | wc_Istore : forall chunk addr args src succ,
+      is_clear (col src) ->
+      Forall (fun arg => is_clear (col arg)) args ->
+      wc_instruction (Istore chunk addr args src succ)
+  | wc_Icall : forall sig fn args res succ,
+      Forall (fun arg => is_clear (col arg)) args ->
+      is_red (col res) ->
+      wc_instruction (Icall sig fn args res succ)
+  | wc_Itailcall : forall sig fn args,
+      Forall (fun arg => is_clear (col arg)) args ->
+      wc_instruction (Itailcall sig fn args)
+  (* | wc_Ibuiltin : TODO *)
+  | wc_Icond : forall cond args ifso ifnot,
+      Forall (fun arg => is_clear (col arg)) args ->
+      wc_instruction (Icond cond args ifso ifnot)
+  | wc_Ijumptable : forall arg tbl,
+      is_clear (col arg) ->
+      wc_instruction (Ijumptable arg tbl)
+  | wc_Ireturn : forall or,
+      optionP (fun r => is_clear (col r)) or ->
+      wc_instruction (Ireturn or)
   .
 
 (*   | Iop: operation -> list reg -> reg -> node -> instruction *)
@@ -55,7 +95,7 @@ Section wc_function.
   Variable col : node -> reg -> color.
 
   Definition wc_code (c : code) : Prop :=
-    forall pc i, c ! pc = Some i -> wc_instruction i.
+    forall pc i, c ! pc = Some i -> wc_instruction (col pc) i.
 
   Record wc_function (f : function) : Prop :=
     mk_wc_function {

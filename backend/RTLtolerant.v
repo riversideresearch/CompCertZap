@@ -138,7 +138,7 @@ Qed.
 
 Definition match_rs (col : reg -> color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
-    exists c, basic_color c /\
+    exists c, is_basic c /\
            forall r, (col r <> c -> Val.lessdef (rs1 # r) (rs2 # r)) /\
                   (* TODO: remove this second condition? Need to use
                      more permissive vote semantics. *)
