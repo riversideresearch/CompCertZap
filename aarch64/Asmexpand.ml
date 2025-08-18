@@ -349,8 +349,6 @@ let expand_builtin_vstore chunk args =
   | _ ->
      assert false
 
-(* TODO *)
-
 (** Generic majority vote. *)
 let maj_vote
       (mov : 'a -> 'a -> instruction)
@@ -383,14 +381,14 @@ let maj_vote
   emit (Plabel lbl_done)
 
 (** Majority vote integers. *)
-let maj_vote_int = maj_vote
-                     (fun x y -> Pmov (RR1 x, RR1 y))
-                     (fun x y -> Pcmp (X, RR0 x, y, SOnone))
+let maj_vote_int sz = maj_vote
+                        (fun x y -> Pmov (RR1 x, RR1 y))
+                        (fun x y -> Pcmp (sz, RR0 x, y, SOnone))
 
 (** Majority vote floats. *)
-let maj_vote_float = maj_vote
-                       (fun x y -> Pfmov (x, y))
-                       (fun x y -> Pfcmp (D, x, y))
+let maj_vote_float sz = maj_vote
+                          (fun x y -> Pfmov (x, y))
+                          (fun x y -> Pfcmp (sz, x, y))
 
 (* Handling of compiler-inlined builtins *)
 
@@ -463,13 +461,13 @@ let expand_builtin_inline name args res =
 
   (* Majority vote *)
   | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote_int a b c res
+     maj_vote_int W a b c res
   | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote_int a b c res
+     maj_vote_int X a b c res
   | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote_float a b c res
+     maj_vote_float S a b c res
   | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote_float a b c res
+     maj_vote_float D a b c res
 
   (* Catch-all *)
   | _ ->
