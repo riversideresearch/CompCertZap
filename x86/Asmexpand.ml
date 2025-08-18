@@ -533,13 +533,13 @@ let expand_builtin_inline name args res =
        emit (Pmov_rr (res, a))
   | "__smove_long", [BA(IR a)], BR(IR res) ->
      if a <> res then
-     emit (Pmov_rr (res, a))
+       emit (Pmov_rr (res, a))
   | "__smove_single", [BA(FR a)], BR(FR res) ->
      if a <> res then
-     emit (Pmovsd_ff (res, a))
+       emit (Pmovsd_ff (res, a))
   | "__smove_float", [BA(FR a)], BR(FR res) ->
      if a <> res then
-     emit (Pmovsd_ff (res, a))
+       emit (Pmovsd_ff (res, a))
 
   (* Majority vote *)
   | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
