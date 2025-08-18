@@ -78,16 +78,16 @@ Definition transfer_builtin_default
   let (av, am') := analyze_call am (map (abuiltin_arg ae am rm) args) in
   VA.State (set_builtin_res res av ae) am'.
 
-Definition eval_static_builtin_function
+Definition eval_static_builtin_function vty
               (ae: aenv) (am: amem) (rm: romem)
               (bf: builtin_function) (args: list (builtin_arg reg)) :=
-  match builtin_function_sem bf
+  match builtin_function_sem vty bf
                  (map val_of_aval (map (abuiltin_arg ae am rm) args)) with
   | Some v => aval_of_val v
   | None => None
   end.
 
-Definition transfer_builtin
+Definition transfer_builtin vty
               (ae: aenv) (am: amem) (rm: romem) (ef: external_function)
               (args: list (builtin_arg reg)) (res: builtin_res reg) :=
   match ef, args with
@@ -117,7 +117,7 @@ Definition transfer_builtin
   | EF_builtin name sg, _ =>
       match lookup_builtin_function name sg with
       | Some bf => 
-          match eval_static_builtin_function ae am rm bf args with
+          match eval_static_builtin_function vty ae am rm bf args with
           | Some av => VA.State (set_builtin_res res av ae) am
           | None => transfer_builtin_default ae am rm args res
           end
@@ -130,7 +130,7 @@ Definition transfer_builtin
 (** The transfer function for one instruction.  Given the abstract state
   "before" the instruction, computes the abstract state "after". *)
 
-Definition transfer (f: function) (rm: romem) (pc: node) (ae: aenv) (am: amem) : VA.t :=
+Definition transfer vty (f: function) (rm: romem) (pc: node) (ae: aenv) (am: amem) : VA.t :=
   match f.(fn_code)!pc with
   | None =>
       VA.Bot
@@ -150,7 +150,7 @@ Definition transfer (f: function) (rm: romem) (pc: node) (ae: aenv) (am: amem) :
   | Some(Itailcall sig ros args) =>
       VA.Bot
   | Some(Ibuiltin ef args res s) =>
-      transfer_builtin ae am rm ef args res
+      transfer_builtin vty ae am rm ef args res
   | Some(Icond cond args s1 s2) =>
       VA.State ae am
   | Some(Ijumptable arg tbl) =>
@@ -162,12 +162,12 @@ Definition transfer (f: function) (rm: romem) (pc: node) (ae: aenv) (am: amem) :
 (** A wrapper on [transfer] that removes information associated with
   dead registers, so as to reduce the sizes of abstract states. *)
 
-Definition transfer' (f: function) (lastuses: PTree.t (list reg)) (rm: romem)
+Definition transfer' vty (f: function) (lastuses: PTree.t (list reg)) (rm: romem)
                      (pc: node) (before: VA.t) : VA.t :=
   match before with
   | VA.Bot => VA.Bot
   | VA.State ae am =>
-      match transfer f rm pc ae am with
+      match transfer vty f rm pc ae am with
       | VA.Bot => VA.Bot
       | VA.State ae' am' =>
           let ae'' :=
@@ -189,10 +189,10 @@ Definition mfunction_entry :=
      am_nonstack := Nonstack;
      am_top := Nonstack |}.
 
-Definition analyze (rm: romem) (f: function): PMap.t VA.t :=
+Definition analyze vty (rm: romem) (f: function): PMap.t VA.t :=
   let lu := Liveness.last_uses f in
   let entry := VA.State (einit_regs f.(fn_params) f.(fn_sig).(sig_args)) mfunction_entry in
-  match DS.fixpoint f.(fn_code) successors_instr (transfer' f lu rm)
+  match DS.fixpoint f.(fn_code) successors_instr (transfer' vty f lu rm)
                     f.(fn_entrypoint) entry with
   | None => PMap.init (VA.State AE.top mtop)
   | Some res => res
@@ -256,13 +256,13 @@ Definition romem_for (p: program) : romem :=
 
 (** Properties of the dataflow solution. *)
 
-Lemma analyze_entrypoint:
+Lemma analyze_entrypoint vty:
   forall rm f vl m bc,
   (forall v, In v vl -> vmatch bc v (Ifptr Nonstack)) ->
   Val.has_argtype_list vl f.(fn_sig).(sig_args) ->
   mmatch bc m mfunction_entry ->
   exists ae am,
-     (analyze rm f)!!(fn_entrypoint f) = VA.State ae am
+     (analyze vty rm f)!!(fn_entrypoint f) = VA.State ae am
   /\ ematch bc (init_regs vl (fn_params f)) ae
   /\ mmatch bc m am.
 Proof.
@@ -270,7 +270,7 @@ Proof.
   unfold analyze.
   set (lu := Liveness.last_uses f).
   set (entry := VA.State (einit_regs f.(fn_params) f.(fn_sig).(sig_args)) mfunction_entry).
-  destruct (DS.fixpoint (fn_code f) successors_instr (transfer' f lu rm)
+  destruct (DS.fixpoint (fn_code f) successors_instr (transfer' vty f lu rm)
                         (fn_entrypoint f) entry) as [res|] eqn:FIX.
 - assert (A: VA.ge res!!(fn_entrypoint f) entry) by (eapply DS.fixpoint_entry; eauto).
   destruct (res!!(fn_entrypoint f)) as [ | ae am ]; simpl in A. contradiction.
@@ -286,20 +286,20 @@ Proof.
   eapply mmatch_top'; eauto.
 Qed.
 
-Lemma analyze_successor:
+Lemma analyze_successor vty:
   forall f n ae am instr s rm ae' am',
-  (analyze rm f)!!n = VA.State ae am ->
+  (analyze vty rm f)!!n = VA.State ae am ->
   f.(fn_code)!n = Some instr ->
   In s (successors_instr instr) ->
-  transfer f rm n ae am = VA.State ae' am' ->
-  VA.ge (analyze rm f)!!s (transfer f rm n ae am).
+  transfer vty f rm n ae am = VA.State ae' am' ->
+  VA.ge (analyze vty rm f)!!s (transfer vty f rm n ae am).
 Proof.
   unfold analyze; intros.
   set (lu := Liveness.last_uses f) in *.
   set (entry := VA.State (einit_regs f.(fn_params) f.(fn_sig).(sig_args)) mfunction_entry) in *.
-  destruct (DS.fixpoint (fn_code f) successors_instr (transfer' f lu rm)
+  destruct (DS.fixpoint (fn_code f) successors_instr (transfer' vty f lu rm)
                         (fn_entrypoint f) entry) as [res|] eqn:FIX.
-- assert (A: VA.ge res!!s (transfer' f lu rm n res#n)).
+- assert (A: VA.ge res!!s (transfer' vty f lu rm n res#n)).
   { eapply DS.fixpoint_solution; eauto with coqlib.
     intros. unfold transfer'. simpl. auto. }
   rewrite H in A. unfold transfer' in A. rewrite H2 in A. rewrite H2.
@@ -309,21 +309,21 @@ Proof.
 - rewrite H2. rewrite PMap.gi. split; intros. apply AE.ge_top. eapply mmatch_top'; eauto.
 Qed.
 
-Lemma analyze_succ:
+Lemma analyze_succ vty:
   forall e m rm f n ae am instr s ae' am' bc,
-  (analyze rm f)!!n = VA.State ae am ->
+  (analyze vty rm f)!!n = VA.State ae am ->
   f.(fn_code)!n = Some instr ->
   In s (successors_instr instr) ->
-  transfer f rm n ae am = VA.State ae' am' ->
+  transfer vty f rm n ae am = VA.State ae' am' ->
   ematch bc e ae' ->
   mmatch bc m am' ->
   exists ae'' am'',
-     (analyze rm f)!!s = VA.State ae'' am''
+     (analyze vty rm f)!!s = VA.State ae'' am''
   /\ ematch bc e ae''
   /\ mmatch bc m am''.
 Proof.
   intros. exploit analyze_successor; eauto. rewrite H2.
-  destruct (analyze rm f)#s as [ | ae'' am'']; simpl; try tauto. intros [A B].
+  destruct (analyze vty rm f)#s as [ | ae'' am'']; simpl; try tauto. intros [A B].
   exists ae'', am''.
   split. auto.
   split. eapply ematch_ge; eauto. eauto.
@@ -391,7 +391,7 @@ Proof.
   intros. destruct res; simpl; auto. apply ematch_update; auto.
 Qed.
 
-Lemma eval_static_builtin_function_sound:
+Lemma eval_static_builtin_function_sound vty:
   forall bc ge rs sp m ae rm am (bf: builtin_function) al vl v va,
   ematch bc rs ae ->
   romatch bc m rm ->
@@ -399,17 +399,17 @@ Lemma eval_static_builtin_function_sound:
   genv_match bc ge ->
   bc sp = BCstack ->
   eval_builtin_args ge (fun r => rs#r) (Vptr sp Ptrofs.zero) m al vl ->
-  eval_static_builtin_function ae am rm bf al = Some va ->
-  builtin_function_sem bf vl = Some v ->
+  eval_static_builtin_function vty ae am rm bf al = Some va ->
+  builtin_function_sem vty bf vl = Some v ->
   vmatch bc v va.
 Proof.
   unfold eval_static_builtin_function; intros.
   exploit abuiltin_args_sound; eauto. 
   set (vla := map (abuiltin_arg ae am rm) al) in *. intros VMA.
-  destruct (builtin_function_sem bf (map val_of_aval vla)) as [v0|] eqn:A; try discriminate.
+  destruct (builtin_function_sem vty bf (map val_of_aval vla)) as [v0|] eqn:A; try discriminate.
   assert (LD: Val.lessdef v0 v).
   { apply val_inject_lessdef.
-    exploit (bs_inject _ (builtin_function_sem bf)). 
+    exploit (bs_inject _ (builtin_function_sem vty bf)). 
     apply val_inject_list_lessdef. eapply list_val_of_aval_sound; eauto.
     rewrite A, H6; simpl. auto.
   }
@@ -935,9 +935,9 @@ Qed.
 
 (** Construction 6: external call *)
 
-Theorem external_call_match:
+Theorem external_call_match vty:
   forall ef (ge: genv) vargs m t vres m' bc rm am,
-  external_call ef ge vargs m t vres m' ->
+  external_call vty ef ge vargs m t vres m' ->
   genv_match bc ge ->
   (forall v, In v vargs -> vmatch bc v Vtop) ->
   romatch bc m rm ->
@@ -955,7 +955,7 @@ Theorem external_call_match:
 Proof.
   intros until am; intros EC GENV ARGS RO MM NOSTACK.
   (* Part 1: using ec_mem_inject *)
-  exploit (@external_call_mem_inject ef _ _ ge vargs m t vres m' (inj_of_bc bc) m vargs).
+  exploit (@external_call_mem_inject vty ef _ _ ge vargs m t vres m' (inj_of_bc bc) m vargs).
   apply inj_of_bc_preserves_globals; auto.
   exact EC.
   eapply mmatch_inj; eauto. eapply mmatch_below; eauto.
@@ -1069,6 +1069,7 @@ Qed.
 
 Section SOUNDNESS.
 
+Variable vty: Builtins2.vote_type.
 Variable prog: program.
 Variable ge: genv.
 
@@ -1086,7 +1087,7 @@ Inductive sound_stack: block_classification -> list stackframe -> mem -> block -
         (SP': bc' sp = BCstack)
         (SAME: forall b, Plt b bound' -> b <> sp -> bc b = bc' b)
         (GE: genv_match bc' ge)
-        (AN: VA.ge (analyze rm f)!!pc (VA.State (AE.set res Vtop ae) mafter_public_call))
+        (AN: VA.ge (analyze vty rm f)!!pc (VA.State (AE.set res Vtop ae) mafter_public_call))
         (EM: ematch bc' e ae),
       sound_stack bc (Stackframe res f (Vptr sp Ptrofs.zero) pc e :: stk) m bound
   | sound_stack_private_call:
@@ -1098,7 +1099,7 @@ Inductive sound_stack: block_classification -> list stackframe -> mem -> block -
         (SP': bc' sp = BCstack)
         (SAME: forall b, Plt b bound' -> b <> sp -> bc b = bc' b)
         (GE: genv_match bc' ge)
-        (AN: VA.ge (analyze rm f)!!pc (VA.State (AE.set res (Ifptr Nonstack) ae) (mafter_private_call am)))
+        (AN: VA.ge (analyze vty rm f)!!pc (VA.State (AE.set res (Ifptr Nonstack) ae) (mafter_private_call am)))
         (EM: ematch bc' e ae)
         (CONTENTS: bmatch bc' m sp am.(am_stack)),
       sound_stack bc (Stackframe res f (Vptr sp Ptrofs.zero) pc e :: stk) m bound.
@@ -1107,7 +1108,7 @@ Inductive sound_state_base: state -> Prop :=
   | sound_regular_state:
       forall s f sp pc e m ae am bc
         (STK: sound_stack bc s m sp)
-        (AN: (analyze rm f)!!pc = VA.State ae am)
+        (AN: (analyze vty rm f)!!pc = VA.State ae am)
         (EM: ematch bc e ae)
         (RO: romatch bc m rm)
         (MM: mmatch bc m am)
@@ -1237,10 +1238,10 @@ Qed.
 
 Lemma sound_succ_state:
   forall bc pc ae am instr ae' am'  s f sp pc' e' m',
-  (analyze rm f)!!pc = VA.State ae am ->
+  (analyze vty rm f)!!pc = VA.State ae am ->
   f.(fn_code)!pc = Some instr ->
   In pc' (successors_instr instr) ->
-  transfer f rm pc ae am = VA.State ae' am' ->
+  transfer vty f rm pc ae am = VA.State ae' am' ->
   ematch bc e' ae' ->
   mmatch bc m' am' ->
   romatch bc m' rm ->
@@ -1254,7 +1255,7 @@ Proof.
 Qed.
 
 Theorem sound_step_base:
-  forall st t st', RTL.step ge st t st' -> sound_state_base st -> sound_state_base st'.
+  forall st t st', RTL.step vty ge st t st' -> sound_state_base st -> sound_state_base st'.
 Proof.
   induction 1; intros SOUND; inv SOUND.
 
@@ -1282,7 +1283,7 @@ Proof.
   eapply sound_stack_storev; eauto.
 
 - (* call *)
-  assert (TR: transfer f rm pc ae am = transfer_call ae am args res).
+  assert (TR: transfer vty f rm pc ae am = transfer_call ae am args res).
   { unfold transfer; rewrite H; auto. }
   unfold transfer_call, analyze_call in TR.
   destruct (pincl (am_nonstack am) Nonstack &&
@@ -1328,11 +1329,11 @@ Proof.
 
 - (* builtin *)
   assert (SPVALID: Plt sp0 (Mem.nextblock m)) by (eapply mmatch_below; eauto with va).
-  assert (TR: transfer f rm pc ae am = transfer_builtin ae am rm ef args res).
+  assert (TR: transfer vty f rm pc ae am = transfer_builtin vty ae am rm ef args res).
   { unfold transfer; rewrite H; auto. }
   (* The default case *)
   assert (DEFAULT:
-            transfer f rm pc ae am = transfer_builtin_default ae am rm args res ->
+            transfer vty f rm pc ae am = transfer_builtin_default ae am rm args res ->
             sound_state_base
                (State s f (Vptr sp0 Ptrofs.zero) pc' (regmap_setres res vres rs) m')).
   { unfold transfer_builtin_default, analyze_call; intros TR'.
@@ -1388,7 +1389,7 @@ Proof.
   destruct ef; auto.
 + (* builtin function *)
   destruct (lookup_builtin_function name sg) as [bf|] eqn:LK; auto.
-  destruct (eval_static_builtin_function ae am rm bf args) as [av|] eqn:ES; auto.
+  destruct (eval_static_builtin_function vty ae am rm bf args) as [av|] eqn:ES; auto.
   simpl in H1. red in H1. rewrite LK in H1. inv H1.
   eapply sound_succ_state; eauto. simpl; auto.
   apply set_builtin_res_sound; auto.
@@ -1471,7 +1472,7 @@ Proof.
 - (* internal function *)
   exploit allocate_stack; eauto.
   intros (bc' & A & B & C & D & E & F & G).
-  exploit (analyze_entrypoint rm f args m' bc'); eauto.
+  exploit (analyze_entrypoint vty rm f args m' bc'); eauto.
   intros (ae & am & AN & EM & MM').
   econstructor; eauto.
   erewrite Mem.alloc_result by eauto.
@@ -1495,7 +1496,7 @@ Proof.
    exploit return_from_public_call; eauto.
    intros; rewrite SAME; auto.
    intros (bc1 & A & B & C & D & E & F & G).
-   destruct (analyze rm f)#pc as [ |ae' am'] eqn:EQ; simpl in AN; try contradiction. destruct AN as [A1 A2].
+   destruct (analyze vty rm f)#pc as [ |ae' am'] eqn:EQ; simpl in AN; try contradiction. destruct AN as [A1 A2].
    eapply sound_regular_state with (bc := bc1); eauto.
    apply sound_stack_exten with bc'; auto.
    eapply ematch_ge; eauto. apply ematch_update. auto. auto.
@@ -1503,7 +1504,7 @@ Proof.
    exploit return_from_private_call; eauto.
    intros; rewrite SAME; auto.
    intros (bc1 & A & B & C & D & E & F & G).
-   destruct (analyze rm f)#pc as [ |ae' am'] eqn:EQ; simpl in AN; try contradiction. destruct AN as [A1 A2].
+   destruct (analyze vty rm f)#pc as [ |ae' am'] eqn:EQ; simpl in AN; try contradiction. destruct AN as [A1 A2].
    eapply sound_regular_state with (bc := bc1); eauto.
    apply sound_stack_exten with bc'; auto.
    eapply ematch_ge; eauto. apply ematch_update. auto. auto.
@@ -1519,23 +1520,24 @@ End SOUNDNESS.
 
 Section LINKING.
 
+Variable vty: Builtins2.vote_type.
 Variable prog: program.
 Let ge := Genv.globalenv prog.
 
 Inductive sound_state: state -> Prop :=
   | sound_state_intro: forall st,
-      (forall cunit, linkorder cunit prog -> sound_state_base cunit ge st) ->
+      (forall cunit, linkorder cunit prog -> sound_state_base vty cunit ge st) ->
       sound_state st.
 
 Theorem sound_step:
-  forall st t st', RTL.step ge st t st' -> sound_state st -> sound_state st'.
+  forall st t st', RTL.step vty ge st t st' -> sound_state st -> sound_state st'.
 Proof.
   intros. inv H0. constructor; intros. eapply sound_step_base; eauto.
 Qed.
 
 Remark sound_state_inv:
   forall st cunit,
-  sound_state st -> linkorder cunit prog -> sound_state_base cunit ge st.
+  sound_state st -> linkorder cunit prog -> sound_state_base vty cunit ge st.
 Proof.
   intros. inv H. eauto.
 Qed.
@@ -1893,8 +1895,8 @@ End INITIAL.
 
 Require Import Axioms.
 
-Theorem sound_initial:
-  forall prog st, initial_state prog st -> sound_state prog st.
+Theorem sound_initial vty:
+  forall prog st, initial_state prog st -> sound_state vty prog st.
 Proof.
   destruct 1.
   exploit initial_mem_matches; eauto. intros (bc & GE & BELOW & NOSTACK & RM & VALID).
@@ -1919,8 +1921,8 @@ Global Hint Resolve areg_sound aregs_sound: va.
 
 Ltac InvSoundState :=
   match goal with
-  | H1: sound_state ?prog ?st, H2: linkorder ?cunit ?prog |- _ =>
-      let S := fresh "S" in generalize (sound_state_inv _ _ _ H1 H2); intros S; inv S
+  | H1: sound_state ?vty ?prog ?st, H2: linkorder ?cunit ?prog |- _ =>
+      let S := fresh "S" in generalize (sound_state_inv _ _ _ _ H1 H2); intros S; inv S
   end.
 
 Definition avalue (a: VA.t) (r: reg) : aval :=
@@ -1929,12 +1931,12 @@ Definition avalue (a: VA.t) (r: reg) : aval :=
   | VA.State ae am => AE.get r ae
   end.
 
-Lemma avalue_sound:
+Lemma avalue_sound vty:
   forall cunit prog s f sp pc e m r,
-  sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
+  sound_state vty prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
   linkorder cunit prog ->
   exists bc,
-     vmatch bc e#r (avalue (analyze (romem_for cunit) f)!!pc r)
+     vmatch bc e#r (avalue (analyze vty (romem_for cunit) f)!!pc r)
   /\ genv_match bc (Genv.globalenv prog)
   /\ bc sp = BCstack.
 Proof.
@@ -1947,13 +1949,13 @@ Definition aaddr (a: VA.t) (r: reg) : aptr :=
   | VA.State ae am => aptr_of_aval (AE.get r ae)
   end.
 
-Lemma aaddr_sound:
+Lemma aaddr_sound vty:
   forall cunit prog s f sp pc e m r b ofs,
-  sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
+  sound_state vty prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
   linkorder cunit prog ->
   e#r = Vptr b ofs ->
   exists bc,
-     pmatch bc b ofs (aaddr (analyze (romem_for cunit) f)!!pc r)
+     pmatch bc b ofs (aaddr (analyze vty (romem_for cunit) f)!!pc r)
   /\ genv_match bc (Genv.globalenv prog)
   /\ bc sp = BCstack.
 Proof.
@@ -1967,13 +1969,13 @@ Definition aaddressing (a: VA.t) (addr: addressing) (args: list reg) : aptr :=
   | VA.State ae am => aptr_of_aval (eval_static_addressing addr (aregs ae args))
   end.
 
-Lemma aaddressing_sound:
+Lemma aaddressing_sound vty:
   forall cunit prog s f sp pc e m addr args b ofs,
-  sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
+  sound_state vty prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
   linkorder cunit prog ->
   eval_addressing (Genv.globalenv prog) (Vptr sp Ptrofs.zero) addr e##args = Some (Vptr b ofs) ->
   exists bc,
-     pmatch bc b ofs (aaddressing (analyze (romem_for cunit) f)!!pc addr args)
+     pmatch bc b ofs (aaddressing (analyze vty (romem_for cunit) f)!!pc addr args)
   /\ genv_match bc (Genv.globalenv prog)
   /\ bc sp = BCstack.
 Proof.
@@ -2013,13 +2015,13 @@ Proof.
   apply match_aptr_of_aval. eapply abuiltin_arg_sound; eauto.
 Qed.
 
-Lemma aaddr_arg_sound:
+Lemma aaddr_arg_sound vty:
   forall cunit prog s f sp pc e m a b ofs,
-  sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
+  sound_state vty prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
   linkorder cunit prog ->
   eval_builtin_arg (Genv.globalenv prog) (fun r => e#r) (Vptr sp Ptrofs.zero) m a (Vptr b ofs) ->
   exists bc,
-     pmatch bc b ofs (aaddr_arg (analyze (romem_for cunit) f)!!pc a)
+     pmatch bc b ofs (aaddr_arg (analyze vty (romem_for cunit) f)!!pc a)
   /\ genv_match bc (Genv.globalenv prog)
   /\ bc sp = BCstack.
 Proof.

@@ -190,15 +190,16 @@ Proof.
   apply helper_functions_preserved. eapply helper_functions_declared_linkorder; eauto.
 Defined.
 
+Variable vty: Builtins2.vote_type.
 Variable sp: val.
 Variable e: env.
 Variable m: mem.
 
 Lemma eval_condexpr_of_expr:
   forall a le v b,
-  eval_expr tge sp e m le a v ->
+  eval_expr vty tge sp e m le a v ->
   Val.bool_of_val v b ->
-  eval_condexpr tge sp e m le (condexpr_of_expr a) b.
+  eval_condexpr vty tge sp e m le (condexpr_of_expr a) b.
 Proof.
   intros until a. functional induction (condexpr_of_expr a); intros.
 (* compare *)
@@ -215,10 +216,10 @@ Qed.
 
 Lemma eval_condition_of_expr:
   forall a le v b,
-  eval_expr tge sp e m le a v ->
+  eval_expr vty tge sp e m le a v ->
   Val.bool_of_val v b ->
   exists vl,
-     eval_exprlist tge sp e m le (snd (condition_of_expr a)) vl
+     eval_exprlist vty tge sp e m le (snd (condition_of_expr a)) vl
   /\ eval_condition (fst (condition_of_expr a)) vl m = Some b.
 Proof.
   intros a; functional induction (condition_of_expr a); intros; simpl.
@@ -231,28 +232,28 @@ Qed.
 
 Lemma eval_load:
   forall le a v chunk v',
-  eval_expr tge sp e m le a v ->
+  eval_expr vty tge sp e m le a v ->
   Mem.loadv chunk m v = Some v' ->
-  eval_expr tge sp e m le (load chunk a) v'.
+  eval_expr vty tge sp e m le (load chunk a) v'.
 Proof.
   intros. generalize H0; destruct v; simpl; intro; try discriminate.
   unfold load.
-  generalize (eval_addressing _ _ _ _ _ chunk _ _ _ _ H (eq_refl _)).
+  generalize (eval_addressing _ _ _ _ _ _ chunk _ _ _ _ H (eq_refl _)).
   destruct (addressing chunk a). intros [vl [EV EQ]].
   eapply eval_Eload; eauto.
 Qed.
 
 Lemma eval_store:
   forall chunk a1 a2 v1 v2 f k m',
-  eval_expr tge sp e m nil a1 v1 ->
-  eval_expr tge sp e m nil a2 v2 ->
+  eval_expr vty tge sp e m nil a1 v1 ->
+  eval_expr vty tge sp e m nil a2 v2 ->
   Mem.storev chunk m v1 v2 = Some m' ->
-  step tge (State f (store chunk a1 a2) k sp e m)
+  step vty tge (State f (store chunk a1 a2) k sp e m)
         E0 (State f Sskip k sp e m').
 Proof.
   intros. generalize H1; destruct v1; simpl; intro; try discriminate.
   unfold store.
-  generalize (eval_addressing _ _ _ _ _ chunk _ _ _ _ H (eq_refl _)).
+  generalize (eval_addressing _ _ _ _ _ _ chunk _ _ _ _ H (eq_refl _)).
   destruct (addressing chunk a1). intros [vl [EV EQ]].
   eapply step_store; eauto.
 Qed.
@@ -261,9 +262,9 @@ Qed.
 
 Lemma eval_sel_unop:
   forall le op a1 v1 v,
-  eval_expr tge sp e m le a1 v1 ->
+  eval_expr vty tge sp e m le a1 v1 ->
   eval_unop op v1 = Some v ->
-  exists v', eval_expr tge sp e m le (sel_unop op a1) v' /\ Val.lessdef v v'.
+  exists v', eval_expr vty tge sp e m le (sel_unop op a1) v' /\ Val.lessdef v v'.
 Proof.
   destruct op; simpl; intros; FuncInv; try subst v.
   apply eval_cast8unsigned; auto.
@@ -303,10 +304,10 @@ Qed.
 
 Lemma eval_sel_binop:
   forall le op a1 a2 v1 v2 v,
-  eval_expr tge sp e m le a1 v1 ->
-  eval_expr tge sp e m le a2 v2 ->
+  eval_expr vty tge sp e m le a1 v1 ->
+  eval_expr vty tge sp e m le a2 v2 ->
   eval_binop op v1 v2 m = Some v ->
-  exists v', eval_expr tge sp e m le (sel_binop op a1 a2) v' /\ Val.lessdef v v'.
+  exists v', eval_expr vty tge sp e m le (sel_binop op a1 a2) v' /\ Val.lessdef v v'.
 Proof.
   destruct op; simpl; intros; FuncInv; try subst v.
   apply eval_add; auto.
@@ -353,11 +354,11 @@ Qed.
 
 Lemma eval_sel_select:
   forall le a1 a2 a3 v1 v2 v3 b ty,
-  eval_expr tge sp e m le a1 v1 ->
-  eval_expr tge sp e m le a2 v2 ->
-  eval_expr tge sp e m le a3 v3 ->
+  eval_expr vty tge sp e m le a1 v1 ->
+  eval_expr vty tge sp e m le a2 v2 ->
+  eval_expr vty tge sp e m le a3 v3 ->
   Val.bool_of_val v1 b ->
-  exists v, eval_expr tge sp e m le (sel_select ty a1 a2 a3) v
+  exists v, eval_expr vty tge sp e m le (sel_select ty a1 a2 a3) v
         /\  Val.lessdef (Val.select (Some b) v2 v3 ty) v.
 Proof.
   unfold sel_select; intros.
@@ -375,9 +376,9 @@ Qed.
 Lemma eval_sel_known_builtin:
   forall bf args a vl v le,
   sel_known_builtin bf args = Some a ->
-  eval_exprlist tge sp e m le args vl ->
-  builtin_function_sem bf vl = Some v ->
-  exists v', eval_expr tge sp e m le a v' /\ Val.lessdef v v'.
+  eval_exprlist vty tge sp e m le args vl ->
+  builtin_function_sem vty bf vl = Some v ->
+  exists v', eval_expr vty tge sp e m le a v' /\ Val.lessdef v v'.
 Proof.
   intros until le; intros SEL ARGS SEM.
   destruct bf as [bf|bf|bf]; simpl in SEL.
@@ -454,6 +455,7 @@ Inductive Rlong: Z -> val -> Prop :=
 
 Section SEL_SWITCH.
 
+Variable vty: Builtins2.vote_type.
 Variable make_cmp_eq: expr -> Z -> expr.
 Variable make_cmp_ltu: expr -> Z -> expr.
 Variable make_sub: expr -> Z -> expr.
@@ -462,17 +464,17 @@ Variable modulus: Z.
 Variable R: Z -> val -> Prop.
 
 Hypothesis eval_make_cmp_eq: forall sp e m le a v i n,
-  eval_expr tge sp e m le a v -> R i v -> 0 <= n < modulus ->
-  eval_expr tge sp e m le (make_cmp_eq a n) (Val.of_bool (zeq i n)).
+  eval_expr vty tge sp e m le a v -> R i v -> 0 <= n < modulus ->
+  eval_expr vty tge sp e m le (make_cmp_eq a n) (Val.of_bool (zeq i n)).
 Hypothesis eval_make_cmp_ltu: forall sp e m le a v i n,
-  eval_expr tge sp e m le a v -> R i v -> 0 <= n < modulus ->
-  eval_expr tge sp e m le (make_cmp_ltu a n) (Val.of_bool (zlt i n)).
+  eval_expr vty tge sp e m le a v -> R i v -> 0 <= n < modulus ->
+  eval_expr vty tge sp e m le (make_cmp_ltu a n) (Val.of_bool (zlt i n)).
 Hypothesis eval_make_sub: forall sp e m le a v i n,
-  eval_expr tge sp e m le a v -> R i v -> 0 <= n < modulus ->
-  exists v', eval_expr tge sp e m le (make_sub a n) v' /\ R ((i - n) mod modulus) v'.
+  eval_expr vty tge sp e m le a v -> R i v -> 0 <= n < modulus ->
+  exists v', eval_expr vty tge sp e m le (make_sub a n) v' /\ R ((i - n) mod modulus) v'.
 Hypothesis eval_make_to_int: forall sp e m le a v i,
-  eval_expr tge sp e m le a v -> R i v ->
-  exists v', eval_expr tge sp e m le (make_to_int a) v' /\ Rint (i mod Int.modulus) v'.
+  eval_expr vty tge sp e m le a v -> R i v ->
+  exists v', eval_expr vty tge sp e m le (make_to_int a) v' /\ Rint (i mod Int.modulus) v'.
 
 Lemma sel_switch_correct_rec:
   forall sp e m varg i x,
@@ -481,14 +483,14 @@ Lemma sel_switch_correct_rec:
   wf_comptree modulus t ->
   nth_error le arg = Some varg ->
   comptree_match modulus i t = Some x ->
-  eval_exitexpr tge sp e m le (sel_switch make_cmp_eq make_cmp_ltu make_sub make_to_int arg t) x.
+  eval_exitexpr vty tge sp e m le (sel_switch make_cmp_eq make_cmp_ltu make_sub make_to_int arg t) x.
 Proof.
   intros until x; intros Ri. induction t; simpl; intros until le; intros WF ARG MATCH.
 - (* base case *)
   inv MATCH. constructor.
 - (* eq test *)
   inv WF.
-  assert (eval_expr tge sp e m le (make_cmp_eq (Eletvar arg) key) (Val.of_bool (zeq i key))).
+  assert (eval_expr vty tge sp e m le (make_cmp_eq (Eletvar arg) key) (Val.of_bool (zeq i key))).
   { eapply eval_make_cmp_eq; eauto. constructor; auto. }
   eapply eval_XEcondition with (va := zeq i key).
   eapply eval_condexpr_of_expr; eauto. destruct (zeq i key); constructor; auto.
@@ -497,7 +499,7 @@ Proof.
   + eapply IHt; eauto.
 - (* lt test *)
   inv WF.
-  assert (eval_expr tge sp e m le (make_cmp_ltu (Eletvar arg) key) (Val.of_bool (zlt i key))).
+  assert (eval_expr vty tge sp e m le (make_cmp_ltu (Eletvar arg) key) (Val.of_bool (zlt i key))).
   { eapply eval_make_cmp_ltu; eauto. constructor; auto. }
   eapply eval_XEcondition with (va := zlt i key).
   eapply eval_condexpr_of_expr; eauto. destruct (zlt i key); constructor; auto.
@@ -510,7 +512,7 @@ Proof.
   instantiate (1 := ofs). auto.
   intros (v' & A & B).
   set (i' := (i - ofs) mod modulus) in *.
-  assert (eval_expr tge sp e m (v' :: le) (make_cmp_ltu (Eletvar O) sz) (Val.of_bool (zlt i' sz))).
+  assert (eval_expr vty tge sp e m (v' :: le) (make_cmp_ltu (Eletvar O) sz) (Val.of_bool (zlt i' sz))).
   { eapply eval_make_cmp_ltu; eauto. constructor; auto. }
   econstructor. eauto.
   eapply eval_XEcondition with (va := zlt i' sz).
@@ -525,10 +527,10 @@ Qed.
 Lemma sel_switch_correct:
   forall dfl cases arg sp e m varg i t le,
   validate_switch modulus dfl cases t = true ->
-  eval_expr tge sp e m le arg varg ->
+  eval_expr vty tge sp e m le arg varg ->
   R i varg ->
   0 <= i < modulus ->
-  eval_exitexpr tge sp e m le
+  eval_exitexpr vty tge sp e m le
      (XElet arg (sel_switch make_cmp_eq make_cmp_ltu make_sub make_to_int O t))
      (switch_target i dfl cases).
 Proof.
@@ -544,6 +546,7 @@ Variable cunit: Cminor.program.
 Variable hf: helper_functions.
 Hypothesis LINK: linkorder cunit prog.
 Hypothesis HF: helper_functions_declared cunit hf.
+Variable vty: Builtins2.vote_type.
 
 Let HF': helper_functions_declared tprog hf.
 Proof.
@@ -553,11 +556,11 @@ Defined.
 Lemma sel_switch_int_correct:
   forall dfl cases arg sp e m i t le,
   validate_switch Int.modulus dfl cases t = true ->
-  eval_expr tge sp e m le arg (Vint i) ->
-  eval_exitexpr tge sp e m le (XElet arg (sel_switch_int O t)) (switch_target (Int.unsigned i) dfl cases).
+  eval_expr vty tge sp e m le arg (Vint i) ->
+  eval_exitexpr vty tge sp e m le (XElet arg (sel_switch_int O t)) (switch_target (Int.unsigned i) dfl cases).
 Proof.
   assert (INTCONST: forall n sp e m le,
-            eval_expr tge sp e m le (Eop (Ointconst n) Enil) (Vint n)).
+            eval_expr vty tge sp e m le (Eop (Ointconst n) Enil) (Vint n)).
   { intros. econstructor. constructor. auto. }
   intros. eapply sel_switch_correct with (R := Rint); eauto.
 - intros until n; intros EVAL R RANGE.
@@ -593,8 +596,8 @@ Qed.
 Lemma sel_switch_long_correct:
   forall dfl cases arg sp e m i t le,
   validate_switch Int64.modulus dfl cases t = true ->
-  eval_expr tge sp e m le arg (Vlong i) ->
-  eval_exitexpr tge sp e m le (XElet arg (sel_switch_long O t)) (switch_target (Int64.unsigned i) dfl cases).
+  eval_expr vty tge sp e m le arg (Vlong i) ->
+  eval_exitexpr vty tge sp e m le (XElet arg (sel_switch_long O t)) (switch_target (Int64.unsigned i) dfl cases).
 Proof.
   intros. eapply sel_switch_correct with (R := Rlong); eauto.
 - intros until n; intros EVAL R RANGE.
@@ -725,13 +728,14 @@ Variable cunit: Cminor.program.
 Variable hf: helper_functions.
 Hypothesis LINK: linkorder cunit prog.
 Hypothesis HF: helper_functions_declared cunit hf.
+Variable vty: Builtins2.vote_type.
 
 Lemma sel_expr_correct:
   forall sp e m a v,
   Cminor.eval_expr ge sp e m a v ->
   forall e' le m',
   env_lessdef e e' -> Mem.extends m m' ->
-  exists v', eval_expr tge sp e' m' le (sel_expr a) v' /\ Val.lessdef v v'.
+  exists v', eval_expr vty tge sp e' m' le (sel_expr a) v' /\ Val.lessdef v v'.
 Proof.
   induction 1; intros; simpl.
   (* Evar *)
@@ -753,7 +757,7 @@ Proof.
   exploit IHeval_expr1; eauto. intros [v1' [A B]].
   exploit IHeval_expr2; eauto. intros [v2' [C D]].
   exploit eval_binop_lessdef; eauto. intros [v' [E F]].
-  assert (G: exists v'', eval_expr tge sp e' m' le (sel_binop op (sel_expr a1) (sel_expr a2)) v'' /\ Val.lessdef v' v'')
+  assert (G: exists v'', eval_expr vty tge sp e' m' le (sel_binop op (sel_expr a1) (sel_expr a2)) v'' /\ Val.lessdef v' v'')
   by (eapply eval_sel_binop; eauto).
   destruct G as [v'' [P Q]].
   exists v''; split; eauto. eapply Val.lessdef_trans; eauto.
@@ -768,7 +772,7 @@ Lemma sel_exprlist_correct:
   Cminor.eval_exprlist ge sp e m a v ->
   forall e' le m',
   env_lessdef e e' -> Mem.extends m m' ->
-  exists v', eval_exprlist tge sp e' m' le (sel_exprlist a) v' /\ Val.lessdef_list v v'.
+  exists v', eval_exprlist vty tge sp e' m' le (sel_exprlist a) v' /\ Val.lessdef_list v v'.
 Proof.
   induction 1; intros; simpl.
   exists (@nil val); split; auto. constructor.
@@ -785,7 +789,7 @@ Lemma sel_select_opt_correct:
   Cminor.eval_expr ge sp e m a2 v2 ->
   Val.bool_of_val vcond b ->
   env_lessdef e e' -> Mem.extends m m' ->
-  exists v', eval_expr tge sp e' m' le a v' /\ Val.lessdef (Val.select (Some b) v1 v2 ty) v'.
+  exists v', eval_expr vty tge sp e' m' le a v' /\ Val.lessdef (Val.select (Some b) v1 v2 ty) v'.
 Proof.
   unfold sel_select_opt; intros. 
   destruct (condition_of_expr (sel_expr cond)) as [cnd args] eqn:C.
@@ -805,7 +809,7 @@ Lemma sel_builtin_arg_correct:
   env_lessdef e e' -> Mem.extends m m' ->
   Cminor.eval_expr ge sp e m a v ->
   exists v',
-     CminorSel.eval_builtin_arg tge sp e' m' (sel_builtin_arg a c) v'
+     CminorSel.eval_builtin_arg vty tge sp e' m' (sel_builtin_arg a c) v'
   /\ Val.lessdef v v'.
 Proof.
   intros. unfold sel_builtin_arg.
@@ -823,7 +827,7 @@ Lemma sel_builtin_args_correct:
   Cminor.eval_exprlist ge sp e m al vl ->
   forall cl,
   exists vl',
-     list_forall2 (CminorSel.eval_builtin_arg tge sp e' m')
+     list_forall2 (CminorSel.eval_builtin_arg vty tge sp e' m')
                   (sel_builtin_args al cl)
                   vl'
   /\ Val.lessdef_list vl vl'.
@@ -846,10 +850,10 @@ Qed.
 Lemma sel_builtin_default_correct:
   forall optid ef al sp e1 m1 vl t v m2 e1' m1' f k,
   Cminor.eval_exprlist ge sp e1 m1 al vl ->
-  external_call ef ge vl m1 t v m2 ->
+  external_call vty ef ge vl m1 t v m2 ->
   env_lessdef e1 e1' -> Mem.extends m1 m1' ->
   exists e2' m2',
-     plus step tge (State f (sel_builtin_default optid ef al) k sp e1' m1')
+     plus (step vty) tge (State f (sel_builtin_default optid ef al) k sp e1' m1')
                  t (State f Sskip k sp e2' m2')
   /\ env_lessdef (set_optvar optid v e1) e2'
   /\ Mem.extends m2 m2'.
@@ -866,10 +870,10 @@ Qed.
 Lemma sel_builtin_correct:
   forall optid ef al sp e1 m1 vl t v m2 e1' m1' f k,
   Cminor.eval_exprlist ge sp e1 m1 al vl ->
-  external_call ef ge vl m1 t v m2 ->
+  external_call vty ef ge vl m1 t v m2 ->
   env_lessdef e1 e1' -> Mem.extends m1 m1' ->
   exists e2' m2',
-     plus step tge (State f (sel_builtin optid ef al) k sp e1' m1')
+     plus (step vty) tge (State f (sel_builtin optid ef al) k sp e1' m1')
                  t (State f Sskip k sp e2' m2')
   /\ env_lessdef (set_optvar optid v e1) e2'
   /\ Mem.extends m2 m2'.
@@ -894,10 +898,10 @@ Qed.
 
 (** If-conversion *)
 
-Definition eventually := Smallstep.eventually Cminor.step Cminor.final_state ge.
+Definition eventually := Smallstep.eventually (Cminor.step vty) Cminor.final_state ge.
 
 Lemma eventually_step: forall f s k sp e m n P,
-  (forall t S', Cminor.step ge (Cminor.State f s k sp e m) t S' -> t = E0 /\ eventually n S' P) ->
+  (forall t S', Cminor.step vty ge (Cminor.State f s k sp e m) t S' -> t = E0 /\ eventually n S' P) ->
   eventually (S n) (Cminor.State f s k sp e m) P.
 Proof.
   intros. apply Smallstep.eventually_later; auto. intros r FS. inv FS.
@@ -981,7 +985,7 @@ Lemma if_conversion_base_correct:
      Cminor.eval_expr ge sp e m ifso v1
   /\ Cminor.eval_expr ge sp e m ifnot v2
   /\ Val.lessdef (if b then v1 else v2) v'
-  /\ step tge (State tf s tk sp e' m')
+  /\ step vty tge (State tf s tk sp e' m')
            E0 (State tf Sskip tk sp (PTree.set id v' e') m').
 Proof.
   unfold if_conversion_base; intros. rewrite H2 in H. clear H2.
@@ -1008,7 +1012,7 @@ Lemma if_conversion_correct:
   env_lessdef e e' -> Mem.extends m m' ->
   let s0 := if b then ifso else ifnot in
   exists n e1 e1',
-     step tge (State f' s k' sp e' m') E0 (State f' Sskip k' sp e1' m')
+     step vty tge (State f' s k' sp e' m') E0 (State f' Sskip k' sp e1' m')
   /\ eventually n (Cminor.State f s0 k sp e m) (eq (Cminor.State f Cminor.Sskip k sp e1 m))
   /\ env_lessdef e1 e1'.
 Proof.
@@ -1267,12 +1271,12 @@ Definition measure (s: Cminor.state) : nat :=
   | Cminor.Returnstate _ _ _ => 2%nat
   end.
 
-Lemma sel_step_correct:
-  forall S1 t S2, Cminor.step ge S1 t S2 ->
+Lemma sel_step_correct vty:
+  forall S1 t S2, Cminor.step vty ge S1 t S2 ->
   forall T1, match_states S1 T1 -> wt_state S1 ->
-  (exists T2, plus step tge T1 t T2 /\ match_states S2 T2)
+  (exists T2, plus (step vty) tge T1 t T2 /\ match_states S2 T2)
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 T1)%nat
-  \/ (exists T2 n, step tge T1 t T2 /\ eventually n S2 (fun S3 => match_states S3 T2)).
+  \/ (exists T2 n, step vty tge T1 t T2 /\ eventually vty n S2 (fun S3 => match_states S3 T2)).
 Proof.
   induction 1; intros T1 ME WTS; inv ME; try (monadInv TS).
 - (* skip seq *)
@@ -1469,8 +1473,8 @@ Proof.
   intros. inv H0. inv H. inv MC. inv LD. constructor.
 Qed.
 
-Theorem transf_program_correct:
-  forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
+Theorem transf_program_correct vty:
+  forward_simulation (Cminor.semantics vty prog) (CminorSel.semantics vty tprog).
 Proof.
   set (MS := fun S T => match_states S T /\ wt_state S).
   apply forward_simulation_eventually_star with (measure := measure) (match_states := MS);
@@ -1482,14 +1486,20 @@ Proof.
 - intros S T r (M & W) FIN.
   eapply sel_final_states; eauto.
 - intros S1 t S2 A T1 (M & W1).
-  assert (W2: wt_state S2) by (eapply subject_reduction; eauto using wt_prog).
+  assert (W2: wt_state S2).
+  { eapply subject_reduction; eauto using wt_prog; apply A. }
   exploit sel_step_correct; eauto.
+  { apply A. }
   intros [(T2 & D & E) | [(D & E & F) | (T2 & n & D & E)]].
 + left; exists T2; auto.
 + subst t. left; exists T1; auto using star_refl.
 + right; exists n, T2; split.
   apply plus_one; auto.
   apply eventually_and_invariant; eauto using subject_reduction, wt_prog.
+  intros.
+  eapply subject_reduction; eauto.
+  { apply wt_prog. }
+  apply H.
 Qed.
 
 End PRESERVATION.

@@ -32,11 +32,12 @@ Definition builtin_function_sig (b: builtin_function) : signature :=
   | BI_replicate b => replicate_builtin_sig b
   end.
 
-Definition builtin_function_sem (b: builtin_function) : builtin_sem (sig_res (builtin_function_sig b)) :=
+Definition builtin_function_sem (vty: vote_type) (b: builtin_function)
+  : builtin_sem (sig_res (builtin_function_sig b)) :=
   match b with
   | BI_standard b => standard_builtin_sem b
   | BI_platform b => platform_builtin_sem b
-  | BI_replicate b => replicate_builtin_sem b
+  | BI_replicate b => replicate_builtin_sem vty b
   end.
 
 Definition lookup_builtin_function (name: string) (sg: signature) : option builtin_function :=

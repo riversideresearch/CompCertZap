@@ -16,11 +16,7 @@ Inductive replicate_builtin : Type :=
 | BI_vote_int
 | BI_vote_long
 | BI_vote_single
-| BI_vote_float
-| BI_vote_int3
-| BI_vote_long3
-| BI_vote_single3
-| BI_vote_float3.
+| BI_vote_float.
 
 Local Open Scope string_scope.
 
@@ -32,11 +28,7 @@ Definition replicate_builtin_table : list (string * replicate_builtin) :=
    ("__builtin_vote_int", BI_vote_int);
    ("__builtin_vote_long", BI_vote_long);
    ("__builtin_vote_single", BI_vote_single);
-   ("__builtin_vote_float", BI_vote_float);
-   ("__builtin_vote_int3", BI_vote_int);
-   ("__builtin_vote_long3", BI_vote_long);
-   ("__builtin_vote_single3", BI_vote_single);
-   ("__builtin_vote_float3", BI_vote_float)].
+   ("__builtin_vote_float", BI_vote_float)].
 
 Definition replicate_builtin_sig (b: replicate_builtin) : signature :=
   match b with
@@ -55,14 +47,6 @@ Definition replicate_builtin_sig (b: replicate_builtin) : signature :=
   | BI_vote_single =>
       [Xsingle; Xsingle; Xsingle ---> Xsingle]
   | BI_vote_float =>
-      [Xfloat; Xfloat; Xfloat ---> Xfloat]
-  | BI_vote_int3 =>
-      [Xint; Xint; Xint ---> Xint]
-  | BI_vote_long3 =>
-      [Xlong; Xlong; Xlong ---> Xlong]
-  | BI_vote_single3 =>
-      [Xsingle; Xsingle; Xsingle ---> Xsingle]
-  | BI_vote_float3 =>
       [Xfloat; Xfloat; Xfloat ---> Xfloat]
   end.
 
@@ -554,21 +538,33 @@ Qed.
 Definition vote_float3_sem : builtin_sem Xfloat :=
   mkbuiltin_v3t Xfloat vote_float3 vote_float3_well_typed vote_float3_compat_inject.
 
-Definition replicate_builtin_sem (b: replicate_builtin)
+Inductive vote_type : Type :=
+| Three
+| Two.
+
+Definition replicate_builtin_sem (vty: vote_type) (b: replicate_builtin)
   : builtin_sem (sig_res (replicate_builtin_sig b)) :=
   match b with
   | BI_smove_int => smove_int_sem
   | BI_smove_long => smove_long_sem
   | BI_smove_single => smove_single_sem
   | BI_smove_float => smove_float_sem
-  | BI_vote_int => vote_int_sem
-  | BI_vote_long => vote_long_sem
-  | BI_vote_single => vote_single_sem
-  | BI_vote_float => vote_float_sem
-  | BI_vote_int3 => vote_int3_sem
-  | BI_vote_long3 => vote_long3_sem
-  | BI_vote_single3 => vote_single3_sem
-  | BI_vote_float3 => vote_float3_sem
+  | BI_vote_int => match vty with
+                  | Two => vote_int_sem
+                  | Three => vote_int3_sem
+                  end
+  | BI_vote_long => match vty with
+                   | Two => vote_long_sem
+                   | Three => vote_long3_sem
+                   end
+  | BI_vote_single => match vty with
+                     | Two => vote_single_sem
+                     | Three => vote_single3_sem
+                     end
+  | BI_vote_float => match vty with
+                    | Two => vote_float_sem
+                    | Three => vote_float3_sem
+                    end
   end.
 
 Lemma vote_int3_vote_int (x y z : val) :

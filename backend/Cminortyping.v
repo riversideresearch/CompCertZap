@@ -633,8 +633,8 @@ Proof.
   intros. eapply Genv.find_funct_prop; eauto.
 Qed.
 
-Lemma subject_reduction:
-  forall st1 t st2, step ge st1 t st2 ->
+Lemma subject_reduction vty:
+  forall st1 t st2, step vty ge st1 t st2 ->
   forall (WT: wt_state st1), wt_state st2.
 Proof.
   destruct 1; intros; inv WT.
@@ -686,8 +686,8 @@ Proof.
   destruct optid. apply def_env_assign; auto. assumption.
 Qed.
 
-Lemma subject_reduction_star:
-  forall st1 t st2, star step ge st1 t st2 ->
+Lemma subject_reduction_star vty:
+  forall st1 t st2, star (step vty) ge st1 t st2 ->
   forall (WT: wt_state st1), wt_state st2.
 Proof.
   induction 1; eauto using subject_reduction.
@@ -799,5 +799,3 @@ Proof.
     destruct b; discriminate.
   - discriminate.
 Qed.
-
-
