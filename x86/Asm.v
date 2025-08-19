@@ -376,6 +376,7 @@ Fixpoint label_pos (lbl: label) (pos: Z) (c: code) {struct c} : option Z :=
       if is_label lbl instr then Some (pos + 1) else label_pos lbl (pos + 1) c'
   end.
 
+Variable vty: Builtins2.vote_type.
 Variable ge: genv.
 
 (** Evaluating an addressing mode *)
@@ -1112,7 +1113,7 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
       eval_builtin_args ge rs (rs RSP) m args vargs ->
-      external_call ef ge vargs m t vres m' ->
+      external_call vty ef ge vargs m t vres m' ->
       rs' = nextinstr_nf
              (set_res res vres
                (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
@@ -1122,7 +1123,7 @@ Inductive step: state -> trace -> state -> Prop :=
       rs PC = Vptr b Ptrofs.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       extcall_arguments rs m (ef_sig ef) args ->
-      external_call ef ge args m t res m' ->
+      external_call vty ef ge args m t res m' ->
       rs' = (set_pair (loc_external_result (ef_sig ef)) res (undef_caller_save_regs rs)) #PC <- (rs RA) ->
       step (State rs m) t (State rs' m').
 
@@ -1147,8 +1148,8 @@ Inductive final_state: state -> int -> Prop :=
       rs#RAX = Vint r ->
       final_state (State rs m) r.
 
-Definition semantics (p: program) :=
-  Semantics step (initial_state p) final_state (Genv.globalenv p).
+Definition semantics vty (p: program) :=
+  Semantics (step vty) (initial_state p) final_state (Genv.globalenv p).
 
 (** Determinacy of the [Asm] semantics. *)
 
@@ -1174,7 +1175,7 @@ Proof.
   intros. eapply C; eauto.
 Qed.
 
-Lemma semantics_determinate: forall p, determinate (semantics p).
+Lemma semantics_determinate vty: forall p, determinate (semantics vty p).
 Proof.
 Ltac Equalities :=
   match goal with
@@ -1220,4 +1221,3 @@ Definition data_preg (r: preg) : bool :=
   | CR _ => false
   | RA => false
   end.
-

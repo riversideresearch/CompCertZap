@@ -51,6 +51,8 @@ Qed.
 (*     zap s s' -> *)
 (*     fstep ge (mkfstate s false) E0 (mkfstate s' true). *)
 
+(* Technically we could/should allow faults (and not vote on) on most
+   builtins, just not external function calls. *)
 Definition zap_allowed (i : instruction) : Prop :=
   match i with
   | Iload _ _ _ _ _ => False
@@ -61,6 +63,9 @@ Definition zap_allowed (i : instruction) : Prop :=
   | _ => True
   end.
 
+(* Should this just fault the result register of the current
+   instruction? That would let us allow faults on smoves, for
+   example. *)
 Inductive maybe_zap : RTL.state -> bool -> RTL.state -> bool -> Prop :=
 | maybe_zap_refl : forall s b,
     maybe_zap s b s b
@@ -71,7 +76,7 @@ Inductive maybe_zap : RTL.state -> bool -> RTL.state -> bool -> Prop :=
 Inductive fstep (ge : genv) : fstate -> trace -> fstate -> Prop :=
 | fstep_step :
   forall s b t s' b' s''
-    (STEP: RTL.step ge s t s')
+    (STEP: RTL.step Builtins2.Two ge s t s')
     (ZAP: maybe_zap s' b s'' b'),
     fstep ge {| fs_state := s; fault := b |} t {| fs_state := s''; fault := b'|}.
 

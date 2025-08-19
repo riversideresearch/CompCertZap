@@ -59,15 +59,6 @@ Definition smove (ty : typ) (src dst : reg)
               [BA src] (BR dst))
   end.
 
-Definition maj_vote3_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
-  match ty with
-  | Tint => Some ("__builtin_vote_int3", BI_vote_int)
-  | Tlong => Some ("__builtin_vote_long3", BI_vote_long)
-  | Tsingle => Some ("__builtin_vote_single3", BI_vote_single)
-  | Tfloat => Some ("__builtin_vote_float3", BI_vote_float)
-  | _ => None
-  end.
-
 Definition maj_vote_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
   | Tint => Some ("__builtin_vote_int", BI_vote_int)
@@ -77,15 +68,9 @@ Definition maj_vote_sig_of_typ (ty : typ) : option (string * replicate_builtin) 
   | _ => None
   end.
 
-Inductive vote_type : Type :=
-| Three
-| Two.
-
-Definition maj_vote_of_typ (vtype : vote_type) (ty : typ) (r1 r2 r3 : reg)
+Definition maj_vote_of_typ (ty : typ) (r1 r2 r3 : reg)
   : option (node -> instruction) :=
-  match (if vtype
-         then maj_vote3_sig_of_typ
-         else maj_vote_sig_of_typ) ty with
+  match maj_vote_sig_of_typ ty with
   | None => None
   | Some (nm, kind) =>
       Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
@@ -101,9 +86,9 @@ Definition maj_vote_of_typ (vtype : vote_type) (ty : typ) (r1 r2 r3 : reg)
     begin. Reserves and returns the node at which subsequent
     instructions should continue.
 *)
-Definition maj_vote (vtype : vote_type) (re : regenv) (r1 r2 r3 : reg) (pc : node)
+Definition maj_vote (re : regenv) (r1 r2 r3 : reg) (pc : node)
   : mon node :=
-  match maj_vote_of_typ vtype (re r1) r1 r2 r3 with
+  match maj_vote_of_typ (re r1) r1 r2 r3 with
   | None => error (MSG "Replicate.v:maj_vote: unexpected Tany32 or Tany64"
                     :: POS pc :: nil)
   | Some vote =>
@@ -119,14 +104,14 @@ Definition maj_vote (vtype : vote_type) (re : regenv) (r1 r2 r3 : reg) (pc : nod
     should begin. Reserves and returns the node at which subsequent
     instructions should continue. *)
 Fixpoint maj_vote_regs
-  (vtype : vote_type) (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
+  (re : regenv) (rm : PMap.t (reg * reg)) (regs : list reg) (pc : node)
   : mon node :=
   match regs with
   | [] => ret pc
   | r1 :: rs =>
-      do succ <- maj_vote_regs vtype re rm rs pc;
+      do succ <- maj_vote_regs re rm rs pc;
       let (r2, r3) := rm # r1 in
-      maj_vote vtype re r1 r2 r3 succ
+      maj_vote re r1 r2 r3 succ
   end.
 
 Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
@@ -237,7 +222,7 @@ Fixpoint copy_all_to_shadows
     original function. [rm] (the replication map) maps registers to
     their corresponding shadow registers. *)
 Definition transf_instr
-  (vtype : vote_type) (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * instruction)
+  (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * instruction)
   : mon unit :=
   let (pc, instr) := ni in
   match instr with
@@ -264,7 +249,7 @@ Definition transf_instr
      instructions with result registers (Icall and Ibuiltin), copy the
      result into its shadow registers. *)
   | _ =>
-      do n <- maj_vote_regs vtype re rm (args_of_instruction instr) pc;
+      do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | Some res, Some succ =>
           do m <- reserve_instr;
@@ -304,9 +289,9 @@ Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
   end.
 
 (** Transform function code by transforming the instructions. *)
-Definition transf_code (vtype : vote_type) (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
+Definition transf_code (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
   : mon unit :=
-  iterM (transf_instr vtype re rm) (PTree.elements c).
+  iterM (transf_instr re rm) (PTree.elements c).
 
 Definition Regset_of_list (l : list positive) : Regset.t  :=
   fold_right (fun acc p => Regset.add acc p) Regset.empty l.
@@ -414,13 +399,13 @@ Definition app' {A : Type} (l1 l2 : list A) : list A :=
     5) return the new entry point node for the function (since new
        instructions were inserted at the front).
 *)
-Definition transf_fun (vtype : vote_type) (re : regenv) (f : function)
+Definition transf_fun (re : regenv) (f : function)
   : mon node :=
   do rm <- replication_map f;
   do live <- live_regs_to_copy f;
   do entry_point <- copy_all_to_shadows re rm (app' live f.(fn_params))
                      f.(fn_entrypoint);
-  do _ <- transf_code vtype re rm f.(fn_code);
+  do _ <- transf_code re rm f.(fn_code);
   ret entry_point.
 
 (** Initialize the generator state with [st_nextreg] and [st_nextnode]
@@ -436,8 +421,9 @@ Program Definition init_state (f : function) : state :=
     _.
 
 (** Run [transf_fun] on [f] with the appropriate initial state. *)
-Definition transf_fun' (vtype : vote_type) (re : regenv) (f : function) : Errors.res function :=
-  match transf_fun vtype re f (init_state f) with
+Definition transf_fun' (re : regenv) (f : function)
+  : Errors.res function :=
+  match transf_fun re f (init_state f) with
   | Error err => Errors.Error err
   | OK entrypoint s _ => Errors.OK {| fn_sig := f.(fn_sig);
                                     fn_params := f.(fn_params);
@@ -452,14 +438,14 @@ Definition transf_fun' (vtype : vote_type) (re : regenv) (f : function) : Errors
 
     2) Call [transf_fun'] with [re] on [f].
 *)
-Definition transf_function (vtype : vote_type) (f : function) : Errors.res function :=
-  Errors.bind (type_function f) (fun re => transf_fun' vtype re f).
+Definition transf_function (f : function) : Errors.res function :=
+  Errors.bind (type_function f) (fun re => transf_fun' re f).
 
-Definition transf_fundef (vtype : vote_type) (fd : fundef) : Errors.res fundef :=
-  AST.transf_partial_fundef (transf_function vtype) fd.
+Definition transf_fundef (fd : fundef) : Errors.res fundef :=
+  AST.transf_partial_fundef transf_function fd.
 
-Definition transf_program (vtype : vote_type) (p : program) : Errors.res program :=
-  transform_partial_program (transf_fundef vtype) p.
+Definition transf_program (p : program) : Errors.res program :=
+  transform_partial_program transf_fundef p.
 
 (* Definition transf_program (p : program) : Errors.res program := *)
 (*   Errors.OK p. *)

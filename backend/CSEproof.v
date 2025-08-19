@@ -19,11 +19,11 @@ Require Import Op Registers RTL.
 Require Import ValueDomain ValueAOp ValueAnalysis.
 Require Import CSEdomain CombineOp CombineOpproof CSE.
 
-Definition match_prog (prog tprog: RTL.program) :=
-  match_program (fun cu f tf => transf_fundef (romem_for cu) f = OK tf) eq prog tprog.
+Definition match_prog vty (prog tprog: RTL.program) :=
+  match_program (fun cu f tf => transf_fundef vty (romem_for cu) f = OK tf) eq prog tprog.
 
-Lemma transf_program_match:
-  forall prog tprog, transf_program prog = OK tprog -> match_prog prog tprog.
+Lemma transf_program_match vty:
+  forall prog tprog, transf_program vty prog = OK tprog -> match_prog vty prog tprog.
 Proof.
   intros. eapply match_transform_partial_program_contextual; eauto.
 Qed.
@@ -885,9 +885,10 @@ Qed.
 
 Section PRESERVATION.
 
+Variable vty: Builtins2.vote_type.
 Variable prog: program.
 Variable tprog : program.
-Hypothesis TRANSF: match_prog prog tprog.
+Hypothesis TRANSF: match_prog vty prog tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
@@ -902,21 +903,21 @@ Proof (Genv.senv_match TRANSF).
 Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
-  exists cu tf, Genv.find_funct tge v = Some tf /\ transf_fundef (romem_for cu) f = OK tf /\ linkorder cu prog.
-Proof (Genv.find_funct_match TRANSF).
+  exists cu tf, Genv.find_funct tge v = Some tf /\ transf_fundef vty (romem_for cu) f = OK tf /\ linkorder cu prog.
+Proof. apply (Genv.find_funct_match TRANSF). Qed.
 
 Lemma funct_ptr_translated:
   forall (b: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge b = Some f ->
-  exists cu tf, Genv.find_funct_ptr tge b = Some tf /\ transf_fundef (romem_for cu) f = OK tf /\ linkorder cu prog.
-Proof (Genv.find_funct_ptr_match TRANSF).
+  exists cu tf, Genv.find_funct_ptr tge b = Some tf /\ transf_fundef vty (romem_for cu) f = OK tf /\ linkorder cu prog.
+Proof. apply (Genv.find_funct_ptr_match TRANSF). Qed.
 
 Lemma sig_preserved:
-  forall rm f tf, transf_fundef rm f = OK tf -> funsig tf = funsig f.
+  forall rm f tf, transf_fundef vty rm f = OK tf -> funsig tf = funsig f.
 Proof.
   unfold transf_fundef; intros. destruct f; monadInv H; auto.
   unfold transf_function in EQ.
-  destruct (analyze f (vanalyze rm f)); try discriminate. inv EQ; auto.
+  destruct (analyze f (vanalyze vty rm f)); try discriminate. inv EQ; auto.
 Qed.
 
 Definition transf_function' (f: function) (approxs: PMap.t numbering) : function :=
@@ -961,7 +962,7 @@ Lemma find_function_translated:
   find_function ge ros rs = Some fd ->
   regs_lessdef rs rs' ->
   exists cu tfd, find_function tge ros rs' = Some tfd
-              /\ transf_fundef (romem_for cu) fd = OK tfd
+              /\ transf_fundef vty (romem_for cu) fd = OK tfd
               /\ linkorder cu prog.
 Proof.
   unfold find_function; intros; destruct ros.
@@ -990,7 +991,7 @@ Qed.
 *)
 
 Definition analyze (cu: program) (f: function) :=
-  CSE.analyze f (vanalyze (romem_for cu) f).
+  CSE.analyze f (vanalyze vty (romem_for cu) f).
 
 Inductive match_stackframes: list stackframe -> list stackframe -> Prop :=
   | match_stackframes_nil:
@@ -1021,7 +1022,7 @@ Inductive match_states: state -> state -> Prop :=
       forall s f tf args m s' args' m' cu
              (LINK: linkorder cu prog)
              (STACKS: match_stackframes s s')
-             (TFD: transf_fundef (romem_for cu) f = OK tf)
+             (TFD: transf_fundef vty (romem_for cu) f = OK tf)
              (ARGS: Val.lessdef_list args args')
              (MEXT: Mem.extends m m'),
       match_states (Callstate s f args m)
@@ -1047,9 +1048,9 @@ Ltac TransfInstr :=
   in the source code. *)
 
 Lemma transf_step_correct:
-  forall s1 t s2, step ge s1 t s2 ->
-  forall s1' (MS: match_states s1 s1') (SOUND: sound_state prog s1),
-  exists s2', step tge s1' t s2' /\ match_states s2 s2'.
+  forall s1 t s2, step vty ge s1 t s2 ->
+  forall s1' (MS: match_states s1 s1') (SOUND: sound_state vty prog s1),
+  exists s2', step vty tge s1' t s2' /\ match_states s2 s2'.
 Proof.
   induction 1; intros; inv MS; try (TransfInstr; intro C).
 
@@ -1327,10 +1328,10 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
+  forward_simulation (RTL.semantics vty prog) (RTL.semantics vty tprog).
 Proof.
   eapply forward_simulation_step with
-    (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
+    (match_states := fun s1 s2 => sound_state vty prog s1 /\ match_states s1 s2).
 - apply senv_preserved.
 - intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
   exists s2. split. auto. split. apply sound_initial; auto. auto.

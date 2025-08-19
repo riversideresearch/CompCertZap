@@ -49,6 +49,10 @@ Proof.
   eapply transf_c_program_to_rtl_correct; eauto.
 Qed.
 
+(* TODO: change this to something like 1) not show existence of tp'
+   but assume that it exists, 2) assume p has behavior beh', 3)
+   behavior_improves beh' beh, and 4) any beh'' of tp' also improve
+   beh'.  *)
 Lemma transf_c_program_to_rtl_behaves p tp beh :
   transf_c_program_to_rtl Replicate.Two p = OK tp ->
   program_behaves (RTL.semantics tp) beh ->

@@ -198,8 +198,8 @@ Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
       instr
   end.
 
-Definition transf_function (rm: romem) (f: function) : res function :=
-  let approx := ValueAnalysis.analyze rm f in
+Definition transf_function vty (rm: romem) (f: function) : res function :=
+  let approx := ValueAnalysis.analyze vty rm f in
   match analyze approx f with
   | Some an =>
       OK {| fn_sig := f.(fn_sig);
@@ -211,8 +211,8 @@ Definition transf_function (rm: romem) (f: function) : res function :=
       Error (msg "Neededness analysis failed")
   end.
 
-Definition transf_fundef (rm: romem) (fd: fundef) : res fundef :=
-  AST.transf_partial_fundef (transf_function rm) fd.
+Definition transf_fundef vty (rm: romem) (fd: fundef) : res fundef :=
+  AST.transf_partial_fundef (transf_function vty rm) fd.
 
-Definition transf_program (p: program) : res program :=
-  transform_partial_program (transf_fundef (romem_for p)) p.
+Definition transf_program vty (p: program) : res program :=
+  transform_partial_program (transf_fundef vty (romem_for p)) p.
