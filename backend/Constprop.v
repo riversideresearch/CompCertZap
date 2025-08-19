@@ -163,7 +163,7 @@ Definition transf_builtin
   end.
 *)
 
-Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
+Definition transf_instr vty (f: function) (an: PMap.t VA.t) (rm: romem)
                         (pc: node) (instr: instruction) :=
   match an!!pc with
   | VA.Bot =>
@@ -205,7 +205,7 @@ Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
           | EF_builtin name sg, BR rd =>
               match lookup_builtin_function name sg with
               | Some bf => 
-                  match eval_static_builtin_function ae am rm bf args with
+                  match eval_static_builtin_function vty ae am rm bf args with
                   | Some a =>
                       match const_for_result a with
                       | Some cop => Iop cop nil rd s
@@ -240,18 +240,18 @@ Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
       end
   end.
 
-Definition transf_function (rm: romem) (f: function) : function :=
-  let an := ValueAnalysis.analyze rm f in
+Definition transf_function vty (rm: romem) (f: function) : function :=
+  let an := ValueAnalysis.analyze vty rm f in
   mkfunction
     f.(fn_sig)
     f.(fn_params)
     f.(fn_stacksize)
-    (PTree.map (transf_instr f an rm) f.(fn_code))
+    (PTree.map (transf_instr vty f an rm) f.(fn_code))
     f.(fn_entrypoint).
 
-Definition transf_fundef (rm: romem) (fd: fundef) : fundef :=
-  AST.transf_fundef (transf_function rm) fd.
+Definition transf_fundef vty (rm: romem) (fd: fundef) : fundef :=
+  AST.transf_fundef (transf_function vty rm) fd.
 
-Definition transf_program (p: program) : program :=
+Definition transf_program vty (p: program) : program :=
   let rm := romem_for p in
-  transform_program (transf_fundef rm) p.
+  transform_program (transf_fundef vty rm) p.
