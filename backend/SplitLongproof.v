@@ -45,12 +45,14 @@ Definition helper_functions_declared {F V: Type} (p: AST.program (AST.fundef F) 
 
 (** * Correctness of the instruction selection functions for 64-bit operators *)
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section CMCONSTR.
 
 Variable prog: program.
 Variable hf: helper_functions.
 Hypothesis HELPERS: helper_functions_declared prog hf.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Let ge := Genv.globalenv prog.
 Variable sp: val.
 Variable e: env.
@@ -1109,3 +1111,5 @@ Proof.
 Qed.
 
 End CMCONSTR.
+
+End VOTE.

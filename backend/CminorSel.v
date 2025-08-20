@@ -150,9 +150,11 @@ Inductive state: Type :=
              (m: mem),                  (**r memory state *)
       state.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section RELSEM.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable ge: genv.
 
 (** The evaluation predicates have the same general shape as those
@@ -464,8 +466,10 @@ Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,
       final_state (Returnstate (Vint r) Kstop m) r.
 
-Definition semantics {T: Type} {vsem: Builtins2.VoteSemantics T} (p: program) :=
+Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
+
+End VOTE.
 
 Global Hint Constructors eval_expr eval_exprlist eval_condexpr: evalexpr.
 
@@ -543,7 +547,10 @@ Proof.
   apply IHinsert_lenv. exact H0. lia.
 Qed.
 
-Lemma eval_lift_expr {T: Type} {vsem: Builtins2.VoteSemantics T}:
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
+Lemma eval_lift_expr:
   forall ge sp e m w le a v,
   eval_expr ge sp e m le a v ->
   forall p le', insert_lenv le p w le' ->
@@ -574,7 +581,7 @@ Proof.
   eapply eval_CElet; eauto. apply H2. constructor; auto.
 Qed.
 
-Lemma eval_lift {T: Type} {vsem: Builtins2.VoteSemantics T}:
+Lemma eval_lift:
   forall ge sp e m le a v w,
   eval_expr ge sp e m le a v ->
   eval_expr ge sp e m (w::le) (lift a) v.
@@ -582,5 +589,7 @@ Proof.
   intros. unfold lift. eapply eval_lift_expr.
   eexact H. apply insert_lenv_0.
 Qed.
+
+End VOTE.
 
 Global Hint Resolve eval_lift: evalexpr.

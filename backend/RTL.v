@@ -179,9 +179,11 @@ Inductive state : Type :=
              (m: mem),                (**r memory state *)
       state.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section RELSEM.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable ge: genv.
 
 Definition find_function
@@ -336,12 +338,12 @@ Inductive final_state: state -> int -> Prop :=
 
 (** The small-step semantics for a program. *)
 
-Definition semantics {T: Type} {vsem: Builtins2.VoteSemantics T} (p: program) :=
+Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
 (** This semantics is receptive to changes in events. *)
 
-Lemma semantics_receptive {T: Type} {vsem: Builtins2.VoteSemantics T}:
+Lemma semantics_receptive:
   forall (p: program), receptive (semantics p).
 Proof.
   intros. constructor; simpl; intros.
@@ -574,3 +576,5 @@ Proof.
   { apply X; auto. }
   unfold max_reg_function. extlia.
 Qed.
+
+End VOTE.

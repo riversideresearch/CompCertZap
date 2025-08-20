@@ -482,12 +482,14 @@ Qed.
 
 (** * Correctness of the smart constructors for division and modulus *)
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section CMCONSTRS.
 
 Variable prog: program.
 Variable hf: helper_functions.
 Hypothesis HELPERS: helper_functions_declared prog hf.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Let ge := Genv.globalenv prog.
 Variable sp: val.
 Variable e: env.
@@ -971,3 +973,5 @@ Proof.
 Qed.
 
 End CMCONSTRS.
+
+End VOTE.

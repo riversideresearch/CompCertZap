@@ -26,9 +26,11 @@ Proof.
   intros. eapply match_transform_partial_program_contextual; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section INLINING.
- 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+
 Variable prog: program.
 Variable tprog: program.
 Hypothesis TRANSF: match_prog prog tprog.
@@ -1330,3 +1332,5 @@ Proof.
 Qed.
 
 End INLINING.
+
+End VOTE.

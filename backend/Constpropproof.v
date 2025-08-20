@@ -21,7 +21,7 @@ Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
 Require Import ConstpropOp ConstpropOpproof Constprop.
 
 Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition match_prog (prog tprog: program) :=
   match_program (fun cu f tf => tf = transf_fundef (romem_for cu) f) eq prog tprog.

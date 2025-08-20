@@ -26,9 +26,11 @@ Proof.
   intros. eapply match_transform_program; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section PRESERVATION.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variables prog tprog: program.
 Hypothesis TRANSL: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
@@ -261,3 +263,5 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+End VOTE.

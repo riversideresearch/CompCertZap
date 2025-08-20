@@ -199,7 +199,7 @@ Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
   end.
 
 Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition transf_function (rm: romem) (f: function) : res function :=
   let approx := ValueAnalysis.analyze rm f in

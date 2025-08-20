@@ -20,7 +20,7 @@ Require Import Registers Op RTL.
 Require Import ValueDomain ValueAnalysis NeedDomain NeedOp Deadcode.
 
 Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition match_prog (prog tprog: RTL.program) :=
   match_program (fun cu f tf => transf_fundef (romem_for cu) f = OK tf) eq prog tprog.
@@ -381,11 +381,13 @@ Proof.
   + apply eagree_update; auto with na.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 (** * Basic properties of the translation *)
 
 Section PRESERVATION.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable prog: program.
 Variable tprog: program.
 Hypothesis TRANSF: match_prog prog tprog.

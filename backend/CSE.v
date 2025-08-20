@@ -560,7 +560,7 @@ Definition transf_code (approxs: PMap.t numbering) (instrs: code) : code :=
   PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
 
 Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
   
 Definition vanalyze := ValueAnalysis.analyze.
 

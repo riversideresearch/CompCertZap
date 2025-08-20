@@ -79,7 +79,7 @@ Definition transfer_builtin_default
   VA.State (set_builtin_res res av ae) am'.
 
 Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition eval_static_builtin_function
               (ae: aenv) (am: amem) (rm: romem)
@@ -195,7 +195,7 @@ Definition mfunction_entry :=
      am_top := Nonstack |}.
 
 Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition analyze (rm: romem) (f: function): PMap.t VA.t :=
   let lu := Liveness.last_uses f in
@@ -402,7 +402,7 @@ Proof.
 Qed.
 
 Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Lemma eval_static_builtin_function_sound:
   forall bc ge rs sp m ae rm am (bf: builtin_function) al vl v va,
@@ -1904,9 +1904,11 @@ Qed.
 
 End INITIAL.
 
+End VOTE.
+
 Require Import Axioms.
 
-Theorem sound_initial:
+Theorem sound_initial {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}:
   forall prog st, initial_state prog st -> sound_state prog st.
 Proof.
   destruct 1.
@@ -1926,8 +1928,6 @@ Proof.
 - exact NOSTACK.
 Qed.
 
-End VOTE.
-
 Global Hint Resolve areg_sound aregs_sound: va.
 
 (** * Interface with other optimizations *)
@@ -1943,9 +1943,6 @@ Definition avalue (a: VA.t) (r: reg) : aval :=
   | VA.Bot => Vbot
   | VA.State ae am => AE.get r ae
   end.
-
-Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 
 Lemma avalue_sound:
   forall cunit prog s f sp pc e m r,
@@ -2044,5 +2041,3 @@ Proof.
   intros. InvSoundState. rewrite AN. exists bc; split; auto.
   eapply aaddr_arg_sound_1; eauto.
 Qed.
-
-End VOTE.

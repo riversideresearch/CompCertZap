@@ -563,7 +563,7 @@ Definition replicate_builtin_sem {S: vote_type} `{VoteSemantics S} (b: replicate
   end.
 
 (* Inductive TwoVote : Type := . *)
-#[export]
+(* #[export] *)
 Instance VoteSemantics_TwoVote : VoteSemantics Two :=
   { vote_sem_int := vote_int_sem
   ; vote_sem_long := vote_long_sem
@@ -572,7 +572,7 @@ Instance VoteSemantics_TwoVote : VoteSemantics Two :=
   }.
 
 (* Inductive ThreeVote : Type := . *)
-#[export]
+(* #[export] *)
 Instance VoteSemantics_ThreeVote : VoteSemantics Three :=
   { vote_sem_int := vote_int3_sem
   ; vote_sem_long := vote_long3_sem

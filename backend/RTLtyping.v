@@ -59,7 +59,6 @@ Definition regenv := reg -> typ.
 
 Section WT_INSTR.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable funct: function.
 Variable env: regenv.
 
@@ -205,6 +204,9 @@ Definition default := Tint.
 End RTLtypes.
 
 Module S := UniSolver(RTLtypes).
+
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section INFERENCE.
 
@@ -855,7 +857,7 @@ Proof.
   eapply wt_regset_assign; eauto. rewrite H8; eapply Mem.load_type; eauto.
 Qed.
 
-Lemma wt_exec_Ibuiltin {T: Type} {vsem: Builtins2.VoteSemantics T}:
+Lemma wt_exec_Ibuiltin:
   forall env f ef (ge: genv) args res s vargs m t vres m' rs,
   wt_instr f env (Ibuiltin ef args res s) ->
   external_call ef ge vargs m t vres m' ->
@@ -916,7 +918,6 @@ Qed.
 
 Section SUBJECT_REDUCTION.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable p: program.
 
 Hypothesis wt_p: wt_program p.
@@ -1002,3 +1003,5 @@ Proof.
 Qed.
 
 End SUBJECT_REDUCTION.
+
+End VOTE.

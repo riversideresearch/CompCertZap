@@ -544,6 +544,9 @@ Proof.
 - inv WS. destruct (ident_eq lbl l). auto. apply IHs; auto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section SUBJECT_REDUCTION.
 
 Variable p: program.
@@ -633,7 +636,7 @@ Proof.
   intros. eapply Genv.find_funct_prop; eauto.
 Qed.
 
-Lemma subject_reduction {T: Type} {vsem: Builtins2.VoteSemantics T}:
+Lemma subject_reduction:
   forall st1 t st2, step ge st1 t st2 ->
   forall (WT: wt_state st1), wt_state st2.
 Proof.
@@ -686,7 +689,7 @@ Proof.
   destruct optid. apply def_env_assign; auto. assumption.
 Qed.
 
-Lemma subject_reduction_star {T: Type} {vsem: Builtins2.VoteSemantics T}:
+Lemma subject_reduction_star:
   forall st1 t st2, star step ge st1 t st2 ->
   forall (WT: wt_state st1), wt_state st2.
 Proof.
@@ -799,3 +802,5 @@ Proof.
     destruct b; discriminate.
   - discriminate.
 Qed.
+
+End VOTE.

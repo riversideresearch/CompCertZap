@@ -164,7 +164,7 @@ Definition transf_builtin
  *)
 
 Section VOTE.
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
                         (pc: node) (instr: instruction) :=

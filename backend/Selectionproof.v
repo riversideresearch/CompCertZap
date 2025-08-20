@@ -178,6 +178,9 @@ Proof.
   unfold helper_functions_declared; intros. decompose [Logic.and] H; clear H. auto 20.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section CMCONSTR.
 
 Variable cunit: Cminor.program.
@@ -190,7 +193,6 @@ Proof.
   apply helper_functions_preserved. eapply helper_functions_declared_linkorder; eauto.
 Defined.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable sp: val.
 Variable e: env.
 Variable m: mem.
@@ -455,7 +457,6 @@ Inductive Rlong: Z -> val -> Prop :=
 
 Section SEL_SWITCH.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable make_cmp_eq: expr -> Z -> expr.
 Variable make_cmp_ltu: expr -> Z -> expr.
 Variable make_sub: expr -> Z -> expr.
@@ -541,8 +542,7 @@ Qed.
 End SEL_SWITCH.
 
 Section SEL_SWITCH_INT.
-  
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+
 Variable cunit: Cminor.program.
 Variable hf: helper_functions.
 Hypothesis LINK: linkorder cunit prog.
@@ -724,7 +724,6 @@ Qed.
 
 Section EXPRESSIONS.
 
-Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable cunit: Cminor.program.
 Variable hf: helper_functions.
 Hypothesis LINK: linkorder cunit prog.
@@ -1271,7 +1270,7 @@ Definition measure (s: Cminor.state) : nat :=
   | Cminor.Returnstate _ _ _ => 2%nat
   end.
 
-Lemma sel_step_correct {T: Type} {vsem: Builtins2.VoteSemantics T}:
+Lemma sel_step_correct:
   forall S1 t S2, Cminor.step ge S1 t S2 ->
   forall T1, match_states S1 T1 -> wt_state S1 ->
   (exists T2, plus step tge T1 t T2 /\ match_states S2 T2)
@@ -1473,7 +1472,7 @@ Proof.
   intros. inv H0. inv H. inv MC. inv LD. constructor.
 Qed.
 
-Theorem transf_program_correct {V: Type} {vsem: Builtins2.VoteSemantics V}:
+Theorem transf_program_correct:
   forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
 Proof.
   set (MS := fun S T => match_states S T /\ wt_state S).
@@ -1496,6 +1495,8 @@ Proof.
   apply plus_one; auto.
   apply eventually_and_invariant; eauto using subject_reduction, wt_prog.
 Qed.
+
+End VOTE.
 
 End PRESERVATION.
 
