@@ -981,7 +981,7 @@ Section PRESERVATION.
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
     intros Hact Hr2 Hr3 Hmaj.
-    destruct vty.
+    destruct vsem.
     - eapply maj_voteR_three_step; eauto.
     - eapply maj_voteR_two_step; eauto.
   Qed.
