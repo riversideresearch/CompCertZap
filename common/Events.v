@@ -1424,16 +1424,16 @@ Qed.
   as defined in the [Builtin] modules.
   These built-in functions have no observable effects and do not access memory. *)
 
-Inductive known_builtin_sem (vty: vote_type) (bf: builtin_function) (ge: Senv.t):
+Inductive known_builtin_sem {VT: vote_type} `{VoteSemantics VT} (bf: builtin_function) (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | known_builtin_sem_intro: forall vargs vres m,
-      builtin_function_sem vty bf vargs = Some vres ->
-      known_builtin_sem vty bf ge vargs m E0 vres m.
+      builtin_function_sem bf vargs = Some vres ->
+      known_builtin_sem bf ge vargs m E0 vres m.
 
-Lemma known_builtin_ok: forall vty bf,
-  extcall_properties (known_builtin_sem vty bf) (builtin_function_sig bf).
+Lemma known_builtin_ok {VT: vote_type} {vsem: VoteSemantics VT}: forall bf,
+  extcall_properties (known_builtin_sem bf) (builtin_function_sig bf).
 Proof.
-  intros. set (bsem := builtin_function_sem vty bf). constructor; intros.
+  intros. set (bsem := builtin_function_sem bf). constructor; intros.
 (* well typed *)
 - inv H.
   specialize (bs_well_typed  _ bsem vargs).
@@ -1494,15 +1494,17 @@ Axiom inline_assembly_properties:
   forall id sg, extcall_properties (inline_assembly_sem id sg) sg.
 
 (** ** Combined semantics of external calls *)
+Section VOTE.
+  Context {VT: vote_type} {vsem: VoteSemantics VT}.
 
-Definition builtin_or_external_sem vty name sg :=
+Definition builtin_or_external_sem name sg :=
   match lookup_builtin_function name sg with
-  | Some bf => known_builtin_sem vty bf
+  | Some bf => known_builtin_sem bf
   | None => external_functions_sem name sg
   end.
 
-Lemma builtin_or_external_sem_ok: forall vty name sg,
-  extcall_properties (builtin_or_external_sem vty name sg) sg.
+Lemma builtin_or_external_sem_ok: forall name sg,
+  extcall_properties (builtin_or_external_sem name sg) sg.
 Proof.
   unfold builtin_or_external_sem; intros. 
   destruct (lookup_builtin_function name sg) as [bf|] eqn:L.
@@ -1522,11 +1524,11 @@ Qed.
 
 This predicate is used in the semantics of all CompCert languages. *)
 
-Definition external_call (vty: vote_type) (ef: external_function): extcall_sem :=
+Definition external_call (ef: external_function): extcall_sem :=
   match ef with
   | EF_external name sg  => external_functions_sem name sg
-  | EF_builtin name sg   => builtin_or_external_sem vty name sg
-  | EF_runtime name sg   => builtin_or_external_sem vty name sg
+  | EF_builtin name sg   => builtin_or_external_sem name sg
+  | EF_runtime name sg   => builtin_or_external_sem name sg
   | EF_vload chunk       => volatile_load_sem chunk
   | EF_vstore chunk      => volatile_store_sem chunk
   | EF_malloc            => extcall_malloc_sem
@@ -1539,8 +1541,8 @@ Definition external_call (vty: vote_type) (ef: external_function): extcall_sem :
   end.
 
 Theorem external_call_spec:
-  forall vty ef,
-  extcall_properties (external_call vty ef) (ef_sig ef).
+  forall ef,
+  extcall_properties (external_call ef) (ef_sig ef).
 Proof.
   intros. unfold external_call, ef_sig; destruct ef.
   apply external_functions_properties.
@@ -1557,22 +1559,22 @@ Proof.
   apply extcall_debug_ok.
 Qed.
 
-Definition external_call_well_typed_gen vty ef := ec_well_typed (external_call_spec vty ef).
-Definition external_call_symbols_preserved vty ef := ec_symbols_preserved (external_call_spec vty ef).
-Definition external_call_valid_block vty ef := ec_valid_block (external_call_spec vty ef).
-Definition external_call_max_perm vty ef := ec_max_perm (external_call_spec vty ef).
-Definition external_call_readonly vty ef := ec_readonly (external_call_spec vty ef).
-Definition external_call_mem_extends vty ef := ec_mem_extends (external_call_spec vty ef).
-Definition external_call_mem_inject_gen vty ef := ec_mem_inject (external_call_spec vty ef).
-Definition external_call_trace_length vty ef := ec_trace_length (external_call_spec vty ef).
-Definition external_call_receptive vty ef := ec_receptive (external_call_spec vty ef).
-Definition external_call_determ vty ef := ec_determ (external_call_spec vty ef).
+Definition external_call_well_typed_gen ef := ec_well_typed (external_call_spec ef).
+Definition external_call_symbols_preserved ef := ec_symbols_preserved (external_call_spec ef).
+Definition external_call_valid_block ef := ec_valid_block (external_call_spec ef).
+Definition external_call_max_perm ef := ec_max_perm (external_call_spec ef).
+Definition external_call_readonly ef := ec_readonly (external_call_spec ef).
+Definition external_call_mem_extends ef := ec_mem_extends (external_call_spec ef).
+Definition external_call_mem_inject_gen ef := ec_mem_inject (external_call_spec ef).
+Definition external_call_trace_length ef := ec_trace_length (external_call_spec ef).
+Definition external_call_receptive ef := ec_receptive (external_call_spec ef).
+Definition external_call_determ ef := ec_determ (external_call_spec ef).
 
 (** Corollary of [external_call_well_typed_gen]. *)
 
 Lemma external_call_well_typed:
-  forall vty ef ge vargs m1 t vres m2,
-  external_call vty ef ge vargs m1 t vres m2 ->
+  forall ef ge vargs m1 t vres m2,
+  external_call ef ge vargs m1 t vres m2 ->
   Val.has_type vres (proj_sig_res (ef_sig ef)).
 Proof.
   intros. apply Val.has_proj_xtype. eapply external_call_well_typed_gen; eauto.
@@ -1581,8 +1583,8 @@ Qed.
 (** Corollary of [external_call_valid_block]. *)
 
 Lemma external_call_nextblock:
-  forall vty ef ge vargs m1 t vres m2,
-  external_call vty ef ge vargs m1 t vres m2 ->
+  forall ef ge vargs m1 t vres m2,
+  external_call ef ge vargs m1 t vres m2 ->
   Ple (Mem.nextblock m1) (Mem.nextblock m2).
 Proof.
   intros. destruct (plt (Mem.nextblock m2) (Mem.nextblock m1)).
@@ -1599,13 +1601,13 @@ Definition meminj_preserves_globals (F V: Type) (ge: Genv.t F V) (f: block -> op
   /\ (forall b1 b2 delta gv, Genv.find_var_info ge b2 = Some gv -> f b1 = Some(b2, delta) -> b2 = b1).
 
 Lemma external_call_mem_inject:
-  forall vty ef F V (ge: Genv.t F V) vargs m1 t vres m2 f m1' vargs',
+  forall ef F V (ge: Genv.t F V) vargs m1 t vres m2 f m1' vargs',
   meminj_preserves_globals ge f ->
-  external_call vty ef ge vargs m1 t vres m2 ->
+  external_call ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
   Val.inject_list f vargs vargs' ->
   exists f', exists vres', exists m2',
-     external_call vty ef ge vargs' m1' t vres' m2'
+     external_call ef ge vargs' m1' t vres' m2'
     /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
@@ -1628,22 +1630,24 @@ Qed.
 (** Corollaries of [external_call_determ]. *)
 
 Lemma external_call_match_traces:
-  forall vty ef ge vargs m t1 vres1 m1 t2 vres2 m2,
-  external_call vty ef ge vargs m t1 vres1 m1 ->
-  external_call vty ef ge vargs m t2 vres2 m2 ->
+  forall ef ge vargs m t1 vres1 m1 t2 vres2 m2,
+  external_call ef ge vargs m t1 vres1 m1 ->
+  external_call ef ge vargs m t2 vres2 m2 ->
   match_traces ge t1 t2.
 Proof.
   intros. exploit external_call_determ. eexact H. eexact H0. tauto.
 Qed.
 
 Lemma external_call_deterministic:
-  forall vty ef ge vargs m t vres1 m1 vres2 m2,
-  external_call vty ef ge vargs m t vres1 m1 ->
-  external_call vty ef ge vargs m t vres2 m2 ->
+  forall ef ge vargs m t vres1 m1 vres2 m2,
+  external_call ef ge vargs m t vres1 m1 ->
+  external_call ef ge vargs m t vres2 m2 ->
   vres1 = vres2 /\ m1 = m2.
 Proof.
   intros. exploit external_call_determ. eexact H. eexact H0. intuition.
 Qed.
+
+End VOTE.
 
 (** * Evaluation of builtin arguments *)
 

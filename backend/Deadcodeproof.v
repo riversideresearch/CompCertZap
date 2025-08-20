@@ -19,11 +19,14 @@ Require Import Values Memory Globalenvs Events Smallstep.
 Require Import Registers Op RTL.
 Require Import ValueDomain ValueAnalysis NeedDomain NeedOp Deadcode.
 
-Definition match_prog vty (prog tprog: RTL.program) :=
-  match_program (fun cu f tf => transf_fundef vty (romem_for cu) f = OK tf) eq prog tprog.
+Section VOTE.
+Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 
-Lemma transf_program_match vty:
-  forall prog tprog, transf_program vty prog = OK tprog -> match_prog vty prog tprog.
+Definition match_prog (prog tprog: RTL.program) :=
+  match_program (fun cu f tf => transf_fundef (romem_for cu) f = OK tf) eq prog tprog.
+
+Lemma transf_program_match:
+  forall prog tprog, transf_program prog = OK tprog -> match_prog prog tprog.
 Proof.
   intros. eapply match_transform_partial_program_contextual; eauto.
 Qed.
@@ -358,6 +361,8 @@ Proof.
   intros. destruct ros; simpl in *. eapply add_need_all_eagree; eauto. auto.
 Qed.
 
+End VOTE.
+
 Global Hint Resolve add_need_all_eagree add_need_all_lessdef
              add_need_eagree add_need_vagree
              add_needs_all_eagree add_needs_all_lessdef
@@ -380,10 +385,10 @@ Qed.
 
 Section PRESERVATION.
 
-Variable vty: Builtins2.vote_type.
+Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable prog: program.
 Variable tprog: program.
-Hypothesis TRANSF: match_prog vty prog tprog.
+Hypothesis TRANSF: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
@@ -399,40 +404,40 @@ Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
   exists cu tf,
-  Genv.find_funct tge v = Some tf /\ transf_fundef vty (romem_for cu) f = OK tf /\ linkorder cu prog.
+  Genv.find_funct tge v = Some tf /\ transf_fundef (romem_for cu) f = OK tf /\ linkorder cu prog.
 Proof. exact (Genv.find_funct_match TRANSF). Qed.
 
 Lemma function_ptr_translated:
   forall (b: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   exists cu tf,
-  Genv.find_funct_ptr tge b = Some tf /\ transf_fundef vty (romem_for cu) f = OK tf /\ linkorder cu prog.
+  Genv.find_funct_ptr tge b = Some tf /\ transf_fundef (romem_for cu) f = OK tf /\ linkorder cu prog.
 Proof. exact (Genv.find_funct_ptr_match TRANSF). Qed.
 
 Lemma sig_function_translated:
   forall rm f tf,
-  transf_fundef vty rm f = OK tf ->
+  transf_fundef rm f = OK tf ->
   funsig tf = funsig f.
 Proof.
   intros; destruct f; monadInv H.
   unfold transf_function in EQ.
-  destruct (analyze (ValueAnalysis.analyze vty rm f) f); inv EQ; auto.
+  destruct (analyze (ValueAnalysis.analyze rm f) f); inv EQ; auto.
   auto.
 Qed.
 
 Lemma stacksize_translated:
   forall rm f tf,
-  transf_function vty rm f = OK tf -> tf.(fn_stacksize) = f.(fn_stacksize).
+  transf_function rm f = OK tf -> tf.(fn_stacksize) = f.(fn_stacksize).
 Proof.
-  unfold transf_function; intros. destruct (analyze (ValueAnalysis.analyze vty rm f) f); inv H; auto.
+  unfold transf_function; intros. destruct (analyze (ValueAnalysis.analyze rm f) f); inv H; auto.
 Qed.
 
 Definition vanalyze (cu: program) (f: function) :=
-  ValueAnalysis.analyze vty (romem_for cu) f.
+  ValueAnalysis.analyze (romem_for cu) f.
 
 Lemma transf_function_at:
   forall cu f tf an pc instr,
-  transf_function vty (romem_for cu) f = OK tf ->
+  transf_function (romem_for cu) f = OK tf ->
   analyze (vanalyze cu f) f = Some an ->
   f.(fn_code)!pc = Some instr ->
   tf.(fn_code)!pc = Some(transf_instr (vanalyze cu f) an pc instr).
@@ -468,7 +473,7 @@ Lemma find_function_translated:
   eagree rs trs (add_ros_need_all ros ne) ->
   exists cu tfd,
      find_function tge ros trs = Some tfd
-  /\ transf_fundef vty (romem_for cu) fd = OK tfd
+  /\ transf_fundef (romem_for cu) fd = OK tfd
   /\ linkorder cu prog.
 Proof.
   intros. destruct ros as [r|id]; simpl in *.
@@ -485,7 +490,7 @@ Inductive match_stackframes: stackframe -> stackframe -> Prop :=
   | match_stackframes_intro:
       forall res f sp pc e tf te cu an
         (LINK: linkorder cu prog)
-        (FUN: transf_function vty (romem_for cu) f = OK tf)
+        (FUN: transf_function (romem_for cu) f = OK tf)
         (ANL: analyze (vanalyze cu f) f = Some an)
         (RES: forall v tv,
               Val.lessdef v tv ->
@@ -499,7 +504,7 @@ Inductive match_states: state -> state -> Prop :=
       forall s f sp pc e m ts tf te tm cu an
         (STACKS: list_forall2 match_stackframes s ts)
         (LINK: linkorder cu prog)
-        (FUN: transf_function vty (romem_for cu) f = OK tf)
+        (FUN: transf_function (romem_for cu) f = OK tf)
         (ANL: analyze (vanalyze cu f) f = Some an)
         (ENV: eagree e te (fst (transfer f (vanalyze cu f) pc an!!pc)))
         (MEM: magree m tm (nlive ge sp (snd (transfer f (vanalyze cu f) pc an!!pc)))),
@@ -509,7 +514,7 @@ Inductive match_states: state -> state -> Prop :=
       forall s f args m ts tf targs tm cu
         (STACKS: list_forall2 match_stackframes s ts)
         (LINK: linkorder cu prog)
-        (FUN: transf_fundef vty (romem_for cu) f = OK tf)
+        (FUN: transf_fundef (romem_for cu) f = OK tf)
         (ARGS: Val.lessdef_list args targs)
         (MEM: Mem.extends m tm),
       match_states (Callstate s f args m)
@@ -539,7 +544,7 @@ Lemma match_succ_states:
   forall s f sp pc e m ts tf te tm an pc' cu instr ne nm
     (LINK: linkorder cu prog)
     (STACKS: list_forall2 match_stackframes s ts)
-    (FUN: transf_function vty (romem_for cu) f = OK tf)
+    (FUN: transf_function (romem_for cu) f = OK tf)
     (ANL: analyze (vanalyze cu f) f = Some an)
     (INSTR: f.(fn_code)!pc = Some instr)
     (SUCC: In pc' (successors_instr instr))
@@ -717,15 +722,15 @@ Qed.
 (** * The simulation diagram *)
 
 Theorem step_simulation:
-  forall S1 t S2, step vty ge S1 t S2 ->
-  forall S1', match_states S1 S1' -> sound_state vty prog S1 ->
-  exists S2', step vty tge S1' t S2' /\ match_states S2 S2'.
+  forall S1 t S2, step ge S1 t S2 ->
+  forall S1', match_states S1 S1' -> sound_state prog S1 ->
+  exists S2', step tge S1' t S2' /\ match_states S2 S2'.
 Proof.
 
 Ltac TransfInstr :=
   match goal with
   | [INSTR: (fn_code _)!_ = Some _,
-     FUN: transf_function _ _ _ = OK _,
+     FUN: transf_function _ _ = OK _,
      ANL: analyze _ _ = Some _ |- _ ] =>
        generalize (transf_function_at _ _ _ _ _ _ FUN ANL INSTR);
        let TI := fresh "TI" in
@@ -1133,17 +1138,17 @@ Qed.
 (** * Semantic preservation *)
 
 Theorem transf_program_correct:
-  forward_simulation (RTL.semantics vty prog) (RTL.semantics vty tprog).
+  forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   intros.
   apply forward_simulation_step with
-     (match_states := fun s1 s2 => sound_state vty prog s1 /\ match_states s1 s2).
+     (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
 - apply senv_preserved.
 - simpl; intros. exploit transf_initial_states; eauto. intros [st2 [A B]].
   exists st2; intuition. eapply sound_initial; eauto.
 - simpl; intros. destruct H. eapply transf_final_states; eauto.
 - simpl; intros. destruct H0.
-  assert (sound_state vty prog s1') by (eapply sound_step; eauto).
+  assert (sound_state prog s1') by (eapply sound_step; eauto).
   fold ge; fold tge. exploit step_simulation; eauto. intros [st2' [A B]].
   exists st2'; auto.
 Qed.

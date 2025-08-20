@@ -757,7 +757,7 @@ Section PRESERVATION.
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
     maj_voteR c ty r1 r2 r3 pc succ ->
-    exists rs', plus (step Builtins2.Three) tge
+    exists rs', plus (@step Builtins2.ThreeVote Builtins2.VoteSemantics_ThreeVote) tge
              (State tstk
                     {| fn_sig := sig
                     ; fn_params := params
@@ -859,7 +859,7 @@ Section PRESERVATION.
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
     maj_voteR c ty r1 r2 r3 pc succ ->
-    exists rs', plus (step Builtins2.Two) tge
+    exists rs', plus (@step Builtins2.TwoVote Builtins2.VoteSemantics_TwoVote) tge
              (State tstk
                     {| fn_sig := sig
                     ; fn_params := params
@@ -955,13 +955,16 @@ Section PRESERVATION.
           rewrite PMap.gss; reflexivity. }
     Qed.
 
-  Lemma maj_voteR_step vty
+  Section VOTE.
+  Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+
+  Lemma maj_voteR_step
     r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
     Val.has_type (rs # r1) ty ->
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
     maj_voteR c ty r1 r2 r3 pc succ ->
-    exists rs', plus (step vty) tge
+    exists rs', plus step tge
              (State tstk
                     {| fn_sig := sig
                     ; fn_params := params

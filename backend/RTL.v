@@ -181,7 +181,7 @@ Inductive state : Type :=
 
 Section RELSEM.
 
-Variable vty : Builtins2.vote_type.
+Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variable ge: genv.
 
 Definition find_function
@@ -245,7 +245,7 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s f sp pc rs m ef args res pc' vargs t vres m',
       (fn_code f)!pc = Some(Ibuiltin ef args res pc') ->
       eval_builtin_args ge (fun r => rs#r) sp m args vargs ->
-      external_call vty ef ge vargs m t vres m' ->
+      external_call ef ge vargs m t vres m' ->
       step (State s f sp pc rs m)
          t (State s f sp pc' (regmap_setres res vres rs) m')
   | exec_Icond:
@@ -281,7 +281,7 @@ Inductive step: state -> trace -> state -> Prop :=
                   m')
   | exec_function_external:
       forall s ef args res t m m',
-      external_call vty ef ge args m t res m' ->
+      external_call ef ge args m t res m' ->
       step (Callstate s (External ef) args m)
          t (Returnstate s res m')
   | exec_return:
@@ -336,17 +336,17 @@ Inductive final_state: state -> int -> Prop :=
 
 (** The small-step semantics for a program. *)
 
-Definition semantics (vty: Builtins2.vote_type) (p: program) :=
-  Semantics (step vty) (initial_state p) final_state (Genv.globalenv p).
+Definition semantics {T: Type} {vsem: Builtins2.VoteSemantics T} (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
 
 (** This semantics is receptive to changes in events. *)
 
-Lemma semantics_receptive:
-  forall vty (p: program), receptive (semantics vty p).
+Lemma semantics_receptive {T: Type} {vsem: Builtins2.VoteSemantics T}:
+  forall (p: program), receptive (semantics p).
 Proof.
   intros. constructor; simpl; intros.
 (* receptiveness *)
-  assert (t1 = E0 -> exists s2, step vty (Genv.globalenv p) s t2 s2).
+  assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
   exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].

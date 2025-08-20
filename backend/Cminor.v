@@ -28,6 +28,9 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Switch.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 (** * Abstract syntax *)
 
 (** Cminor is a low-level imperative language structured in expressions,
@@ -245,7 +248,6 @@ Inductive state: Type :=
 
 Section RELSEM.
 
-Variable vty : Builtins2.vote_type.
 Variable ge: genv.
 
 (** Evaluation of constants and operator applications.
@@ -477,7 +479,7 @@ Inductive step: state -> trace -> state -> Prop :=
 
   | step_builtin: forall f optid ef bl k sp e m vargs t vres m',
       eval_exprlist sp e m bl vargs ->
-      external_call vty ef ge vargs m t vres m' ->
+      external_call ef ge vargs m t vres m' ->
       step (State f (Sbuiltin optid ef bl) k sp e m)
          t (State f Sskip k sp (set_optvar optid vres e) m')
 
@@ -541,7 +543,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate (Internal f) vargs k m)
         E0 (State f f.(fn_body) k (Vptr sp Ptrofs.zero) e m')
   | step_external_function: forall ef vargs k m t vres m',
-      external_call vty ef ge vargs m t vres m' ->
+      external_call ef ge vargs m t vres m' ->
       step (Callstate (External ef) vargs k m)
          t (Returnstate vres k m')
 
@@ -573,17 +575,17 @@ Inductive final_state: state -> int -> Prop :=
 
 (** The corresponding small-step semantics. *)
 
-Definition semantics (vty: Builtins2.vote_type) (p: program) :=
-  Semantics (step vty) (initial_state p) final_state (Genv.globalenv p).
+Definition semantics (p: program) :=
+  Semantics step (initial_state p) final_state (Genv.globalenv p).
 
 (** This semantics is receptive to changes in events. *)
 
 Lemma semantics_receptive:
-  forall vty (p: program), receptive (semantics vty p).
+  forall (p: program), receptive (semantics p).
 Proof.
   intros. constructor; simpl; intros.
 (* receptiveness *)
-  assert (t1 = E0 -> exists s2, step vty (Genv.globalenv p) s t2 s2).
+  assert (t1 = E0 -> exists s2, step (Genv.globalenv p) s t2 s2).
     intros. subst. inv H0. exists s1; auto.
   inversion H; subst; auto.
   exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
@@ -634,7 +636,7 @@ Ltac Determ :=
   end.
 
 Lemma semantics_determinate:
-  forall vty (p: program), determinate (semantics vty p).
+  forall (p: program), determinate (semantics p).
 Proof.
   intros. constructor; set (ge := Genv.globalenv p); simpl; intros.
 - (* determ *)
@@ -710,7 +712,6 @@ Definition outcome_free_mem
 
 Section NATURALSEM.
 
-Variable vty: Builtins2.vote_type.
 Variable ge: genv.
 
 (** Evaluation of a function invocation: [eval_funcall ge m f args t m' res]
@@ -733,7 +734,7 @@ Inductive eval_funcall:
       eval_funcall m (Internal f) vargs t m3 vres
   | eval_funcall_external:
       forall ef m args t res m',
-      external_call vty ef ge args m t res m' ->
+      external_call ef ge args m t res m' ->
       eval_funcall m (External ef) args t m' res
 
 (** Execution of a statement: [exec_stmt ge f sp e m s t e' m' out]
@@ -773,7 +774,7 @@ with exec_stmt:
   | exec_Sbuiltin:
       forall f sp e m optid ef bl t m' vargs vres e',
       eval_exprlist ge sp e m bl vargs ->
-      external_call vty ef ge vargs m t vres m' ->
+      external_call ef ge vargs m t vres m' ->
       e' = set_optvar optid vres e ->
       exec_stmt f sp e m (Sbuiltin optid ef bl) t e' m' Out_normal
   | exec_Sifthenelse:
@@ -914,7 +915,8 @@ End NATURALSEM.
 
 (** Big-step execution of a whole program *)
 
-Inductive bigstep_program_terminates vty (p: program): trace -> int -> Prop :=
+Inductive bigstep_program_terminates
+  (p: program): trace -> int -> Prop :=
   | bigstep_program_terminates_intro:
       forall b f m0 t m r,
       let ge := Genv.globalenv p in
@@ -922,10 +924,11 @@ Inductive bigstep_program_terminates vty (p: program): trace -> int -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = signature_main ->
-      eval_funcall vty ge m0 f nil t m (Vint r) ->
-      bigstep_program_terminates vty p t r.
+      eval_funcall ge m0 f nil t m (Vint r) ->
+      bigstep_program_terminates p t r.
 
-Inductive bigstep_program_diverges vty (p: program): traceinf -> Prop :=
+Inductive bigstep_program_diverges
+  (p: program): traceinf -> Prop :=
   | bigstep_program_diverges_intro:
       forall b f m0 t,
       let ge := Genv.globalenv p in
@@ -933,11 +936,11 @@ Inductive bigstep_program_diverges vty (p: program): traceinf -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = signature_main ->
-      evalinf_funcall vty ge m0 f nil t ->
-      bigstep_program_diverges vty p t.
+      evalinf_funcall ge m0 f nil t ->
+      bigstep_program_diverges p t.
 
-Definition bigstep_semantics vty (p: program) :=
-  Bigstep_semantics (bigstep_program_terminates vty p) (bigstep_program_diverges vty p).
+Definition bigstep_semantics (p: program) :=
+  Bigstep_semantics (bigstep_program_terminates p) (bigstep_program_diverges p).
 
 (** ** Correctness of the big-step semantics with respect to the transition semantics *)
 
@@ -985,18 +988,18 @@ Proof.
   destruct k; simpl; intros; auto || contradiction.
 Qed.
 
-Lemma eval_funcall_exec_stmt_steps vty:
+Lemma eval_funcall_exec_stmt_steps:
   (forall m fd args t m' res,
-   eval_funcall vty ge m fd args t m' res ->
+   eval_funcall ge m fd args t m' res ->
    forall k,
    is_call_cont k ->
-   star (step vty) ge (Callstate fd args k m)
+   star step ge (Callstate fd args k m)
               t (Returnstate res k m'))
 /\(forall f sp e m s t e' m' out,
-   exec_stmt vty ge f sp e m s t e' m' out ->
+   exec_stmt ge f sp e m s t e' m' out ->
    forall k,
    exists S,
-   star (step vty) ge (State f s k sp e m) t S
+   star step ge (State f s k sp e m) t S
    /\ outcome_state_match sp e' m' f k out S).
 Proof.
   apply eval_funcall_exec_stmt_ind2; intros.
@@ -1147,33 +1150,33 @@ Proof.
   econstructor.
 Qed.
 
-Lemma eval_funcall_steps vty:
+Lemma eval_funcall_steps:
    forall m fd args t m' res,
-   eval_funcall vty ge m fd args t m' res ->
+   eval_funcall ge m fd args t m' res ->
    forall k,
    is_call_cont k ->
-   star (step vty) ge (Callstate fd args k m)
+   star step ge (Callstate fd args k m)
      t (Returnstate res k m').
-Proof. apply (proj1 (eval_funcall_exec_stmt_steps vty)). Qed.
+Proof. apply (proj1 eval_funcall_exec_stmt_steps). Qed.
 
-Lemma exec_stmt_steps vty:
+Lemma exec_stmt_steps:
    forall f sp e m s t e' m' out,
-   exec_stmt vty ge f sp e m s t e' m' out ->
+   exec_stmt ge f sp e m s t e' m' out ->
    forall k,
    exists S,
-   star (step vty) ge (State f s k sp e m) t S
+   star step ge (State f s k sp e m) t S
    /\ outcome_state_match sp e' m' f k out S.
-Proof. apply (proj2 (eval_funcall_exec_stmt_steps vty)). Qed.
+Proof. apply (proj2 eval_funcall_exec_stmt_steps). Qed.
 
-Lemma evalinf_funcall_forever vty:
+Lemma evalinf_funcall_forever:
   forall m fd args T k,
-  evalinf_funcall vty ge m fd args T ->
-  forever_plus (step vty) ge (Callstate fd args k m) T.
+  evalinf_funcall ge m fd args T ->
+  forever_plus step ge (Callstate fd args k m) T.
 Proof.
   cofix CIH_FUN.
   assert (forall sp e m s T f k,
-          execinf_stmt vty ge f sp e m s T ->
-          forever_plus (step vty) ge (State f s k sp e m) T).
+          execinf_stmt ge f sp e m s T ->
+          forever_plus step ge (State f s k sp e m) T).
   cofix CIH_STMT.
   intros. inv H.
 
@@ -1193,7 +1196,7 @@ Proof.
   apply CIH_STMT. eauto. traceEq.
 
 (* seq 2 *)
-  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ _ _ H0 (Kseq s2 k))
+  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ _ H0 (Kseq s2 k))
   as [S [A B]]. inv B.
   eapply forever_plus_intro.
   eapply plus_left. constructor.
@@ -1207,7 +1210,7 @@ Proof.
   apply CIH_STMT. eauto. traceEq.
 
 (* loop loop *)
-  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ _ _ H0 (Kseq (Sloop s0) k))
+  destruct (exec_stmt_steps _ _ _ _ _ _ _ _ _ H0 (Kseq (Sloop s0) k))
   as [S [A B]]. inv B.
   eapply forever_plus_intro.
   eapply plus_left. constructor.
@@ -1233,8 +1236,8 @@ Proof.
   traceEq.
 Qed.
 
-Theorem bigstep_semantics_sound vty:
-  bigstep_sound (bigstep_semantics vty prog) (semantics vty prog).
+Theorem bigstep_semantics_sound:
+  bigstep_sound (bigstep_semantics prog) (semantics prog).
 Proof.
   constructor; intros.
 (* termination *)
@@ -1250,3 +1253,5 @@ Proof.
 Qed.
 
 End BIGSTEP_TO_TRANSITION.
+
+End VOTE.

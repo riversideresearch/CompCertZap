@@ -28,9 +28,9 @@ Qed.
 
 Section PRESERVATION.
 
+Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
 Variables prog tprog: program.
 Hypothesis TRANSL: match_prog prog tprog.
-Variable vty: Builtins2.vote_type.
 Let ge := Genv.globalenv prog.
 Let tge := Genv.globalenv tprog.
 
@@ -157,9 +157,9 @@ Inductive match_states: RTL.state -> RTL.state -> Prop :=
                    (Returnstate stk' v m).
 
 Lemma step_simulation:
-  forall S1 t S2, RTL.step vty ge S1 t S2 ->
+  forall S1 t S2, RTL.step ge S1 t S2 ->
   forall S1', match_states S1 S1' ->
-  exists S2', RTL.step vty tge S1' t S2' /\ match_states S2 S2'.
+  exists S2', RTL.step tge S1' t S2' /\ match_states S2 S2'.
 Proof.
   induction 1; intros S1' MS; inv MS; try TR_AT.
 (* nop *)
@@ -251,7 +251,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forward_simulation (RTL.semantics vty prog) (RTL.semantics vty tprog).
+  forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_step.
   apply senv_preserved.

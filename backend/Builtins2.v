@@ -542,30 +542,68 @@ Inductive vote_type : Type :=
 | Three
 | Two.
 
-Definition replicate_builtin_sem (vty: vote_type) (b: replicate_builtin)
+Class VoteSemantics (V : vote_type) : Type :=
+  { vote_sem_int : builtin_sem Xint
+  ; vote_sem_long : builtin_sem Xlong
+  ; vote_sem_single : builtin_sem Xsingle
+  ; vote_sem_float : builtin_sem Xfloat
+  }.
+
+Definition replicate_builtin_sem {S: vote_type} `{VoteSemantics S} (b: replicate_builtin)
   : builtin_sem (sig_res (replicate_builtin_sig b)) :=
   match b with
   | BI_smove_int => smove_int_sem
   | BI_smove_long => smove_long_sem
   | BI_smove_single => smove_single_sem
   | BI_smove_float => smove_float_sem
-  | BI_vote_int => match vty with
-                  | Two => vote_int_sem
-                  | Three => vote_int3_sem
-                  end
-  | BI_vote_long => match vty with
-                   | Two => vote_long_sem
-                   | Three => vote_long3_sem
-                   end
-  | BI_vote_single => match vty with
-                     | Two => vote_single_sem
-                     | Three => vote_single3_sem
-                     end
-  | BI_vote_float => match vty with
-                    | Two => vote_float_sem
-                    | Three => vote_float3_sem
-                    end
+  | BI_vote_int => vote_sem_int
+  | BI_vote_long => vote_sem_long
+  | BI_vote_single => vote_sem_single
+  | BI_vote_float => vote_sem_float
   end.
+
+(* Inductive TwoVote : Type := . *)
+#[export]
+Instance VoteSemantics_TwoVote : VoteSemantics Two :=
+  { vote_sem_int := vote_int_sem
+  ; vote_sem_long := vote_long_sem
+  ; vote_sem_single := vote_single_sem
+  ; vote_sem_float := vote_float_sem
+  }.
+
+(* Inductive ThreeVote : Type := . *)
+#[export]
+Instance VoteSemantics_ThreeVote : VoteSemantics Three :=
+  { vote_sem_int := vote_int3_sem
+  ; vote_sem_long := vote_long3_sem
+  ; vote_sem_single := vote_single3_sem
+  ; vote_sem_float := vote_float3_sem
+  }.
+
+(* Definition replicate_builtin_sem (vty: vote_type) (b: replicate_builtin) *)
+(*   : builtin_sem (sig_res (replicate_builtin_sig b)) := *)
+(*   match b with *)
+(*   | BI_smove_int => smove_int_sem *)
+(*   | BI_smove_long => smove_long_sem *)
+(*   | BI_smove_single => smove_single_sem *)
+(*   | BI_smove_float => smove_float_sem *)
+(*   | BI_vote_int => match vty with *)
+(*                   | Two => vote_int_sem *)
+(*                   | Three => vote_int3_sem *)
+(*                   end *)
+(*   | BI_vote_long => match vty with *)
+(*                    | Two => vote_long_sem *)
+(*                    | Three => vote_long3_sem *)
+(*                    end *)
+(*   | BI_vote_single => match vty with *)
+(*                      | Two => vote_single_sem *)
+(*                      | Three => vote_single3_sem *)
+(*                      end *)
+(*   | BI_vote_float => match vty with *)
+(*                     | Two => vote_float_sem *)
+(*                     | Three => vote_float3_sem *)
+(*                     end *)
+(*   end. *)
 
 Lemma vote_int3_vote_int (x y z : val) :
   Val.lessdef (vote_int3 x y z) (vote_int x y z).

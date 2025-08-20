@@ -440,6 +440,9 @@ Proof.
   apply filter_globdefs_unique_names.
 Qed.
 
+Section VOTE.
+Context {VT: Type} {vsem: Builtins2.VoteSemantics VT}.
+
 (** * Semantic preservation *)
 
 Section SOUNDNESS.
@@ -773,16 +776,16 @@ Inductive match_states: state -> state -> Prop :=
          (RESINJ: Val.inject j res tres)
          (MEMINJ: Mem.inject j m tm),
       match_states (Returnstate s res m)
-                   (Returnstate ts tres tm).
+        (Returnstate ts tres tm).
 
-Lemma external_call_inject vty:
+Lemma external_call_inject:
   forall ef vargs m1 t vres m2 f m1' vargs',
   meminj_preserves_globals f ->
-  external_call vty ef ge vargs m1 t vres m2 ->
+  external_call ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
   Val.inject_list f vargs vargs' ->
   exists f', exists vres', exists m2',
-    external_call vty ef tge vargs' m1' t vres' m2'
+    external_call ef tge vargs' m1' t vres' m2'
     /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
@@ -879,10 +882,10 @@ Proof.
   exists (v1' :: vl'); split; constructor; auto.
 Qed.
 
-Theorem step_simulation vty:
-  forall S1 t S2, step vty ge S1 t S2 ->
+Theorem step_simulation:
+  forall S1 t S2, step ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
-  exists S2', step vty tge S1' t S2' /\ match_states S2 S2'.
+  exists S2', step tge S1' t S2' /\ match_states S2 S2'.
 Proof.
   induction 1; intros; inv MS.
 
@@ -1252,21 +1255,21 @@ Proof.
   intros. inv H0. inv H. inv STACKS. inv RESINJ. constructor.
 Qed.
 
-Lemma transf_program_correct_1 vty:
-  forward_simulation (semantics vty p) (semantics vty tp).
+Lemma transf_program_correct_1:
+  forward_simulation (semantics p) (semantics  tp).
 Proof.
   intros.
   eapply forward_simulation_step.
   exploit globals_symbols_inject. apply init_meminj_preserves_globals. intros [A B]. exact A.
   eexact transf_initial_states.
   eexact transf_final_states.
-  eexact (step_simulation vty).
+  eexact step_simulation.
 Qed.
 
 End SOUNDNESS.
 
-Theorem transf_program_correct vty:
-  forall p tp, match_prog p tp -> forward_simulation (semantics vty p) (semantics vty tp).
+Theorem transf_program_correct:
+  forall p tp, match_prog p tp -> forward_simulation (semantics p) (semantics tp).
 Proof.
   intros p tp (used & A & B).  apply transf_program_correct_1 with used; auto.
 Qed.
@@ -1436,3 +1439,5 @@ Proof.
 Qed.
 
 Global Instance TransfSelectionLink : TransfLink match_prog := link_match_program.
+
+End VOTE.

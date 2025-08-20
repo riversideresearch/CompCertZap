@@ -559,10 +559,13 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
 Definition transf_code (approxs: PMap.t numbering) (instrs: code) : code :=
   PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
 
+Section VOTE.
+Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+  
 Definition vanalyze := ValueAnalysis.analyze.
 
-Definition transf_function vty (rm: romem) (f: function) : res function :=
-  let approx := vanalyze vty rm f in
+Definition transf_function (rm: romem) (f: function) : res function :=
+  let approx := vanalyze rm f in
   match analyze f approx with
   | None => Error (msg "CSE failure")
   | Some approxs =>
@@ -574,8 +577,10 @@ Definition transf_function vty (rm: romem) (f: function) : res function :=
            f.(fn_entrypoint))
   end.
 
-Definition transf_fundef vty (rm: romem) (f: fundef) : res fundef :=
-  AST.transf_partial_fundef (transf_function vty rm) f.
+Definition transf_fundef (rm: romem) (f: fundef) : res fundef :=
+  AST.transf_partial_fundef (transf_function rm) f.
 
-Definition transf_program vty (p: program) : res program :=
-  transform_partial_program (transf_fundef vty (romem_for p)) p.
+Definition transf_program (p: program) : res program :=
+  transform_partial_program (transf_fundef (romem_for p)) p.
+
+End VOTE.
