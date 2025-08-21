@@ -19,6 +19,9 @@ Require Import Initializers.
 
 Open Scope error_monad_scope.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section SOUNDNESS.
 
 Variable ge: genv.
@@ -1348,3 +1351,5 @@ Proof.
   { change sz with s0.(total_size). eapply total_size_transl_init_rec; eauto. }
   rewrite <- H4. eapply init_data_list_of_state_correct; eauto; rewrite H4; auto.
 Qed.
+
+End VOTE.

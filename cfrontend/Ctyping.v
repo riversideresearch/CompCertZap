@@ -1790,9 +1790,12 @@ Proof.
 - destruct v; contradiction || constructor.
 Qed.
 
-Lemma wt_rred vty:
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
+Lemma wt_rred:
   forall ge tenv a m t a' m',
-  rred vty ge a m t a' m' -> wt_rvalue ge tenv a -> wt_rvalue ge tenv a'.
+  rred ge a m t a' m' -> wt_rvalue ge tenv a -> wt_rvalue ge tenv a'.
 Proof.
   induction 1; intros WT; inversion WT.
 - (* valof *) simpl in *. constructor. eapply wt_deref_loc; eauto.
@@ -1856,9 +1859,9 @@ Proof.
   induction 1; intros WT; constructor.
 Qed.
 
-Lemma rred_same_type vty:
+Lemma rred_same_type:
   forall ge a m t a' m',
-  rred vty ge a m t a' m' -> typeof a' = typeof a.
+  rred ge a m t a' m' -> typeof a' = typeof a.
 Proof.
   induction 1; auto.
 Qed.
@@ -1970,7 +1973,6 @@ End WT_SWITCH.
 
 Section PRESERVATION.
 
-Variable vty: Builtins2.vote_type.
 Variable prog: program.
 Hypothesis WTPROG: wt_program prog.
 Let ge := globalenv prog.
@@ -2158,7 +2160,7 @@ Qed.
 End WT_FIND_LABEL.
 
 Lemma preservation_estep:
-  forall S t S', estep vty ge S t S' -> wt_state S -> wt_state S'.
+  forall S t S', estep ge S t S' -> wt_state S -> wt_state S'.
 Proof.
   induction 1; intros WT; inv WT.
 - (* lred *)
@@ -2190,7 +2192,7 @@ Proof.
 Qed.
 
 Lemma preservation_sstep:
-  forall S t S', sstep vty ge S t S' -> wt_state S -> wt_state S'.
+  forall S t S', sstep ge S t S' -> wt_state S -> wt_state S'.
 Proof.
   induction 1; intros WT; inv WT.
 - inv WTS; eauto with ty.
@@ -2239,7 +2241,7 @@ Proof.
 Qed.
 
 Theorem preservation:
-  forall S t S', step vty ge S t S' -> wt_state S -> wt_state S'.
+  forall S t S', step ge S t S' -> wt_state S -> wt_state S'.
 Proof.
   intros. destruct H. eapply preservation_estep; eauto. eapply preservation_sstep; eauto.
 Qed.
@@ -2287,3 +2289,5 @@ Corollary sem_cast_already_typed_idem: forall v t1 t2 m v',
 Proof.
   intros. destruct (sem_cast_already_typed v t1 t2 m H0); congruence.
 Qed.
+
+End VOTE.

@@ -749,215 +749,8 @@ Section PRESERVATION.
     apply Regset.union_3; assumption.
   Qed.
 
-  (** This is totally redundant (copy/paste of the same proof below but *)
-  (*     with three=true in maj_voteR) but the easiest solution. *)
-  Lemma maj_voteR_three_step
-    r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
-    Val.has_type (rs # r1) ty ->
-    rs # r1 = rs # r2 ->
-    rs # r2 = rs # r3 ->
-    maj_voteR c ty r1 r2 r3 pc succ ->
-    exists rs', plus (@step Builtins2.Three Builtins2.VoteSemantics_ThreeVote) tge
-             (State tstk
-                    {| fn_sig := sig
-                    ; fn_params := params
-                    ; fn_stacksize := stacksize
-                    ; fn_code := c
-                    ; fn_entrypoint := entrypoint |}
-                    sp pc rs m) []
-             (State tstk
-                    {| fn_sig := sig
-                    ; fn_params := params
-                    ; fn_stacksize := stacksize
-                    ; fn_code := c
-                    ; fn_entrypoint := entrypoint |}
-                    sp succ rs' m) /\ (forall r, rs # r = rs' # r).
-  Proof.
-    intros Hact Hr2 Hr3 Hmaj; inv Hmaj.
-    (* TODO: all four cases are very similar. combine them somehow or *)
-  (*      factor out commonality? *)
-    destruct ty; simpl in *; try contradiction; clear H.
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_int3.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          (* This is necessary for riscv but not x86_64. Why? *)
-          try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
-                     destruct (eq_block _ _); simpl; try congruence;
-                     destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Int.eq_dec i i); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_float3.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_long3.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          try solve[rewrite PMap.gss; reflexivity];
-          try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity];
-          destruct Archi.ptr64 eqn:Harchi; simpl;
-          try solve[simpl in Hact; congruence];
-          destruct (eq_block _ _); simpl; try congruence;
-          destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_single3.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float32.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    Qed.
-
-  Lemma maj_voteR_two_step
-    r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
-    Val.has_type (rs # r1) ty ->
-    rs # r1 = rs # r2 ->
-    rs # r2 = rs # r3 ->
-    maj_voteR c ty r1 r2 r3 pc succ ->
-    exists rs', plus (@step Builtins2.Two Builtins2.VoteSemantics_TwoVote) tge
-             (State tstk
-                    {| fn_sig := sig
-                    ; fn_params := params
-                    ; fn_stacksize := stacksize
-                    ; fn_code := c
-                    ; fn_entrypoint := entrypoint |}
-                    sp pc rs m) []
-             (State tstk
-                    {| fn_sig := sig
-                    ; fn_params := params
-                    ; fn_stacksize := stacksize
-                    ; fn_code := c
-                    ; fn_entrypoint := entrypoint |}
-                    sp succ rs' m) /\ (forall r, rs # r = rs' # r).
-  Proof.
-    intros Hact Hr2 Hr3 Hmaj; inv Hmaj.
-    (* TODO: all four cases are very similar. combine them somehow or *)
-  (*      factor out commonality? *)
-    destruct ty; simpl in *; try contradiction; clear H.
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_int.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          (* This is necessary for riscv but not x86_64. Why? *)
-          try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
-                     destruct (eq_block _ _); simpl; try congruence;
-                     destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Int.eq_dec i i); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_float.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_long.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          try solve[rewrite PMap.gss; reflexivity];
-          try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity];
-          destruct Archi.ptr64 eqn:Harchi; simpl;
-          try solve[simpl in Hact; congruence];
-          destruct (eq_block _ _); simpl; try congruence;
-          destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        unfold Builtins2.vote_single.
-        rewrite <- Hr3, <- Hr2.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float32.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    Qed.
-
   Section VOTE.
-  (* Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}. *)
-  Context {VT: Builtins2.vote_type}.
+  Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
   Lemma maj_voteR_step
     r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
@@ -981,14 +774,92 @@ Section PRESERVATION.
                     ; fn_entrypoint := entrypoint |}
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
-    intros Hact Hr2 Hr3 Hmaj.
-    destruct VT.
-    (* destruct vsem. *)
-    - eapply maj_voteR_three_step; eauto.
-    - eapply maj_voteR_two_step; eauto.
+    intros Hact Hr2 Hr3 Hmaj; inv Hmaj.
+    destruct vsem.
+    (* TODO: all four cases are very similar. combine them somehow or *)
+    (*      factor out commonality? *)
+    destruct ty; simpl in *; try contradiction; clear H.
+    { inv H0.
+      eexists; split.
+      - econstructor.
+        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+            eauto; repeat constructor.
+          rewrite <- Hr3, <- Hr2.
+          apply vote_sem_int_ok.
+          apply Val.has_inj_type in Hact; auto.
+        + apply star_refl.
+        + reflexivity.
+      - intro r; simpl.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
+        2: { rewrite PMap.gso; auto. }
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
+          (* This is necessary for riscv but not x86_64. Why? *)
+          try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
+                     destruct (eq_block _ _); simpl; try congruence;
+                     destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
+                     rewrite PMap.gss; reflexivity].
+        * rewrite PMap.gss; reflexivity.
+        * destruct (Int.eq_dec i i); simpl; try congruence.
+          rewrite PMap.gss; reflexivity. }
+    { inv H0.
+      eexists; split.
+      - econstructor.
+        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+            eauto; repeat constructor.
+          rewrite <- Hr3, <- Hr2.
+          apply vote_sem_float_ok.
+          apply Val.has_inj_type in Hact; auto.
+        + apply star_refl.
+        + reflexivity.
+      - intro r; simpl.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
+        2: { rewrite PMap.gso; auto. }
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
+        * rewrite PMap.gss; reflexivity.
+        * destruct (Float.eq_dec f f); simpl; try congruence.
+          rewrite PMap.gss; reflexivity. }
+    { inv H0.
+      eexists; split.
+      - econstructor.
+        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+            eauto; repeat constructor.
+          rewrite <- Hr3, <- Hr2.
+          apply vote_sem_long_ok.
+          apply Val.has_inj_type in Hact; auto.
+        + apply star_refl.
+        + reflexivity.
+      - intro r; simpl.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
+        2: { rewrite PMap.gso; auto. }
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
+          try solve[rewrite PMap.gss; reflexivity];
+          try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
+                     rewrite PMap.gss; reflexivity];
+          destruct Archi.ptr64 eqn:Harchi; simpl;
+          try solve[simpl in Hact; congruence];
+          destruct (eq_block _ _); simpl; try congruence;
+          destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
+          rewrite PMap.gss; reflexivity. }
+    { inv H0.
+      eexists; split.
+      - econstructor.
+        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+            eauto; repeat constructor.
+          rewrite <- Hr3, <- Hr2.
+          apply vote_sem_single_ok.
+          apply Val.has_inj_type in Hact; auto.
+        + apply star_refl.
+        + reflexivity.
+      - intro r; simpl.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r1); subst.
+        2: { rewrite PMap.gso; auto. }
+        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
+        * rewrite PMap.gss; reflexivity.
+        * destruct (Float32.eq_dec f f); simpl; try congruence.
+          rewrite PMap.gss; reflexivity. }
   Qed.
 
-  Lemma maj_vote_regR_star_step vty
+  Lemma maj_vote_regR_star_step
     c re (rm : PMap.t (reg * reg))
     args pc n tstk sig params stacksize entrypoint sp rs m :
     Forall (fun r1 => Val.has_type (rs # r1) (re r1) /\
@@ -996,7 +867,7 @@ Section PRESERVATION.
                        rm # r1 = (r2, r3) ->
                        rs # r1 = rs # r2 /\ rs # r2 = rs # r3) args ->
     maj_vote_regsR c re rm args pc n ->
-    exists rs', star (step vty) tge
+    exists rs', star step tge
              (State tstk
                     {| fn_sig := sig
                     ; fn_params := params
@@ -1037,12 +908,12 @@ Section PRESERVATION.
     intro r; rewrite Hrs'; apply Hr''.
   Qed.
 
-  Lemma smove_step vty
+  Lemma smove_step
     ty src dst mov tstk sig params stacksize c entrypoint sp rs m pc succ :
     Val.has_type (rs # src) ty ->
     smove ty src dst = Some mov ->
     c ! pc = Some (mov succ) ->
-    step vty tge
+    step tge
       (State tstk
              {| fn_sig := sig
              ; fn_params := params
@@ -1087,11 +958,11 @@ Section PRESERVATION.
         destruct (rs # src); try contradiction; auto.
   Qed.
 
-  Lemma smoveR_step vty tstk sig params stacksize c entrypoint ty
+  Lemma smoveR_step tstk sig params stacksize c entrypoint ty
     r1 r2 r3 sp rs m pc succ :
     Val.has_type (rs # r1) ty ->
     smoveR c ty r1 r2 r3 pc succ ->
-    star (step vty) tge
+    star step tge
       (State tstk
              {| fn_sig := sig
              ; fn_params := params
@@ -1189,13 +1060,13 @@ Section PRESERVATION.
     rewrite PMap.gso; auto.
   Qed.
 
-  Lemma copy_allR_star_step vty
+  Lemma copy_allR_star_step
     c re (rm : PMap.t (reg * reg))
     args pc succ tstk sig params stacksize entrypoint sp rs m :
     Forall (fun r => Val.has_type (rs # r) (re r)) args ->
     rm_wf rm args ->
     copy_allR re rm c args pc succ ->
-    star (step vty) tge
+    star step tge
       (State tstk
              {| fn_sig := sig
              ; fn_params := params
@@ -1900,11 +1771,11 @@ Section PRESERVATION.
     rewrite IHl1; auto.
   Qed.
 
-  Theorem step_simulation vty s1 t s2 :
-    step vty ge s1 t s2 ->
+  Theorem step_simulation s1 t s2 :
+    step ge s1 t s2 ->
     forall ts1,
       match_states s1 ts1 ->
-      exists ts2, plus (step vty) tge ts1 t ts2 /\ match_states s2 ts2.
+      exists ts2, plus step tge ts1 t ts2 /\ match_states s2 ts2.
   Proof.
     intros Hstep ts1 Hmatch.
     inv Hstep.
@@ -2644,8 +2515,8 @@ Section PRESERVATION.
     intros Hmatch Hfin; inv Hmatch; inv Hfin; inv STACKS; constructor.
   Qed.
 
-  Theorem transf_program_correct vty :
-    forward_simulation (semantics vty prog) (semantics vty tprog).
+  Theorem transf_program_correct :
+    forward_simulation (semantics prog) (semantics tprog).
   Proof.
     intros.
     apply forward_simulation_plus with
@@ -2657,5 +2528,7 @@ Section PRESERVATION.
     - simpl; intros s1 t s1' Hstep s2 Hmatch.
       eapply step_simulation; eauto; intuition.
   Qed.
+
+  End VOTE.
 
 End PRESERVATION.

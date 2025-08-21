@@ -542,13 +542,20 @@ Inductive vote_type : Type :=
 | Three
 | Two.
 
-(* TODO: add property that when all three arguments are equal, the
+(* Include property that when all three arguments are equal, the
    output is equal to them. *)
+Definition vote_sem_ok {tret: xtype} (sem : builtin_sem tret) : Prop :=
+  forall a, Val.has_rettype a tret -> sem.(bs_sem _) [a; a; a] = Some a.
+
 Class VoteSemantics (V : vote_type) : Type :=
   { vote_sem_int : builtin_sem Xint
   ; vote_sem_long : builtin_sem Xlong
   ; vote_sem_single : builtin_sem Xsingle
   ; vote_sem_float : builtin_sem Xfloat
+  ; vote_sem_int_ok : vote_sem_ok vote_sem_int
+  ; vote_sem_long_ok : vote_sem_ok vote_sem_long
+  ; vote_sem_single_ok : vote_sem_ok vote_sem_single
+  ; vote_sem_float_ok : vote_sem_ok vote_sem_float
   }.
 
 Definition replicate_builtin_sem {S: vote_type} `{VoteSemantics S} (b: replicate_builtin)
@@ -567,22 +574,52 @@ Definition replicate_builtin_sem {S: vote_type} `{VoteSemantics S} (b: replicate
 Section VOTE_SEMANTICS.
 
 (* Inductive TwoVote : Type := . *)
-#[export]
-Instance VoteSemantics_TwoVote : VoteSemantics Two :=
+(* #[export] *)
+Program Instance VoteSemantics_Two : VoteSemantics Two :=
   { vote_sem_int := vote_int_sem
   ; vote_sem_long := vote_long_sem
   ; vote_sem_single := vote_single_sem
   ; vote_sem_float := vote_float_sem
   }.
+Next Obligation.
+  intros a Ha; simpl; f_equal.
+  unfold vote_int.
+  destruct a; auto; try contradiction.
+  - destruct (Int.eq_dec _ _); simpl; congruence.
+  - simpl in Ha; rewrite Ha; simpl.
+    destruct (eq_block _ _); simpl; try congruence.
+    destruct (Ptrofs.eq_dec _ _); simpl; congruence.
+Qed.
+Next Obligation.
+Admitted.
+Next Obligation.
+Admitted.
+Next Obligation.
+Admitted.
 
 (* Inductive ThreeVote : Type := . *)
-#[export]
-Instance VoteSemantics_ThreeVote : VoteSemantics Three :=
+(* #[export] *)
+Program Instance VoteSemantics_Three : VoteSemantics Three :=
   { vote_sem_int := vote_int3_sem
   ; vote_sem_long := vote_long3_sem
   ; vote_sem_single := vote_single3_sem
   ; vote_sem_float := vote_float3_sem
   }.
+Next Obligation.
+    intros a Ha; simpl; f_equal.
+    unfold vote_int3.
+    destruct a; auto; try contradiction.
+    - destruct (Int.eq_dec _ _); simpl; congruence.
+    - simpl in Ha; rewrite Ha; simpl.
+      destruct (eq_block _ _); simpl; try congruence.
+      destruct (Ptrofs.eq_dec _ _); simpl; congruence.
+Qed.
+Next Obligation.
+Admitted.
+Next Obligation.
+Admitted.
+Next Obligation.
+Admitted.
 
 End VOTE_SEMANTICS.
 

@@ -41,11 +41,11 @@ Definition env := PTree.t (block * type). (* map variable -> location & type *)
 
 Definition empty_env: env := (PTree.empty (block * type)).
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section SEMANTICS.
-
-Variable vty: Builtins2.vote_type.
-Variable ge: genv.
+ Variable ge: genv.
 
 (** [deref_loc ty m b ofs bf t v] computes the value of a datum
   of type [ty] residing in memory [m] at block [b], offset [ofs],
@@ -314,7 +314,7 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
         E0 (Eval v ty) m
   | red_builtin: forall ef tyargs el ty m vargs t vres m',
       cast_arguments m el tyargs vargs ->
-      external_call vty ef ge vargs m t vres m' ->
+      external_call ef ge vargs m t vres m' ->
       rred (Ebuiltin ef tyargs el ty) m
          t (Eval vres ty) m'.
 
@@ -808,7 +808,7 @@ Inductive sstep: state -> trace -> state -> Prop :=
          E0 (State f f.(fn_body) k e m2)
 
   | step_external_function: forall ef targs tres cc vargs k m vres t m',
-      external_call vty ef ge vargs m t vres m' ->
+      external_call ef ge vargs m t vres m' ->
       sstep (Callstate (External ef targs tres cc) vargs k m)
           t (Returnstate vres k m')
 
@@ -845,13 +845,13 @@ Inductive final_state: state -> int -> Prop :=
 
 (** Wrapping up these definitions in a small-step semantics. *)
 
-Definition semantics vty (p: program) :=
-  Semantics_gen (step vty) (initial_state p) final_state (globalenv p) (globalenv p).
+Definition semantics (p: program) :=
+  Semantics_gen step (initial_state p) final_state (globalenv p) (globalenv p).
 
 (** This semantics has the single-event property. *)
 
-Lemma semantics_single_events vty:
-  forall p, single_events (semantics vty p).
+Lemma semantics_single_events:
+  forall p, single_events (semantics p).
 Proof.
   unfold semantics; intros; red; simpl; intros.
   set (ge := globalenv p) in *.
@@ -864,3 +864,5 @@ Proof.
   eapply external_call_trace_length; eauto.
   inv H; simpl; try lia. eapply external_call_trace_length; eauto.
 Qed.
+
+End VOTE.

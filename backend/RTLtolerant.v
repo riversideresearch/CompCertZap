@@ -302,7 +302,7 @@ Section TOLERANCE.
 
   Theorem faulty_step_exists s t s' fs :
     match_states s fs ->
-    Step (RTL.semantics Builtins2.Three prog) s t s' ->
+    Step (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
     exists t' fs', Step (faulty_semantics prog) fs t' fs'.
   Proof.
     intros Hmatch Hstep.
@@ -337,7 +337,7 @@ Section TOLERANCE.
 
   Theorem faulty_step_simulation s t s' fs t' fs' :
     match_states s fs ->
-    Step (RTL.semantics Builtins2.Three prog) s t s' ->
+    Step (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
     Step (faulty_semantics prog) fs t' fs' ->
     t = t' /\ match_states s' fs'.
   Proof.
@@ -400,7 +400,7 @@ Section TOLERANCE.
 
   Corollary faulty_star_step_exists s t s' fs :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
     exists fs', Star (faulty_semantics prog) fs t fs' /\ match_states s' fs'.
   Proof.
     intros Hmatch Hstar.
@@ -421,7 +421,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma initial_states_match s fs :
-    initial_state (RTL.semantics Builtins2.Three prog) s ->
+    initial_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
     initial_state (faulty_semantics prog) fs ->
     match_states s fs.
   Proof.
@@ -439,7 +439,7 @@ Section TOLERANCE.
 
   Lemma final_state_faulty_nostep s fs r :
     match_states s fs ->
-    final_state (RTL.semantics Builtins2.Three prog) s r ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s r ->
     Nostep (faulty_semantics prog) fs.
   Proof.
     intros Hmatch Hfin.
@@ -451,7 +451,7 @@ Section TOLERANCE.
   Lemma final_state_nostep s fs r :
     match_states s fs ->
     final_state (faulty_semantics prog) fs r ->
-    Nostep (RTL.semantics Builtins2.Three prog) s.
+    Nostep (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s.
   Proof.
     intros Hmatch Hfin t s' Hstep.
     inv Hfin; inv Hmatch; simpl in *; try congruence.
@@ -460,8 +460,8 @@ Section TOLERANCE.
 
   Lemma star_final_prog1_not_forever_silent t s s' fs r :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    final_state (RTL.semantics Builtins2.Three prog) s' r ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
     Forever_silent (faulty_semantics prog) fs ->
     False.
   Proof.
@@ -478,8 +478,8 @@ Section TOLERANCE.
 
   Lemma terminates_diverges_False t t' s s' fs fs' r :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    final_state (RTL.semantics Builtins2.Three prog) s' r ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
     Star (faulty_semantics prog) fs t' fs' ->
     Forever_silent (faulty_semantics prog) fs' ->
     False.
@@ -510,7 +510,7 @@ Section TOLERANCE.
 
   Lemma star_final_prog2_not_silent t s fs fs' r :
     match_states s fs ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
     Star (faulty_semantics prog) fs t fs' ->
     final_state (faulty_semantics prog) fs' r ->
     False.
@@ -528,8 +528,8 @@ Section TOLERANCE.
 
   Lemma diverges_terminates_False t t' s s' fs fs' r :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' ->
     Star (faulty_semantics prog) fs t' fs' ->
     final_state (faulty_semantics prog) fs' r ->
     False.
@@ -549,7 +549,7 @@ Section TOLERANCE.
 
   Lemma reacts_terminates_False t s fs fs' r T :
     match_states s fs ->
-    Forever_reactive (RTL.semantics Builtins2.Three prog) s T ->
+    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
     Star (faulty_semantics prog) fs t fs' ->
     final_state (faulty_semantics prog) fs' r ->
     False.
@@ -573,7 +573,7 @@ Section TOLERANCE.
 
   Lemma star_silent_trace s t s' fs :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' -> 
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' -> 
     Forever_silent (faulty_semantics prog) fs ->
     t = E0.
   Proof.
@@ -589,7 +589,7 @@ Section TOLERANCE.
 
   Lemma reactive_not_silent s fs T :
     match_states s fs ->
-    Forever_reactive (RTL.semantics Builtins2.Three prog) s T ->
+    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
     Forever_silent (faulty_semantics prog) fs ->
     False.
   Proof.
@@ -600,7 +600,7 @@ Section TOLERANCE.
 
   Lemma reacts_diverges_False t s fs fs' T :
     match_states s fs ->
-    Forever_reactive (RTL.semantics Builtins2.Three prog) s T ->
+    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
     Star (faulty_semantics prog) fs t fs' ->
     Forever_silent (faulty_semantics prog) fs' ->
     False.
@@ -622,7 +622,7 @@ Section TOLERANCE.
   (* Can't do other direction because prog1 can get stuck. *)
   Lemma match_states_forever_silent s fs :
     match_states s fs ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
       Forever_silent (faulty_semantics prog) fs.
   Proof.
     revert s fs.
@@ -640,7 +640,7 @@ Section TOLERANCE.
   (* Can't do other direction because prog1 can get stuck. *)
   Lemma match_states_forever_reactive s fs T :
     match_states s fs ->
-    Forever_reactive (RTL.semantics Builtins2.Three prog) s T ->
+    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
       Forever_reactive (faulty_semantics prog) fs T.
   Proof.
     revert s fs T.
@@ -655,7 +655,7 @@ Section TOLERANCE.
 
   Lemma star_faulty_silent_trace s fs t fs' :
     match_states s fs ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
     Star (faulty_semantics prog) fs t fs' ->
     t = E0.
   Proof.
@@ -671,7 +671,7 @@ Section TOLERANCE.
 
   Lemma silent_not_reactive s fs T :
     match_states s fs ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
     Forever_reactive (faulty_semantics prog) fs T ->
     False.
   Proof.
@@ -682,8 +682,8 @@ Section TOLERANCE.
 
   Lemma star_silent_not_reactive t s s' fs T :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' ->
     Forever_reactive (faulty_semantics prog) fs T ->
     False.
   Proof.
@@ -703,8 +703,8 @@ Section TOLERANCE.
 
   Lemma star_final_not_reactive t s s' fs r T :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    final_state (RTL.semantics Builtins2.Three prog) s' r ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
     Forever_reactive (faulty_semantics prog) fs T ->
     False.
   Proof.
@@ -724,7 +724,7 @@ Section TOLERANCE.
 
   Lemma match_states_final s fs r :
     match_states s fs ->
-    final_state (RTL.semantics Builtins2.Three prog) s r ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s r ->
     final_state (faulty_semantics prog) fs r.
   Proof.
     intros Hmatch Hfin; inv Hfin.
@@ -743,8 +743,8 @@ Section TOLERANCE.
 
   Lemma star_final_nostep_final s t s' r fs :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    final_state (RTL.semantics Builtins2.Three prog) s' r ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
     Nostep (faulty_semantics prog) fs ->
     final_state (faulty_semantics prog) fs r.
   Proof.
@@ -758,8 +758,8 @@ Section TOLERANCE.
 
   Lemma star_final_star_nostep_final s t s' r fs t' fs' :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    final_state (RTL.semantics Builtins2.Three prog) s' r ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
     Star (faulty_semantics prog) fs t' fs' ->
     Nostep (faulty_semantics prog) fs' ->
     final_state (faulty_semantics prog) fs' r.
@@ -782,8 +782,8 @@ Section TOLERANCE.
 
   Lemma star_final_final s t s' r fs r' :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    final_state (RTL.semantics Builtins2.Three prog) s' r ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
     final_state (faulty_semantics prog) fs r' ->
     t = E0 /\ r = r'.
   Proof.
@@ -797,8 +797,8 @@ Section TOLERANCE.
 
   Lemma star_final_star_final s t s' r fs t' fs' r' :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    final_state (RTL.semantics Builtins2.Three prog) s' r ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
     Star (faulty_semantics prog) fs t' fs' ->
     final_state (faulty_semantics prog) fs' r' ->
     t = t' /\ r = r'.
@@ -819,8 +819,8 @@ Section TOLERANCE.
 
   Lemma star_silent_star_silent s t s' fs t' fs' :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' ->
     Star (faulty_semantics prog) fs t' fs' ->
     Forever_silent (faulty_semantics prog) fs' ->
     t = t'.
@@ -844,7 +844,7 @@ Section TOLERANCE.
 
   Lemma silent_not_star_stuck s fs t fs' :
     match_states s fs ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
     Star (faulty_semantics prog) fs t fs' ->
     Nostep (faulty_semantics prog) fs' ->
     False.
@@ -866,8 +866,8 @@ Section TOLERANCE.
 
   Lemma star_silent_star_not_stuck s t s' fs t' fs' :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
-    Forever_silent (RTL.semantics Builtins2.Three prog) s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' ->
     Star (faulty_semantics prog) fs t' fs' ->
     Nostep (faulty_semantics prog) fs' ->
     False.
@@ -889,7 +889,7 @@ Section TOLERANCE.
 
   Lemma reactive_star_not_stuck s fs t' fs' T :
     match_states s fs ->
-    Forever_reactive (RTL.semantics Builtins2.Three prog) s T ->
+    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
     Star (faulty_semantics prog) fs t' fs' ->
     Nostep (faulty_semantics prog) fs' ->
     False.
@@ -962,7 +962,7 @@ Section TOLERANCE.
 
   Lemma star_prefix s s' fs fs' t1 t2 :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t1 s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t1 s' ->
     Star (faulty_semantics prog) fs t2 fs' ->
     trace_prefix t1 t2 \/ trace_prefix t2 t1.
   Proof.
@@ -1015,7 +1015,7 @@ Section TOLERANCE.
 
   Lemma reactive_reactive s fs T1 T2 :
     match_states s fs ->
-    Forever_reactive (RTL.semantics Builtins2.Three prog) s T1 ->
+    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T1 ->
     Forever_reactive (faulty_semantics prog) fs T2 ->
     traceinf_sim T1 T2.
   Proof.
@@ -1038,7 +1038,7 @@ Section TOLERANCE.
 
   Lemma star_final_state_trace_prefix s s' fs fs' t1 t2 r :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t1 s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t1 s' ->
     Star (faulty_semantics prog) fs t2 fs' ->
     final_state (faulty_semantics prog) fs' r ->
     trace_prefix t1 t2.
@@ -1061,7 +1061,7 @@ Section TOLERANCE.
 
   Lemma star_silent_trace_prefix s s' fs fs' t1 t2 :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t1 s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t1 s' ->
     Star (faulty_semantics prog) fs t2 fs' ->
     Forever_silent (faulty_semantics prog) fs' ->
     trace_prefix t1 t2.
@@ -1086,7 +1086,7 @@ Section TOLERANCE.
 
   Lemma star_nostep_trace_prefix s s' fs fs' t1 t2 :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t1 s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t1 s' ->
     Star (faulty_semantics prog) fs t2 fs' ->
     Nostep (faulty_semantics prog) fs' ->
     trace_prefix t1 t2.
@@ -1109,7 +1109,7 @@ Section TOLERANCE.
 
   Lemma star_reactive_trace_prefix s s' fs t T :
     match_states s fs ->
-    Star (RTL.semantics Builtins2.Three prog) s t s' ->
+    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
     Forever_reactive (faulty_semantics prog) fs T ->
     traceinf_prefix t T.
   Proof.
@@ -1132,7 +1132,7 @@ Section TOLERANCE.
   Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
     RTL.initial_state prog s ->
     initial_state (faulty_semantics prog) fs ->
-    state_behaves (RTL.semantics Builtins2.Three prog) s beh1 ->
+    state_behaves (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s beh1 ->
     state_behaves (faulty_semantics prog) fs beh2 ->
     behavior_improves beh1 beh2.
   Proof.
@@ -1184,7 +1184,7 @@ Section TOLERANCE.
   Qed.
 
   Theorem faulty_behavior_improves beh1 beh2 :
-    program_behaves (RTL.semantics Builtins2.Three prog) beh1 ->
+    program_behaves (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) beh1 ->
     program_behaves (faulty_semantics prog) beh2 ->
     behavior_improves beh1 beh2.
   Proof.
@@ -1234,7 +1234,7 @@ Section TOLERANCE.
      driver/Complements.v. *)
   (* Theorem faulty_behavior_improves' beh2 : *)
   (*   program_behaves (faulty_semantics prog) beh2 -> *)
-  (*   exists beh1, program_behaves (RTL.semantics Builtins2.Three prog) beh1 /\ behavior_improves beh1 beh2. *)
+  (*   exists beh1, program_behaves (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) beh1 /\ behavior_improves beh1 beh2. *)
   (* Admitted. *)
 
 End TOLERANCE.

@@ -282,11 +282,13 @@ Proof.
 - apply IHwf_avail0.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 (** * Semantic preservation *)
 
 Section PRESERVATION.
 
-Variable vty: Builtins2.vote_type.
 Variable prog: program.
 Variable tprog: program.
 
@@ -356,7 +358,7 @@ Qed.
 
 Lemma eval_add_delta_ranges:
   forall s f sp c rs m before after,
-  star (step vty) tge (State s f sp (add_delta_ranges before after c) rs m)
+  star step tge (State s f sp (add_delta_ranges before after c) rs m)
              E0 (State s f sp c rs m).
 Proof.
   intros. unfold add_delta_ranges.
@@ -422,9 +424,9 @@ Qed.
 (** The simulation diagram. *)
 
 Theorem transf_step_correct:
-  forall s1 t s2, step vty ge s1 t s2 ->
+  forall s1 t s2, step ge s1 t s2 ->
   forall ts1 (MS: match_states s1 ts1),
-  exists ts2, plus (step vty) tge ts1 t ts2 /\ match_states s2 ts2.
+  exists ts2, plus step tge ts1 t ts2 /\ match_states s2 ts2.
 Proof.
   induction 1; intros ts1 MS; inv MS; try (inv TRC).
 - (* getstack *)
@@ -549,7 +551,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forward_simulation (semantics vty prog) (semantics vty tprog).
+  forward_simulation (semantics prog) (semantics tprog).
 Proof.
   eapply forward_simulation_plus.
   apply senv_preserved.
@@ -559,3 +561,5 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+End VOTE.

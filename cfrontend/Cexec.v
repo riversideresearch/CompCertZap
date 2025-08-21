@@ -96,6 +96,9 @@ Defined.
 
 (** * Events, volatile memory accesses, and external functions. *)
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section EXEC.
 
 Variable ge: genv.
@@ -2316,3 +2319,5 @@ Definition at_final_state (S: state): option int :=
   | Returnstate (Vint r) Kstop m => Some r
   | _ => None
   end.
+
+End VOTE.

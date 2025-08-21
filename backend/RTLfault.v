@@ -76,7 +76,7 @@ Inductive maybe_zap : RTL.state -> bool -> RTL.state -> bool -> Prop :=
 Inductive fstep (ge : genv) : fstate -> trace -> fstate -> Prop :=
 | fstep_step :
   forall s b t s' b' s''
-    (STEP: RTL.step Builtins2.Two ge s t s')
+    (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge s t s')
     (ZAP: maybe_zap s' b s'' b'),
     fstep ge {| fs_state := s; fault := b |} t {| fs_state := s''; fault := b'|}.
 

@@ -30,9 +30,11 @@ Proof.
   intros. eapply match_transform_program; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section CLEANUP.
 
-Variable vty: Builtins2.vote_type.
 Variables prog tprog: program.
 Hypothesis TRANSL: match_prog prog tprog.
 Let ge := Genv.globalenv prog.
@@ -231,9 +233,9 @@ Proof.
 Qed.
 
 Theorem transf_step_correct:
-  forall s1 t s2, step vty ge s1 t s2 ->
+  forall s1 t s2, step ge s1 t s2 ->
   forall s1' (MS: match_states s1 s1'),
-  (exists s2', step vty tge s1' t s2' /\ match_states s2 s2')
+  (exists s2', step tge s1' t s2' /\ match_states s2 s2')
   \/ (measure s2 < measure s1 /\ t = E0 /\ match_states s2 s1')%nat.
 Proof.
   induction 1; intros; inv MS; try rewrite remove_unused_labels_cons.
@@ -346,7 +348,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forward_simulation (Linear.semantics vty prog) (Linear.semantics vty tprog).
+  forward_simulation (Linear.semantics prog) (Linear.semantics tprog).
 Proof.
   eapply forward_simulation_opt.
   apply senv_preserved.
@@ -356,3 +358,5 @@ Proof.
 Qed.
 
 End CLEANUP.
+
+End VOTE.

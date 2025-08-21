@@ -72,9 +72,11 @@ Proof.
   try contradiction; try discriminate; econstructor; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section PRESERVATION.
 
-Variable vty: Builtins2.vote_type.
 Variable return_address_offset: Mach.function -> Mach.code -> ptrofs -> Prop.
 
 Hypothesis return_address_offset_exists:
@@ -82,7 +84,7 @@ Hypothesis return_address_offset_exists:
   is_tail (Mcall sg ros :: c) (fn_code f) ->
   exists ofs, return_address_offset f c ofs.
 
-Let step := Mach.step vty return_address_offset.
+Let step := Mach.step return_address_offset.
 
 Variable prog: Linear.program.
 Variable tprog: Mach.program.
@@ -1849,7 +1851,7 @@ Inductive match_states: Linear.state -> Mach.state -> Prop :=
                   (Mach.Returnstate cs' rs m').
 
 Theorem transf_step_correct:
-  forall s1 t s2, Linear.step vty ge s1 t s2 ->
+  forall s1 t s2, Linear.step ge s1 t s2 ->
   forall (WTS: wt_state s1) s1' (MS: match_states s1 s1'),
   exists s2', plus step tge s1' t s2' /\ match_states s2 s2'.
 Proof.
@@ -2205,7 +2207,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forward_simulation (Linear.semantics vty prog) (Mach.semantics vty return_address_offset tprog).
+  forward_simulation (Linear.semantics prog) (Mach.semantics return_address_offset tprog).
 Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
   eapply forward_simulation_plus with (match_states := ms).
@@ -2222,3 +2224,5 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+End VOTE.

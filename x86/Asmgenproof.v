@@ -27,9 +27,11 @@ Proof.
   intros. eapply match_transform_partial_program; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section PRESERVATION.
 
-Variable vty: Builtins2.vote_type.
 Variable prog: Mach.program.
 Variable tprog: Asm.program.
 Hypothesis TRANSF: match_prog prog tprog.
@@ -75,7 +77,7 @@ Lemma exec_straight_exec:
   forall fb f c ep tf tc c' rs m rs' m',
   transl_code_at_pc ge (rs PC) fb f c ep tf tc ->
   exec_straight tge tf tc rs m c' rs' m' ->
-  plus (step vty) tge (State rs m) E0 (State rs' m').
+  plus step tge (State rs m) E0 (State rs' m').
 Proof.
   intros. inv H.
   eapply exec_straight_steps_1; eauto.
@@ -413,7 +415,7 @@ Lemma exec_straight_steps:
     /\ agree ms2 sp rs2
     /\ (it1_is_parent ep i = true -> rs2#RAX = parent_sp s)) ->
   exists st',
-  plus (step vty) tge (State rs1 m1') E0 st' /\
+  plus step tge (State rs1 m1') E0 st' /\
   match_states (Mach.State s fb sp c ms2 m2) st'.
 Proof.
   intros. inversion H2. subst. monadInv H7.
@@ -437,7 +439,7 @@ Lemma exec_straight_steps_goto:
     /\ agree ms2 sp rs2
     /\ exec_instr tge tf jmp rs2 m2' = goto_label tf lbl rs2 m2') ->
   exists st',
-  plus (step vty) tge (State rs1 m1') E0 st' /\
+  plus step tge (State rs1 m1') E0 st' /\
   match_states (Mach.State s fb sp c' ms2 m2) st'.
 Proof.
   intros. inversion H3. subst. monadInv H9.
@@ -478,9 +480,9 @@ Definition measure (s: Mach.state) : nat :=
 (** This is the simulation diagram.  We prove it by case analysis on the Mach transition. *)
 
 Theorem step_simulation:
-  forall S1 t S2, Mach.step vty return_address_offset ge S1 t S2 ->
+  forall S1 t S2, Mach.step return_address_offset ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
-  (exists S2', plus (step vty) tge S1' t S2' /\ match_states S2 S2')
+  (exists S2', plus step tge S1' t S2' /\ match_states S2 S2')
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 S1')%nat.
 Proof.
   induction 1; intros; inv MS.
@@ -916,7 +918,7 @@ Proof.
 Qed.
 
 Theorem transf_program_correct:
-  forward_simulation (Mach.semantics vty return_address_offset prog) (Asm.semantics vty tprog).
+  forward_simulation (Mach.semantics return_address_offset prog) (Asm.semantics tprog).
 Proof.
   eapply forward_simulation_star with (measure := measure).
   apply senv_preserved.
@@ -926,3 +928,5 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+End VOTE.

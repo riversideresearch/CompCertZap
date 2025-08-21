@@ -34,9 +34,11 @@ Require Import Cop.
 Require Import Csyntax.
 Require Import Csem.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section STRATEGY.
 
-Variable vty: Builtins2.vote_type.
 Variable ge: genv.
 
 (** * Definition of the strategy *)
@@ -378,12 +380,12 @@ Inductive estep: state -> trace -> state -> Prop :=
   | step_builtin: forall f C ef tyargs rargs ty k e m vargs t vres m',
       leftcontext RV RV C ->
       eval_simple_list e m rargs tyargs vargs ->
-      external_call vty ef ge vargs m t vres m' ->
+      external_call ef ge vargs m t vres m' ->
       estep (ExprState f (C (Ebuiltin ef tyargs rargs ty)) k e m)
           t (ExprState f (C (Eval vres ty)) k e m').
 
 Definition step (S: state) (t: trace) (S': state) : Prop :=
-  estep S t S' \/ sstep vty ge S t S'.
+  estep S t S' \/ sstep ge S t S'.
 
 (** Properties of contexts *)
 
@@ -410,12 +412,12 @@ Local Hint Resolve context_compose contextlist_compose : core.
   if it cannot get stuck by doing silent transitions only. *)
 
 Definition safe (s: Csem.state) : Prop :=
-  forall s', star (Csem.step vty) ge s E0 s' ->
-  (exists r, final_state s' r) \/ (exists t, exists s'', Csem.step vty ge s' t s'').
+  forall s', star Csem.step ge s E0 s' ->
+  (exists r, final_state s' r) \/ (exists t, exists s'', Csem.step ge s' t s'').
 
 Lemma safe_steps:
   forall s s',
-  safe s -> star (Csem.step vty) ge s E0 s' -> safe s'.
+  safe s -> star Csem.step ge s E0 s' -> safe s'.
 Proof.
   intros; red; intros.
   eapply H. eapply star_trans; eauto.
@@ -423,16 +425,16 @@ Qed.
 
 Lemma star_safe:
   forall s1 s2 t s3,
-  safe s1 -> star (Csem.step vty) ge s1 E0 s2 -> (safe s2 -> star (Csem.step vty) ge s2 t s3) ->
-  star (Csem.step vty) ge s1 t s3.
+  safe s1 -> star Csem.step ge s1 E0 s2 -> (safe s2 -> star Csem.step ge s2 t s3) ->
+  star Csem.step ge s1 t s3.
 Proof.
   intros. eapply star_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
 Qed.
 
 Lemma plus_safe:
   forall s1 s2 t s3,
-  safe s1 -> star (Csem.step vty) ge s1 E0 s2 -> (safe s2 -> plus (Csem.step vty) ge s2 t s3) ->
-  plus (Csem.step vty) ge s1 t s3.
+  safe s1 -> star Csem.step ge s1 E0 s2 -> (safe s2 -> plus Csem.step ge s2 t s3) ->
+  plus Csem.step ge s1 t s3.
 Proof.
   intros. eapply star_plus_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
 Qed.
@@ -3066,3 +3068,5 @@ Proof.
   apply lt_wf.
   eapply evalinf_funcall_steps; eauto.
 Qed.
+
+End VOTE.
