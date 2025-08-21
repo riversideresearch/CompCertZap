@@ -542,6 +542,8 @@ Inductive vote_type : Type :=
 | Three
 | Two.
 
+(* TODO: add property that when all three arguments are equal, the
+   output is equal to them. *)
 Class VoteSemantics (V : vote_type) : Type :=
   { vote_sem_int : builtin_sem Xint
   ; vote_sem_long : builtin_sem Xlong
@@ -562,8 +564,10 @@ Definition replicate_builtin_sem {S: vote_type} `{VoteSemantics S} (b: replicate
   | BI_vote_float => vote_sem_float
   end.
 
+Section VOTE_SEMANTICS.
+
 (* Inductive TwoVote : Type := . *)
-(* #[export] *)
+#[export]
 Instance VoteSemantics_TwoVote : VoteSemantics Two :=
   { vote_sem_int := vote_int_sem
   ; vote_sem_long := vote_long_sem
@@ -572,13 +576,15 @@ Instance VoteSemantics_TwoVote : VoteSemantics Two :=
   }.
 
 (* Inductive ThreeVote : Type := . *)
-(* #[export] *)
+#[export]
 Instance VoteSemantics_ThreeVote : VoteSemantics Three :=
   { vote_sem_int := vote_int3_sem
   ; vote_sem_long := vote_long3_sem
   ; vote_sem_single := vote_single3_sem
   ; vote_sem_float := vote_float3_sem
   }.
+
+End VOTE_SEMANTICS.
 
 (* Definition replicate_builtin_sem (vty: vote_type) (b: replicate_builtin) *)
 (*   : builtin_sem (sig_res (replicate_builtin_sig b)) := *)

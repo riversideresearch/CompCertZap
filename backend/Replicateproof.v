@@ -757,7 +757,7 @@ Section PRESERVATION.
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
     maj_voteR c ty r1 r2 r3 pc succ ->
-    exists rs', plus (@step Builtins2.ThreeVote Builtins2.VoteSemantics_ThreeVote) tge
+    exists rs', plus (@step Builtins2.Three Builtins2.VoteSemantics_ThreeVote) tge
              (State tstk
                     {| fn_sig := sig
                     ; fn_params := params
@@ -859,7 +859,7 @@ Section PRESERVATION.
     rs # r1 = rs # r2 ->
     rs # r2 = rs # r3 ->
     maj_voteR c ty r1 r2 r3 pc succ ->
-    exists rs', plus (@step Builtins2.TwoVote Builtins2.VoteSemantics_TwoVote) tge
+    exists rs', plus (@step Builtins2.Two Builtins2.VoteSemantics_TwoVote) tge
              (State tstk
                     {| fn_sig := sig
                     ; fn_params := params
@@ -956,7 +956,8 @@ Section PRESERVATION.
     Qed.
 
   Section VOTE.
-  Context {T: Type} {vsem: Builtins2.VoteSemantics T}.
+  (* Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}. *)
+  Context {VT: Builtins2.vote_type}.
 
   Lemma maj_voteR_step
     r1 r2 r3 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
@@ -981,7 +982,8 @@ Section PRESERVATION.
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
     intros Hact Hr2 Hr3 Hmaj.
-    destruct vsem.
+    destruct VT.
+    (* destruct vsem. *)
     - eapply maj_voteR_three_step; eauto.
     - eapply maj_voteR_two_step; eauto.
   Qed.

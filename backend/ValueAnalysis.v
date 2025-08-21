@@ -1944,6 +1944,9 @@ Definition avalue (a: VA.t) (r: reg) : aval :=
   | VA.State ae am => AE.get r ae
   end.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Lemma avalue_sound:
   forall cunit prog s f sp pc e m r,
   sound_state prog (State s f (Vptr sp Ptrofs.zero) pc e m) ->
@@ -2041,3 +2044,5 @@ Proof.
   intros. InvSoundState. rewrite AN. exists bc; split; auto.
   eapply aaddr_arg_sound_1; eauto.
 Qed.
+
+End VOTE.

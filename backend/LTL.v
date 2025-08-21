@@ -162,7 +162,7 @@ Inductive state : Type :=
 
 
 Section VOTE.
-Context {VT: Type} {vsem: Builtins2.VoteSemantics VT}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section RELSEM.
 

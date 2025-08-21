@@ -1156,3 +1156,5 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+End VOTE.

@@ -441,7 +441,7 @@ Proof.
 Qed.
 
 Section VOTE.
-Context {VT: Type} {vsem: Builtins2.VoteSemantics VT}.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** * Semantic preservation *)
 
