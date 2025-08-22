@@ -163,9 +163,6 @@ Definition transf_builtin
   end.
  *)
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
-
 Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
                         (pc: node) (instr: instruction) :=
   match an!!pc with
@@ -258,5 +255,3 @@ Definition transf_fundef (rm: romem) (fd: fundef) : fundef :=
 Definition transf_program (p: program) : program :=
   let rm := romem_for p in
   transform_program (transf_fundef rm) p.
-
-End VOTE.

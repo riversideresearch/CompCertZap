@@ -29,6 +29,9 @@ Require Import RTLcolor RTLfault RTLtolerant.
   or ``improves upon'' [beh']  by replacing a ``going wrong'' behavior
   with a more defined behavior. *)
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Theorem transf_c_program_preservation:
   forall p tp beh,
   transf_c_program p = OK tp ->
@@ -41,7 +44,7 @@ Qed.
 
 Theorem transf_c_program_to_rtl_preservation:
   forall p tp beh,
-  transf_c_program_to_rtl Replicate.Two p = OK tp ->
+  transf_c_program_to_rtl p = OK tp ->
   program_behaves (RTL.semantics tp) beh ->
   exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh.
 Proof.
@@ -49,15 +52,16 @@ Proof.
   eapply transf_c_program_to_rtl_correct; eauto.
 Qed.
 
+End VOTE.
+
 (* TODO: change this to something like 1) not show existence of tp'
    but assume that it exists, 2) assume p has behavior beh', 3)
    behavior_improves beh' beh, and 4) any beh'' of tp' also improve
    beh'.  *)
 Lemma transf_c_program_to_rtl_behaves p tp beh :
-  transf_c_program_to_rtl Replicate.Two p = OK tp ->
-  program_behaves (RTL.semantics tp) beh ->
-  exists tp', transf_c_program_to_rtl Replicate.Three p = OK tp' /\
-           program_behaves (RTL.semantics tp') beh.
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh ->
+  program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh.
 Admitted.
 
 (* (* This is stronger and should probably also be true. *) *)

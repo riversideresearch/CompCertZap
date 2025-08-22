@@ -538,49 +538,69 @@ Qed.
 Definition vote_float3_sem : builtin_sem Xfloat :=
   mkbuiltin_v3t Xfloat vote_float3 vote_float3_well_typed vote_float3_compat_inject.
 
+Record vote_sem : Type :=
+  { vote_sem_int : builtin_sem Xint
+  ; vote_sem_long : builtin_sem Xlong
+  ; vote_sem_single : builtin_sem Xsingle
+  ; vote_sem_float : builtin_sem Xfloat
+  }.
+
 Inductive vote_type : Type :=
-| Three
-| Two.
+| Two
+| Three.
+
+Definition vote_type_sem (vty: vote_type) : vote_sem :=
+  match vty with
+  | Two => {| vote_sem_int := vote_int_sem
+          ; vote_sem_long := vote_long_sem
+          ; vote_sem_single := vote_single_sem
+          ; vote_sem_float := vote_float_sem |}
+  | Three => {| vote_sem_int := vote_int3_sem
+            ; vote_sem_long := vote_long3_sem
+            ; vote_sem_single := vote_single3_sem
+            ; vote_sem_float := vote_float3_sem |}
+  end.
 
 (* Include property that when all three arguments are equal, the
    output is equal to them. *)
 Definition vote_sem_ok {tret: xtype} (sem : builtin_sem tret) : Prop :=
   forall a, Val.has_rettype a tret -> sem.(bs_sem _) [a; a; a] = Some a.
 
-Class VoteSemantics (V : vote_type) : Type :=
-  { vote_sem_int : builtin_sem Xint
-  ; vote_sem_long : builtin_sem Xlong
-  ; vote_sem_single : builtin_sem Xsingle
-  ; vote_sem_float : builtin_sem Xfloat
-  ; vote_sem_int_ok : vote_sem_ok vote_sem_int
-  ; vote_sem_long_ok : vote_sem_ok vote_sem_long
-  ; vote_sem_single_ok : vote_sem_ok vote_sem_single
-  ; vote_sem_float_ok : vote_sem_ok vote_sem_float
+Class VoteSemantics (vty : vote_type) : Prop :=
+  { vote_sem_int_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_int)
+  ; vote_sem_long_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_long)
+  ; vote_sem_single_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_single)
+  ; vote_sem_float_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_float)
   }.
 
-Definition replicate_builtin_sem {S: vote_type} `{VoteSemantics S} (b: replicate_builtin)
+(* Class VoteSemantics (V : vote_type) : Type := *)
+(*   { vote_sem_int : builtin_sem Xint *)
+(*   ; vote_sem_long : builtin_sem Xlong *)
+(*   ; vote_sem_single : builtin_sem Xsingle *)
+(*   ; vote_sem_float : builtin_sem Xfloat *)
+(*   ; vote_sem_int_ok : vote_sem_ok vote_sem_int *)
+(*   ; vote_sem_long_ok : vote_sem_ok vote_sem_long *)
+(*   ; vote_sem_single_ok : vote_sem_ok vote_sem_single *)
+(*   ; vote_sem_float_ok : vote_sem_ok vote_sem_float *)
+(*   }. *)
+
+Definition replicate_builtin_sem {VT: vote_type} `{VoteSemantics VT}
+  (b: replicate_builtin)
   : builtin_sem (sig_res (replicate_builtin_sig b)) :=
   match b with
   | BI_smove_int => smove_int_sem
   | BI_smove_long => smove_long_sem
   | BI_smove_single => smove_single_sem
   | BI_smove_float => smove_float_sem
-  | BI_vote_int => vote_sem_int
-  | BI_vote_long => vote_sem_long
-  | BI_vote_single => vote_sem_single
-  | BI_vote_float => vote_sem_float
+  | BI_vote_int => (vote_type_sem VT).(vote_sem_int)
+  | BI_vote_long => (vote_type_sem VT).(vote_sem_long)
+  | BI_vote_single => (vote_type_sem VT).(vote_sem_single)
+  | BI_vote_float => (vote_type_sem VT).(vote_sem_float)
   end.
 
 Section VOTE_SEMANTICS.
 
-(* Inductive TwoVote : Type := . *)
-(* #[export] *)
-Program Instance VoteSemantics_Two : VoteSemantics Two :=
-  { vote_sem_int := vote_int_sem
-  ; vote_sem_long := vote_long_sem
-  ; vote_sem_single := vote_single_sem
-  ; vote_sem_float := vote_float_sem
-  }.
+Program Instance VoteSemantics_Two : VoteSemantics Two.
 Next Obligation.
   intros a Ha; simpl; f_equal.
   unfold vote_int.
@@ -597,14 +617,32 @@ Admitted.
 Next Obligation.
 Admitted.
 
-(* Inductive ThreeVote : Type := . *)
-(* #[export] *)
-Program Instance VoteSemantics_Three : VoteSemantics Three :=
-  { vote_sem_int := vote_int3_sem
-  ; vote_sem_long := vote_long3_sem
-  ; vote_sem_single := vote_single3_sem
-  ; vote_sem_float := vote_float3_sem
-  }.
+
+(* (* Inductive TwoVote : Type := . *) *)
+(* (* #[export] *) *)
+(* Program Instance VoteSemantics_Two : VoteSemantics Two := *)
+(*   { vote_sem_int := vote_int_sem *)
+(*   ; vote_sem_long := vote_long_sem *)
+(*   ; vote_sem_single := vote_single_sem *)
+(*   ; vote_sem_float := vote_float_sem *)
+(*   }. *)
+(* Next Obligation. *)
+(*   intros a Ha; simpl; f_equal. *)
+(*   unfold vote_int. *)
+(*   destruct a; auto; try contradiction. *)
+(*   - destruct (Int.eq_dec _ _); simpl; congruence. *)
+(*   - simpl in Ha; rewrite Ha; simpl. *)
+(*     destruct (eq_block _ _); simpl; try congruence. *)
+(*     destruct (Ptrofs.eq_dec _ _); simpl; congruence. *)
+(* Qed. *)
+(* Next Obligation. *)
+(* Admitted. *)
+(* Next Obligation. *)
+(* Admitted. *)
+(* Next Obligation. *)
+(* Admitted. *)
+
+Program Instance VoteSemantics_Three : VoteSemantics Three.
 Next Obligation.
     intros a Ha; simpl; f_equal.
     unfold vote_int3.
@@ -620,6 +658,30 @@ Next Obligation.
 Admitted.
 Next Obligation.
 Admitted.
+
+(* (* Inductive ThreeVote : Type := . *) *)
+(* (* #[export] *) *)
+(* Program Instance VoteSemantics_Three : VoteSemantics Three := *)
+(*   { vote_sem_int := vote_int3_sem *)
+(*   ; vote_sem_long := vote_long3_sem *)
+(*   ; vote_sem_single := vote_single3_sem *)
+(*   ; vote_sem_float := vote_float3_sem *)
+(*   }. *)
+(* Next Obligation. *)
+(*     intros a Ha; simpl; f_equal. *)
+(*     unfold vote_int3. *)
+(*     destruct a; auto; try contradiction. *)
+(*     - destruct (Int.eq_dec _ _); simpl; congruence. *)
+(*     - simpl in Ha; rewrite Ha; simpl. *)
+(*       destruct (eq_block _ _); simpl; try congruence. *)
+(*       destruct (Ptrofs.eq_dec _ _); simpl; congruence. *)
+(* Qed. *)
+(* Next Obligation. *)
+(* Admitted. *)
+(* Next Obligation. *)
+(* Admitted. *)
+(* Next Obligation. *)
+(* Admitted. *)
 
 End VOTE_SEMANTICS.
 
