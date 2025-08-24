@@ -54,15 +54,15 @@ Qed.
 
 End VOTE.
 
-(* TODO: change this to something like 1) not show existence of tp'
-   but assume that it exists, 2) assume p has behavior beh', 3)
-   behavior_improves beh' beh, and 4) any beh'' of tp' also improve
-   beh'.  *)
-Lemma transf_c_program_to_rtl_behaves p tp beh :
-  transf_c_program_to_rtl p = OK tp ->
-  program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh ->
-  program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh.
-Admitted.
+(* (* TODO: change this to something like 1) not show existence of tp' *)
+(*    but assume that it exists, 2) assume p has behavior beh', 3) *)
+(*    behavior_improves beh' beh, and 4) any beh'' of tp' also improve *)
+(*    beh'.  *) *)
+(* Lemma transf_c_program_to_rtl_behaves p tp beh : *)
+(*   transf_c_program_to_rtl p = OK tp -> *)
+(*   program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh -> *)
+(*   program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh. *)
+(* Admitted. *)
 
 (* (* This is stronger and should probably also be true. *) *)
 (* Lemma transf_c_program_to_rtl_behaves' p tp : *)
@@ -76,62 +76,73 @@ Admitted.
    checkable, so we can implement a Boolean decider to check it
    (unfortunately that means repeating the entire compilation to have
    the other version of the program to check against). *)
-Lemma transf_c_program_to_rtl_match_votes p tp tp' :
-  transf_c_program_to_rtl Replicate.Two p = OK tp ->
-  transf_c_program_to_rtl Replicate.Three p = OK tp' ->
-  match_votes_program tp' tp.
-Admitted.
+(* Lemma transf_c_program_to_rtl_match_votes p tp tp' : *)
+(*   transf_c_program_to_rtl Replicate.Two p = OK tp -> *)
+(*   transf_c_program_to_rtl Replicate.Three p = OK tp' -> *)
+(*   match_votes_program tp' tp. *)
+(* Admitted. *)
 
 (* Lemma transf_c_program_to_rtl_wc_program p tp : *)
 (*   transf_c_program_to_rtl Replicate.Three p = OK tp -> *)
 (*   exists col, wc_program col tp. *)
 (* Admitted. *)
 
-Theorem transf_c_program_to_rtl_preservation_faulty:
-  forall p tp beh,
-  transf_c_program_to_rtl Replicate.Two p = OK tp ->
-  program_behaves (RTL.semantics tp) beh ->
-  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh
-          /\ (check_program tp = true ->
-             forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
-                     behavior_improves beh' fbeh).
-Proof.
-  intros p tp beh Hp Hbeh.
-  pose proof Hp as Hp'.
-  eapply transf_c_program_to_rtl_behaves in Hp'; eauto.
-  destruct Hp' as (tp' & Hp' & Hbeh').
-  generalize (transf_c_program_to_rtl_match_votes _ _ _ Hp Hp').
-  intro Hmatchvotes.
-  pose proof Hbeh' as H.
-  eapply backward_simulation_behavior_improves in H.
-  2: { eapply transf_c_program_to_rtl_correct; eauto. }
-  destruct H as (beh1 & Hbeh1 & Himp).
-  exists beh1; repeat split; auto.
-  
-  (* intros fbeh Hfbeh. *)
-  (* eapply behavior_improves_trans; eauto. *)
-  (* apply transf_c_program_to_rtl_wc_program in Hp'. *)
-  (* destruct Hp' as [col Hwc]. *)
+(* TODO: if source program doesn't contain any vote builtins, then
+   2-vote and 3-vote semantics are equivalent for compiled
+   programs. Then, there can be two different versions of the lemma
+   below: one that assumes tp has a behavior wrt. 3-voting, and
+   another that assumes tp has a behavior wrt. 2-voting and
+   additionally that the source program doesn't contain any votes. *)
 
-  intros Hcheck fbeh Hfbeh.
-  eapply behavior_improves_trans; eauto.
-  (* apply transf_c_program_to_rtl_wc_program in Hp'. *)
-  (* destruct Hp' as [col Hwc]. *)
-
-  (* eapply faulty_behavior_improves' in Hfbeh; eauto. *)
-  (* destruct Hfbeh as (beh1' & Hbeh1' & Himp'). *)
-  (* (* Need to know that beh and beh1' are equal (RTL.semantics *)
-  (* determinate, I guess). Aaand that's where the extensionality axiom *)
-  (* is needed. *) *)
+(* Theorem transf_c_program_to_rtl_preservation_faulty: *)
+(*   forall p tp beh, *)
+(*   transf_c_program_to_rtl p = OK tp -> *)
+(*   program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh -> *)
+(*   exists beh', program_behaves (@Csem.semantics Builtins2.Two Builtins2.VoteSemantics_Two p) beh' *)
+(*           /\ behavior_improves beh' beh *)
+(*           /\ (check_program tp = true -> *)
+(*              forall fbeh, program_behaves (faulty_semantics tp) fbeh -> *)
+(*                      behavior_improves beh' fbeh). *)
+(* Proof. *)
+(*   intros p tp beh Hp Hbeh. *)
+(*   pose proof Hp as Hp'. *)
+(*   eapply transf_c_program_to_rtl_behaves in Hp'; eauto. *)
+(*   destruct Hp' as (tp' & Hp' & Hbeh'). *)
+(*   generalize (transf_c_program_to_rtl_match_votes _ _ _ Hp Hp'). *)
+(*   intro Hmatchvotes. *)
+(*   pose proof Hbeh' as H. *)
+(*   eapply backward_simulation_behavior_improves in H. *)
+(*   2: { eapply transf_c_program_to_rtl_correct; eauto. } *)
+(*   destruct H as (beh1 & Hbeh1 & Himp). *)
+(*   exists beh1; repeat split; auto. *)
   
-  eapply faulty_behavior_improves; eauto.
-  apply check_program_sound in Hcheck.
-  eapply match_votes_program_wc'; eauto.
-Qed.
+(*   (* intros fbeh Hfbeh. *) *)
+(*   (* eapply behavior_improves_trans; eauto. *) *)
+(*   (* apply transf_c_program_to_rtl_wc_program in Hp'. *) *)
+(*   (* destruct Hp' as [col Hwc]. *) *)
+
+(*   intros Hcheck fbeh Hfbeh. *)
+(*   eapply behavior_improves_trans; eauto. *)
+(*   (* apply transf_c_program_to_rtl_wc_program in Hp'. *) *)
+(*   (* destruct Hp' as [col Hwc]. *) *)
+
+(*   (* eapply faulty_behavior_improves' in Hfbeh; eauto. *) *)
+(*   (* destruct Hfbeh as (beh1' & Hbeh1' & Himp'). *) *)
+(*   (* (* Need to know that beh and beh1' are equal (RTL.semantics *) *)
+(*   (* determinate, I guess). Aaand that's where the extensionality axiom *) *)
+(*   (* is needed. *) *) *)
+  
+(*   eapply faulty_behavior_improves; eauto. *)
+(*   apply check_program_sound in Hcheck. *)
+(*   eapply match_votes_program_wc'; eauto. *)
+(* Qed. *)
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is
   one of the possible behaviors of the source C code. *)
+
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Theorem transf_c_program_is_refinement:
   forall p tp,
@@ -393,3 +404,5 @@ Proof.
 Qed.
 
 End SEPARATE_COMPILATION.
+
+End VOTE.

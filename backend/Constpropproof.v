@@ -502,16 +502,16 @@ Opaque builtin_strength_reduction.
   destruct ef; auto.
   destruct res; auto.
   destruct (lookup_builtin_function name sg) as [bf|] eqn:LK; auto.
-  destruct (eval_static_builtin_function ae am rm bf args) as [a|] eqn:ES; auto.
-  destruct (const_for_result a) as [cop|] eqn:CR; auto.
-  clear DFL. simpl in H1; red in H1; rewrite LK in H1; inv H1.
-  exploit const_for_result_correct; eauto. 
-  eapply eval_static_builtin_function_sound; eauto.
-  intros (v' & A & B).
-  left; econstructor; econstructor; split.
-  eapply exec_Iop; eauto.
-  eapply match_states_succ; eauto.
-  apply set_reg_lessdef; auto.
+  (* destruct (eval_static_builtin_function ae am rm bf args) as [a|] eqn:ES; auto. *)
+  (* destruct (const_for_result a) as [cop|] eqn:CR; auto. *)
+  (* clear DFL. simpl in H1; red in H1; rewrite LK in H1; inv H1. *)
+  (* exploit const_for_result_correct; eauto.  *)
+  (* eapply eval_static_builtin_function_sound; eauto. *)
+  (* intros (v' & A & B). *)
+  (* left; econstructor; econstructor; split. *)
+  (* eapply exec_Iop; eauto. *)
+  (* eapply match_states_succ; eauto. *)
+  (* apply set_reg_lessdef; auto. *)
 - (* Icond, preserved *)
   rename pc'0 into pc. TransfInstr.
   set (ac := eval_static_condition cond (aregs ae args)).

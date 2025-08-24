@@ -228,7 +228,7 @@ Definition transf_c_program_to_rtl (p: Csyntax.program)
 (** Force [Initializers] and [Cexec] to be extracted as well. *)
 
 Definition transl_init := Initializers.transl_init.
-Definition cexec_do_step := Cexec.do_step.
+Definition cexec_do_step := @Cexec.do_step.
 
 (** The following lemmas help reason over compositions of passes. *)
 
@@ -483,6 +483,9 @@ Proof.
   intros. unfold match_if in *. destruct (flag tt). eauto. subst. apply forward_simulation_identity.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Theorem cstrategy_semantic_preservation:
   forall p tp,
   match_prog p tp ->
@@ -710,3 +713,5 @@ Proof.
   destruct H2 as (rtl_program & P & Q).
   exists rtl_program; split; auto. eapply c_semantic_preservation_rtl; eauto.
 Qed.
+
+End VOTE.

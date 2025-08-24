@@ -204,15 +204,17 @@ Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
           match ef, res with
           | EF_builtin name sg, BR rd =>
               match lookup_builtin_function name sg with
-              | Some bf => 
-                  match eval_static_builtin_function ae am rm bf args with
-                  | Some a =>
-                      match const_for_result a with
-                      | Some cop => Iop cop nil rd s
-                      | None => dfl
-                      end
-                 | None => dfl
-                 end
+              | Some bf => dfl
+                 (*  match @eval_static_builtin_function *)
+                 (*          Builtins2.Two Builtins2.VoteSemantics_Two *)
+                 (*          ae am rm bf args with *)
+                 (*  | Some a => *)
+                 (*      match const_for_result a with *)
+                 (*      | Some cop => Iop cop nil rd s *)
+                 (*      | None => dfl *)
+                 (*      end *)
+                 (* | None => dfl *)
+                 (* end *)
              | None => dfl
              end
           | _, _ => dfl
