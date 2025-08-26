@@ -17,7 +17,7 @@ Require Import Coqlib Errors.
 Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
-Require Import RTLcolor RTLfault RTLtolerant.
+Require Import RTLcolor RTLfault RTLtolerant Novotes.
 
 (** * Preservation of whole-program behaviors *)
 
@@ -87,13 +87,6 @@ End VOTE.
 (*   exists col, wc_program col tp. *)
 (* Admitted. *)
 
-(* TODO: if source program doesn't contain any vote builtins, then
-   2-vote and 3-vote semantics are equivalent for compiled
-   programs. Then, there can be two different versions of the lemma
-   below: one that assumes tp has a behavior wrt. 3-voting, and
-   another that assumes tp has a behavior wrt. 2-voting and
-   additionally that the source program doesn't contain any votes. *)
-
 (* Theorem transf_c_program_to_rtl_preservation_faulty: *)
 (*   forall p tp beh, *)
 (*   transf_c_program_to_rtl p = OK tp -> *)
@@ -136,6 +129,77 @@ End VOTE.
 (*   apply check_program_sound in Hcheck. *)
 (*   eapply match_votes_program_wc'; eauto. *)
 (* Qed. *)
+
+(* (* TODO: prove that 3-vote behavior implies 2-vote behavior? or that *)
+(*    2-vote behavior always improves on 3-vote behavior. *) *)
+(* Lemma Two_improves_Three p beh beh' : *)
+(*   program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two p) beh -> *)
+(*   program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three p) beh' -> *)
+(*   behavior_improves beh beh'. *)
+(* Admitted. *)
+
+Theorem transf_c_program_to_rtl_preservation_faulty:
+  forall p tp beh,
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh ->
+  exists beh', program_behaves (@Csem.semantics Builtins2.Three Builtins2.VoteSemantics_Three p) beh'
+          /\ behavior_improves beh' beh
+          /\ (check_program tp = true ->
+             forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
+                     behavior_improves beh' fbeh).
+Proof.
+  intros p tp beh Hp Hbeh.
+  pose proof Hp as Hp'.
+  pose proof Hbeh as H.
+  eapply backward_simulation_behavior_improves in H.
+  2: { eapply transf_c_program_to_rtl_correct; eauto. }
+  destruct H as (beh1 & Hbeh1 & Himp).
+  exists beh1; repeat split; auto.
+  intros Hcheck fbeh Hfbeh.
+  eapply behavior_improves_trans; eauto.
+  eapply faulty_behavior_improves; eauto.
+  apply check_program_sound; auto.
+Qed.
+
+(* TODO: if source program doesn't contain any vote builtins, then
+   2-vote and 3-vote semantics are equivalent for compiled
+   programs. Then, there can be two different versions of the lemma
+   below: one that assumes tp has a behavior wrt. 3-voting, and
+   another that assumes tp has a behavior wrt. 2-voting and
+   additionally that the source program doesn't contain any votes. *)
+
+Lemma no_votes_Two_implies_Three p tp beh :
+  no_votes p ->
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh ->
+  program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh.
+Proof.
+Admitted.
+
+Theorem transf_c_program_to_rtl_preservation_faulty':
+  forall p tp beh,
+  no_votes p ->
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh ->
+  exists beh', program_behaves (@Csem.semantics Builtins2.Two Builtins2.VoteSemantics_Two p) beh'
+          /\ behavior_improves beh' beh
+          /\ (check_program tp = true ->
+             forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
+                     behavior_improves beh' fbeh).
+Proof.
+  intros p tp beh Hnv Hp Hbeh.
+  pose proof Hp as Hp'.
+  pose proof Hbeh as H.
+  eapply backward_simulation_behavior_improves in H.
+  2: { eapply transf_c_program_to_rtl_correct; eauto. }
+  destruct H as (beh1 & Hbeh1 & Himp).
+  exists beh1; repeat split; auto.
+  intros Hcheck fbeh Hfbeh.
+  eapply behavior_improves_trans; eauto.
+  eapply faulty_behavior_improves; eauto.
+  - apply check_program_sound; auto.
+  - eapply no_votes_Two_implies_Three; eauto.
+Qed.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is
