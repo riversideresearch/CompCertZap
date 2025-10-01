@@ -18,10 +18,10 @@ Definition optionP {A : Type} (pred : A -> Prop) (o : option A) : Prop :=
   | Some a => pred a
   end.
 
-(** TODO: need color to be position dependent. Clear is a temporary
-    color that gets reset to red after a use. So, red registers are
-    variously red or clear throughout the function, but green and blue
-    registers never change colors. *)
+(** Color is position dependent. Clear is a temporary color that gets
+    reset to red after a use. So, red registers are variously red or
+    clear throughout the function, but green and blue registers never
+    change colors. *)
 
 Inductive color : Type :=
 | Red

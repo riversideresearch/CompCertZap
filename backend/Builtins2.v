@@ -552,17 +552,16 @@ Inductive vote_type : Type :=
 Definition vote_type_sem (vty: vote_type) : vote_sem :=
   match vty with
   | Two => {| vote_sem_int := vote_int_sem
-          ; vote_sem_long := vote_long_sem
-          ; vote_sem_single := vote_single_sem
-          ; vote_sem_float := vote_float_sem |}
+           ; vote_sem_long := vote_long_sem
+           ; vote_sem_single := vote_single_sem
+           ; vote_sem_float := vote_float_sem |}
   | Three => {| vote_sem_int := vote_int3_sem
-            ; vote_sem_long := vote_long3_sem
-            ; vote_sem_single := vote_single3_sem
-            ; vote_sem_float := vote_float3_sem |}
+             ; vote_sem_long := vote_long3_sem
+             ; vote_sem_single := vote_single3_sem
+             ; vote_sem_float := vote_float3_sem |}
   end.
 
-(* Include property that when all three arguments are equal, the
-   output is equal to them. *)
+(* When all three arguments are equal, the output is equal to them. *)
 Definition vote_sem_ok {tret: xtype} (sem : builtin_sem tret) : Prop :=
   forall a, Val.has_rettype a tret -> sem.(bs_sem _) [a; a; a] = Some a.
 
