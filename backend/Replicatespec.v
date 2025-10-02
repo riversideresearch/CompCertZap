@@ -220,7 +220,7 @@ Inductive match_instr
   : instruction -> Prop :=
 | match_Inop :
   forall n,
-    PTree.get pc c = Some (Inop n) ->
+    c ! pc = Some (Inop n) ->
     match_instr re rm c pc (Inop n)
 | match_Iop :
   forall op args1 args2 args3 res1 res2 res3 n1 n2 succ
@@ -378,13 +378,14 @@ Proof.
 Qed.
 
 Inductive match_function re rm : function -> function -> Prop :=
-| match_fun : forall sig params stacksize c c' entrypoint entrypoint' copy_regs
-                (RM_WF: rm_wf rm (all_regs_list params c))
-                (RM_INV: rm_inv params c rm)
-                (CODE: match_code re rm c c')
-                (COPY_REGS_OK: Forall (fun x => In x (all_regs_list params c)) copy_regs)
-                (* (COPY: copy_allR re rm c' (copy_regs ++ params) entrypoint' entrypoint), *)
-                (COPY: copy_allR re rm c' (app' copy_regs params) entrypoint' entrypoint),
+| match_fun :
+  forall sig params stacksize c c' entrypoint entrypoint' copy_regs
+    (RM_WF: rm_wf rm (all_regs_list params c))
+    (RM_INV: rm_inv params c rm)
+    (CODE: match_code re rm c c')
+    (COPY_REGS_OK: Forall (fun x => In x (all_regs_list params c)) copy_regs)
+    (* (COPY: copy_allR re rm c' (copy_regs ++ params) entrypoint' entrypoint), *)
+    (COPY: copy_allR re rm c' (app' copy_regs params) entrypoint' entrypoint),
     match_function re rm
       ({| fn_sig := sig
         ; fn_params := params
@@ -661,227 +662,233 @@ Proof.
   apply smoveR_ptree_set; auto.
 Qed.
 
-(** The translation algorithm meets its relational specification. *)
-Lemma iterM_match_instr
-  p i (l : list (positive * instruction)) re rm s s' pf u :
-  p < s.(st_nextnode) ->
-  In (p, i) l ->
-  iterM (transf_instr re rm) l s = RTLgen.OK u s' pf ->
+Lemma transf_instr_match_instr re rm p i u s s' pf :
+  transf_instr re rm (p, i) s = RTLgen.OK u s' pf ->
+  p < st_nextnode s ->
   match_instr re rm (st_code s') p i.
 Proof.
-  revert s s' pf; induction l; simpl; intros s s' pf Hlt Hin Htransf.
-  { contradiction. }
-  unfold RTLgen.bind in Htransf.
-  gen_case Hiter.
-  gen_case Htransf'.
-  destruct Hin as [?|Hin]; subst.
-  - simpl in Htransf'.
-    destruct i.
+  intros Htransf Hlt.
+  simpl in Htransf.
+  destruct i.
 
-    (* Inop *)
-    + unfold update_instr in Htransf'.
-      repeat lr_case.
-      simpl; constructor; rewrite PTree.gss; reflexivity.
+  (* Inop *)
+  - unfold update_instr in Htransf.
+    repeat lr_case.
+    simpl; constructor; rewrite PTree.gss; reflexivity.
 
-    (* Iop *)
-    + unfold RTLgen.bind in Htransf'.
-      repeat egen_case.
-      unfold update_instr in *.
-      repeat lr_case.
-      inv H; inv H1.
-      destruct (rm # r) eqn:Hrmr; simpl in *.
-      assert (p < st_nextnode s'0).
-      { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
-      eapply match_Iop with (pc := p)
-                            (n1 := s'0.(st_nextnode))
-                            (n2 := Pos.succ (s'0.(st_nextnode))); eauto.
+  (* Iop *)
+  - unfold RTLgen.bind in Htransf.
+    repeat egen_case.
+    unfold update_instr in *.
+    repeat lr_case.
+    inv H; inv H1.
+    destruct (rm # r) eqn:Hrmr; simpl in *.
+    (* assert (p < st_nextnode s). auto. *)
+    (* { inv s1; simpl in *; unfold Ple in *; lia. } *)
+    eapply match_Iop with (pc := p)
+                          (n1 := s.(st_nextnode))
+                          (n2 := Pos.succ (s.(st_nextnode))); eauto.
       { apply rm_l_map_rm. }
-      * rewrite 2!PTree.gso; try lia.
-        rewrite PTree.gss; reflexivity.
-      * rewrite PTree.gso; try lia.
-        rewrite PTree.gss; reflexivity.
-      * rewrite PTree.gss; reflexivity.
+    + rewrite 2!PTree.gso; try lia.
+      rewrite PTree.gss; reflexivity.
+    + rewrite PTree.gso; try lia.
+      rewrite PTree.gss; reflexivity.
+    + rewrite PTree.gss; reflexivity.
 
-    (* Iload *)
-    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
-      repeat egen_case.
-      unfold update_instr in H2.
-      repeat lr_case; simpl.
-      destruct (rm # r) eqn:Hr.
-      eapply copy_to_shadows_smoveR in H0; eauto.
-      2: { simpl; lia. }
-      eapply match_iload with (n1:=n0); eauto.
-      3: { apply smoveR_ptree_set; eauto. }
-      2: { rewrite PTree.gss; auto. }
-      eapply maj_vote_regsR_ptree_set; auto.
-      eapply state_incr_maj_vote_regsR.
-      2: { eapply maj_vote_regs_maj_vote_regsR.
-           2: { eauto. }
-           clear Hiter; inv s0; unfold Ple in *; lia. }
-      intro pc; inv s5; auto.
+  (* Iload *)
+  - unfold RTLgen.bind in Htransf; simpl in Htransf.
+    repeat egen_case.
+    unfold update_instr in H2.
+    repeat lr_case; simpl.
+    destruct (rm # r) eqn:Hr.
+    eapply copy_to_shadows_smoveR in H0; eauto.
+    2: { simpl; lia. }
+    eapply match_iload with (n1:=n0); eauto.
+    3: { apply smoveR_ptree_set; eauto. }
+    2: { rewrite PTree.gss; auto. }
+    eapply maj_vote_regsR_ptree_set; auto.
+    eapply state_incr_maj_vote_regsR.
+    2: { eapply maj_vote_regs_maj_vote_regsR.
+         2: { eauto. }
+         auto. }
+    intro pc; inv s3; auto.
 
-    (* Istore *)
-    + unfold RTLgen.bind in Htransf'.
-      simpl in Htransf'.
-      gen_case Hmaj.
-      gen_case Hupd.
-      replace ((do succ <- maj_vote_regs re rm l0 p;
-                   let (r2, r3) := rm # r in maj_vote re r r2 r3 succ) s'0)
-        with (maj_vote_regs re rm (r :: l0) p s'0) in Hmaj by auto.
-      apply maj_vote_regs_maj_vote_regsR in Hmaj.
-      2: { clear Hiter; inv s0; unfold Ple in *; lia. }
-      unfold update_instr in Hupd.
-      repeat lr_case.
-      simpl in *.
-      inv s1; inv s3; inv pf; simpl in *; unfold Ple in *.
-      destruct (rm # r) eqn:Hrmr; simpl in *.
-      econstructor.
-      { eauto. }
-      2: { rewrite PTree.gss; reflexivity. }
-      apply maj_vote_regsR_ptree_set; auto.
+  (* Istore *)
+  - unfold RTLgen.bind in Htransf.
+    simpl in Htransf.
+    gen_case Hmaj.
+    gen_case Hupd.
+    replace ((do succ <- maj_vote_regs re rm l p;
+                 let (r2, r3) := rm # r in maj_vote re r r2 r3 succ) s)
+      with (maj_vote_regs re rm (r :: l) p s) in Hmaj by auto.
+    apply maj_vote_regs_maj_vote_regsR in Hmaj; auto.
+    (* 2: { clear Hiter; inv s0; unfold Ple in *; lia. } *)
+    unfold update_instr in Hupd.
+    repeat lr_case.
+    simpl in *.
+    inv s1; inv pf; simpl in *; unfold Ple in *.
+    destruct (rm # r) eqn:Hrmr; simpl in *.
+    econstructor.
+    { eauto. }
+    2: { rewrite PTree.gss; reflexivity. }
+    apply maj_vote_regsR_ptree_set; auto.
 
-    (* Icall *)
-    + simpl in Htransf'; unfold RTLgen.bind in Htransf'; simpl in Htransf'.
-      repeat egen_case.
-      unfold copy_to_shadows in H0.
-      destruct (rm # r) eqn:Hrmr.
-      unfold RTLgen.bind in H0.
-      unfold error in *.
-      destruct (smove (re r) r r0) eqn:Hmov1; gen_contra.
-      destruct (smove (re r) r r1) eqn:Hmov2; gen_contra.
-      repeat egen_case.
-      unfold update_instr in *.
-      repeat lr_case.
-      simpl in *.
-      assert (p < st_nextnode s'0).
-      { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
-      assert (Hn0: n0 < s'1.(st_nextnode)).
-      { eapply maj_vote_regs_succ_lt_nextnode.
-        2: { eauto. }
-        auto. }
-      apply maj_vote_regs_maj_vote_regsR in H; auto.
-      reserve_instr_inv.
-      simpl in *.
-      repeat state_incr_inv.
-      simpl in *; unfold Ple in *.
-      econstructor; eauto.
-      * repeat apply maj_vote_regsR_ptree_set; eauto.
-      * rewrite PTree.gss; reflexivity.
-      * econstructor; eauto.
-        { rewrite 2!PTree.gso; try lia.
-          rewrite PTree.gss; reflexivity. }
-        { rewrite PTree.gso; try lia.
-          rewrite PTree.gss; reflexivity. }
+  (* Icall *)
+  - simpl in Htransf; unfold RTLgen.bind in Htransf; simpl in Htransf.
+    repeat egen_case.
+    unfold copy_to_shadows in H0.
+    destruct (rm # r) eqn:Hrmr.
+    unfold RTLgen.bind in H0.
+    unfold error in *.
+    destruct (smove (re r) r r0) eqn:Hmov1; gen_contra.
+    destruct (smove (re r) r r1) eqn:Hmov2; gen_contra.
+    repeat egen_case.
+    unfold update_instr in *.
+    repeat lr_case.
+    simpl in *.
+    assert (p < st_nextnode s'0).
+    { clear H; inv s2; simpl in *; unfold Ple in *; lia. }
+    assert (Hn0: n0 < s'0.(st_nextnode)).
+    { eapply maj_vote_regs_succ_lt_nextnode.
+      2: { eauto. }
+      auto. }
+    apply maj_vote_regs_maj_vote_regsR in H; auto.
+    reserve_instr_inv.
+    simpl in *.
+    repeat state_incr_inv.
+    simpl in *; unfold Ple in *.
+    econstructor; eauto.
+    + repeat apply maj_vote_regsR_ptree_set; eauto.
+    + rewrite PTree.gss; reflexivity.
+    + econstructor; eauto.
+      { rewrite 2!PTree.gso; try lia.
+        rewrite PTree.gss; reflexivity. }
+      { rewrite PTree.gso; try lia.
+        rewrite PTree.gss; reflexivity. }
 
-    (* Itailcall *)
-    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
-      repeat egen_case.
-      unfold update_instr in *.
-      repeat lr_case.
-      simpl in *.
-      apply maj_vote_regs_maj_vote_regsR in H.
-      2: { clear Hiter; inv s0; unfold Ple in *; lia. }
-      repeat state_incr_inv.
-      simpl in *; unfold Ple in *.
-      econstructor; eauto.
-      * repeat apply maj_vote_regsR_ptree_set; eauto.
-      * rewrite PTree.gss; reflexivity.
+  (* Itailcall *)
+  - unfold RTLgen.bind in Htransf; simpl in Htransf.
+    repeat egen_case.
+    unfold update_instr in *.
+    repeat lr_case.
+    simpl in *.
+    apply maj_vote_regs_maj_vote_regsR in H; auto.
+    repeat state_incr_inv.
+    simpl in *; unfold Ple in *.
+    econstructor; eauto.
+    + repeat apply maj_vote_regsR_ptree_set; eauto.
+    + rewrite PTree.gss; reflexivity.
 
     (* Ibuiltin *)
-    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
-      destruct (reg_of_builtin_res b) eqn:Hb.
-      * repeat egen_case.
-        unfold update_instr in H2.
-        repeat lr_case; simpl.
-        destruct b; simpl in Hb; inv Hb.
-        destruct (rm # r) eqn:Hr.
-        eapply match_Ibuiltin_2.
-        { eapply maj_vote_regsR_ptree_set; auto.
-          eapply state_incr_maj_vote_regsR.
-          2: { eapply maj_vote_regs_maj_vote_regsR.
-               2: { eauto. }
-               clear Hiter; inv s0; unfold Ple in *; lia. }
-          intros; clear H0; inv s4; inv s5.
-          specialize (H2 pc); specialize (H5 pc).
-          destruct H2 as [H2 | H2]; auto. }
-        2: { eauto. }
-        rewrite PTree.gss; reflexivity.
-        apply smoveR_ptree_set; auto.
-        eapply copy_to_shadows_smoveR; eauto.
-        simpl; lia.
-      * repeat egen_case.
-        unfold update_instr in H0.
-        repeat lr_case; simpl.
-        eapply match_Ibuiltin_1.
-        { intro HC; inv HC; inv Hb. }
-        { eapply maj_vote_regsR_ptree_set; auto.
-          eapply state_incr_maj_vote_regsR.
-          2: { eapply maj_vote_regs_maj_vote_regsR.
-               2: { eauto. }
-               clear Hiter; inv s0; unfold Ple in *; lia. }
-          intros; inv s1; inv s3.
-          specialize (H2 pc); specialize (H5 pc).
-          destruct H2 as [H2 | H2]; auto. }
-        rewrite PTree.gss; reflexivity.
+  - unfold RTLgen.bind in Htransf; simpl in Htransf.
+    destruct (reg_of_builtin_res b) eqn:Hb.
+    + repeat egen_case.
+      unfold update_instr in H2.
+      repeat lr_case; simpl.
+      destruct b; simpl in Hb; inv Hb.
+      destruct (rm # r) eqn:Hr.
+      eapply match_Ibuiltin_2.
+      { eapply maj_vote_regsR_ptree_set; auto.
+        eapply state_incr_maj_vote_regsR.
+        2: { eapply maj_vote_regs_maj_vote_regsR.
+             2: { eauto. }
+             auto. }
+        intros; clear H0; inv s3; inv s4.
+        specialize (H2 pc); specialize (H5 pc).
+        destruct H2 as [H2 | H2]; auto. }
+      2: { eauto. }
+      rewrite PTree.gss; reflexivity.
+      apply smoveR_ptree_set; auto.
+      eapply copy_to_shadows_smoveR; eauto.
+      simpl; lia.
+    + repeat egen_case.
+      unfold update_instr in H0.
+      repeat lr_case; simpl.
+      eapply match_Ibuiltin_1.
+      { intro HC; inv HC; inv Hb. }
+      { eapply maj_vote_regsR_ptree_set; auto.
+        eapply state_incr_maj_vote_regsR.
+        2: { eapply maj_vote_regs_maj_vote_regsR.
+             2: { eauto. }
+             auto. }
+        intros; inv s1.
+        specialize (H2 pc).
+        destruct H2 as [H2 | H2]; auto. }
+      rewrite PTree.gss; reflexivity.
 
-    (* Icond *)
-    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
-      repeat egen_case.
-      unfold update_instr in *.
-      repeat lr_case.
-      simpl in *.
-      apply maj_vote_regs_maj_vote_regsR in H.
-      2: { clear Hiter; inv s0; unfold Ple in *; lia. }
-      repeat state_incr_inv.
-      simpl in *; unfold Ple in *.
-      econstructor; eauto.
-      * repeat apply maj_vote_regsR_ptree_set; eauto.
-      * rewrite PTree.gss; reflexivity.
+  (* Icond *)
+  - unfold RTLgen.bind in Htransf; simpl in Htransf.
+    repeat egen_case.
+    unfold update_instr in *.
+    repeat lr_case.
+    simpl in *.
+    apply maj_vote_regs_maj_vote_regsR in H; auto.
+    repeat state_incr_inv.
+    simpl in *; unfold Ple in *.
+    econstructor; eauto.
+    + repeat apply maj_vote_regsR_ptree_set; eauto.
+    + rewrite PTree.gss; reflexivity.
 
-    (* Ijumptable *)
-    + unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+  (* Ijumptable *)
+  - unfold RTLgen.bind in Htransf; simpl in Htransf.
+    destruct (rm # r) as [r2 r3] eqn:Hr.
+    unfold RTLgen.bind in Htransf; simpl in Htransf.
+    repeat egen_case.
+    unfold update_instr in *.
+    repeat lr_case.
+    simpl in *.
+    eapply maj_vote_maj_voteR in H1; eauto.
+    repeat state_incr_inv.
+    simpl in *; unfold Ple in *.
+    econstructor; eauto.
+    + repeat apply maj_voteR_ptree_set; eauto.
+    + rewrite PTree.gss; reflexivity.
+
+  (* Ireturn *)
+  - destruct o; simpl in *.
+    + unfold RTLgen.bind in Htransf; simpl in Htransf.
       destruct (rm # r) as [r2 r3] eqn:Hr.
-      unfold RTLgen.bind in Htransf'; simpl in Htransf'.
+      unfold RTLgen.bind in Htransf; simpl in Htransf.
       repeat egen_case.
       unfold update_instr in *.
       repeat lr_case.
       simpl in *.
       eapply maj_vote_maj_voteR in H1; eauto.
-      2: { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
       repeat state_incr_inv.
       simpl in *; unfold Ple in *.
       econstructor; eauto.
-      * repeat apply maj_voteR_ptree_set; eauto.
-      * rewrite PTree.gss; reflexivity.
+      { repeat apply maj_voteR_ptree_set; eauto. }
+      { rewrite PTree.gss; reflexivity. }
+    + unfold RTLgen.bind in Htransf; simpl in Htransf.
+      repeat egen_case.
+      unfold update_instr in *.
+      repeat lr_case; simpl.
+      econstructor.
+      rewrite PTree.gss; reflexivity.
+Qed.
 
-    (* Ireturn *)
-    + destruct o; simpl in *.
-      * unfold RTLgen.bind in Htransf'; simpl in Htransf'.
-        destruct (rm # r) as [r2 r3] eqn:Hr.
-        unfold RTLgen.bind in Htransf'; simpl in Htransf'.
-        repeat egen_case.
-        unfold update_instr in *.
-        repeat lr_case.
-        simpl in *.
-        eapply maj_vote_maj_voteR in H1; eauto.
-        2: { clear Hiter; inv s0; simpl in *; unfold Ple in *; lia. }
-        repeat state_incr_inv.
-        simpl in *; unfold Ple in *.
-        econstructor; eauto.
-        { repeat apply maj_voteR_ptree_set; eauto. }
-        { rewrite PTree.gss; reflexivity. }
-      * unfold RTLgen.bind in Htransf'; simpl in Htransf'.
-        repeat egen_case.
-        unfold update_instr in *.
-        repeat lr_case; simpl.
-        econstructor.
-        rewrite PTree.gss; reflexivity.
-
-  - unfold RTLgen.bind in Htransf'.
-    destruct u, u0.
-    assert (H: match_instr re rm (st_code s'0) p i).
-    { eapply IHl; eauto. }
-    eapply state_incr_match_instr; eauto.
+Lemma iterM_match_instr
+  (l : list (positive * instruction)) re rm s s' pf u :
+  iterM (transf_instr re rm) l s = RTLgen.OK u s' pf ->
+  forall p i,
+    p < s.(st_nextnode) ->
+    In (p, i) l ->
+    match_instr re rm (st_code s') p i.
+Proof.
+  revert s s' pf.
+  induction l; simpl; intros s s' pf Htransf p i Hlt Hin.
+  { contradiction. }
+  unfold RTLgen.bind in Htransf.
+  gen_case Hiter.
+  gen_case Htransf'.
+  destruct Hin as [?|Hin]; subst.
+  2: { unfold RTLgen.bind in Htransf'.
+       destruct u, u0.
+       assert (H: match_instr re rm (st_code s'0) p i).
+       { eapply IHl; eauto. }
+       eapply state_incr_match_instr; eauto. }
+  eapply transf_instr_match_instr; eauto.
+  clear Hiter; inv s0; unfold Ple in *; lia.
 Qed.
 
 Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
@@ -1357,7 +1364,7 @@ Proof.
   apply in_elements; auto.
 Qed.
 
-Lemma transf_function_match_fundef (f tf : fundef) :
+Theorem transf_function_match_fundef (f tf : fundef) :
   transf_fundef f = OK tf ->
   match_fundef f tf.
 Proof.
