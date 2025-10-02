@@ -293,7 +293,7 @@ Inductive match_instr
     [pc] in the original code [c], there is a matching code sequence
     at [pc] in the translated code [c'].*)
 Definition match_code (re : regenv) (rm : PMap.t (reg * reg)) (c c': code) : Prop :=
-  forall p i, c ! p = Some i -> match_instr re rm c' p i.
+  forall pc i, c ! pc = Some i -> match_instr re rm c' pc i.
 
 Inductive reg_used_in_instr (r : reg) : instruction -> Prop :=
 | reg_used_Iop_args : forall op args res succ,

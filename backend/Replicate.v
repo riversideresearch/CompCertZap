@@ -424,11 +424,11 @@ Program Definition init_state (f : function) : state :=
 Definition transf_fun' (re : regenv) (f : function) : Errors.res function :=
   match transf_fun re f (init_state f) with
   | Error err => Errors.Error err
-  | OK entrypoint s _ => Errors.OK {| fn_sig := f.(fn_sig);
-                                    fn_params := f.(fn_params);
-                                    fn_stacksize := f.(fn_stacksize);
-                                    fn_code := s.(st_code);
-                                    fn_entrypoint := entrypoint; |}
+  | OK entrypoint s _ => Errors.OK {| fn_sig := f.(fn_sig)
+                                   ; fn_params := f.(fn_params)
+                                   ; fn_stacksize := f.(fn_stacksize)
+                                   ; fn_code := s.(st_code)
+                                   ; fn_entrypoint := entrypoint |}
   end.
 
 (** Transform a function [f]:
