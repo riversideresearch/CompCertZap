@@ -578,3 +578,24 @@ Proof.
 Qed.
 
 End VOTE.
+
+Require Import Novotes.
+
+Section AGREE.
+  Variable p : program.
+  Definition sem := @semantics Builtins2.Three (Builtins2.VoteSemantics_Three) p.
+
+  Inductive at_vote : state -> Prop :=
+  | at_vote_state : forall stk f sp pc rs m ef args res pc',
+      (fn_code f)!pc = Some (Ibuiltin ef args res pc') ->
+      is_vote_builtin ef ->
+      at_vote (State stk f sp pc rs m).
+
+  Definition agreement (s : state) : Prop :=
+    initial_state p s ->
+    forall t s',
+      Star sem s t s' ->
+      at_vote s' ->
+      exists t' s'', Step sem s' t' s''.
+
+End AGREE.

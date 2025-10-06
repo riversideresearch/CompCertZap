@@ -168,9 +168,6 @@ Qed.
    another that assumes tp has a behavior wrt. 2-voting and
    additionally that the source program doesn't contain any votes. *)
 
-(* This should push through the rest of the compiler because each pass
-   is a forward simulation? *)
-
 Lemma no_votes_Two_implies_Three p tp beh :
   no_votes p -> 
   transf_c_program_to_rtl p = OK tp ->
