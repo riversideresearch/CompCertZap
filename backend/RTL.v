@@ -591,11 +591,12 @@ Section AGREE.
       is_vote_builtin ef ->
       at_vote (State stk f sp pc rs m).
 
-  Definition agreement (s : state) : Prop :=
-    initial_state p s ->
-    forall t s',
-      Star sem s t s' ->
-      at_vote s' ->
-      exists t' s'', Step sem s' t' s''.
+  Definition agreement : Prop :=
+    forall s,
+      initial_state p s ->
+      forall t s',
+        Star sem s t s' ->
+        at_vote s' ->
+        exists t' s'', Step sem s' t' s''.
 
 End AGREE.

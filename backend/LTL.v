@@ -325,3 +325,26 @@ Fixpoint successors_block (b: bblock) : list node :=
   | Lreturn :: _ => nil
   | instr :: b' => successors_block b'
   end.
+
+Require Import Novotes.
+
+Section AGREE.
+  Variable p : program.
+  Definition sem := @semantics Builtins2.Three (Builtins2.VoteSemantics_Three) p.
+
+  Inductive at_vote : state -> Prop :=
+  | at_vote_state : forall stk f sp pc ls m ef args res bb,
+      (fn_code f)!pc = Some bb ->
+      In (Lbuiltin ef args res) bb ->
+      is_vote_builtin ef ->
+      at_vote (State stk f sp pc ls m).
+
+  Definition agreement : Prop :=
+    forall s,
+      initial_state p s ->
+      forall t s',
+        Star sem s t s' ->
+        at_vote s' ->
+        exists t' s'', Step sem s' t' s''.
+
+End AGREE.

@@ -2549,3 +2549,54 @@ Qed.
 End PRESERVATION.
 
 End VOTE.
+
+Section AGREE.
+  Variable p : RTL.program.
+  Variable tp : LTL.program.
+
+  Definition sem := @RTL.semantics Builtins2.Three (Builtins2.VoteSemantics_Three) p.
+  Definition tsem := @LTL.semantics Builtins2.Three (Builtins2.VoteSemantics_Three) tp.
+  Hypothesis sim : backward_simulation sem tsem.
+
+  Variable pmem : mem.
+  Hypothesis p_init_mem: Genv.init_mem p = Some pmem.
+
+  Definition ge := Genv.globalenv p.
+
+  Variable bmain : block.
+  Hypothesis p_bmain : Genv.find_symbol ge p.(prog_main) = Some bmain.
+  
+  Variable fmain : RTL.fundef.
+  Hypothesis p_fmain_sig : RTL.funsig fmain = signature_main.
+  Hypothesis p_fmain : Genv.find_funct_ptr ge bmain = Some fmain.
+
+  Lemma preserve_agreement :
+    RTL.agreement p ->
+    LTL.agreement tp.
+  Proof.
+    unfold RTL.agreement.
+    intros Hagree ts Hinit t ts' Hstar Hatvote.
+    simpl in *.
+    
+    assert (Hinit_p: RTL.initial_state p (RTL.Callstate nil fmain nil pmem)).
+    { econstructor; eauto. }
+
+    inv sim.
+    generalize (bsim_match_initial_states props _ _ Hinit_p Hinit).
+    intros (i & s & Hinit_p' & Hmatch).
+    eapply Hagree in Hinit_p'.
+    (* destruct Hinit_p' *)
+    (* eapply (bsim_match_initial_states props) in Hinit_p. *)
+    
+  Admitted.
+
+(* Inductive initial_state (p: program): state -> Prop := *)
+(*   | initial_state_intro: forall b f m0, *)
+(*       let ge := Genv.globalenv p in *)
+(*       Genv.init_mem p = Some m0 -> *)
+(*       Genv.find_symbol ge p.(prog_main) = Some b -> *)
+(*       Genv.find_funct_ptr ge b = Some f -> *)
+(*       funsig f = signature_main -> *)
+(*       initial_state p (Callstate nil f nil m0). *)
+
+End AGREE.
