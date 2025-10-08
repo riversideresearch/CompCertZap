@@ -4,6 +4,8 @@
 CC=ccomp ./configure --enable-imprecise-c99-float-ops --disable-systhreads --build=aarch64-pc-linux --enable-shared=no
 ```
 
+Do steps in patch.py.
+
 # Fix linux header files
 
 Add to `/usr/lib/linux/uapi/arm64/asm/sigcontext.h`, above definition of `struct fpsimd_context`:

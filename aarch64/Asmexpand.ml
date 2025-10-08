@@ -475,6 +475,12 @@ let expand_builtin_inline name args res =
 
 (* Expansion of instructions *)
 
+let next_lbl : label ref = ref BinNums.Coq_xH
+let fresh_lbl () : label =
+  let lbl = !next_lbl in
+  next_lbl := BinPos.Pos.add !next_lbl BinNums.(Coq_xI Coq_xH);
+  lbl
+
 let expand_instruction instr =
   match instr with
   | Pallocframe (sz, ofs) ->
@@ -513,8 +519,24 @@ let expand_instruction instr =
      | _ ->
         assert false
      end
+  | Ptbnz (sz, r, i, tgt) ->
+     let l1, l2 = new_label (), new_label () in
+     emit (Ptbnz (sz, r, i, l1));
+     emit (Pb l2);
+     emit (Plabel l1);
+     emit (Pb tgt);
+     emit (Plabel l2)
+  | Ptbz (sz, r, i, tgt) ->
+     let l1, l2 = new_label (), new_label () in
+     emit (Ptbz (sz, r, i, l1));
+     emit (Pb l2);
+     emit (Plabel l1);
+     emit (Pb tgt);
+     emit (Plabel l2)
   | _ ->
      emit instr
+
+  (* | Ptbnz of isize * ireg * Int.int * label *)
 
 let int_reg_to_dwarf = function
   | X0 -> 0 | X1 -> 1 | X2 -> 2 | X3 -> 3 | X4 -> 4
@@ -540,9 +562,23 @@ let preg_to_dwarf = function
    | SP -> 31
    | _ -> assert false
 
+let max_label (c : code) : label =
+  (* let go (l : instruction list) (acc : BinNums.positive) : BinNums.positive = *)
+  (*   match l with *)
+  (*   | [] -> acc *)
+  (*   | x :: xs -> acc *)
+  (* in *)
+  (* go c BinNums.Coq_xH *)
+  List.fold_left (fun p instr ->
+      match instr with
+      | Plabel lbl -> max p lbl
+      | _ -> p)
+    BinNums.Coq_xH c
+
 let expand_function id fn =
   try
     set_current_function fn;
+    next_lbl := BinPos.Pos.add (max_label fn.fn_code) BinNums.(Coq_xI Coq_xH);
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
@@ -559,3 +595,4 @@ let expand_fundef id = function
 
 let expand_program (p: Asm.program) : Asm.program Errors.res =
   AST.transform_partial_program2 expand_fundef (fun id v -> Errors.OK v) p
+
