@@ -350,14 +350,10 @@ let expand_builtin_vstore chunk args =
      assert false
 
 let is_cond_branch = function
-  | Pbc _ -> true
-  | Ptbnz _ -> true
-  | Ptbz _ -> true
-  | Pcbnz _ -> true
-  | Pcbz _ -> true
+  | Pbc _ | Ptbnz _ | Ptbz _ | Pcbnz _ | Pcbz _ -> true
   | _ -> false
 
-let negate_cond = function
+let negate_testcond = function
   | TCeq -> TCne
   | TCne -> TCeq
   | TChs -> TClo
@@ -374,7 +370,7 @@ let negate_cond = function
 (** Negate a conditional branch instruction and update its target
     label to [new_tgt]. *)
 let negate_cond_branch new_tgt = function
-  | Pbc (cond, _) -> Pbc (negate_cond cond, new_tgt)
+  | Pbc (cond, _) -> Pbc (negate_testcond cond, new_tgt)
   | Ptbnz (sz, r, i, _) -> Ptbz (sz, r, i, new_tgt)
   | Ptbz (sz, r, i, _) -> Ptbnz (sz, r, i, new_tgt)
   | Pcbnz (sz, r, _) -> Pcbz (sz, r, new_tgt)
