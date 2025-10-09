@@ -349,6 +349,27 @@ let expand_builtin_vstore chunk args =
   | _ ->
      assert false
 
+let negate_cond = function
+  | TCeq -> TCne
+  | TCne -> TCeq
+  | TChs -> TClo
+  | TClo -> TChs
+  | TCmi -> TCpl
+  | TCpl -> TCmi
+  | TChi -> TCls
+  | TCls -> TChi
+  | TCge -> TClt
+  | TClt -> TCge
+  | TCgt -> TCle
+  | TCle -> TCgt
+
+(** Emit long-jump version of [Pbc (cond, tgt)]. *)
+let expand_pbc (cond : testcond) (tgt : label) : unit =
+  let lbl = new_label () in
+  emit (Pbc (negate_cond cond, lbl));
+  emit (Pb tgt);
+  emit (Plabel lbl)
+
 (** Generic majority vote. *)
 let maj_vote
       (mov : 'a -> 'a -> instruction)
@@ -364,18 +385,18 @@ let maj_vote
   if a = res || b = res then begin
       side_emit (mov res c);
       emit (cmp a b);
-      emit (Pbc (TCne, lbl_fix));
+      expand_pbc TCne lbl_fix
     end
   else if c = res then begin
       side_emit (mov res a);
       emit (cmp a c);
-      emit (Pbc (TCne, lbl_fix));
+      expand_pbc TCne lbl_fix
     end
   else begin
       side_emit (mov res c);
       emit (cmp a b);
-      emit (Pbc (TCne, lbl_fix));
-      emit (mov res a);
+      expand_pbc TCne lbl_fix;
+      emit (mov res a)
     end;
   side_emit (Pb lbl_done);
   emit (Plabel lbl_done)
@@ -475,20 +496,6 @@ let expand_builtin_inline name args res =
 
 (* Expansion of instructions *)
 
-let negate_cond = function
-  | TCeq -> TCne
-  | TCne -> TCeq
-  | TChs -> TClo
-  | TClo -> TChs
-  | TCmi -> TCpl
-  | TCpl -> TCmi
-  | TChi -> TCls
-  | TCls -> TChi
-  | TCge -> TClt
-  | TClt -> TCge
-  | TCgt -> TCle
-  | TCle -> TCgt
-
 let expand_instruction instr =
   match instr with
   | Pallocframe (sz, ofs) ->
@@ -528,30 +535,27 @@ let expand_instruction instr =
         assert false
      end
   | Pbc (cond, tgt) ->
-     let lbl = new_label () in
-     emit (Pbc (negate_cond cond, lbl));
-     emit (Pb tgt);
-     emit (Plabel lbl);
+     expand_pbc cond tgt
   | Ptbnz (sz, r, i, tgt) ->
      let lbl = new_label () in
      emit (Ptbz (sz, r, i, lbl));
      emit (Pb tgt);
-     emit (Plabel lbl);
+     emit (Plabel lbl)
   | Ptbz (sz, r, i, tgt) ->
      let lbl = new_label () in
      emit (Ptbnz (sz, r, i, lbl));
      emit (Pb tgt);
-     emit (Plabel lbl);
+     emit (Plabel lbl)
   | Pcbnz (sz, r, tgt) ->
      let lbl = new_label () in
      emit (Pcbz (sz, r, lbl));
      emit (Pb tgt);
-     emit (Plabel lbl);
+     emit (Plabel lbl)
   | Pcbz (sz, r, tgt) ->
      let lbl = new_label () in
      emit (Pcbnz (sz, r, lbl));
      emit (Pb tgt);
-     emit (Plabel lbl);
+     emit (Plabel lbl)
   | _ ->
      emit instr
 
@@ -598,4 +602,3 @@ let expand_fundef id = function
 
 let expand_program (p: Asm.program) : Asm.program Errors.res =
   AST.transform_partial_program2 expand_fundef (fun id v -> Errors.OK v) p
-
