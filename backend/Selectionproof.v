@@ -380,7 +380,7 @@ Lemma eval_sel_known_builtin:
   exists v', eval_expr tge sp e m le a v' /\ Val.lessdef v v'.
 Proof.
   intros until le; intros SEL ARGS SEM.
-  destruct bf as [bf|bf]; simpl in SEL.
+  destruct bf as [bf|bf|bf]; simpl in SEL.
 - destruct bf; try discriminate.
 + (* select *)
   inv ARGS; try discriminate. inv H0; try discriminate. inv H2; try discriminate. inv H3; try discriminate.
@@ -399,6 +399,7 @@ Proof.
   inv SEL.  
   simpl in SEM; inv SEM. apply eval_absfs; auto.
 - eapply eval_platform_builtin; eauto.
+- discriminate.
 Qed.
 
 End CMCONSTR.

@@ -19,6 +19,8 @@ open BinNums
 
 val emit: instruction -> unit
   (* Emit an instruction *)
+val side_emit: instruction -> unit
+  (* Emit an instruction to the side buffer *)
 val new_label: unit -> label
   (* Compute a fresh label *)
 val is_current_function_variadic: unit -> bool

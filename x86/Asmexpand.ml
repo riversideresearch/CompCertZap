@@ -339,6 +339,47 @@ let expand_fma args res i132 i213 i231 =
 
 (* Handling of compiler-inlined builtins *)
 
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
+      (cmp : 'a -> 'a -> instruction)
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+  if a == b || a == c || b == c then begin
+     raise (Error "ill-formed majority vote")
+  end;
+  assert (a <> b && a <> c && b <> c);
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  side_emit (Plabel lbl_fix);
+  if a = res || b = res then begin
+      side_emit (mov res c);
+      emit (cmp a b);
+      emit (Pjcc (Cond_ne, lbl_fix));
+    end
+  else if c = res then begin
+      side_emit (mov res a);
+      emit (cmp a c);
+      emit (Pjcc (Cond_ne, lbl_fix));
+    end
+  else begin
+      side_emit (mov res c);
+      emit (cmp a b);
+      emit (Pjcc (Cond_ne, lbl_fix));
+      emit (mov res a);
+    end;
+  side_emit (Pjmp_l lbl_done);
+  emit (Plabel lbl_done)
+
+(** Majority vote integers. *)
+let maj_vote_int = maj_vote
+                     (fun x y -> Pmov_rr (x, y))
+                     (fun x y -> Pcmpl_rr (x, y))
+
+(** Majority vote floats. *)
+let maj_vote_float = maj_vote
+                       (fun x y -> Pmovsd_ff (x, y))
+                       (fun x y -> Pcomiss_ff (x, y))
+
 let expand_builtin_inline name args res =
   match name, args, res with
   (* Integer arithmetic *)
@@ -485,6 +526,31 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
+
+  (* Shadow move *)
+  | "__builtin_smove_int", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__builtin_smove_long", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__builtin_smove_single", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pmovsd_ff (res, a))
+  | "__builtin_smove_float", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pmovsd_ff (res, a))
+
+  (* Majority vote *)
+  | "__builtin_vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__builtin_vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__builtin_vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+  | "__builtin_vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))

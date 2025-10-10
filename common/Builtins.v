@@ -19,15 +19,16 @@
 From Coq Require Import String.
 Require Import Coqlib.
 Require Import AST Integers Floats Values.
-Require Export Builtins0 Builtins1.
+Require Export Builtins0 Builtins1 Builtins2.
 
 Inductive builtin_function : Type :=
   | BI_standard (b: standard_builtin)
-  | BI_platform (b: platform_builtin).
+  | BI_platform (b: platform_builtin)
+  | BI_replicate (b: replicate_builtin).
 
 Definition eq_builtin_function: forall (x y: builtin_function), {x=y} + {x<>y}.
 Proof.
-  generalize eq_standard_builtin eq_platform_builtin; decide equality.
+  generalize eq_standard_builtin eq_platform_builtin eq_replicate_builtin; decide equality.
 Defined.
 Global Opaque eq_builtin_function.
 
@@ -35,12 +36,14 @@ Definition builtin_function_sig (b: builtin_function) : signature :=
   match b with
   | BI_standard b => standard_builtin_sig b
   | BI_platform b => platform_builtin_sig b
+  | BI_replicate b => replicate_builtin_sig b
   end.
 
 Definition builtin_function_sem (b: builtin_function) : builtin_sem (sig_res (builtin_function_sig b)) :=
   match b with
   | BI_standard b => standard_builtin_sem b
   | BI_platform b => platform_builtin_sem b
+  | BI_replicate b => replicate_builtin_sem b
   end.
 
 Lemma builtin_function_sem_inject: forall b vargs vres f vargs',
@@ -71,8 +74,11 @@ Definition lookup_builtin_function (name: string) (sg: signature) : option built
   | None => 
   match lookup_builtin platform_builtin_sig name sg platform_builtin_table with
   | Some b => Some (BI_platform b)
+  | None =>
+  match lookup_builtin replicate_builtin_sig name sg replicate_builtin_table with
+  | Some b => Some (BI_replicate b)
   | None => None
-  end end.
+  end end end.
 
 Lemma lookup_builtin_function_sig:
   forall name sg b, lookup_builtin_function name sg = Some b -> builtin_function_sig b = sg.
@@ -82,7 +88,7 @@ Proof.
   inv H. simpl. eapply lookup_builtin_sig; eauto.
   destruct (lookup_builtin platform_builtin_sig name sg platform_builtin_table) as [bp|] eqn:E'.
   inv H. simpl. eapply lookup_builtin_sig; eauto.
+  destruct (lookup_builtin replicate_builtin_sig name sg replicate_builtin_table) as [bp|] eqn:E''.
+  inv H. simpl. eapply lookup_builtin_sig; eauto.
   discriminate.
 Qed.
-
-
