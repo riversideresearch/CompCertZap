@@ -159,6 +159,8 @@ let gnu_prepro_actions = [
   Exact "-MP", Self gnu_prepro_opt;
   Exact "-MT", String (gnu_prepro_opt_key "-MT");
   Exact "-MQ", String (gnu_prepro_opt_key "-MQ");
+  Exact "-MD", Self gnu_prepro_opt;
+  Exact "-MMD", Self gnu_prepro_opt;
   Exact "-nostdinc", Self (fun s -> gnu_prepro_opt s; use_standard_headers := false);
   Exact "-imacros", String (gnu_prepro_opt_key "-imacros");
   Exact "-idirafter", String (gnu_prepro_opt_key "-idirafter");
@@ -190,6 +192,9 @@ let gnu_prepro_help =
 {|  -M            Output a rule suitable for make describing the
                  dependencies of the main source file
   -MM            Like -M but do not mention system header files
+  -MD            Like -M but writes output to a .d file as a side-
+                 effect of compilation
+  -MMD           Like -MD but do not mention system header files
   -MF <file>     Specifies file <file> as output file for -M or -MM
   -MG            Assumes missing header files are generated for -M
   -MP            Add a phony target for each dependency other than

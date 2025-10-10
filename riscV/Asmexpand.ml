@@ -156,7 +156,7 @@ let expand_annot_val kind txt targ args res =
 
 let offset_in_range ofs =
   let ofs = Z.to_int64 ofs in -2048L <= ofs && ofs < 2048L
-
+  
 let memcpy_small_arg sz arg tmp =
   match arg with
   | BA (IR r) ->
@@ -485,7 +485,7 @@ let expand_clz ~sixtyfour ~splitlong =
   (* N := bitsize of X's type (32 or 64) *)
   expand_loadimm32 X7 (coqint_of_camlint
                          (if sixtyfour || splitlong then 64l else 32l));
-  (* S := initial shift amount (16 or 32) *)
+  (* S := initial shift amount (16 or 32) *)                         
   expand_loadimm32 X8 (coqint_of_camlint (if sixtyfour then 32l else 16l));
   if splitlong then begin
     (* if (Xhigh == 0) goto lbl1 *)
@@ -526,7 +526,7 @@ let expand_ctz ~sixtyfour ~splitlong =
   (* N := bitsize of X's type (32 or 64) *)
   expand_loadimm32 X7 (coqint_of_camlint
                          (if sixtyfour || splitlong then 64l else 32l));
-  (* S := initial shift amount (16 or 32) *)
+  (* S := initial shift amount (16 or 32) *)                         
   expand_loadimm32 X8 (coqint_of_camlint (if sixtyfour then 32l else 16l));
   if splitlong then begin
     (* if (Xlow == 0) goto lbl1 *)
@@ -557,63 +557,26 @@ let expand_ctz ~sixtyfour ~splitlong =
                      else Psrliw(X6, X X6, coqint_of_camlint 31l));
   emit (Psubw(X7, X X7, X X6))
 
+(* Full register width "and", "xor" *)
+
+let _Pand (r, a1, a2) =
+  if Archi.ptr64 then Pandl(r, a1, a2) else Pandw(r, a1, a2)
+let _Pxor (r, a1, a2) =
+  if Archi.ptr64 then Pxorl(r, a1, a2) else Pxorw(r, a1, a2)
+
+(* Conditional move *)
+(* res <- if cond then arg1 else arg2
+   cond must be 0 or 1. *)
+
+let expand_csel res cond arg1 arg2 =
+  emit (Psubw(X31, X0, cond)); (* X31 = -1 if cond = 1, 0 if cond = 0 *)
+  emit (_Pxor(X1, arg1, arg2));
+  emit (_Pand(X1, X X1, X X31));
+  emit (_Pxor(res, arg2, X X1))
+     (* res = (arg1 ^ arg2) ^ arg2 = arg1  if cond = 1
+        res = 0 ^ arg2 = arg2              if cond = 0 *)
+
 (* Handling of compiler-inlined builtins *)
-
-(* (\* Full sync version *\) *)
-(* (\** Generic majority vote. *\) *)
-(* let maj_vote *)
-(*       (mov : 'a -> 'a -> instruction) *)
-(*       (cmp_j : 'a -> 'a -> label -> instruction list) *)
-(*       (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit = *)
-(*   if a == b || a == c || b == c then begin *)
-(*     raise (Error "ill-formed majority vote") *)
-(*   end; *)
-(*   let lbl_done = new_label () in *)
-(*   let lbl_fix = new_label () in *)
-(*   side_emit (Plabel lbl_fix); *)
-(*   side_emit (mov res c); *)
-(*   side_emit (Pj_l lbl_done); *)
-(*   List.iter emit (cmp_j a b lbl_fix); *)
-(*       emit (mov res a); *)
-(*   emit (Plabel lbl_done) *)
-
-(** Generic majority vote. *)
-let maj_vote
-      (mov : 'a -> 'a -> instruction)
-      (cmp_j : 'a -> 'a -> label -> instruction list)
-      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
-  if a == b || a == c || b == c then begin
-    raise (Error "ill-formed majority vote")
-  end;
-  let lbl_done = new_label () in
-  let lbl_fix = new_label () in
-  side_emit (Plabel lbl_fix);
-  if a = res || b = res then begin
-      List.iter emit (cmp_j a b lbl_fix); (* Compare a and b *)
-      side_emit (mov res c); (* If a != b, res := c *)
-    end
-  else if c = res then begin
-      List.iter emit (cmp_j a c lbl_fix); (* Compare a and c *)
-      side_emit (mov res b); (* If a != c, res := b *)
-    end
-  else begin
-      List.iter emit (cmp_j a b lbl_fix); (* Compare a and b *)
-      emit (mov res a); (* If a == b, res := a *)
-      side_emit (mov res c); (* If a != b, res := c *)
-    end;
-  side_emit (Pj_l lbl_done);
-  emit (Plabel lbl_done)
-
-(** Majority vote integers. *)
-let maj_vote_int = maj_vote
-                     (fun x y -> Pmv (x, y))
-                     (fun x y lbl -> [Pbnel (X x, X y, lbl)])
-
-(** Majority vote floats. *)
-let maj_vote_float = maj_vote
-                       (fun x y -> Pfmv (x, y))
-                       (fun x y lbl -> [Pfeqs (X31, x, y);
-                                        Pbnel (X0, X X31, lbl)])
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -681,29 +644,29 @@ let expand_builtin_inline name args res =
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = ah) rl
-      (fun rl ->
+			(fun rl ->
                          emit (Psltuw (X1, X0, X al));
-       emit (Psubw (rl, X0, X al));
-       emit (Psubw (rh, X0, X ah));
-       emit (Psubw (rh, X rh, X X1)))
+			 emit (Psubw (rl, X0, X al));
+			 emit (Psubw (rh, X0, X ah));
+			 emit (Psubw (rh, X rh, X X1)))
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = bl || rl = ah || rl = bh) rl
-      (fun rl ->
-       emit (Paddw (rl, X al, X bl));
+			(fun rl ->
+			 emit (Paddw (rl, X al, X bl));
                          emit (Psltuw (X1, X rl, X bl));
-       emit (Paddw (rh, X ah, X bh));
-       emit (Paddw (rh, X rh, X X1)))
+			 emit (Paddw (rh, X ah, X bh));
+			 emit (Paddw (rh, X rh, X X1)))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = ah || rl = bh) rl
-      (fun rl ->
+			(fun rl ->
                          emit (Psltuw (X1, X al, X bl));
-       emit (Psubw (rl, X al, X bl));
-       emit (Psubw (rh, X ah, X bh));
-       emit (Psubw (rh, X rh, X X1)))
+			 emit (Psubw (rl, X al, X bl));
+			 emit (Psubw (rh, X ah, X bh));
+			 emit (Psubw (rh, X rh, X X1)))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = a || rl = b) rl
@@ -716,31 +679,6 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
-
-  (* Shadow move *)
-  | "__smove_int", [BA(IR a)], BR(IR res) ->
-     if a <> res then
-       emit (Pmv (res, a))
-  | "__smove_long", [BA(IR a)], BR(IR res) ->
-     if a <> res then
-       emit (Pmv (res, a))
-  | "__smove_single", [BA(FR a)], BR(FR res) ->
-     if a <> res then
-       emit (Pfmv (res, a))
-  | "__smove_float", [BA(FR a)], BR(FR res) ->
-     if a <> res then
-       emit (Pfmv (res, a))
-
-  (* Majority vote *)
-  | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote_int a b c res
-  | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote_int a b c res
-  | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote_float a b c res
-  | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote_float a b c res
-
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
@@ -778,6 +716,8 @@ let expand_instruction instr =
       end else 0 in
      expand_addptrofs X2 X2 (Ptrofs.repr (Z.add sz (Z.of_uint extra_sz)))
 
+  | Pcsel(rd, rcond, rs1, rs2) ->
+      expand_csel rd (X rcond) (X rs1) (X rs2)
   | Pseqw(rd, rs1, rs2) ->
       (* emulate based on the fact that x == 0 iff x <u 1 (unsigned cmp) *)
       if rs2 = X0 then begin

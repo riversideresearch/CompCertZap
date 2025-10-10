@@ -67,7 +67,7 @@ Inductive operation : Type :=
   | Ocast16signed            (**r [rd] is 16-bit sign extension of [r1] *)
   | Oadd                     (**r [rd = r1 + r2] *)
   | Oaddimm (n: int)         (**r [rd = r1 + n] *)
-  | Oneg                     (**r [rd = - r1]   *)
+  | Oneg                     (**r [rd = - r1]   *)                     
   | Osub                     (**r [rd = r1 - r2] *)
   | Omul                     (**r [rd = r1 * r2] *)
   | Omulhs                   (**r [rd = high part of r1 * r2, signed] *)
@@ -152,7 +152,9 @@ Inductive operation : Type :=
   | Osingleoflong            (**r [rd = float32_of_signed_long(r1)] *)
   | Osingleoflongu           (**r [rd = float32_of_unsigned_int(r1)] *)
 (*c Boolean tests: *)
-  | Ocmp (cond: condition).  (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
+  | Ocmp (cond: condition)   (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
+  | Osel (cond: condition) (ty: typ).
+                             (**r [rd = r1] if condition holds, [rd = r2] otherwise. *)
 
 (** Addressing modes.  [r1], [r2], etc, are the arguments to the
   addressing. *)
@@ -179,11 +181,11 @@ Defined.
 
 Definition eq_operation: forall (x y: operation), {x=y} + {x<>y}.
 Proof.
-  generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec Float.eq_dec Float32.eq_dec ident_eq eq_condition; intros.
+  generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec Float.eq_dec Float32.eq_dec ident_eq typ_eq eq_condition; intros.
   decide equality.
 Defined.
 
-(* Alternate definition:
+(* Alternate definition: 
 Definition beq_operation: forall (x y: operation), bool.
 Proof.
   generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec Float.eq_dec Float32.eq_dec ident_eq eq_condition; boolean_equality.
@@ -318,6 +320,7 @@ Definition eval_operation
   | Osingleoflong, v1::nil => Val.singleoflong v1
   | Osingleoflongu, v1::nil => Val.singleoflongu v1
   | Ocmp c, _ => Some (Val.of_optbool (eval_condition c vl m))
+  | Osel c ty, v1::v2::vl => Some (Val.select (eval_condition c vl m) v1 v2 ty)
   | _, _ => None
   end.
 
@@ -360,20 +363,6 @@ Ltac FuncInv :=
   | _ =>
       idtac
   end.
-
-Lemma eval_addressing_vundef F V (genv : Genv.t F V) sp addr vs v :
-  eval_addressing genv sp addr vs = Some v ->
-  In Vundef vs ->
-  v = Vundef.
-Proof.
-  unfold eval_addressing. intros Heval Hin.
-  destruct addr; try congruence.
-  - destruct vs eqn:Hvs; inv Hin.
-    + destruct l; inv Heval; reflexivity.
-    + destruct l; [inv H | congruence].
-  - destruct vs; [inv Hin|congruence].
-  - destruct vs; [inv Hin|congruence].
-Qed.
 
 (** * Static typing of conditions, operators and addressing modes. *)
 
@@ -488,6 +477,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osingleoflong => (Tlong :: nil, Tsingle)
   | Osingleoflongu => (Tlong :: nil, Tsingle)
   | Ocmp c => (type_of_condition c, Tint)
+  | Osel c ty => (ty :: ty :: type_of_condition c, ty)
   end.
 
 Definition type_of_addressing (addr: addressing) : list typ :=
@@ -545,7 +535,7 @@ Proof with (try exact I; try reflexivity; auto using Val.Vptr_has_type).
   - apply type_add.
   (* neg, sub *)
   - destruct v0...
-  - unfold Val.sub. destruct v0; destruct v1...
+  - unfold Val.sub. destruct v0; destruct v1... 
     unfold Val.has_type; destruct Archi.ptr64...
     destruct Archi.ptr64... destruct (eq_block b b0)...
   (* mul, mulhs, mulhu *)
@@ -594,7 +584,7 @@ Proof with (try exact I; try reflexivity; auto using Val.Vptr_has_type).
   - apply type_addl.
   (* negl, subl *)
   - destruct v0...
-  - unfold Val.subl. destruct v0; destruct v1...
+  - unfold Val.subl. destruct v0; destruct v1... 
     unfold Val.has_type; destruct Archi.ptr64...
     destruct Archi.ptr64... destruct (eq_block b b0)...
   (* mull, mullhs, mullhu *)
@@ -678,6 +668,8 @@ Proof with (try exact I; try reflexivity; auto using Val.Vptr_has_type).
   - destruct v0; simpl in H0; inv H0...
   (* cmp *)
   - destruct (eval_condition cond vl m)... destruct b...
+  (* sel *)
+  - destruct (eval_condition cond vl m)... apply Val.normalize_type.
 Qed.
 
 End SOUNDNESS.
@@ -809,11 +801,11 @@ Proof.
   assert (A: forall x n,
              Val.offset_ptr x (Ptrofs.add n (Ptrofs.repr delta)) =
              Val.add (Val.offset_ptr x n) (Vint (Int.repr delta))).
-  { intros; destruct x; simpl; auto. rewrite H1.
+  { intros; destruct x; simpl; auto. rewrite H1. 
     rewrite Ptrofs.add_assoc. f_equal; f_equal; f_equal. symmetry; auto with ptrofs. }
   destruct addr; simpl in H; inv H; simpl in *; FuncInv; subst.
 - rewrite A; auto.
-- unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); auto.
+- unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); auto. 
   simpl. rewrite H1. f_equal; f_equal; f_equal. symmetry; auto with ptrofs.
 - rewrite A; auto.
 Qed.
@@ -831,12 +823,27 @@ Definition is_trivial_op (op: operation) : bool :=
 
 (** Operations that depend on the memory state. *)
 
+Definition cond_depends_on_memory (c: condition) : bool :=
+  match c with
+  | Ccompu _  | Ccompuimm _ _  => negb Archi.ptr64
+  | Ccomplu _ | Ccompluimm _ _ => Archi.ptr64
+  | _ => false
+  end.
+
+Lemma cond_depends_on_memory_correct:
+  forall c args m1 m2,
+  cond_depends_on_memory c = false ->
+  eval_condition c args m1 = eval_condition c args m2.
+Proof.
+  unfold cond_depends_on_memory; intros until m2; intros SF;
+  destruct c; try reflexivity; rewrite ? negb_false_iff in SF;
+  simpl; unfold Val.cmpu_bool, Val.cmplu_bool; rewrite SF; reflexivity.
+Qed.
+
 Definition op_depends_on_memory (op: operation) : bool :=
   match op with
-  | Ocmp (Ccompu _) => negb Archi.ptr64
-  | Ocmp (Ccompuimm _ _) => negb Archi.ptr64
-  | Ocmp (Ccomplu _) => Archi.ptr64
-  | Ocmp (Ccompluimm _ _) => Archi.ptr64
+  | Ocmp c => cond_depends_on_memory c
+  | Osel c ty => cond_depends_on_memory c
   | _ => false
   end.
 
@@ -845,9 +852,10 @@ Lemma op_depends_on_memory_correct:
   op_depends_on_memory op = false ->
   eval_operation ge sp op args m1 = eval_operation ge sp op args m2.
 Proof.
-  intros until m2. destruct op; simpl; try congruence.
-  destruct cond; simpl; intros SF; auto; rewrite ? negb_false_iff in SF;
-  unfold Val.cmpu_bool, Val.cmplu_bool; rewrite SF; reflexivity.
+  intros until m2. destruct op; simpl; try congruence; intros SF.
+- f_equal; f_equal; auto using cond_depends_on_memory_correct.
+- destruct args; auto. destruct args; auto.
+  f_equal; f_equal; auto using cond_depends_on_memory_correct.
 Qed.
 
 (** Global variables mentioned in an operation or addressing mode *)
@@ -884,7 +892,7 @@ Lemma eval_addressing_preserved:
   eval_addressing ge2 sp addr vl = eval_addressing ge1 sp addr vl.
 Proof.
   intros.
-  unfold eval_addressing; destruct addr; auto. destruct vl; auto.
+  unfold eval_addressing; destruct addr; auto. destruct vl; auto. 
   unfold Genv.symbol_address. rewrite agree_on_symbols; auto.
 Qed.
 
@@ -996,7 +1004,7 @@ Proof.
   (* addrsymbol *)
   - apply GL; simpl; auto.
   (* addrstack *)
-  - apply Val.offset_ptr_inject; auto.
+  - apply Val.offset_ptr_inject; auto. 
   (* castsigned *)
   - inv H4; simpl; auto.
   - inv H4; simpl; auto.
@@ -1155,6 +1163,9 @@ Proof.
     exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
     destruct b; simpl; constructor.
     simpl; constructor.
+  (* sel *)
+  - apply Val.select_inject; auto. destruct (eval_condition cond vl1 m1) eqn:?; auto.
+    exploit eval_condition_inj; eauto.
 Qed.
 
 Lemma eval_addressing_inj:
@@ -1170,7 +1181,7 @@ Proof.
   intros. destruct addr; simpl in H2; simpl; FuncInv; InvInject; TrivialExists.
   apply Val.offset_ptr_inject; auto.
   apply H; simpl; auto.
-  apply Val.offset_ptr_inject; auto.
+  apply Val.offset_ptr_inject; auto. 
 Qed.
 
 End EVAL_COMPAT.
@@ -1328,7 +1339,7 @@ Proof.
   rewrite eval_shift_stack_addressing.
   eapply eval_addressing_inj with (sp1 := Vptr sp1 Ptrofs.zero); eauto.
   intros. apply symbol_address_inject.
-  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
 Qed.
 
 Lemma eval_operation_inject:
@@ -1348,7 +1359,7 @@ Proof.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
   intros; eapply Mem.different_pointers_inject; eauto.
   intros. apply symbol_address_inject.
-  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
+  econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
 Qed.
 
 End EVAL_INJECT.
@@ -1372,4 +1383,4 @@ Definition builtin_arg_ok
   match ba with
   | (BA _ | BA_splitlong (BA _) (BA _)) => true
   | _ => builtin_arg_ok_1 ba c
-  end.
+  end.  

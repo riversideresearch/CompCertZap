@@ -111,14 +111,11 @@ module Target : TARGET =
 (* Generate code to load the address of id + ofs in register r *)
 
     let loadsymbol oc r id ofs =
-      if Archi.pic_code () then begin
+      if SelectOp.symbol_is_relocatable id then begin
         assert (ofs = Integers.Ptrofs.zero);
         fprintf oc "	la	%a, %s\n" ireg r (extern_atom id)
       end else begin
-        fprintf oc "	lui	%a, %%hi(%a)\n"
-                                ireg r symbol_offset (id, ofs);
-        fprintf oc "	addi	%a, %a, %%lo(%a)\n"
-                                ireg r ireg r symbol_offset (id, ofs)
+        fprintf oc "	lla	%a, %a\n" ireg r symbol_offset (id, ofs)
       end
 
 (* Emit .file / .loc debugging directives *)
@@ -138,9 +135,21 @@ module Target : TARGET =
 
 (* Offset part of a load or store *)
 
+    let latest_auipc : (ident * Integers.Ptrofs.int) option ref = ref None
+
     let offset oc = function
-    | Ofsimm n -> ptrofs oc n
-    | Ofslow(id, ofs) -> fprintf oc "%%lo(%a)" symbol_offset (id, ofs)
+    | Ofsimm n ->
+        ptrofs oc n
+    | Ofslow(id, ofs) ->
+        assert (!latest_auipc = Some(id, ofs));
+        fprintf oc "%%pcrel_lo(1b)"
+
+(* Emit the target of a call, with a `@plt` suffix in PIC mode. *)
+
+    let symbol_plt oc s =
+      if SelectOp.symbol_is_relocatable s
+      then fprintf oc "%a@plt" symbol s
+      else symbol oc s
 
 (* Printing of instructions *)
     let print_instruction oc = function
@@ -275,11 +284,11 @@ module Target : TARGET =
       | Pj_l(l) ->
          fprintf oc "	j	%a\n" print_label l
       | Pj_s(s, sg) ->
-         fprintf oc "	jump	%a, x31\n" symbol s
+         fprintf oc "	tail	%a\n" symbol_plt s
       | Pj_r(r, sg) ->
          fprintf oc "	jr	%a\n" ireg r
       | Pjal_s(s, sg) ->
-         fprintf oc "	call	%a\n" symbol s
+         fprintf oc "	call	%a\n" symbol_plt s
       | Pjal_r(r, sg) ->
          fprintf oc "	jalr	%a\n" ireg r
 
@@ -486,7 +495,7 @@ module Target : TARGET =
          assert false
       | Pfreeframe(sz, ofs) ->
          assert false
-      | Pseqw _ | Psnew _ | Pseql _ | Psnel _ | Pcvtl2w _ | Pcvtw2l _ ->
+      | Pcsel _ | Pseqw _ | Psnew _ | Pseql _ | Psnel _ | Pcvtl2w _ | Pcvtw2l _ ->
          assert false
 
       (* Pseudo-instructions that remain *)
@@ -495,7 +504,8 @@ module Target : TARGET =
       | Ploadsymbol(rd, id, ofs) ->
          loadsymbol oc rd id ofs
       | Ploadsymbol_high(rd, id, ofs) ->
-         fprintf oc "	lui	%a, %%hi(%a)\n" ireg rd symbol_offset (id, ofs)
+         fprintf oc "1:	auipc	%a, %%pcrel_hi(%a)\n" ireg rd symbol_offset (id, ofs);
+         latest_auipc := Some(id, ofs)
       | Ploadli(rd, n) ->
          let d = camlint64_of_coqint n in
          let lbl = label_literal64 d in
@@ -516,7 +526,7 @@ module Target : TARGET =
          List.iter (fun l -> fprintf oc "%a " print_label l) tbl;
          fprintf oc "]\n";
          fprintf oc "	sll	x5, %a, 2\n" ireg r;
-         fprintf oc "	la	x31, %a\n" label lbl;
+         fprintf oc "	lla	x31, %a\n" label lbl;
          fprintf oc "	add	x5, x31, x5\n";
          fprintf oc "	lw	x5, 0(x5)\n";
          fprintf oc "	add	x5, x31, x5\n";
@@ -584,6 +594,7 @@ module Target : TARGET =
 
     let print_instructions oc fn =
       current_function_sig := fn.fn_sig;
+      latest_auipc := None;
       List.iter (print_instruction oc) fn.fn_code
 
 
@@ -592,7 +603,10 @@ module Target : TARGET =
     let address = if Archi.ptr64 then ".quad" else ".long"
 
     let print_prologue oc =
-      fprintf oc "	.option %s\n" (if Archi.pic_code() then "pic" else "nopic");
+      fprintf oc "	.option %s\n"
+        (if !Clflags.option_fpic || !Clflags.option_fpie
+         then "pic"
+         else "nopic");
       if !Clflags.option_g then begin
         section oc Section_text;
       end

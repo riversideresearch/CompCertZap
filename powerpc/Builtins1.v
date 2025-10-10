@@ -16,8 +16,8 @@
 
 (** Platform-specific built-in functions *)
 
-Require Import String Coqlib.
-Require Import AST Integers Floats Values.
+From Coq Require Import String.
+Require Import Coqlib AST Integers Floats Values.
 Require Import Builtins0.
 Local Open Scope asttyp_scope.
 
@@ -83,3 +83,8 @@ Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (sig_res (pl
   | BI_mulhdu =>
     mkbuiltin_n2t Tlong Tlong Xlong Int64.mulhu
   end.
+
+Definition eq_platform_builtin: forall (x y: platform_builtin), {x=y} + {x<>y}.
+Proof.
+  decide equality.
+Defined.

@@ -61,11 +61,14 @@ endif
 # deprecated-since-8.20
 #    renamings performed in Coq's standard library;
 #    using the new names would break compatibility with earlier Coq versions.
+# deprecated-from-Coq
+#    Rocq wants "From Stdlib Require" while Coq wants "From Coq Require".
 
 COQCOPTS ?= \
   -w -unused-pattern-matching-variable \
   -w -deprecated-since-8.19 \
-  -w -deprecated-since-8.20
+  -w -deprecated-since-8.20 \
+  -w -deprecated-from-Coq
 
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
 MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
@@ -73,17 +76,20 @@ MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
 # Flocq and Menhirlib run into other renaming issues.
 # These warnings can only be addressed upstream.
 
-flocq/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition
-MenhirLib/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition
+flocq/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition -w -deprecated-since-9.0
+MenhirLib/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition -w -deprecated-since-9.0
 
 # For the extraction phase, we silence other warnings:
 # change-dir-deprecated:
 #    warning introduced in 8.20, no alternative before 8.20
 # extraction-default-directory:
 #    warning introduced in 8.20, no alternative before 8.20
+# deprecated-from-Coq:
+#    see above
 COQEXTRACTOPTS ?= \
   -w -change-dir-deprecated \
-  -w -extraction-default-directory
+  -w -extraction-default-directory \
+  -w -deprecated-from-Coq
 
 ifneq ($(INSTALL_COQDEV),true)
 # Disable costly generation of .cmx files, which are not used locally
@@ -166,7 +172,6 @@ BACKEND=\
   NeedDomain.v NeedOp.v Deadcode.v Deadcodeproof.v \
   Unusedglob.v Unusedglobproof.v \
   Machregs.v Locations.v Conventions1.v Conventions.v LTL.v \
-  Replicate.v Replicatespec.v Replicateproof.v Builtins2.v \
   Allocation.v Allocproof.v \
   Tunneling.v Tunnelingproof.v \
   Linear.v Lineartyping.v \
@@ -176,10 +181,6 @@ BACKEND=\
   Mach.v \
   Bounds.v Stacklayout.v Stacking.v Stackingproof.v \
   Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v
-
-ifeq ($(ARCH),riscV)
-BACKEND += Fault.v Tolerant.v
-endif
 
 # C front-end modules (in cfrontend/)
 
@@ -314,7 +315,7 @@ latexdoc:
 	@chmod a-w $*.v
 
 compcert.ini: Makefile.config
-	(echo "stdlib_path=$(LIBDIR)"; \
+	(echo "stdlib_path=$(RELLIBDIR)"; \
          echo "prepro=$(CPREPRO)"; \
          echo "linker=$(CLINKER)"; \
          echo "asm=$(CASM)"; \
@@ -329,7 +330,8 @@ compcert.ini: Makefile.config
          echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
          echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
-	 echo "response_file_style=$(RESPONSEFILE)";) \
+	 echo "response_file_style=$(RESPONSEFILE)"; \
+	 echo "pic_supported=$(PIC_SUPPORTED)") \
         > compcert.ini
 
 compcert.config: Makefile.config

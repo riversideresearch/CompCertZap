@@ -989,7 +989,7 @@ Opaque Int.eq.
   apply exec_straight_one. simpl; eauto. auto.
   split; intros; Simpl. 
 - (* addrsymbol *)
-  destruct (Archi.pic_code tt && negb (Ptrofs.eq ofs Ptrofs.zero)).
+  destruct (SelectOp.symbol_is_relocatable id && negb (Ptrofs.eq ofs Ptrofs.zero)).
 + set (rs1 := nextinstr (rs#x <- (Genv.symbol_address ge id Ptrofs.zero))).
   exploit (addptrofs_correct x x ofs k rs1 m); eauto with asmgen. 
   intros (rs2 & A & B & C).
@@ -1084,6 +1084,19 @@ Opaque Int.eq.
 - (* cond *)
   exploit transl_cond_op_correct; eauto. intros (rs' & A & B & C).
   exists rs'; split. eexact A. eauto with asmgen.
+- (* sel *)
+  destruct (ireg_eq x0 x1).
+  + inv EQ3. econstructor; split; [|split].
+    * apply exec_straight_one; simpl; auto.
+    * Simpl. destruct eval_condition as [[]|]; simpl; auto using Val.lessdef_normalize.
+    * intros; Simpl.
+  + exploit transl_cond_op_correct; eauto. intros (rs1 & A & B & C).
+    econstructor; split; [|split].
+    * eapply exec_straight_trans. eexact A. apply exec_straight_one; simpl; eauto.
+    * Simpl. rewrite (C x0), (C x1); eauto with asmgen.
+      destruct eval_condition as [b|]; simpl in *; auto.
+      destruct b; inv B; apply Val.lessdef_normalize.
+    * intros; Simpl.
 Qed.
 
 (** Memory accesses *)

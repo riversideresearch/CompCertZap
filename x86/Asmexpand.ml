@@ -137,24 +137,24 @@ let addressing_of_builtin_arg = function
 let expand_builtin_memcpy_small sz al src dst =
   let rec copy src dst sz =
     if sz >= 8 && Archi.ptr64 then begin
-  emit (Pmovq_rm (RCX, src));
-  emit (Pmovq_mr (dst, RCX));
+	emit (Pmovq_rm (RCX, src));
+	emit (Pmovq_mr (dst, RCX));
         copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
     end else if sz >= 8 && !Clflags.option_ffpu then begin
-  emit (Pmovsq_rm (XMM7, src));
-  emit (Pmovsq_mr (dst, XMM7));
+	emit (Pmovsq_rm (XMM7, src));
+	emit (Pmovsq_mr (dst, XMM7));
         copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
       end else if sz >= 4 then begin
-  emit (Pmovl_rm (RCX, src));
-  emit (Pmovl_mr (dst, RCX));
+	emit (Pmovl_rm (RCX, src));
+	emit (Pmovl_mr (dst, RCX));
         copy (offset_addressing src _4z) (offset_addressing dst _4z) (sz - 4)
       end else if sz >= 2 then begin
-  emit (Pmovw_rm (RCX, src));
-  emit (Pmovw_mr (dst, RCX));
+	emit (Pmovw_rm (RCX, src));
+	emit (Pmovw_mr (dst, RCX));
         copy (offset_addressing src _2z) (offset_addressing dst _2z) (sz - 2)
       end else if sz >= 1 then begin
-  emit (Pmovb_rm (RCX, src));
-  emit (Pmovb_mr (dst, RCX));
+	emit (Pmovb_rm (RCX, src));
+	emit (Pmovb_mr (dst, RCX));
         copy (offset_addressing src _1z) (offset_addressing dst _1z) (sz - 1)
       end in
   copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
@@ -193,11 +193,11 @@ let expand_builtin_vload_common chunk addr res =
   | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
      let addr' = offset_addressing addr _4z in
      if not (Asmgen.addressing_mentions addr res2) then begin
-   emit (Pmovl_rm (res2,addr));
-   emit (Pmovl_rm (res1,addr'))
+	 emit (Pmovl_rm (res2,addr));
+	 emit (Pmovl_rm (res1,addr'))
        end else begin
-   emit (Pmovl_rm (res1,addr'));
-   emit (Pmovl_rm (res2,addr))
+	 emit (Pmovl_rm (res1,addr'));
+	 emit (Pmovl_rm (res2,addr))
        end
   | Mfloat32, BR(FR res) ->
      emit (Pmovss_fm (res,addr))
@@ -339,47 +339,6 @@ let expand_fma args res i132 i213 i231 =
 
 (* Handling of compiler-inlined builtins *)
 
-(** Generic majority vote. *)
-let maj_vote
-      (mov : 'a -> 'a -> instruction)
-      (cmp : 'a -> 'a -> instruction)
-      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
-  if a == b || a == c || b == c then begin
-     raise (Error "ill-formed majority vote")
-  end;
-  assert (a <> b && a <> c && b <> c);
-  let lbl_done = new_label () in
-  let lbl_fix = new_label () in
-  side_emit (Plabel lbl_fix);
-  if a = res || b = res then begin
-      side_emit (mov res c);
-      emit (cmp a b);
-      emit (Pjcc (Cond_ne, lbl_fix));
-    end
-  else if c = res then begin
-      side_emit (mov res a);
-      emit (cmp a c);
-      emit (Pjcc (Cond_ne, lbl_fix));
-    end
-  else begin
-      side_emit (mov res c);
-      emit (cmp a b);
-      emit (Pjcc (Cond_ne, lbl_fix));
-      emit (mov res a);
-    end;
-  side_emit (Pjmp_l lbl_done);
-  emit (Plabel lbl_done)
-
-(** Majority vote integers. *)
-let maj_vote_int = maj_vote
-                     (fun x y -> Pmov_rr (x, y))
-                     (fun x y -> Pcmpl_rr (x, y))
-
-(** Majority vote floats. *)
-let maj_vote_float = maj_vote
-                       (fun x y -> Pmovsd_ff (x, y))
-                       (fun x y -> Pcomiss_ff (x, y))
-
 let expand_builtin_inline name args res =
   match name, args, res with
   (* Integer arithmetic *)
@@ -392,7 +351,7 @@ let expand_builtin_inline name args res =
        emit (Pmov_rr (res,a1));
      emit (Pbswap64 res)
   | "__builtin_bswap64", [BA_splitlong(BA(IR ah), BA(IR al))],
-    BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                         BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = RAX && al = RDX && rh = RDX && rl = RAX);
      emit (Pbswap32 RAX);
      emit (Pbswap32 RDX)
@@ -405,12 +364,12 @@ let expand_builtin_inline name args res =
      emit (Pxorl_ri(res,coqint_of_camlint 31l))
   | "__builtin_clzl", [BA(IR a1)], BR(IR res) ->
      if not(Archi.ptr64) then begin
-         emit (Pbsrl (res,a1));
-         emit (Pxorl_ri(res,coqint_of_camlint 31l))
-       end else begin
-         emit (Pbsrq (res,a1));
-         emit (Pxorl_ri(res,coqint_of_camlint 63l))
-       end
+       emit (Pbsrl (res,a1));
+       emit (Pxorl_ri(res,coqint_of_camlint 31l))
+     end else begin
+       emit (Pbsrq (res,a1));
+       emit (Pxorl_ri(res,coqint_of_camlint 63l))
+     end
   | "__builtin_clzll", [BA(IR a1)], BR(IR res) ->
      emit (Pbsrq (res,a1));
      emit (Pxorl_ri(res,coqint_of_camlint 63l))
@@ -450,46 +409,46 @@ let expand_builtin_inline name args res =
   | ("__builtin_fsqrt" | "__builtin_sqrt"), [BA(FR a1)], BR(FR res) ->
      emit (Psqrtsd (res,a1))
   | "__builtin_fmadd",  _, _ ->
-     expand_fma args res
-       (fun r1 r2 r3 -> Pfmadd132(r1, r2, r3))
-       (fun r1 r2 r3 -> Pfmadd213(r1, r2, r3))
-       (fun r1 r2 r3 -> Pfmadd231(r1, r2, r3))
+      expand_fma args res
+        (fun r1 r2 r3 -> Pfmadd132(r1, r2, r3))
+        (fun r1 r2 r3 -> Pfmadd213(r1, r2, r3))
+        (fun r1 r2 r3 -> Pfmadd231(r1, r2, r3))
   | "__builtin_fmsub",  _, _ ->
-     expand_fma args res
-       (fun r1 r2 r3 -> Pfmsub132(r1, r2, r3))
-       (fun r1 r2 r3 -> Pfmsub213(r1, r2, r3))
-       (fun r1 r2 r3 -> Pfmsub231(r1, r2, r3))
+      expand_fma args res
+        (fun r1 r2 r3 -> Pfmsub132(r1, r2, r3))
+        (fun r1 r2 r3 -> Pfmsub213(r1, r2, r3))
+        (fun r1 r2 r3 -> Pfmsub231(r1, r2, r3))
   | "__builtin_fnmadd",  _, _ ->
-     expand_fma args res
-       (fun r1 r2 r3 -> Pfnmadd132(r1, r2, r3))
-       (fun r1 r2 r3 -> Pfnmadd213(r1, r2, r3))
-       (fun r1 r2 r3 -> Pfnmadd231(r1, r2, r3))
+      expand_fma args res
+        (fun r1 r2 r3 -> Pfnmadd132(r1, r2, r3))
+        (fun r1 r2 r3 -> Pfnmadd213(r1, r2, r3))
+        (fun r1 r2 r3 -> Pfnmadd231(r1, r2, r3))
   | "__builtin_fnmsub",  _, _ ->
-     expand_fma args res
-       (fun r1 r2 r3 -> Pfnmsub132(r1, r2, r3))
-       (fun r1 r2 r3 -> Pfnmsub213(r1, r2, r3))
-       (fun r1 r2 r3 -> Pfnmsub231(r1, r2, r3))
+      expand_fma args res
+        (fun r1 r2 r3 -> Pfnmsub132(r1, r2, r3))
+        (fun r1 r2 r3 -> Pfnmsub213(r1, r2, r3))
+        (fun r1 r2 r3 -> Pfnmsub231(r1, r2, r3))
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
-    BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = RDX && al = RAX && rh = RDX && rl = RAX);
      emit (Pnegl RAX);
      emit (Padcl_ri (RDX,_0));
      emit (Pnegl RDX)
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-    BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
      emit (Paddl_rr (RAX,RBX));
      emit (Padcl_rr (RDX,RCX))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-    BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
      emit (Psubl_rr (RAX,RBX));
      emit (Psbbl_rr (RDX,RCX))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
-    BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
      assert (a = RAX && b = RDX && rh = RDX && rl = RAX);
      emit (Pmull_r RDX)
   (* Memory accesses *)
@@ -526,31 +485,6 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
-
-  (* Shadow move *)
-  | "__smove_int", [BA(IR a)], BR(IR res) ->
-     if a <> res then
-       emit (Pmov_rr (res, a))
-  | "__smove_long", [BA(IR a)], BR(IR res) ->
-     if a <> res then
-       emit (Pmov_rr (res, a))
-  | "__smove_single", [BA(FR a)], BR(FR res) ->
-     if a <> res then
-       emit (Pmovsd_ff (res, a))
-  | "__smove_float", [BA(FR a)], BR(FR res) ->
-     if a <> res then
-       emit (Pmovsd_ff (res, a))
-
-  (* Majority vote *)
-  | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote_int a b c res
-  | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote_int a b c res
-  | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote_float a b c res
-  | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote_float a b c res
-
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
@@ -663,7 +597,7 @@ let expand_instruction instr =
      begin
        match ef with
        | EF_builtin(name, sg) ->
-    expand_builtin_inline (camlstring_of_coqstring name) args res
+	  expand_builtin_inline (camlstring_of_coqstring name) args res
        | EF_vload chunk ->
           expand_builtin_vload chunk args res
        | EF_vstore chunk ->

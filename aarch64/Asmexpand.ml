@@ -347,91 +347,7 @@ let expand_builtin_vstore chunk args =
         expand_builtin_vstore_common chunk (RR1 X16) _0 src
       end
   | _ ->
-     assert false
-
-let is_cond_branch = function
-  | Pbc _ | Ptbnz _ | Ptbz _ | Pcbnz _ | Pcbz _ -> true
-  | _ -> false
-
-let negate_testcond = function
-  | TCeq -> TCne
-  | TCne -> TCeq
-  | TChs -> TClo
-  | TClo -> TChs
-  | TCmi -> TCpl
-  | TCpl -> TCmi
-  | TChi -> TCls
-  | TCls -> TChi
-  | TCge -> TClt
-  | TClt -> TCge
-  | TCgt -> TCle
-  | TCle -> TCgt
-
-(** Negate a conditional branch instruction and update its target
-    label to [new_tgt]. *)
-let negate_cond_branch new_tgt = function
-  | Pbc (cond, _) -> Pbc (negate_testcond cond, new_tgt)
-  | Ptbnz (sz, r, i, _) -> Ptbz (sz, r, i, new_tgt)
-  | Ptbz (sz, r, i, _) -> Ptbnz (sz, r, i, new_tgt)
-  | Pcbnz (sz, r, _) -> Pcbz (sz, r, new_tgt)
-  | Pcbz (sz, r, _) -> Pcbnz (sz, r, new_tgt)
-  | _ -> raise (Error "negate_cond_branch: expected conditional branch")
-
-let tgt_of_branch = function
-  | Pbc (_, tgt) -> tgt
-  | Ptbnz (_, _, _, tgt) -> tgt
-  | Ptbz (_, _, _, tgt) -> tgt
-  | Pcbnz (_, _, tgt) -> tgt
-  | Pcbz (_, _, tgt) -> tgt
-  | _ -> raise (Error "tgt_of_branch: expected conditional branch")
-
-(** Emit long-jump version of [instr]. *)
-let expand_cond_branch instr : unit =
-  let lbl = new_label () in
-  emit (negate_cond_branch lbl instr);
-  emit (Pb (tgt_of_branch instr));
-  emit (Plabel lbl)
-
-(** Generic majority vote. *)
-let maj_vote
-      (mov : 'a -> 'a -> instruction)
-      (cmp : 'a -> 'a -> instruction)
-      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
-  if a == b || a == c || b == c then begin
-     raise (Error "ill-formed majority vote")
-  end;
-  assert (a <> b && a <> c && b <> c);
-  let lbl_done = new_label () in
-  let lbl_fix = new_label () in
-  side_emit (Plabel lbl_fix);
-  if a = res || b = res then begin
-      side_emit (mov res c);
-      emit (cmp a b);
-      expand_cond_branch (Pbc (TCne, lbl_fix))
-    end
-  else if c = res then begin
-      side_emit (mov res a);
-      emit (cmp a c);
-      expand_cond_branch (Pbc (TCne, lbl_fix))
-    end
-  else begin
-      side_emit (mov res c);
-      emit (cmp a b);
-      expand_cond_branch (Pbc (TCne, lbl_fix));
-      emit (mov res a)
-    end;
-  side_emit (Pb lbl_done);
-  emit (Plabel lbl_done)
-
-(** Majority vote integers. *)
-let maj_vote_int sz = maj_vote
-                        (fun x y -> Pmov (RR1 x, RR1 y))
-                        (fun x y -> Pcmp (sz, RR0 x, y, SOnone))
-
-(** Majority vote floats. *)
-let maj_vote_float sz = maj_vote
-                          (fun x y -> Pfmov (x, y))
-                          (fun x y -> Pfcmp (sz, x, y))
+      assert false
 
 (* Handling of compiler-inlined builtins *)
 
@@ -487,31 +403,6 @@ let expand_builtin_inline name args res =
   (* Vararg *)
   | "__builtin_va_start", [BA(IR a)], _ ->
       expand_builtin_va_start a
-
-  (* Shadow move *)
-  | "__smove_int", [BA(IR a)], BR(IR res) ->
-     if a <> res then
-       emit (Pmov (RR1 res, RR1 a))
-  | "__smove_long", [BA(IR a)], BR(IR res) ->
-     if a <> res then
-       emit (Pmov (RR1 res, RR1 a))
-  | "__smove_single", [BA(FR a)], BR(FR res) ->
-     if a <> res then
-       emit (Pfmov (res, a))
-  | "__smove_float", [BA(FR a)], BR(FR res) ->
-     if a <> res then
-       emit (Pfmov (res, a))
-
-  (* Majority vote *)
-  | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote_int W a b c res
-  | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
-     maj_vote_int X a b c res
-  | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote_float S a b c res
-  | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
-     maj_vote_float D a b c res
-
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
@@ -556,8 +447,6 @@ let expand_instruction instr =
      | _ ->
         assert false
      end
-  | _ when is_cond_branch instr ->
-     expand_cond_branch instr
   | _ ->
      emit instr
 

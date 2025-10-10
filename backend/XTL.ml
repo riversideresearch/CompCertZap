@@ -50,7 +50,7 @@ type xfunction = {
   fn_sig: signature;
   fn_stacksize: Z.t;
   fn_code: code;
-  fn_entrypoint: node;
+  fn_entrypoint: node
 }
 
 (* Type of a variable *)

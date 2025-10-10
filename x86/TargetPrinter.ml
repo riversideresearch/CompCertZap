@@ -107,6 +107,7 @@ module type SYSTEM =
       val raw_symbol: out_channel -> string -> unit
       val symbol: out_channel -> P.t -> unit
       val symbol_paren: out_channel -> P.t -> unit
+      val symbol_function: out_channel -> P.t -> unit
       val label: out_channel -> int -> unit
       val name_of_section: section_name -> string
       val stack_alignment: int
@@ -137,6 +138,10 @@ module ELF_System : SYSTEM =
       then fprintf oc "(%s)" s
       else fprintf oc "%s" s
 
+    let symbol_function oc symb =
+      symbol_paren oc symb;
+      if SelectOp.symbol_is_relocatable symb then fprintf oc "@PLT"
+
     let label = elf_label
 
     let name_of_section = function
@@ -152,7 +157,7 @@ module ELF_System : SYSTEM =
           elf_mergeable_string_section sz ".section	.rodata"
       | Section_literal sz ->
           elf_mergeable_literal_section sz ".section	.rodata"
-      | Section_jumptable -> ".text"
+      | Section_jumptable -> ".section	.rodata"
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
@@ -205,6 +210,9 @@ module MacOS_System : SYSTEM =
 
     let symbol_paren = symbol
         (* the leading '_' protects the leading '$' *)
+
+    let symbol_function = symbol
+        (* no need for @PLT even in PIC mode *)
 
     let label oc lbl =
       fprintf oc "L%d" lbl
@@ -277,6 +285,8 @@ module Cygwin_System : SYSTEM =
       if String.length s > 0 && s.[0] = '$'
       then fprintf oc "(%a)" raw_symbol s
       else raw_symbol oc s
+
+    let symbol_function = symbol_paren
 
     let label oc lbl =
        fprintf oc "L%d" lbl
@@ -560,9 +570,9 @@ module Target(System: SYSTEM):TARGET =
       | Pnegq(rd) ->
           fprintf oc "	negq	%a\n" ireg64 rd
       | Paddl_ri (res,n) ->
-    fprintf oc "	addl	$%ld, %a\n" (camlint_of_coqint n) ireg32 res
+	  fprintf oc "	addl	$%ld, %a\n" (camlint_of_coqint n) ireg32 res
       | Paddq_ri (res,n) ->
-    fprintf oc "	addq	%a, %a\n" intconst64 n ireg64 res
+	  fprintf oc "	addq	%a, %a\n" intconst64 n ireg64 res
       | Psubl_rr(rd, r1) ->
           fprintf oc "	subl	%a, %a\n" ireg32 r1 ireg32 rd
       | Psubq_rr(rd, r1) ->
@@ -723,7 +733,7 @@ module Target(System: SYSTEM):TARGET =
       | Pjmp_l(l) ->
           fprintf oc "	jmp	%a\n" label (transl_label l)
       | Pjmp_s(f, sg) ->
-          fprintf oc "	jmp	%a\n" symbol_paren f
+          fprintf oc "	jmp	%a\n" symbol_function f
       | Pjmp_r(r, sg) ->
           fprintf oc "	jmp	*%a\n" ireg r
       | Pjcc(c, l) ->
@@ -749,7 +759,7 @@ module Target(System: SYSTEM):TARGET =
             fprintf oc "	jmp	*%a(, %a, 4)\n" label l ireg r
           end
       | Pcall_s(f, sg) ->
-          fprintf oc "	call	%a\n" symbol_paren f;
+          fprintf oc "	call	%a\n" symbol_function f;
           if (not Archi.ptr64) && sg.sig_cc.cc_structret then
             fprintf oc "	pushl	%%eax\n"
       | Pcall_r(r, sg) ->
@@ -766,59 +776,59 @@ module Target(System: SYSTEM):TARGET =
           end
       (* Instructions produced by Asmexpand *)
       | Padcl_ri (res,n) ->
-   fprintf oc "  	adcl	$%ld, %a\n" (camlint_of_coqint n) ireg32 res;
+	 fprintf oc "  	adcl	$%ld, %a\n" (camlint_of_coqint n) ireg32 res;
       | Padcl_rr (res,a1) ->
-   fprintf oc "  	adcl	%a, %a\n" ireg32 a1 ireg32 res;
+	 fprintf oc "  	adcl	%a, %a\n" ireg32 a1 ireg32 res;
       | Paddl_rr (res,a1) ->
-   fprintf oc "	addl	%a, %a\n" ireg32 a1 ireg32 res;
+	 fprintf oc "	addl	%a, %a\n" ireg32 a1 ireg32 res;
       | Paddl_mi (addr,n) ->
-   fprintf oc "	addl	$%ld, %a\n" (camlint_of_coqint n) addressing addr
+	 fprintf oc "	addl	$%ld, %a\n" (camlint_of_coqint n) addressing addr
       | Pbsfl (res,a1) ->
-   fprintf oc "	bsfl	%a, %a\n" ireg32 a1 ireg32 res
+	 fprintf oc "	bsfl	%a, %a\n" ireg32 a1 ireg32 res
       | Pbsfq (res,a1) ->
-   fprintf oc "	bsfq	%a, %a\n" ireg64 a1 ireg64 res
+	 fprintf oc "	bsfq	%a, %a\n" ireg64 a1 ireg64 res
       | Pbsrl (res,a1) ->
-   fprintf oc "	bsrl	%a, %a\n" ireg32 a1 ireg32 res
+	 fprintf oc "	bsrl	%a, %a\n" ireg32 a1 ireg32 res
       | Pbsrq (res,a1) ->
-   fprintf oc "	bsrq	%a, %a\n" ireg64 a1 ireg64 res
+	 fprintf oc "	bsrq	%a, %a\n" ireg64 a1 ireg64 res
       | Pbswap64 res ->
-   fprintf oc "	bswap	%a\n" ireg64 res
+	 fprintf oc "	bswap	%a\n" ireg64 res
       | Pbswap32 res ->
-   fprintf oc "	bswap	%a\n" ireg32 res
+	 fprintf oc "	bswap	%a\n" ireg32 res
       | Pbswap16 res ->
-   fprintf oc "	rolw	$8, %a\n" ireg16 res
+	 fprintf oc "	rolw	$8, %a\n" ireg16 res
       | Pcfi_adjust sz ->
-   cfi_adjust oc (camlint_of_coqint sz)
+	 cfi_adjust oc (camlint_of_coqint sz)
       | Pfmadd132 (res,a1,a2) ->
-   fprintf oc "	vfmadd132sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfmadd132sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmadd213 (res,a1,a2) ->
-   fprintf oc "	vfmadd213sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfmadd213sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmadd231 (res,a1,a2) ->
-   fprintf oc "	vfmadd231sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfmadd231sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmsub132 (res,a1,a2) ->
-   fprintf oc "	vfmsub132sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfmsub132sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmsub213 (res,a1,a2) ->
-   fprintf oc "	vfmsub213sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfmsub213sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmsub231 (res,a1,a2) ->
-   fprintf oc "	vfmsub231sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfmsub231sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmadd132 (res,a1,a2) ->
-   fprintf oc "	vfnmadd132sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfnmadd132sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmadd213 (res,a1,a2) ->
-   fprintf oc "	vfnmadd213sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfnmadd213sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmadd231 (res,a1,a2) ->
-   fprintf oc "	vfnmadd231sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfnmadd231sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmsub132 (res,a1,a2) ->
-   fprintf oc "	vfnmsub132sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfnmsub132sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmsub213 (res,a1,a2) ->
-   fprintf oc "	vfnmsub213sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfnmsub213sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmsub231 (res,a1,a2) ->
-   fprintf oc "	vfnmsub231sd	%a, %a, %a\n" freg a2 freg a1 freg res
+	 fprintf oc "	vfnmsub231sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pmaxsd (res,a1) ->
-   fprintf oc "	maxsd	%a, %a\n" freg a1 freg res
+	 fprintf oc "	maxsd	%a, %a\n" freg a1 freg res
       | Pminsd (res,a1) ->
-   fprintf oc "	minsd	%a, %a\n" freg a1 freg res
+	 fprintf oc "	minsd	%a, %a\n" freg a1 freg res
       | Pmovb_rm (rd,a) ->
-   fprintf oc "	movb	%a, %a\n" addressing a ireg8 rd
+	 fprintf oc "	movb	%a, %a\n" addressing a ireg8 rd
       | Pmovq_rf (rd, r1) ->
          fprintf oc "	movq	%a, %a\n" freg r1 ireg64 rd
       | Pmovsq_mr(a, rs) ->
@@ -826,29 +836,29 @@ module Target(System: SYSTEM):TARGET =
       | Pmovsq_rm(rd, a) ->
           fprintf oc "	movq	%a, %a\n" addressing a freg rd
       | Pmovsb ->
-   fprintf oc "	movsb\n";
+	 fprintf oc "	movsb\n";
       | Pmovsw ->
-   fprintf oc "	movsw\n";
+	 fprintf oc "	movsw\n";
       | Pmovw_rm (rd, a) ->
           fprintf oc "	movw	%a, %a\n" addressing a ireg16 rd
       | Pnop ->
           fprintf oc "	nop\n"
       | Prep_movsl ->
-   fprintf oc "	rep	movsl\n"
+	 fprintf oc "	rep	movsl\n"
       | Psbbl_rr (res,a1) ->
-   fprintf oc "	sbbl	%a, %a\n" ireg32 a1 ireg32 res
+	 fprintf oc "	sbbl	%a, %a\n" ireg32 a1 ireg32 res
       | Psqrtsd (res,a1) ->
-   fprintf oc "	sqrtsd	%a, %a\n" freg a1 freg res
+	 fprintf oc "	sqrtsd	%a, %a\n" freg a1 freg res
       | Psubl_ri (res,n) ->
-    fprintf oc "	subl	$%ld, %a\n" (camlint_of_coqint n) ireg32 res;
+	  fprintf oc "	subl	$%ld, %a\n" (camlint_of_coqint n) ireg32 res;
       | Psubq_ri (res,n) ->
-    fprintf oc "	subq	%a, %a\n" intconst64 n ireg64 res;
+	  fprintf oc "	subq	%a, %a\n" intconst64 n ireg64 res;
       (* Pseudo-instructions *)
       | Plabel(l) ->
           fprintf oc "%a:\n" label (transl_label l)
       | Pallocframe(sz, ofs_ra, ofs_link)
       | Pfreeframe(sz, ofs_ra, ofs_link) ->
-   assert false
+	 assert false
       | Pbuiltin(ef, args, res) ->
           begin match ef with
             | EF_annot(kind,txt, targs) ->

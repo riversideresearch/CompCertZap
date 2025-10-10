@@ -278,7 +278,7 @@ Opaque Int.eq.
 - destruct (preg_of r); try discriminate; destruct (preg_of m); inv H; TailNoLabel.
 - destruct (Float.eq_dec n Float.zero); TailNoLabel.
 - destruct (Float32.eq_dec n Float32.zero); TailNoLabel.
-- destruct (Archi.pic_code tt && negb (Ptrofs.eq ofs Ptrofs.zero)).
+- destruct (SelectOp.symbol_is_relocatable id && negb (Ptrofs.eq ofs Ptrofs.zero)).
 + eapply tail_nolabel_trans; [|apply addptrofs_label]. TailNoLabel.
 + TailNoLabel. 
 - apply opimm32_label; intros; exact I.
@@ -292,6 +292,7 @@ Opaque Int.eq.
 - apply opimm64_label; intros; exact I.
 - destruct (Int.eq n Int.zero); TailNoLabel.
 - eapply transl_cond_op_label; eauto.
+- eapply tail_nolabel_trans; eauto using transl_cond_op_label; TailNoLabel.
 Qed.
 
 Remark indexed_memory_access_label:

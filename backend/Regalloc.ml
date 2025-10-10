@@ -733,9 +733,8 @@ let rec add_interfs_block g blk live =
       add_interfs_instr g instr live';
       live_before instr live'
 
-let find_coloring f liveness tyenv maps =
+let find_coloring f liveness =
   (*type_function f;  (* for debugging *)*)
-
   let g = IRC.init (spill_costs f) in
   PTree.fold
     (fun () pc blk -> ignore (add_interfs_block g blk (PMap.get pc liveness)))
@@ -745,7 +744,7 @@ let find_coloring f liveness tyenv maps =
     destroyed_at_function_entry;
   IRC.coloring g
 
-
+
 (*********** Determination of variables that need spill code insertion *****)
 
 let is_reg alloc v =
@@ -1153,20 +1152,20 @@ let transl_function fn alloc =
 
 exception Timeout
 
-let rec first_round f liveness tyenv maps =
-  let alloc = find_coloring f liveness tyenv maps in
+let rec first_round f liveness =
+  let alloc = find_coloring f liveness in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- After initial register allocation\n\n";
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f
   end;
   let ts = tospill_function f alloc in
-  if VSet.is_empty ts then success f alloc else more_rounds f ts 1 tyenv maps
+  if VSet.is_empty ts then success f alloc else more_rounds f ts 1
 
-and more_rounds f ts count tyenv maps =
+and more_rounds f ts count =
   if count >= 40 then raise Timeout;
   let f' = spill_function f ts count in
   let liveness = liveness_analysis f' in
-  let alloc = find_coloring f' liveness tyenv maps in
+  let alloc = find_coloring f' liveness in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- After register allocation (round %d)\n\n" count;
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f'
@@ -1180,7 +1179,7 @@ and more_rounds f ts count tyenv maps =
       VSet.iter (fun v -> fprintf !pp "%a " PrintXTL.var v) ts';
       fprintf !pp "\n\n"
     end;
-    more_rounds f (VSet.union ts ts') (count + 1) tyenv maps
+    more_rounds f (VSet.union ts ts') (count + 1)
   end
 
 and success f alloc =
@@ -1195,25 +1194,25 @@ and success f alloc =
 let regalloc f =
   init_trace();
   reset_temps();
-  let f1, maps = Splitting.rename_function f in
+  let f1 = Splitting.rename_function f in
   match RTLtyping.type_function f1 with
   | Errors.Error msg ->
-     Errors.Error(Errors.MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
+      Errors.Error(Errors.MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
   | Errors.OK tyenv ->
-     let f2 = function_of_RTL_function f1 tyenv in
-     let liveness = liveness_analysis f2 in
-     let f3 = dead_code_elimination f2 liveness in
-     if !option_dalloctrace then begin
-         fprintf !pp "-------------- Initial XTL\n\n";
-         PrintXTL.print_function !pp f3
-       end;
-     try
-       Errors.OK(first_round f3 liveness tyenv maps)
-     with
-     | Timeout ->
-        Errors.Error(Errors.msg (coqstring_of_camlstring "spilling fails to converge"))
-     | Type_error_at pc ->
-        Errors.Error [Errors.MSG(coqstring_of_camlstring "ill-typed XTL code at PC ");
-                      Errors.POS pc]
-     | Bad_LTL ->
-        Errors.Error(Errors.msg (coqstring_of_camlstring "bad LTL after spilling"))
+      let f2 = function_of_RTL_function f1 tyenv in
+      let liveness = liveness_analysis f2 in
+      let f3 = dead_code_elimination f2 liveness in
+      if !option_dalloctrace then begin
+        fprintf !pp "-------------- Initial XTL\n\n";
+        PrintXTL.print_function !pp f3
+      end;
+      try
+        Errors.OK(first_round f3 liveness)
+      with
+      | Timeout ->
+          Errors.Error(Errors.msg (coqstring_of_camlstring "spilling fails to converge"))
+      | Type_error_at pc ->
+          Errors.Error [Errors.MSG(coqstring_of_camlstring "ill-typed XTL code at PC ");
+                 Errors.POS pc]
+      | Bad_LTL ->
+          Errors.Error(Errors.msg (coqstring_of_camlstring "bad LTL after spilling"))

@@ -180,7 +180,7 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_extern,Storage_extern
     | Storage_default,Storage_default -> sto
     | _,Storage_static ->
-  error loc "static declaration of '%s' follows non-static declaration" s;
+	error loc "static declaration of '%s' follows non-static declaration" s;
         sto
     | Storage_static,_ -> Storage_static (* Static stays static *)
     | Storage_extern,_ -> if is_function_type env new_ty then Storage_extern else sto
@@ -196,7 +196,7 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_auto,_
     | _,Storage_register
     | Storage_register,_ ->
-  error loc "unexpected %s declaration of '%s'"
+	error loc "unexpected %s declaration of '%s'"
                   (name_of_storage_class sto) s;
         sto
   in
@@ -1540,16 +1540,21 @@ module I = struct
                 find (f_i :: before) after
         in find [] flds
     | TUnion(id, _), Init_union(id', fld, i) ->
+        (* matches in the most recently activated field, propagating current initializer *)
         if fld.fld_name = name then
           OK(Zunion(z, id, fld), i)
+        else if fld.fld_anonymous && has_member env name fld.fld_typ then
+          let zi = (Zunion(z, id, fld), i) in
+          member env zi name
         else begin
+          (* matches in another field, creation of new default initializer *)
           let rec find = function
             | [] -> NotFound
             | fld1 :: rem ->
                 if fld1.fld_name = name then
                   OK(Zunion(z, id, fld1), default_init env fld1.fld_typ)
-                else if fld.fld_anonymous && has_member env name fld.fld_typ then
-                  let zi = (Zunion(z, id, fld1),i) in
+                else if fld1.fld_anonymous && has_member env name fld1.fld_typ then
+                  let zi = (Zunion(z, id, fld1), default_init env fld1.fld_typ) in
                   member env zi name
                 else
                   find rem

@@ -15,7 +15,7 @@
 
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
 Require Import AST Linking Builtins.
-Require Import Values Memory.
+Require Import Values Memory Events.
 Require Import Op Registers RTL.
 Require Import ValueDomain ValueAnalysis CSEdomain CombineOp.
 
@@ -65,6 +65,39 @@ Fixpoint valnum_regs (n: numbering) (rl: list reg)
   | r1 :: rs =>
       let (n1, v1) := valnum_reg n r1 in
       let (ns, vs) := valnum_regs n1 rs in
+      (ns, v1 :: vs)
+  end.
+
+Fixpoint valnum_builtin_arg (n: numbering) (a: builtin_arg reg)
+                 {struct a} : numbering * builtin_arg valnum :=
+  match a with
+  | BA r => let (n, v) := valnum_reg n r in (n, BA v)
+  | BA_int i => (n, BA_int i)
+  | BA_long i => (n, BA_long i)
+  | BA_float f => (n, BA_float f)
+  | BA_single f => (n, BA_single f)
+  | BA_loadstack chunk ofs => (n, BA_loadstack chunk ofs)
+  | BA_addrstack ofs => (n, BA_addrstack ofs)
+  | BA_loadglobal chunk id ofs => (n, BA_loadglobal chunk id ofs)
+  | BA_addrglobal id ofs => (n, BA_addrglobal id ofs)
+  | BA_splitlong a1 a2 =>
+      let (n, v1) := valnum_builtin_arg n a1 in
+      let (n, v2) := valnum_builtin_arg n a2 in
+      (n, BA_splitlong v1 v2)
+  | BA_addptr a1 a2 =>
+      let (n, v1) := valnum_builtin_arg n a1 in
+      let (n, v2) := valnum_builtin_arg n a2 in
+      (n, BA_addptr v1 v2)
+  end.
+
+Fixpoint valnum_builtin_args (n: numbering) (args: list (builtin_arg reg))
+               {struct args} : numbering * list (builtin_arg valnum) :=
+  match args with
+  | nil =>
+      (n, nil)
+  | arg1 :: args =>
+      let (n1, v1) := valnum_builtin_arg n arg1 in
+      let (ns, vs) := valnum_builtin_args n1 args in
       (ns, v1 :: vs)
   end.
 
@@ -207,9 +240,20 @@ Definition add_load (n: numbering) (rd: reg)
   let (n1, vs) := valnum_regs n rs in
   add_rhs n1 rd (Load chunk addr vs p).
 
-(** [set_unknown n rd] returns a numbering where [rd] is mapped to
-  no value number, and no equations are added.  This is useful
-  to model instructions with unpredictable results such as [Ibuiltin]. *)
+(** [add_builtin n res bf args] specializes [add_rhs] for the case of a
+  built-in function.  The right-hand side corresponding to [bf]
+  and the value numbers for the argument [args] [rs] is built
+  and added to [n] as described in [add_rhs]. *)
+
+Definition add_builtin (n: numbering) (dst: builtin_res reg)
+                       (bf: builtin_function) (args: list (builtin_arg reg)) :=
+  match dst with
+  | BR rd =>
+      let (n1, args1) := valnum_builtin_args n args in
+      add_rhs n1 rd (Builtin bf args1)
+  | _ =>
+      n
+  end.
 
 Definition set_unknown (n: numbering) (rd: reg) :=
   {| num_next := n.(num_next);
@@ -247,6 +291,7 @@ Definition filter_loads (r: rhs) : bool :=
   match r with
   | Op op _ => op_depends_on_memory op
   | Load _ _ _ _ => true
+  | Builtin bf args => builtin_args_depends_on_memory args
   end.
 
 Definition kill_all_loads (n: numbering) : numbering :=
@@ -264,6 +309,8 @@ Definition filter_after_store (n: numbering) (p: aptr) (sz: Z) (r: rhs) :=
       op_depends_on_memory op
   | Load chunk addr vl q =>
       negb (pdisjoint q (size_chunk chunk) p sz)
+  | Builtin bf args =>
+      builtin_args_depends_on_memory args
   end.
 
 Definition kill_loads_after_store
@@ -271,6 +318,25 @@ Definition kill_loads_after_store
              (chunk: memory_chunk) (addr: addressing) (args: list reg) :=
   let p := aaddressing app addr args in
   kill_equations (filter_after_store n p (size_chunk chunk)) n.
+
+(** [kill_cheap_computations n] removes all equations corresponding to
+    ``cheap'' computations, i.e. computations that are not worth
+    factoring across a call to a runtime library function.
+    (Such a factoring has its own costs, since the result must be kept
+    in a callee-save register or a stack location.)
+    As a rough approximation of costs, we say that all [Op] and [Load]
+    computations are cheap, and all [Builtin] computations are
+    expensive.  More precise criteria are possible. *)
+
+Definition filter_cheap (r: rhs) : bool :=
+  match r with
+  | Op _ _ => true
+  | Load _ _ _ _ => true
+  | Builtin _ _ => false
+  end.
+
+Definition kill_cheap_computations (n: numbering) : numbering :=
+  kill_equations filter_cheap n.
 
 (** [add_store_result n chunk addr rargs rsrc] updates the numbering [n]
   to reflect the knowledge gained after executing an instruction
@@ -422,20 +488,22 @@ Module Solver := BBlock_solver(Numbering).
 
 (** The transfer function for the dataflow analysis returns the numbering
   ``after'' execution of the instruction at [pc], as a function of the
-  numbering ``before''.  For [Iop] and [Iload] instructions, we add
-  equations or reuse existing value numbers as described for
-  [add_op] and [add_load].  For [Istore] instructions, we forget
-  equations involving memory loads at possibly overlapping locations,
-  then add an equation for loads from the same location stored to.
-  For [Icall] instructions, we could simply associate a fresh, unconstrained by equations value number
-  to the result register.  However, it is often undesirable to eliminate
-  common subexpressions across a function call (there is a risk of
-  increasing too much the register pressure across the call), so we
-  just forget all equations and start afresh with an empty numbering.
-  Finally, for instructions that modify neither registers nor
+  numbering ``before''.
+- For [Iop] and [Iload] instructions, we add equations or reuse
+  existing value numbers as described for [add_op] and [add_load].
+- For [Istore] instructions, we forget equations involving memory
+  loads at possibly overlapping locations, then add an equation for
+  loads from the same location stored to.
+- For [Icall] instructions, we could simply associate a fresh,
+  unconstrained by equations value number to the result register.
+  However, it is often undesirable to eliminate common subexpressions
+  across a function call (there is a risk of increasing too much the
+  register pressure across the call), so we just forget all equations
+  and start afresh with an empty numbering.
+- Finally, for instructions that modify neither registers nor
   the memory, we keep the numbering unchanged.
 
-  For builtin invocations [Ibuiltin], we have three strategies:
+  For builtin invocations [Ibuiltin], we have four strategies:
 - Forget all equations.  This is appropriate for builtins that can be
   turned into function calls
   ([EF_external], [EF_runtime], [EF_malloc], [EF_free]).
@@ -443,11 +511,17 @@ Module Solver := BBlock_solver(Numbering).
   This is appropriate for builtins that can modify memory,
   e.g. volatile stores, or [EF_builtin] for unknown builtin functions.
 - Keep all equations, taking advantage of the fact that neither memory
-  nor registers are modified.  This is appropriate for annotations,
-  volatile loads, and known builtin functions.
+  nor registers are modified.  This is appropriate for annotations and
+  volatile loads.
+- Keep all equations and add a new equation.  This is appropriate for
+  builtin functions with known semantics.
+
+  [Icall] instructions that call runtime library functions with known
+  semantics can be analyzed like a builtin invocation,
+  by adding a new [Builtin] equation.
 *)
 
-Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numbering) :=
+Definition transfer (f: function) (dm: defmap) (approx: PMap.t VA.t) (pc: node) (before: numbering) :=
   match f.(fn_code)!pc with
   | None => before
   | Some i =>
@@ -463,7 +537,12 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
           let n := kill_loads_after_store app before chunk addr args in
           add_store_result app n chunk addr args src
       | Icall sig ros args res s =>
-          empty_numbering
+          match is_known_runtime_function dm ros with
+          | None => empty_numbering
+          | Some bf =>
+              let n := kill_cheap_computations before in
+              add_builtin n (BR res) bf (map (@BA _) args)
+          end
       | Itailcall sig ros args =>
           empty_numbering
       | Ibuiltin ef args res s =>
@@ -474,7 +553,7 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
               set_res_unknown (kill_all_loads before) res
           | EF_builtin name sg =>
               match lookup_builtin_function name sg with
-              | Some bf => set_res_unknown before res
+              | Some bf => add_builtin before res bf args
               | None    => set_res_unknown (kill_all_loads before) res
               end
           | EF_memcpy sz al =>
@@ -505,21 +584,22 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
   which produces sub-optimal solutions quickly.  The result is
   a mapping from program points to numberings. *)
 
-Definition analyze (f: RTL.function) (approx: PMap.t VA.t): option (PMap.t numbering) :=
-  Solver.fixpoint (fn_code f) successors_instr (transfer f approx) f.(fn_entrypoint).
+Definition analyze (f: RTL.function) (dm: defmap) (approx: PMap.t VA.t): option (PMap.t numbering) :=
+  Solver.fixpoint (fn_code f) successors_instr (transfer f dm approx) f.(fn_entrypoint).
 
 (** * Code transformation *)
 
 (** The code transformation is performed instruction by instruction.
-  [Iload] instructions and non-trivial [Iop] instructions are turned
-  into move instructions if their result is already available in a
-  register, as indicated by the numbering inferred at that program point.
+  [Iload] instructions, non-trivial [Iop] instructions, and [Ibuiltin]
+  with known built-in functions are turned into move instructions if
+  their result is already available in a register, as indicated by the
+  numbering inferred at that program point.
 
   Some operations are so cheap to compute that it is generally not
   worth reusing their results.  These operations are detected by the
   function [is_trivial_op] in module [Op]. *)
 
-Definition transf_instr (n: numbering) (instr: instruction) :=
+Definition transf_instr (dm: defmap) (n: numbering) (instr: instruction) :=
   match instr with
   | Iop op args res s =>
       if is_trivial_op op then instr else
@@ -544,6 +624,27 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
       let (n1, vl) := valnum_regs n args in
       let (addr', args') := reduce _ combine_addr n1 addr args vl in
       Istore chunk addr' args' src s
+  | Icall sg ros args res s =>
+      match is_known_runtime_function dm ros with
+      | None => instr
+      | Some bf =>
+          let (n1, args') := valnum_builtin_args n (map (@BA _) args) in
+          match find_rhs n1 (Builtin bf args') with
+          | Some r => Iop Omove (r :: nil) res s
+          | None   => instr
+          end
+      end
+  | Ibuiltin (EF_builtin name sg) args (BR res) s =>
+      match lookup_builtin_function name sg with
+      | Some bf =>
+          let (n1, args') := valnum_builtin_args n args in
+          match find_rhs n1 (Builtin bf args') with
+          | Some r => Iop Omove (r :: nil) res s
+          | None   => instr
+          end
+      | None =>
+          instr
+      end
   | Icond cond args s1 s2 =>
       let (n1, vl) := valnum_regs n args in
       match combine_cond' cond vl with
@@ -556,26 +657,29 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
       instr
   end.
 
-Definition transf_code (approxs: PMap.t numbering) (instrs: code) : code :=
-  PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
+Definition transf_code (dm: defmap) (approxs: PMap.t numbering) (instrs: code) : code :=
+  PTree.map (fun pc instr => transf_instr dm approxs!!pc instr) instrs.
 
 Definition vanalyze := ValueAnalysis.analyze.
 
-Definition transf_function (rm: romem) (f: function) : res function :=
+Definition globdefs := PTree.t (globdef fundef unit).
+
+Definition transf_function (dm: defmap) (rm: romem) (f: function) : res function :=
   let approx := vanalyze rm f in
-  match analyze f approx with
+  match analyze f dm approx with
   | None => Error (msg "CSE failure")
   | Some approxs =>
       OK(mkfunction
            f.(fn_sig)
            f.(fn_params)
            f.(fn_stacksize)
-           (transf_code approxs f.(fn_code))
+           (transf_code dm approxs f.(fn_code))
            f.(fn_entrypoint))
   end.
 
-Definition transf_fundef (rm: romem) (f: fundef) : res fundef :=
-  AST.transf_partial_fundef (transf_function rm) f.
+Definition transf_fundef (dm: defmap) (rm: romem) (f: fundef) : res fundef :=
+  AST.transf_partial_fundef (transf_function dm rm) f.
 
 Definition transf_program (p: program) : res program :=
-  transform_partial_program (transf_fundef (romem_for p)) p.
+  transform_partial_program (transf_fundef (prog_defmap p) (romem_for p)) p.
+
