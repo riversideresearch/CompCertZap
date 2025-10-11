@@ -161,6 +161,7 @@ BACKEND=\
   SelectLongproof.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
+  RTLdmr.v RTLdmrspec.v RTLdmrproof.v \
   RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
   Tailcall.v Tailcallproof.v \
   Inlining.v Inliningspec.v Inliningproof.v \

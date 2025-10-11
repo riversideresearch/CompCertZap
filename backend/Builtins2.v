@@ -16,7 +16,11 @@ Inductive replicate_builtin : Type :=
 | BI_vote_int
 | BI_vote_long
 | BI_vote_single
-| BI_vote_float.
+| BI_vote_float
+| BI_check_int
+| BI_check_long
+| BI_check_single
+| BI_check_float.
 
 Definition eq_replicate_builtin: forall (x y: replicate_builtin), {x=y} + {x<>y}.
 Proof.
@@ -33,7 +37,11 @@ Definition replicate_builtin_table : list (string * replicate_builtin) :=
    ("__builtin_vote_int", BI_vote_int);
    ("__builtin_vote_long", BI_vote_long);
    ("__builtin_vote_single", BI_vote_single);
-   ("__builtin_vote_float", BI_vote_float)].
+   ("__builtin_vote_float", BI_vote_float);
+   ("__builtin_check_int", BI_check_int);
+   ("__builtin_check_long", BI_check_long);
+   ("__builtin_check_single", BI_check_single);
+   ("__builtin_check_float", BI_check_float)].
 
 Definition replicate_builtin_sig (b: replicate_builtin) : signature :=
   match b with
@@ -53,6 +61,14 @@ Definition replicate_builtin_sig (b: replicate_builtin) : signature :=
       [Xsingle; Xsingle; Xsingle ---> Xsingle]
   | BI_vote_float =>
       [Xfloat; Xfloat; Xfloat ---> Xfloat]
+  | BI_check_int =>
+      [Xint; Xint ---> Xvoid]
+  | BI_check_long =>
+      [Xlong; Xlong ---> Xvoid]
+  | BI_check_single =>
+      [Xsingle; Xsingle ---> Xvoid]
+  | BI_check_float =>
+      [Xfloat; Xfloat ---> Xvoid]
   end.
 
 Program Definition smove_int_sem : builtin_sem Xint :=
@@ -362,6 +378,24 @@ Qed.
 Definition vote_float_sem : builtin_sem Xfloat :=
   mkbuiltin_v3t Xfloat vote_float vote_float_well_typed vote_float_compat_inject.
 
+(** ******************)
+(** DMR checks. *)
+
+Definition check (x y : val) : val := Vundef.
+
+Lemma check_well_typed x y :
+  Val.has_rettype (check x y) Xvoid.
+Proof. apply I. Qed.
+
+Lemma check_compat_inject j v1 v1' v2 v2' :
+  Val.inject j v1 v1' ->
+  Val.inject j v2 v2' ->
+  Val.inject j (check v1 v2) (check v1' v2').
+Proof. auto. Qed.
+
+Definition check_sem : builtin_sem Xvoid :=
+  mkbuiltin_v2t Xvoid check check_well_typed check_compat_inject.
+
 Definition replicate_builtin_sem (b: replicate_builtin)
   : builtin_sem (sig_res (replicate_builtin_sig b)) :=
   match b with
@@ -373,4 +407,8 @@ Definition replicate_builtin_sem (b: replicate_builtin)
   | BI_vote_long => vote_long_sem
   | BI_vote_single => vote_single_sem
   | BI_vote_float => vote_float_sem
+  | BI_check_int => check_sem
+  | BI_check_long => check_sem
+  | BI_check_single => check_sem
+  | BI_check_float => check_sem
   end.

@@ -102,6 +102,8 @@ Extract Constant Compopts.thumb =>
   "fun _ -> !Clflags.option_mthumb".
 Extract Constant Compopts.debug =>
   "fun _ -> !Clflags.option_g".
+Extract Constant Compopts.dmr =>
+  "fun _ -> !Clflags.option_dmr".
 Extract Constant Compopts.tmr =>
   "fun _ -> !Clflags.option_tmr".
 

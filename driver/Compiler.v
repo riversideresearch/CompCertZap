@@ -35,6 +35,7 @@ Require Cshmgen.
 Require Cminorgen.
 Require Selection.
 Require RTLgen.
+Require RTLdmr.
 Require RTLtmr.
 Require Tailcall.
 Require Inlining.
@@ -57,6 +58,7 @@ Require Cshmgenproof.
 Require Cminorgenproof.
 Require Selectionproof.
 Require RTLgenproof.
+Require RTLdmrproof.
 Require RTLtmrproof.
 Require Tailcallproof.
 Require Inliningproof.
@@ -138,10 +140,12 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print (print_RTL 7)
   @@@ time "Unused globals" Unusedglob.transform_program
   @@ print (print_RTL 8)
-  @@@ partial_if Compopts.tmr (time "TMR" RTLtmr.transf_program)
+  @@@ partial_if Compopts.dmr (time "DMR" RTLdmr.transf_program)
   @@ print (print_RTL 9)
-  @@ time "Renumbering" Renumber.transf_program
+  @@@ partial_if Compopts.tmr (time "TMR" RTLtmr.transf_program)
   @@ print (print_RTL 10)
+  @@ time "Renumbering" Renumber.transf_program
+  @@ print (print_RTL 11)
   @@@ time "Register allocation" Allocation.transf_program
    @@ print print_LTL
    @@ time "Branch tunneling" Tunneling.tunnel_program
@@ -249,6 +253,7 @@ Definition CompCert's_passes :=
   ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog)
   ::: mkpass (match_if Compopts.optim_redundancy Deadcodeproof.match_prog)
   ::: mkpass Unusedglobproof.match_prog
+  ::: mkpass (match_if Compopts.dmr RTLdmrproof.match_prog)
   ::: mkpass (match_if Compopts.tmr RTLtmrproof.match_prog)
   ::: mkpass Renumberproof.match_prog
   ::: mkpass Allocproof.match_prog
@@ -294,7 +299,8 @@ Proof.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  destruct (partial_if tmr RTLtmr.transf_program p14) as [p15'|e] eqn:P15; simpl in T; try discriminate.
+  destruct (partial_if dmr RTLdmr.transf_program p14) as [pdmr|e] eqn:Pdmr; simpl in T; try discriminate.
+  destruct (partial_if tmr RTLtmr.transf_program pdmr) as [p15'|e] eqn:P15; simpl in T; try discriminate.
   set (p15 := Renumber.transf_program p15') in *.
   destruct (Allocation.transf_program p15) as [p16|e] eqn:P16; simpl in T; try discriminate.
   set (p17 := Tunneling.tunnel_program p16) in *.
@@ -317,6 +323,7 @@ Proof.
   exists p12; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
   exists p13; split. eapply partial_if_match; eauto. apply Deadcodeproof.transf_program_match.
   exists p14; split. apply Unusedglobproof.transf_program_match; auto.
+  exists pdmr; split. eapply partial_if_match; eauto. apply RTLdmrproof.transf_program_match; auto.
   exists p15'; split. eapply partial_if_match; eauto. apply RTLtmrproof.transf_program_match; auto.
   exists p15; split. apply Renumberproof.transf_program_match; auto.
   exists p16; split. apply Allocproof.transf_program_match; auto.
@@ -376,7 +383,7 @@ Ltac DestructM :=
       destruct H as (p & M & MM); clear H
   end.
   repeat DestructM. subst tp.
-  assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics p23)).
+  assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics p24)).
   {
   eapply compose_forward_simulations.
     eapply SimplExprproof.transl_program_correct; eassumption.
@@ -405,7 +412,9 @@ Ltac DestructM :=
     eapply match_if_simulation. eassumption. exact Deadcodeproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply Unusedglobproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
+  eapply compose_forward_simulations.
+    eapply match_if_simulation. eassumption. exact RTLdmrproof.transf_program_correct; eassumption.
+  eapply compose_forward_simulations.
     eapply match_if_simulation. eassumption. exact RTLtmrproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply Renumberproof.transf_program_correct; eassumption.
