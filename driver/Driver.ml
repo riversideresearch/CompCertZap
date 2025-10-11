@@ -303,6 +303,7 @@ let cmdline_actions =
     @ DebugInit.debugging_actions @
 (* Code generation options -- more below *)
  [
+  Exact "-tmr", Set option_tmr;
   Exact "-O0", Unit (unset_all optimization_options);
   Exact "-O", Unit (set_all optimization_options);
   _Regexp "-O[123]$", Unit (set_all optimization_options);

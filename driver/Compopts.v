@@ -44,3 +44,5 @@ Parameter thumb: unit -> bool.
 
 (** Flag -g.  For insertion of debugging information. *)
 Parameter debug: unit -> bool.
+
+Parameter tmr: unit -> bool.

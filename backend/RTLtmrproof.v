@@ -1735,7 +1735,7 @@ Section PRESERVATION.
     induction l; simpl; auto; intros Hwf Hrefl.
     destruct (rm # a) eqn:Ha.
     apply IHl in Hrefl; clear IHl.
-    2: { eapply rm_wf_antimonotone; eauto; intuition. }
+    2: { eapply rm_wf_antimonotone; eauto with *. }
     intros r1 r2 r3 Hr1 Hused.
     destruct (DecidableTypeEx.Positive_as_DT.eq_dec r1 a); subst.
     { rewrite Hr1 in Ha; inv Ha.

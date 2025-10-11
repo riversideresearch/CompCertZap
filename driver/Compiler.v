@@ -138,7 +138,7 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print (print_RTL 7)
   @@@ time "Unused globals" Unusedglob.transform_program
   @@ print (print_RTL 8)
-  @@@ time "TMR" RTLtmr.transf_program
+  @@@ partial_if Compopts.tmr (time "TMR" RTLtmr.transf_program)
   @@ print (print_RTL 9)
   @@ time "Renumbering" Renumber.transf_program
   @@ print (print_RTL 10)
@@ -249,7 +249,7 @@ Definition CompCert's_passes :=
   ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog)
   ::: mkpass (match_if Compopts.optim_redundancy Deadcodeproof.match_prog)
   ::: mkpass Unusedglobproof.match_prog
-  ::: mkpass RTLtmrproof.match_prog
+  ::: mkpass (match_if Compopts.tmr RTLtmrproof.match_prog)
   ::: mkpass Renumberproof.match_prog
   ::: mkpass Allocproof.match_prog
   ::: mkpass Tunnelingproof.match_prog
@@ -294,7 +294,7 @@ Proof.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  destruct (RTLtmr.transf_program p14) as [p15'|e] eqn:P15; simpl in T; try discriminate.
+  destruct (partial_if tmr RTLtmr.transf_program p14) as [p15'|e] eqn:P15; simpl in T; try discriminate.
   set (p15 := Renumber.transf_program p15') in *.
   destruct (Allocation.transf_program p15) as [p16|e] eqn:P16; simpl in T; try discriminate.
   set (p17 := Tunneling.tunnel_program p16) in *.
@@ -317,7 +317,7 @@ Proof.
   exists p12; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
   exists p13; split. eapply partial_if_match; eauto. apply Deadcodeproof.transf_program_match.
   exists p14; split. apply Unusedglobproof.transf_program_match; auto.
-  exists p15'; split. apply RTLtmrproof.transf_program_match; auto.
+  exists p15'; split. eapply partial_if_match; eauto. apply RTLtmrproof.transf_program_match; auto.
   exists p15; split. apply Renumberproof.transf_program_match; auto.
   exists p16; split. apply Allocproof.transf_program_match; auto.
   exists p17; split. apply Tunnelingproof.transf_program_match.
@@ -406,10 +406,10 @@ Ltac DestructM :=
   eapply compose_forward_simulations.
     eapply Unusedglobproof.transf_program_correct; eassumption.
     eapply compose_forward_simulations.
-    eapply RTLtmrproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
+    eapply match_if_simulation. eassumption. exact RTLtmrproof.transf_program_correct; eassumption.
+  eapply compose_forward_simulations.
     eapply Renumberproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
+  eapply compose_forward_simulations.
     eapply Allocproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply Tunnelingproof.transf_program_correct; eassumption.
