@@ -345,8 +345,8 @@ let maj_vote
       (cmp : 'a -> 'a -> instruction)
       (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
   if a == b || a == c || b == c then begin
-     raise (Error "ill-formed majority vote")
-  end;
+      raise (Error "ill-formed majority vote")
+    end;
   assert (a <> b && a <> c && b <> c);
   let lbl_done = new_label () in
   let lbl_fix = new_label () in
@@ -385,8 +385,8 @@ let check
       (cmp : 'a -> 'a -> instruction)
       (a : 'a) (b : 'a) : unit =
   if a == b then begin
-     raise (Error "ill-formed DMR check")
-  end;
+      raise (Error "ill-formed DMR check")
+    end;
   let lbl_done = new_label () in
   let lbl_fault = new_label () in
   side_emit (Plabel lbl_fault);

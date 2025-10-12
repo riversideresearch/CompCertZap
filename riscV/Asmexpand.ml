@@ -578,6 +578,95 @@ let expand_csel res cond arg1 arg2 =
 
 (* Handling of compiler-inlined builtins *)
 
+(* (\* Full sync version *\) *)
+(* (\** Generic majority vote. *\) *)
+(* let maj_vote *)
+(*       (mov : 'a -> 'a -> instruction) *)
+(*       (cmp_j : 'a -> 'a -> label -> instruction list) *)
+(*       (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit = *)
+(*   if a == b || a == c || b == c then begin *)
+(*     raise (Error "ill-formed majority vote") *)
+(*   end; *)
+(*   let lbl_done = new_label () in *)
+(*   let lbl_fix = new_label () in *)
+(*   side_emit (Plabel lbl_fix); *)
+(*   side_emit (mov res c); *)
+(*   side_emit (Pj_l lbl_done); *)
+(*   List.iter emit (cmp_j a b lbl_fix); *)
+(*       emit (mov res a); *)
+(*   emit (Plabel lbl_done) *)
+
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
+      (cmp_j : 'a -> 'a -> label -> instruction list)
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+  if a == b || a == c || b == c then begin
+      raise (Error "ill-formed majority vote")
+    end;
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  side_emit (Plabel lbl_fix);
+  if a = res || b = res then begin
+      List.iter emit (cmp_j a b lbl_fix); (* Compare a and b *)
+      side_emit (mov res c); (* If a != b, res := c *)
+    end
+  else if c = res then begin
+      List.iter emit (cmp_j a c lbl_fix); (* Compare a and c *)
+      side_emit (mov res b); (* If a != c, res := b *)
+    end
+  else begin
+      List.iter emit (cmp_j a b lbl_fix); (* Compare a and b *)
+      emit (mov res a); (* If a == b, res := a *)
+      side_emit (mov res c); (* If a != b, res := c *)
+    end;
+  side_emit (Pj_l lbl_done);
+  emit (Plabel lbl_done)
+
+(** Majority vote 32-bit integers. *)
+let maj_vote_int = maj_vote
+                     (fun x y -> Pmv (x, y))
+                     (fun x y lbl -> [Pbnew (X x, X y, lbl)])
+
+(** Majority vote 64-bit integers. *)
+let maj_vote_long = maj_vote
+                      (fun x y -> Pmv (x, y))
+                      (fun x y lbl -> [Pbnel (X x, X y, lbl)])
+
+(** Majority vote single-precision floats. *)
+let maj_vote_single = maj_vote
+                        (fun x y -> Pfmv (x, y))
+                        (fun x y lbl -> [Pfeqs (X31, x, y);
+                                         Pbeqw (X0, X X31, lbl)])
+
+(** Majority vote double-precision floats. *)
+let maj_vote_float = maj_vote
+                       (fun x y -> Pfmv (x, y))
+                       (fun x y lbl -> [Pfeqd (X31, x, y);
+                                        Pbeql (X0, X X31, lbl)])
+
+(* (\** DMR checks. *\) *)
+(* let check *)
+(*       (cmp : 'a -> 'a -> instruction) *)
+(*       (a : 'a) (b : 'a) : unit = *)
+(*   if a == b then begin *)
+(*      raise (Error "ill-formed DMR check") *)
+(*   end; *)
+(*   let lbl_done = new_label () in *)
+(*   let lbl_fault = new_label () in *)
+(*   side_emit (Plabel lbl_fault); *)
+(*   side_emit Pnop; *)
+(*   side_emit (Pj_l lbl_done); *)
+(*   emit (cmp a b); *)
+(*   emit (Pjcc (Cond_ne, lbl_fault)); *)
+(*   emit (Plabel lbl_done) *)
+  
+(* (\** Check integers. *\) *)
+(* let check_int = check (fun x y -> Pcmpl_rr (x, y)) *)
+
+(* (\** Check floats. *\) *)
+(* let check_float = check (fun x y -> Pcomiss_ff (x, y)) *)
+
 let expand_builtin_inline name args res =
   match name, args, res with
   (* Synchronization *)
@@ -679,6 +768,41 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
+
+  (* Shadow move *)
+  | "__smove_int", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmv (res, a))
+  | "__smove_long", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmv (res, a))
+  | "__smove_single", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmv (res, a))
+  | "__smove_float", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmv (res, a))
+
+  (* Majority vote *)
+  | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_long a b c res
+  | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_single a b c res
+  | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+
+  (* (\* DMR check *\) *)
+  (* | "__builtin_check_int", [BA(IR a); BA(IR b)], BR_none -> *)
+  (*    check_int a b *)
+  (* | "__builtin_check_long", [BA(IR a); BA(IR b)], BR_none -> *)
+  (*    check_int a b *)
+  (* | "__builtin_check_single", [BA(FR a); BA(FR b)], BR_none -> *)
+  (*    check_float a b *)
+  (* | "__builtin_check_float", [BA(FR a); BA(FR b)], BR_none -> *)
+  (*    check_float a b *)
+
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))

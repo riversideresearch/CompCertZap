@@ -1,3 +1,22 @@
+# Quickstart for CompCert only
+
+## Install RISC-V cross-compiler
+```bash
+sudo apt install gcc-riscv64-linux-elf
+```
+
+## Build CompCert
+```bash
+git clone ssh://git@ssh.bitbucket.riversideresearch.org:7999/radhs/compcert.git && \
+cd compcert && \
+./configure -toolprefix riscv64-linux-gnu- riscv64-linux && \
+make -j$(nproc)
+```
+
+`sudo make install` to install globally.
+
+# CompCert + spike
+
 ## Make RISC-V tools directory
 ```bash
 sudo mkdir /opt/riscv && \
@@ -31,7 +50,7 @@ cd riscv-isa-sim && git switch replicate && mkdir build && cd build && \
 make install -j$(nproc)
 ```
 
-Add to `~/.bashrc`:
+Add to `~/.bashrc` (also needed for building CompCert with our riscv toolprefix):
 ```bash
 export PATH="/opt/riscv/bin:$PATH"
 ```
@@ -41,10 +60,10 @@ export PATH="/opt/riscv/bin:$PATH"
 spike pk <prog> <arg*>
 ```
 
-## Build CompCert with TMR pass
+## Build CompCert
 ```bash
 git clone ssh://git@ssh.bitbucket.riversideresearch.org:7999/radhs/compcert.git && \
-cd compcert && git switch replicate && \
+cd compcert && \
 ./configure -toolprefix riscv64-unknown-linux-gnu- riscv64-linux && \
 make -j$(nproc)
 ```
