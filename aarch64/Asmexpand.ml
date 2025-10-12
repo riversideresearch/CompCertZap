@@ -349,10 +349,12 @@ let expand_builtin_vstore chunk args =
   | _ ->
       assert false
 
-(** Branch relaxation stuff *)
+(** Conditional branch rewriting *)
 
+(* Doesn't include Pcbnz or Pcbz because they have a sufficiently
+   large (+/- 1M) range. Pbc, Ptbnz, and Ptbz on the other hand have
+   only +/- 32K. *)
 let is_cond_branch = function
-  (* | Pbc _ | Ptbnz _ | Ptbz _ | Pcbnz _ | Pcbz _ -> true *)
   | Pbc _ | Ptbnz _ | Ptbz _ -> true
   | _ -> false
 
@@ -376,16 +378,12 @@ let negate_cond_branch new_tgt = function
   | Pbc (cond, _) -> Pbc (negate_testcond cond, new_tgt)
   | Ptbnz (sz, r, i, _) -> Ptbz (sz, r, i, new_tgt)
   | Ptbz (sz, r, i, _) -> Ptbnz (sz, r, i, new_tgt)
-  (* | Pcbnz (sz, r, _) -> Pcbz (sz, r, new_tgt) *)
-  (* | Pcbz (sz, r, _) -> Pcbnz (sz, r, new_tgt) *)
   | _ -> raise (Error "negate_cond_branch: expected conditional branch")
 
 let tgt_of_branch = function
   | Pbc (_, tgt) -> tgt
   | Ptbnz (_, _, _, tgt) -> tgt
   | Ptbz (_, _, _, tgt) -> tgt
-  (* | Pcbnz (_, _, tgt) -> tgt *)
-  (* | Pcbz (_, _, tgt) -> tgt *)
   | _ -> raise (Error "tgt_of_branch: expected conditional branch")
 
 let do_expand_cond_branches : bool ref = ref false
@@ -394,9 +392,9 @@ let do_expand_cond_branches : bool ref = ref false
 let expand_cond_branch instr : unit =
   if !do_expand_cond_branches then
     let lbl = new_label () in
-    emit (negate_cond_branch lbl instr);
-    emit (Pb (tgt_of_branch instr));
-    emit (Plabel lbl)
+    emit @@ negate_cond_branch lbl instr;
+    emit @@ Pb (tgt_of_branch instr);
+    emit @@ Plabel lbl
   else
     emit instr
 
@@ -413,28 +411,25 @@ let maj_vote
   assert (a <> b && a <> c && b <> c);
   let lbl_done = new_label () in
   let lbl_fix = new_label () in
-  side_emit (Plabel lbl_fix);
+  side_emit @@ Plabel lbl_fix;
   if a = res || b = res then begin
-      side_emit (mov res c);
-      emit (cmp a b);
-      (* expand_cond_branch (Pbc (TCne, lbl_fix)) *)
-      emit @@ Pbc (TCne, lbl_fix)
+      side_emit @@ mov res c;
+      emit @@ cmp a b;
+      expand_cond_branch @@ Pbc (TCne, lbl_fix)
     end
   else if c = res then begin
-      side_emit (mov res a);
-      emit (cmp a c);
-      (* expand_cond_branch (Pbc (TCne, lbl_fix)) *)
-      emit @@ Pbc (TCne, lbl_fix)
+      side_emit @@ mov res a;
+      emit @@ cmp a c;
+      expand_cond_branch @@ Pbc (TCne, lbl_fix)
     end
   else begin
-      side_emit (mov res c);
-      emit (cmp a b);
-      (* expand_cond_branch (Pbc (TCne, lbl_fix)); *)
-      emit @@ Pbc (TCne, lbl_fix);
-      emit (mov res a)
+      side_emit @@ mov res c;
+      emit @@ cmp a b;
+      expand_cond_branch (Pbc (TCne, lbl_fix));
+      emit @@ mov res a
     end;
-  side_emit (Pb lbl_done);
-  emit (Plabel lbl_done)
+  side_emit @@ Pb lbl_done;
+  emit @@ Plabel lbl_done
 
 (** Majority vote integers. *)
 let maj_vote_int sz = maj_vote
@@ -448,6 +443,7 @@ let maj_vote_float sz = maj_vote
 
 (** DMR checks. *)
 let check
+      (call_handler : 'a -> 'a -> instruction list)
       (cmp : 'a -> 'a -> instruction)
       (a : 'a) (b : 'a) : unit =
   if a == b then begin
@@ -455,18 +451,92 @@ let check
     end;
   let lbl_done = new_label () in
   let lbl_fault = new_label () in
-  side_emit (Plabel lbl_fault);
-  side_emit Pnop;
-  side_emit (Pb lbl_done);
-  emit (cmp a b);
-  emit (Pbc (TCne, lbl_fault));
-  emit (Plabel lbl_done)
+  side_emit @@ Plabel lbl_fault;
+  List.iter side_emit @@ call_handler a b;
+  side_emit @@ Pb lbl_done;
+  emit @@ cmp a b;
+  emit @@ Pbc (TCne, lbl_fault);
+  emit @@ Plabel lbl_done
 
-(** Check integers. *)
-let check_int sz = check (fun x y -> Pcmp (sz, RR0 x, y, SOnone))
+let int_reg_to_dwarf = function
+  | X0 -> 0 | X1 -> 1 | X2 -> 2 | X3 -> 3 | X4 -> 4
+  | X5 -> 5 | X6 -> 6 | X7 -> 7 | X8 -> 8 | X9 -> 9
+  | X10 -> 10 | X11 -> 11 | X12 -> 12 | X13 -> 13 | X14 -> 14
+  | X15 -> 15 | X16 -> 16 | X17 -> 17 | X18 -> 18 | X19 -> 19
+  | X20 -> 20 | X21 -> 21 | X22 -> 22 | X23 -> 23 | X24 -> 24
+  | X25 -> 25 | X26 -> 26 | X27 -> 27 | X28 -> 28 | X29 -> 29
+  | X30 -> 30
 
-(** Check floats. *)
-let check_float sz = check (fun x y -> Pfcmp (sz, x, y))
+let float_reg_to_dwarf = function
+  | D0 -> 64 | D1 -> 65 | D2 -> 66 | D3 -> 67 | D4 -> 68
+  | D5 -> 69 | D6 -> 70 | D7 -> 71 | D8 -> 72 | D9 -> 73
+  | D10 -> 74 | D11 -> 75 | D12 -> 76 | D13 -> 77 | D14 -> 78
+  | D15 -> 79 | D16 -> 80 | D17 -> 81 | D18 -> 82 | D19 -> 83
+  | D20 -> 84 | D21 -> 85 | D22 -> 86 | D23 -> 87 | D24 -> 88
+  | D25 -> 89 | D26 -> 90 | D27 -> 91 | D28 -> 92 | D29 -> 93
+  | D30 -> 94 | D31 -> 95
+
+let preg_to_dwarf = function
+   | IR r -> int_reg_to_dwarf r
+   | FR r -> float_reg_to_dwarf r
+   | SP -> 31
+   | _ -> assert false
+
+(** Check 32-bit integers. *)
+let check_int = check
+                  (fun a b -> [
+                       Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
+                     ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
+                     ; Pmov (RR1 X2, RR1 a)
+                     ; Pmov (RR1 X3, RR1 b)
+                     ; Pbl (intern_string "__fault_int",
+                            { sig_args = [Xint; Xint; Xint; Xint]
+                            ; sig_res = Xvoid
+                            ; sig_cc = cc_default })
+                  ])
+                  (fun a b -> Pcmp (W, RR0 a, b, SOnone))
+
+(** Check 64-bit integers. *)
+let check_long = check
+                   (fun a b -> [
+                        Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
+                      ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
+                      ; Pmov (RR1 X2, RR1 a)
+                      ; Pmov (RR1 X3, RR1 b)
+                      ; Pbl (intern_string "__fault_long",
+                             { sig_args = [Xint; Xint; Xlong; Xlong]
+                             ; sig_res = Xvoid
+                             ; sig_cc = cc_default })
+                   ])
+                   (fun a b -> Pcmp (X, RR0 a, b, SOnone))
+
+(** Check single-precision floats. *)
+let check_single = check
+                     (fun a b -> [
+                          Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
+                        ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
+                        ; Pfmov (D0, a)
+                        ; Pfmov (D1, b)
+                        ; Pbl (intern_string "__fault_single",
+                               { sig_args = [Xint; Xint; Xsingle; Xsingle]
+                               ; sig_res = Xvoid
+                               ; sig_cc = cc_default })
+                     ])
+                     (fun a b -> Pfcmp (S, a, b))
+
+(** Check double-precision floats. *)
+let check_float = check
+                    (fun a b -> [
+                         Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
+                       ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
+                       ; Pfmov (D0, a)
+                       ; Pfmov (D1, b)
+                       ; Pbl (intern_string "__fault_float",
+                              { sig_args = [Xint; Xint; Xfloat; Xfloat]
+                              ; sig_res = Xvoid
+                              ; sig_cc = cc_default })
+                    ])
+                    (fun a b -> Pfcmp (D, a, b))
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -547,13 +617,13 @@ let expand_builtin_inline name args res =
 
   (* DMR check *)
   | "__builtin_check_int", [BA(IR a); BA(IR b)], BR_none ->
-     check_int W a b
+     check_int a b
   | "__builtin_check_long", [BA(IR a); BA(IR b)], BR_none ->
-     check_int X a b
+     check_long a b
   | "__builtin_check_single", [BA(FR a); BA(FR b)], BR_none ->
-     check_float S a b
+     check_single a b
   | "__builtin_check_float", [BA(FR a); BA(FR b)], BR_none ->
-     check_float D a b
+     check_float a b
 
   (* Catch-all *)
   | _ ->
@@ -603,30 +673,6 @@ let expand_instruction instr =
      expand_cond_branch instr
   | _ ->
      emit instr
-
-let int_reg_to_dwarf = function
-  | X0 -> 0 | X1 -> 1 | X2 -> 2 | X3 -> 3 | X4 -> 4
-  | X5 -> 5 | X6 -> 6 | X7 -> 7 | X8 -> 8 | X9 -> 9
-  | X10 -> 10 | X11 -> 11 | X12 -> 12 | X13 -> 13 | X14 -> 14
-  | X15 -> 15 | X16 -> 16 | X17 -> 17 | X18 -> 18 | X19 -> 19
-  | X20 -> 20 | X21 -> 21 | X22 -> 22 | X23 -> 23 | X24 -> 24
-  | X25 -> 25 | X26 -> 26 | X27 -> 27 | X28 -> 28 | X29 -> 29
-  | X30 -> 30
-
-let float_reg_to_dwarf = function
-  | D0 -> 64 | D1 -> 65 | D2 -> 66 | D3 -> 67 | D4 -> 68
-  | D5 -> 69 | D6 -> 70 | D7 -> 71 | D8 -> 72 | D9 -> 73
-  | D10 -> 74 | D11 -> 75 | D12 -> 76 | D13 -> 77 | D14 -> 78
-  | D15 -> 79 | D16 -> 80 | D17 -> 81 | D18 -> 82 | D19 -> 83
-  | D20 -> 84 | D21 -> 85 | D22 -> 86 | D23 -> 87 | D24 -> 88
-  | D25 -> 89 | D26 -> 90 | D27 -> 91 | D28 -> 92 | D29 -> 93
-  | D30 -> 94 | D31 -> 95
-
-let preg_to_dwarf = function
-   | IR r -> int_reg_to_dwarf r
-   | FR r -> float_reg_to_dwarf r
-   | SP -> 31
-   | _ -> assert false
 
 let expand_function id fn =
   try

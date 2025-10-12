@@ -655,7 +655,7 @@ let check
   let lbl_done = new_label () in
   let lbl_fault = new_label () in
   side_emit (Plabel lbl_fault);
-  side_emit Pnop;
+  side_emit Pnop; (* TODO: do something *)
   side_emit (Pj_l lbl_done);
   List.iter emit (cmp_j a b lbl_fault);
   emit (Plabel lbl_done)
