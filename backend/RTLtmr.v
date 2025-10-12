@@ -259,38 +259,11 @@ Definition transf_instr
       end
   end.
 
-(* The following two functions are not tail recursive (because their
-   tail-recursive variants are harder to reason about by induction)
-   which could potentially be a problem when translating very large
-   functions (containing lots of instructions and/or temporaries).
-   Specifically, since iterM is used in transf_code, it might overflow
-   the call stack. One easy workaround might be to do the proofs
-   wrt. these versions of the functions but in the implementation use
-   tail-recursive versions on reversed argument lists (using a
-   tail-recursive rev function) and prove them equivalent. *)
-
-(** Monadic iteration. *)
-Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
-  match l with
-  | [] => ret tt
-  | x :: xs =>
-      do _ <- iterM f xs;
-      f x
-  end.
-
-(** Monadic fold. *)
-Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
-  : mon A :=
-  match l with
-  | [] => ret a
-  | x :: xs =>
-      do a' <- foldM f xs a;
-      f a' x
-  end.
-
 (** Transform function code by transforming the instructions. *)
 Definition transf_code (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
   : mon unit :=
+  (* NOTE: change to use iterM' and rev' if stack overflow becomes a
+     problem. Then use [iterM_iterM'_rev] in RTLtmrspec.v. *)
   iterM (transf_instr re rm) (PTree.elements c).
 
 Definition Regset_of_list (l : list positive) : Regset.t  :=
@@ -358,6 +331,8 @@ Definition max_reg (regs : Regset.t) :=
     corresponding shadow registers) for a function with parameters
     [params] and code body [c]. *)
 Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
+  (* NOTE: change to use foldM' and rev' if stack overflow becomes a
+     problem. Then use [foldM_foldM'_rev] in RTLtmrspec.v. *)
   foldM (fun rm r1 =>
            do r2 <- new_reg;
            do r3 <- new_reg;
@@ -383,10 +358,6 @@ Definition live_regs_to_copy (f : function) : mon (list reg) :=
   ret (Regset.elements (Regset.diff
                           (Regset.inter live (code_regs f.(fn_code)))
                           (Regset_of_list f.(fn_params)))).
-
-(** Tail-recursive list append. *)
-Definition app' {A : Type} (l1 l2 : list A) : list A :=
-  rev_append (rev' l1) l2.
 
 (** Generate fault-tolerant version of function [f]. [re] should be
     the typing context that resulted from typechecking [f].
@@ -445,6 +416,3 @@ Definition transf_fundef (fd : fundef) : Errors.res fundef :=
 
 Definition transf_program (p : program) : Errors.res program :=
   transform_partial_program transf_fundef p.
-
-(* Definition transf_program (p : program) : Errors.res program := *)
-(*   Errors.OK p. *)

@@ -247,49 +247,6 @@ Definition transf_instr
       end
   end.
 
-(** Monadic iteration. *)
-Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
-  match l with
-  | [] => ret tt
-  | x :: xs =>
-      do _ <- iterM f xs;
-      f x
-  end.
-
-(** Monadic iteration (tail recursive). *)
-Fixpoint iterM_rev {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
-  match l with
-  | [] => ret tt
-  | x :: xs =>
-      do _ <- f x;
-      iterM_rev f xs
-  end.
-Definition iterM' {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
-  iterM_rev f (rev' l).
-
-(** Monadic fold. *)
-Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
-  : mon A :=
-  match l with
-  | [] => ret a
-  | x :: xs =>
-      do a' <- foldM f xs a;
-      f a' x
-  end.
-
-(** Monadic fold (tail recursive). *)
-Fixpoint foldM_rev {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
-  : mon A :=
-  match l with
-  | [] => ret a
-  | x :: xs =>
-      do a' <- f a x;
-      foldM_rev f xs a'
-  end.
-Definition foldM' {A B : Type} (f : A -> B -> mon A) (l : list B)
-  : A -> mon A :=
-  foldM_rev f (rev' l).
-
 (** Transform function code by transforming the instructions. *)
 Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code)
   : mon unit :=
@@ -383,10 +340,6 @@ Definition live_regs_to_copy (f : function) : mon (list reg) :=
   ret (Regset.elements (Regset.diff
                           (Regset.inter live (code_regs f.(fn_code)))
                           (Regset_of_list f.(fn_params)))).
-
-(** Tail-recursive list append. *)
-Definition app' {A : Type} (l1 l2 : list A) : list A :=
-  rev_append (rev' l1) l2.
 
 (** Generate fault-tolerant version of function [f]. [re] should be
     the register type environment that resulted from typechecking [f].

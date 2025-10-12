@@ -23,6 +23,8 @@ Require Import Registers.
 Require Import CminorSel.
 Require Import RTL.
 
+Require Import Coq.Logic.ProofIrrelevance.
+
 Local Open Scope string_scope.
 
 (** * Translation environments and state *)
@@ -143,6 +145,121 @@ Definition handle_error {A: Type} (f g: mon A) : mon A :=
     | OK a s' i => OK a s' i
     | Error _ => g s
     end.
+
+(** Monadic iteration. *)
+Fixpoint iterM {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
+  match l with
+  | nil => ret tt
+  | x :: xs =>
+      do _ <- iterM f xs;
+      f x
+  end.
+
+(** Monadic iteration (tail recursive). *)
+Fixpoint iterM_rev {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
+  match l with
+  | nil => ret tt
+  | x :: xs =>
+      do _ <- f x;
+      iterM_rev f xs
+  end.
+Definition iterM' {A : Type} (f : A -> mon unit) (l : list A) : mon unit :=
+  iterM_rev f (rev' l).
+
+(** Monadic fold. *)
+Fixpoint foldM {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
+  : mon A :=
+  match l with
+  | nil => ret a
+  | x :: xs =>
+      do a' <- foldM f xs a;
+      f a' x
+  end.
+
+(** Monadic fold (tail recursive). *)
+Fixpoint foldM_rev {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A)
+  : mon A :=
+  match l with
+  | nil => ret a
+  | x :: xs =>
+      do a' <- f a x;
+      foldM_rev f xs a'
+  end.
+Definition foldM' {A B : Type} (f : A -> B -> mon A) (l : list B)
+  : A -> mon A :=
+  foldM_rev f (rev' l).
+
+Lemma iterM_rev_app {A : Type} (f : A -> mon unit) (l1 l2 : list A) s :
+  iterM_rev f (l1 ++ l2) s = (do _ <- iterM_rev f l1; iterM_rev f l2) s.
+Proof.
+  unfold RTLgen.bind.
+  revert l2 s; induction l1; intros l2 s; simpl.
+  { destruct (iterM_rev f l2 s); auto.
+    f_equal; apply proof_irrelevance. }
+  unfold RTLgen.bind.
+  destruct (f a s); auto.
+  rewrite IHl1.
+  destruct (iterM_rev f l1 s'); auto.
+  destruct (iterM_rev f l2 s'0); auto.
+  f_equal; apply proof_irrelevance.
+Qed.
+
+Lemma iterM_iterM_rev_rev {A : Type} (f : A -> mon unit) (l : list A) s :
+  iterM f l s = iterM_rev f (rev l) s.
+Proof.
+  revert s; induction l; intro s; simpl; auto.
+  unfold RTLgen.bind.
+  rewrite IHl, iterM_rev_app.
+  simpl; unfold RTLgen.bind; simpl.
+  destruct (iterM_rev f (rev l) s); auto.
+  destruct (f a s'); auto.
+  destruct u0.
+  f_equal; apply proof_irrelevance.
+Qed.
+
+Lemma iterM_iterM' {A : Type} (f : A -> mon unit) (l : list A) s :
+  iterM f l s = iterM' f l s.
+Proof.
+  unfold iterM'.
+  rewrite <- rev_rev'.
+  apply iterM_iterM_rev_rev.
+Qed.
+
+Lemma foldM_rev_app {A B : Type} (f : A -> B -> mon A) (l1 l2 : list B) a s :
+  foldM_rev f (l1 ++ l2) a s = (do a' <- foldM_rev f l1 a; foldM_rev f l2 a') s.
+Proof.
+  unfold RTLgen.bind.
+  revert l2 s a; induction l1; intros l2 s x; simpl.
+  { destruct (foldM_rev f l2 x s); auto.
+    f_equal; apply proof_irrelevance. }
+  unfold RTLgen.bind.
+  destruct (f x a s); auto.
+  rewrite IHl1.
+  destruct (foldM_rev f l1 a0 s'); auto.
+  destruct (foldM_rev f l2 a1 s'0); auto.
+  f_equal; apply proof_irrelevance.
+Qed.
+
+Lemma foldM_foldM_rev_rev {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A) s :
+  foldM f l a s = foldM_rev f (rev l) a s.
+Proof.
+  revert a s; induction l; intros x s; simpl; auto.
+  unfold RTLgen.bind.
+  rewrite IHl, foldM_rev_app.
+  simpl; unfold RTLgen.bind; simpl.
+  destruct (foldM_rev f (rev l) x s); auto.
+  destruct (f a0 a s'); auto.
+  f_equal; apply proof_irrelevance.
+Qed.
+
+Lemma foldM_foldM' {A B : Type} (f : A -> B -> mon A) (l : list B) (a : A) s :
+  foldM f l a s = foldM' f l a s.
+Proof.
+  unfold foldM'.
+  rewrite <- rev_rev'.
+  apply foldM_foldM_rev_rev.
+Qed.
+
 
 (** ** Operations on state *)
 
