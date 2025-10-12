@@ -643,29 +643,36 @@ let maj_vote_single = maj_vote
 let maj_vote_float = maj_vote
                        (fun x y -> Pfmv (x, y))
                        (fun x y lbl -> [Pfeqd (X31, x, y);
-                                        Pbeql (X0, X X31, lbl)])
+                                        Pbeqw (X0, X X31, lbl)])
 
-(* (\** DMR checks. *\) *)
-(* let check *)
-(*       (cmp : 'a -> 'a -> instruction) *)
-(*       (a : 'a) (b : 'a) : unit = *)
-(*   if a == b then begin *)
-(*      raise (Error "ill-formed DMR check") *)
-(*   end; *)
-(*   let lbl_done = new_label () in *)
-(*   let lbl_fault = new_label () in *)
-(*   side_emit (Plabel lbl_fault); *)
-(*   side_emit Pnop; *)
-(*   side_emit (Pj_l lbl_done); *)
-(*   emit (cmp a b); *)
-(*   emit (Pjcc (Cond_ne, lbl_fault)); *)
-(*   emit (Plabel lbl_done) *)
+(** DMR checks. *)
+let check
+      (cmp_j : 'a -> 'a -> label -> instruction list)
+      (a : 'a) (b : 'a) : unit =
+  if a == b then begin
+     raise (Error "ill-formed DMR check")
+  end;
+  let lbl_done = new_label () in
+  let lbl_fault = new_label () in
+  side_emit (Plabel lbl_fault);
+  side_emit Pnop;
+  side_emit (Pj_l lbl_done);
+  List.iter emit (cmp_j a b lbl_fault);
+  emit (Plabel lbl_done)
   
-(* (\** Check integers. *\) *)
-(* let check_int = check (fun x y -> Pcmpl_rr (x, y)) *)
+(** Check 32-bit integers. *)
+let check_int = check (fun x y lbl -> [Pbnew (X x, X y, lbl)])
 
-(* (\** Check floats. *\) *)
-(* let check_float = check (fun x y -> Pcomiss_ff (x, y)) *)
+(** Check 64-bit integers. *)
+let check_long = check (fun x y lbl -> [Pbnel (X x, X y, lbl)])
+
+(** Check single-precision floats. *)
+let check_single = check (fun x y lbl -> [Pfeqs (X31, x, y);
+                                          Pbeqw (X0, X X31, lbl)])
+
+(** Check double-precision floats. *)
+let check_float = check (fun x y lbl -> [Pfeqd (X31, x, y);
+                                         Pbeqw (X0, X X31, lbl)])
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -793,15 +800,15 @@ let expand_builtin_inline name args res =
   | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
      maj_vote_float a b c res
 
-  (* (\* DMR check *\) *)
-  (* | "__builtin_check_int", [BA(IR a); BA(IR b)], BR_none -> *)
-  (*    check_int a b *)
-  (* | "__builtin_check_long", [BA(IR a); BA(IR b)], BR_none -> *)
-  (*    check_int a b *)
-  (* | "__builtin_check_single", [BA(FR a); BA(FR b)], BR_none -> *)
-  (*    check_float a b *)
-  (* | "__builtin_check_float", [BA(FR a); BA(FR b)], BR_none -> *)
-  (*    check_float a b *)
+  (* DMR check *)
+  | "__builtin_check_int", [BA(IR a); BA(IR b)], BR_none ->
+     check_int a b
+  | "__builtin_check_long", [BA(IR a); BA(IR b)], BR_none ->
+     check_long a b
+  | "__builtin_check_single", [BA(FR a); BA(FR b)], BR_none ->
+     check_single a b
+  | "__builtin_check_float", [BA(FR a); BA(FR b)], BR_none ->
+     check_float a b
 
   (* Catch-all *)
   | _ ->
