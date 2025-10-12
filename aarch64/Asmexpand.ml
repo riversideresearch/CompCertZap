@@ -441,6 +441,8 @@ let maj_vote_float sz = maj_vote
                           (fun x y -> Pfmov (x, y))
                           (fun x y -> Pfcmp (sz, x, y))
 
+(* let do_check : bool ref = ref false *)
+
 (** DMR checks. *)
 let check
       (call_handler : 'a -> 'a -> instruction list)
@@ -449,6 +451,7 @@ let check
   if a == b then begin
       raise (Error "ill-formed DMR check")
     end;
+  (* if !do_check then *)
   let lbl_done = new_label () in
   let lbl_fault = new_label () in
   side_emit @@ Plabel lbl_fault;
@@ -457,6 +460,7 @@ let check
   emit @@ cmp a b;
   emit @@ Pbc (TCne, lbl_fault);
   emit @@ Plabel lbl_done
+(* List.iter emit @@ call_handler a b *)
 
 let int_reg_to_dwarf = function
   | X0 -> 0 | X1 -> 1 | X2 -> 2 | X3 -> 3 | X4 -> 4
@@ -485,10 +489,10 @@ let preg_to_dwarf = function
 (** Check 32-bit integers. *)
 let check_int = check
                   (fun a b -> [
-                       Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
-                     ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
-                     ; Pmov (RR1 X2, RR1 a)
+                       Pmov (RR1 X2, RR1 a)
                      ; Pmov (RR1 X3, RR1 b)
+                     ; Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
+                     ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
                      ; Pbl (intern_string "__fault_int",
                             { sig_args = [Xint; Xint; Xint; Xint]
                             ; sig_res = Xvoid
@@ -499,10 +503,10 @@ let check_int = check
 (** Check 64-bit integers. *)
 let check_long = check
                    (fun a b -> [
-                        Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
-                      ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
-                      ; Pmov (RR1 X2, RR1 a)
+                        Pmov (RR1 X2, RR1 a)
                       ; Pmov (RR1 X3, RR1 b)
+                      ; Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
+                      ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
                       ; Pbl (intern_string "__fault_long",
                              { sig_args = [Xint; Xint; Xlong; Xlong]
                              ; sig_res = Xvoid
@@ -513,10 +517,10 @@ let check_long = check
 (** Check single-precision floats. *)
 let check_single = check
                      (fun a b -> [
-                          Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
-                        ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
-                        ; Pfmov (D0, a)
+                          Pfmov (D0, a)
                         ; Pfmov (D1, b)
+                        ; Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
+                        ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
                         ; Pbl (intern_string "__fault_single",
                                { sig_args = [Xint; Xint; Xsingle; Xsingle]
                                ; sig_res = Xvoid
@@ -527,10 +531,10 @@ let check_single = check
 (** Check double-precision floats. *)
 let check_float = check
                     (fun a b -> [
-                         Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
-                       ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
-                       ; Pfmov (D0, a)
+                         Pfmov (D0, a)
                        ; Pfmov (D1, b)
+                       ; Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
+                       ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
                        ; Pbl (intern_string "__fault_float",
                               { sig_args = [Xint; Xint; Xfloat; Xfloat]
                               ; sig_res = Xvoid
@@ -678,6 +682,11 @@ let expand_function id fn =
   try
     set_current_function fn;
     do_expand_cond_branches := List.length fn.fn_code > 8192;
+    (* let fn_name = extern_atom id in *)
+    (* do_check := (match fn_name with *)
+    (*             | "__fault_int" | "__fault_long" *)
+    (*               | "__fault_single" | "__fault_float" -> false *)
+    (*             | _ -> true); *)
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
