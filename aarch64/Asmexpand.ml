@@ -352,7 +352,8 @@ let expand_builtin_vstore chunk args =
 (** Branch relaxation stuff *)
 
 let is_cond_branch = function
-  | Pbc _ | Ptbnz _ | Ptbz _ | Pcbnz _ | Pcbz _ -> true
+  (* | Pbc _ | Ptbnz _ | Ptbz _ | Pcbnz _ | Pcbz _ -> true *)
+  | Pbc _ | Ptbnz _ | Ptbz _ -> true
   | _ -> false
 
 let negate_testcond = function
@@ -375,24 +376,29 @@ let negate_cond_branch new_tgt = function
   | Pbc (cond, _) -> Pbc (negate_testcond cond, new_tgt)
   | Ptbnz (sz, r, i, _) -> Ptbz (sz, r, i, new_tgt)
   | Ptbz (sz, r, i, _) -> Ptbnz (sz, r, i, new_tgt)
-  | Pcbnz (sz, r, _) -> Pcbz (sz, r, new_tgt)
-  | Pcbz (sz, r, _) -> Pcbnz (sz, r, new_tgt)
+  (* | Pcbnz (sz, r, _) -> Pcbz (sz, r, new_tgt) *)
+  (* | Pcbz (sz, r, _) -> Pcbnz (sz, r, new_tgt) *)
   | _ -> raise (Error "negate_cond_branch: expected conditional branch")
 
 let tgt_of_branch = function
   | Pbc (_, tgt) -> tgt
   | Ptbnz (_, _, _, tgt) -> tgt
   | Ptbz (_, _, _, tgt) -> tgt
-  | Pcbnz (_, _, tgt) -> tgt
-  | Pcbz (_, _, tgt) -> tgt
+  (* | Pcbnz (_, _, tgt) -> tgt *)
+  (* | Pcbz (_, _, tgt) -> tgt *)
   | _ -> raise (Error "tgt_of_branch: expected conditional branch")
+
+let do_expand_cond_branches : bool ref = ref false
 
 (** Emit long-jump version of [instr]. *)
 let expand_cond_branch instr : unit =
-  let lbl = new_label () in
-  emit (negate_cond_branch lbl instr);
-  emit (Pb (tgt_of_branch instr));
-  emit (Plabel lbl)
+  if !do_expand_cond_branches then
+    let lbl = new_label () in
+    emit (negate_cond_branch lbl instr);
+    emit (Pb (tgt_of_branch instr));
+    emit (Plabel lbl)
+  else
+    emit instr
 
 (* Handling of compiler-inlined builtins *)
 
@@ -411,17 +417,20 @@ let maj_vote
   if a = res || b = res then begin
       side_emit (mov res c);
       emit (cmp a b);
-      expand_cond_branch (Pbc (TCne, lbl_fix))
+      (* expand_cond_branch (Pbc (TCne, lbl_fix)) *)
+      emit @@ Pbc (TCne, lbl_fix)
     end
   else if c = res then begin
       side_emit (mov res a);
       emit (cmp a c);
-      expand_cond_branch (Pbc (TCne, lbl_fix))
+      (* expand_cond_branch (Pbc (TCne, lbl_fix)) *)
+      emit @@ Pbc (TCne, lbl_fix)
     end
   else begin
       side_emit (mov res c);
       emit (cmp a b);
-      expand_cond_branch (Pbc (TCne, lbl_fix));
+      (* expand_cond_branch (Pbc (TCne, lbl_fix)); *)
+      emit @@ Pbc (TCne, lbl_fix);
       emit (mov res a)
     end;
   side_emit (Pb lbl_done);
@@ -590,6 +599,7 @@ let preg_to_dwarf = function
 let expand_function id fn =
   try
     set_current_function fn;
+    do_expand_cond_branches := List.length fn.fn_code > 8192;
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
