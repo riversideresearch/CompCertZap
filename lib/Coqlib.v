@@ -1430,3 +1430,13 @@ Proof.
   unfold app'.
   rewrite rev_append_rev, <- rev_rev', rev_involutive; reflexivity.
 Qed.
+
+(** * Misc *)
+
+(* Lemma in_app_l {A : Type} (l1 l2 : list A) : *)
+(*   (forall x, In x l1 -> In x l2) -> *)
+(*   (forall x, In x (l1 ++ l2) -> In x l2). *)
+(* Proof. *)
+(*   intros H x Hin. *)
+(*   apply in_app_or in Hin; destruct Hin; auto. *)
+(* Qed. *)

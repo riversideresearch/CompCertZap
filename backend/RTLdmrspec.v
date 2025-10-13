@@ -816,8 +816,7 @@ Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
   transf_code re rm c s = RTLgen.OK u s' pf ->
   match_code re rm c s'.(st_code).
 Proof.
-  unfold transf_code; intros Hlt Hc p i Hi.
-  rewrite <- iterM_iterM' in Hc.
+  intros Hlt Hc p i Hi.
   eapply iterM_match_instr; eauto.
   apply PTree.elements_correct; eauto.
 Qed.
@@ -1068,7 +1067,6 @@ Lemma replication_map_wf f rm s pf :
   replication_map f (init_state f) = RTLgen.OK rm s pf ->
   rm_wf rm (fun_regs_list f).
 Proof.
-  unfold replication_map; rewrite <- foldM_foldM'.
   intro H; eapply replication_map_wf_aux; eauto.
   apply Forall_forall; intros r Hin.
   apply in_lt_max_reg; auto.
@@ -1224,8 +1222,6 @@ Lemma replication_map_rm_inv' sig params stacksize c entrypoint s pf rm :
        |}) = RTLgen.OK rm s pf ->
   rm_inv params c rm.
 Proof.
-  unfold replication_map.
-  rewrite <- foldM_foldM'.
   intro Hfold.
   apply rm_inv_list_rm_inv.
   set (s0 := init_state

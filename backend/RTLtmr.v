@@ -262,8 +262,6 @@ Definition transf_instr
 (** Transform function code by transforming the instructions. *)
 Definition transf_code (re : regenv) (rm : PMap.t (reg * reg)) (c : code)
   : mon unit :=
-  (* NOTE: change to use iterM' and rev' if stack overflow becomes a
-     problem. Then use [iterM_iterM'_rev] in RTLtmrspec.v. *)
   iterM (transf_instr re rm) (PTree.elements c).
 
 Definition Regset_of_list (l : list positive) : Regset.t  :=
@@ -331,8 +329,6 @@ Definition max_reg (regs : Regset.t) :=
     corresponding shadow registers) for a function with parameters
     [params] and code body [c]. *)
 Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
-  (* NOTE: change to use foldM' and rev' if stack overflow becomes a
-     problem. Then use [foldM_foldM'_rev] in RTLtmrspec.v. *)
   foldM (fun rm r1 =>
            do r2 <- new_reg;
            do r3 <- new_reg;
