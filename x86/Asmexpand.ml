@@ -357,7 +357,7 @@ let maj_vote
       emit (Pjcc (Cond_ne, lbl_fix));
     end
   else if c = res then begin
-      side_emit (mov res a);
+      side_emit (mov res b);
       emit (cmp a c);
       emit (Pjcc (Cond_ne, lbl_fix));
     end

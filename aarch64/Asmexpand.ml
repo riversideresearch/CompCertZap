@@ -393,14 +393,14 @@ let maj_vote
       emit @@ Pbc (TCne, lbl_fix)
     end
   else if c = res then begin
-      side_emit @@ mov res a;
+      side_emit @@ mov res b;
       emit @@ cmp a c;
       emit @@ Pbc (TCne, lbl_fix)
     end
   else begin
       side_emit @@ mov res c;
       emit @@ cmp a b;
-      emit (Pbc (TCne, lbl_fix));
+      emit @@ Pbc (TCne, lbl_fix);
       emit @@ mov res a
     end;
   side_emit @@ Pb lbl_done;
@@ -676,7 +676,7 @@ let expand_cond_branch fn_size instr : unit =
 let expand_function id fn =
   try
     set_current_function fn;
-    (* Do regular expansion pass, including builtins *)
+    (* Do main expansion pass, including builtins *)
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
     (* Then reset and do another pass to expand branches *)
     let fn' = get_current_function () in

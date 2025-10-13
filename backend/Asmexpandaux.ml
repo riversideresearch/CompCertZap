@@ -63,12 +63,17 @@ let is_current_function_variadic () =
 let get_current_function_sig () =
   (!current_function).fn_sig
 
+let[@tail_mod_cons] rec app (l1 : 'a list) (l2 : 'a list) : 'a list =
+  match l1 with
+  | [] -> l2
+  | x :: xs -> x :: (app [@tailcall]) xs l2
+
 let get_current_function () =
   let c = List.rev !current_code in
   let side_c = List.rev !side_buf in
   let fn = !current_function in
   set_current_function dummy_function;
-  {fn with fn_code = c @ side_c}
+  {fn with fn_code = app c side_c}
 
 (* Expand function for debug information *)
 
