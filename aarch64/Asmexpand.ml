@@ -349,119 +349,6 @@ let expand_builtin_vstore chunk args =
   | _ ->
       assert false
 
-(** Conditional branch rewriting *)
-
-(* Doesn't include Pcbnz or Pcbz because they have a sufficiently
-   large (+/- 1M) range. Pbc, Ptbnz, and Ptbz on the other hand have
-   only +/- 32K. *)
-let is_cond_branch = function
-  | Pbc _ | Ptbnz _ | Ptbz _ -> true
-  | _ -> false
-
-let negate_testcond = function
-  | TCeq -> TCne
-  | TCne -> TCeq
-  | TChs -> TClo
-  | TClo -> TChs
-  | TCmi -> TCpl
-  | TCpl -> TCmi
-  | TChi -> TCls
-  | TCls -> TChi
-  | TCge -> TClt
-  | TClt -> TCge
-  | TCgt -> TCle
-  | TCle -> TCgt
-
-(** Negate a conditional branch instruction and update its target
-    label to [new_tgt]. *)
-let negate_cond_branch new_tgt = function
-  | Pbc (cond, _) -> Pbc (negate_testcond cond, new_tgt)
-  | Ptbnz (sz, r, i, _) -> Ptbz (sz, r, i, new_tgt)
-  | Ptbz (sz, r, i, _) -> Ptbnz (sz, r, i, new_tgt)
-  | _ -> raise (Error "negate_cond_branch: expected conditional branch")
-
-let tgt_of_branch = function
-  | Pbc (_, tgt) -> tgt
-  | Ptbnz (_, _, _, tgt) -> tgt
-  | Ptbz (_, _, _, tgt) -> tgt
-  | _ -> raise (Error "tgt_of_branch: expected conditional branch")
-
-let do_expand_cond_branches : bool ref = ref false
-
-(** Emit long-jump version of [instr]. *)
-let expand_cond_branch instr : unit =
-  if !do_expand_cond_branches then
-    let lbl = new_label () in
-    emit @@ negate_cond_branch lbl instr;
-    emit @@ Pb (tgt_of_branch instr);
-    emit @@ Plabel lbl
-  else
-    emit instr
-
-(* Handling of compiler-inlined builtins *)
-
-(** Generic majority vote. *)
-let maj_vote
-      (mov : 'a -> 'a -> instruction)
-      (cmp : 'a -> 'a -> instruction)
-      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
-  if a == b || a == c || b == c then begin
-      raise (Error "ill-formed majority vote")
-    end;
-  assert (a <> b && a <> c && b <> c);
-  let lbl_done = new_label () in
-  let lbl_fix = new_label () in
-  side_emit @@ Plabel lbl_fix;
-  if a = res || b = res then begin
-      side_emit @@ mov res c;
-      emit @@ cmp a b;
-      expand_cond_branch @@ Pbc (TCne, lbl_fix)
-    end
-  else if c = res then begin
-      side_emit @@ mov res a;
-      emit @@ cmp a c;
-      expand_cond_branch @@ Pbc (TCne, lbl_fix)
-    end
-  else begin
-      side_emit @@ mov res c;
-      emit @@ cmp a b;
-      expand_cond_branch (Pbc (TCne, lbl_fix));
-      emit @@ mov res a
-    end;
-  side_emit @@ Pb lbl_done;
-  emit @@ Plabel lbl_done
-
-(** Majority vote integers. *)
-let maj_vote_int sz = maj_vote
-                        (fun x y -> Pmov (RR1 x, RR1 y))
-                        (fun x y -> Pcmp (sz, RR0 x, y, SOnone))
-
-(** Majority vote floats. *)
-let maj_vote_float sz = maj_vote
-                          (fun x y -> Pfmov (x, y))
-                          (fun x y -> Pfcmp (sz, x, y))
-
-(* let do_check : bool ref = ref false *)
-
-(** DMR checks. *)
-let check
-      (call_handler : 'a -> 'a -> instruction list)
-      (cmp : 'a -> 'a -> instruction)
-      (a : 'a) (b : 'a) : unit =
-  if a == b then begin
-      raise (Error "ill-formed DMR check")
-    end;
-  (* if !do_check then *)
-  let lbl_done = new_label () in
-  let lbl_fault = new_label () in
-  side_emit @@ Plabel lbl_fault;
-  List.iter side_emit @@ call_handler a b;
-  side_emit @@ Pb lbl_done;
-  emit @@ cmp a b;
-  emit @@ Pbc (TCne, lbl_fault);
-  emit @@ Plabel lbl_done
-(* List.iter emit @@ call_handler a b *)
-
 let int_reg_to_dwarf = function
   | X0 -> 0 | X1 -> 1 | X2 -> 2 | X3 -> 3 | X4 -> 4
   | X5 -> 5 | X6 -> 6 | X7 -> 7 | X8 -> 8 | X9 -> 9
@@ -486,8 +373,69 @@ let preg_to_dwarf = function
    | SP -> 31
    | _ -> assert false
 
+(* Handling of compiler-inlined builtins *)
+
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
+      (cmp : 'a -> 'a -> instruction)
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+  if a == b || a == c || b == c then begin
+      raise (Error "ill-formed majority vote")
+    end;
+  assert (a <> b && a <> c && b <> c);
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  side_emit @@ Plabel lbl_fix;
+  if a = res || b = res then begin
+      side_emit @@ mov res c;
+      emit @@ cmp a b;
+      emit @@ Pbc (TCne, lbl_fix)
+    end
+  else if c = res then begin
+      side_emit @@ mov res a;
+      emit @@ cmp a c;
+      emit @@ Pbc (TCne, lbl_fix)
+    end
+  else begin
+      side_emit @@ mov res c;
+      emit @@ cmp a b;
+      emit (Pbc (TCne, lbl_fix));
+      emit @@ mov res a
+    end;
+  side_emit @@ Pb lbl_done;
+  emit @@ Plabel lbl_done
+
+(** Majority vote integers. *)
+let maj_vote_int sz = maj_vote
+                        (fun x y -> Pmov (RR1 x, RR1 y))
+                        (fun x y -> Pcmp (sz, RR0 x, y, SOnone))
+
+(** Majority vote floats. *)
+let maj_vote_float sz = maj_vote
+                          (fun x y -> Pfmov (x, y))
+                          (fun x y -> Pfcmp (sz, x, y))
+
+(** DMR checks. *)
+let check
+      (cmp : 'a -> 'a -> instruction)
+      (call_handler : 'a -> 'a -> instruction list)
+      (a : 'a) (b : 'a) : unit =
+  if a == b then begin
+      raise (Error "ill-formed DMR check")
+    end;
+  let lbl_done = new_label () in
+  let lbl_fault = new_label () in
+  side_emit @@ Plabel lbl_fault;
+  List.iter side_emit @@ call_handler a b;
+  side_emit @@ Pb lbl_done;
+  emit @@ cmp a b;
+  emit @@ Pbc (TCne, lbl_fault);
+  emit @@ Plabel lbl_done
+
 (** Check 32-bit integers. *)
 let check_int = check
+                  (fun a b -> Pcmp (W, RR0 a, b, SOnone))
                   (fun a b -> [
                        Pmov (RR1 X2, RR1 a)
                      ; Pmov (RR1 X3, RR1 b)
@@ -498,10 +446,10 @@ let check_int = check
                             ; sig_res = Xvoid
                             ; sig_cc = cc_default })
                   ])
-                  (fun a b -> Pcmp (W, RR0 a, b, SOnone))
 
 (** Check 64-bit integers. *)
 let check_long = check
+                   (fun a b -> Pcmp (X, RR0 a, b, SOnone))
                    (fun a b -> [
                         Pmov (RR1 X2, RR1 a)
                       ; Pmov (RR1 X3, RR1 b)
@@ -512,10 +460,10 @@ let check_long = check
                              ; sig_res = Xvoid
                              ; sig_cc = cc_default })
                    ])
-                   (fun a b -> Pcmp (X, RR0 a, b, SOnone))
 
 (** Check single-precision floats. *)
 let check_single = check
+                     (fun a b -> Pfcmp (S, a, b))
                      (fun a b -> [
                           Pfmov (D0, a)
                         ; Pfmov (D1, b)
@@ -526,10 +474,10 @@ let check_single = check
                                ; sig_res = Xvoid
                                ; sig_cc = cc_default })
                      ])
-                     (fun a b -> Pfcmp (S, a, b))
 
 (** Check double-precision floats. *)
 let check_float = check
+                    (fun a b -> Pfcmp (D, a, b))
                     (fun a b -> [
                          Pfmov (D0, a)
                        ; Pfmov (D1, b)
@@ -540,7 +488,6 @@ let check_float = check
                               ; sig_res = Xvoid
                               ; sig_cc = cc_default })
                     ])
-                    (fun a b -> Pfcmp (D, a, b))
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -673,21 +620,69 @@ let expand_instruction instr =
      | _ ->
         assert false
      end
-  | _ when is_cond_branch instr ->
-     expand_cond_branch instr
+  | _ ->
+     emit instr
+
+(** Conditional branch rewriting *)
+
+let negate_testcond = function
+  | TCeq -> TCne
+  | TCne -> TCeq
+  | TChs -> TClo
+  | TClo -> TChs
+  | TCmi -> TCpl
+  | TCpl -> TCmi
+  | TChi -> TCls
+  | TCls -> TChi
+  | TCge -> TClt
+  | TClt -> TCge
+  | TCgt -> TCle
+  | TCle -> TCgt
+
+(** Negate a conditional branch instruction and update its target
+    label to [new_tgt]. *)
+let negate_cond_branch new_tgt = function
+  | Pbc (cond, _) -> Pbc (negate_testcond cond, new_tgt)
+  | Ptbnz (sz, r, i, _) -> Ptbz (sz, r, i, new_tgt)
+  | Ptbz (sz, r, i, _) -> Ptbnz (sz, r, i, new_tgt)
+  | Pcbnz (sz, r, _) -> Pcbz (sz, r, new_tgt)
+  | Pcbz (sz, r, _) -> Pcbnz (sz, r, new_tgt)
+  | _ -> raise (Error "negate_cond_branch: expected conditional branch")
+
+let tgt_of_branch = function
+  | Pbc (_, tgt) -> tgt
+  | Ptbnz (_, _, _, tgt) -> tgt
+  | Ptbz (_, _, _, tgt) -> tgt
+  | Pcbnz (_, _, tgt) -> tgt
+  | Pcbz (_, _, tgt) -> tgt
+  | _ -> raise (Error "tgt_of_branch: expected conditional branch")
+
+let branch_range = function
+  | Pbc _ | Pcbnz _ | Pcbz _ -> Some 262144
+  | Ptbnz _ | Ptbz _ -> Some 8192
+  | _ -> None
+
+(** Emit long-jump version of [instr]. *)
+let expand_cond_branch fn_size instr : unit =
+  match branch_range instr with
+  | Some range when fn_size > range ->
+     let lbl = new_label () in
+     emit @@ negate_cond_branch lbl instr;
+     emit @@ Pb (tgt_of_branch instr);
+     emit @@ Plabel lbl
   | _ ->
      emit instr
 
 let expand_function id fn =
   try
     set_current_function fn;
-    do_expand_cond_branches := List.length fn.fn_code > 8192;
-    (* let fn_name = extern_atom id in *)
-    (* do_check := (match fn_name with *)
-    (*             | "__fault_int" | "__fault_long" *)
-    (*               | "__fault_single" | "__fault_float" -> false *)
-    (*             | _ -> true); *)
+    (* Do regular expansion pass, including builtins *)
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
+    (* Then reset and do another pass to expand branches *)
+    let fn' = get_current_function () in
+    set_current_function fn';
+    expand id (* sp= *) 31 preg_to_dwarf
+      (expand_cond_branch @@ List.length fn'.fn_code) fn'.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
