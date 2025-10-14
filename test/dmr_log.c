@@ -29,28 +29,28 @@ void __fault_float(int reg1, int reg2, double val1, double val2) {
 }
 
 int f_int(int x) {
-  asm volatile (
+  asm (
     "mov w1, #5"
   );
   return x + 1;
 }
 
 long f_long(long x) {
-  asm volatile (
+  asm (
     "mov x1, #5"
   );
   return x + 1;
 }
 
 float f_single(float x) {
-  asm volatile (
+  asm (
     "fmov s1, #5"
   );
   return x + 1;
 }
 
 double f_float(double x) {
-  asm volatile (
+  asm (
     "fmov d2, #5"
   );
   return x + 1;

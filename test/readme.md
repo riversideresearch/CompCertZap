@@ -3,5 +3,5 @@
 ## dmr_log.c
 
 ```bash
-ccomp -dmr dmr_log.c && ./a.out; echo $?
+ccomp -finline-asm dmr_log.c -dmr -dasm && ./a.out
 ```
