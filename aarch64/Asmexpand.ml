@@ -434,60 +434,64 @@ let check
   emit @@ Plabel lbl_done
 
 (** Check 32-bit integers. *)
-let check_int = check
-                  (fun a b -> Pcmp (W, RR0 a, b, SOnone))
-                  (fun a b -> [
-                       Pmov (RR1 X2, RR1 a)
-                     ; Pmov (RR1 X3, RR1 b)
-                     ; Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
-                     ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
-                     ; Pbl (intern_string "__fault_int",
-                            { sig_args = [Xint; Xint; Xint; Xint]
-                            ; sig_res = Xvoid
-                            ; sig_cc = cc_default })
-                  ])
+let check_int =
+  check
+    (fun a b -> Pcmp (W, RR0 a, b, SOnone))
+    (fun a b -> [
+         Pmov (RR1 X2, RR1 a)
+       ; Pmov (RR1 X3, RR1 b)
+       ; Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
+       ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
+       ; Pbl (intern_string "__fault_int",
+              { sig_args = [Xint; Xint; Xint; Xint]
+              ; sig_res = Xvoid
+              ; sig_cc = cc_default })
+    ])
 
 (** Check 64-bit integers. *)
-let check_long = check
-                   (fun a b -> Pcmp (X, RR0 a, b, SOnone))
-                   (fun a b -> [
-                        Pmov (RR1 X2, RR1 a)
-                      ; Pmov (RR1 X3, RR1 b)
-                      ; Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
-                      ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
-                      ; Pbl (intern_string "__fault_long",
-                             { sig_args = [Xint; Xint; Xlong; Xlong]
-                             ; sig_res = Xvoid
-                             ; sig_cc = cc_default })
-                   ])
+let check_long =
+  check
+    (fun a b -> Pcmp (X, RR0 a, b, SOnone))
+    (fun a b -> [
+         Pmov (RR1 X2, RR1 a)
+       ; Pmov (RR1 X3, RR1 b)
+       ; Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
+       ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
+       ; Pbl (intern_string "__fault_long",
+              { sig_args = [Xint; Xint; Xlong; Xlong]
+              ; sig_res = Xvoid
+              ; sig_cc = cc_default })
+    ])
 
 (** Check single-precision floats. *)
-let check_single = check
-                     (fun a b -> Pfcmp (S, a, b))
-                     (fun a b -> [
-                          Pfmov (D0, a)
-                        ; Pfmov (D1, b)
-                        ; Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
-                        ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
-                        ; Pbl (intern_string "__fault_single",
-                               { sig_args = [Xint; Xint; Xsingle; Xsingle]
-                               ; sig_res = Xvoid
-                               ; sig_cc = cc_default })
-                     ])
+let check_single =
+  check
+    (fun a b -> Pfcmp (S, a, b))
+    (fun a b -> [
+         Pfmov (D0, a)
+       ; Pfmov (D1, b)
+       ; Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
+       ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
+       ; Pbl (intern_string "__fault_single",
+              { sig_args = [Xint; Xint; Xsingle; Xsingle]
+              ; sig_res = Xvoid
+              ; sig_cc = cc_default })
+    ])
 
 (** Check double-precision floats. *)
-let check_float = check
-                    (fun a b -> Pfcmp (D, a, b))
-                    (fun a b -> [
-                         Pfmov (D0, a)
-                       ; Pfmov (D1, b)
-                       ; Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
-                       ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
-                       ; Pbl (intern_string "__fault_float",
-                              { sig_args = [Xint; Xint; Xfloat; Xfloat]
-                              ; sig_res = Xvoid
-                              ; sig_cc = cc_default })
-                    ])
+let check_float =
+  check
+    (fun a b -> Pfcmp (D, a, b))
+    (fun a b -> [
+         Pfmov (D0, a)
+       ; Pfmov (D1, b)
+       ; Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
+       ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
+       ; Pbl (intern_string "__fault_float",
+              { sig_args = [Xint; Xint; Xfloat; Xfloat]
+              ; sig_res = Xvoid
+              ; sig_cc = cc_default })
+    ])
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -657,33 +661,51 @@ let tgt_of_branch = function
   | Pcbz (_, _, tgt) -> tgt
   | _ -> raise (Error "tgt_of_branch: expected conditional branch")
 
+(** Emit long-jump version of [instr]. *)
+let expand_cond_branch instr : unit =
+  let lbl = new_label () in
+  emit @@ negate_cond_branch lbl instr;
+  emit @@ Pb (tgt_of_branch instr);
+  emit @@ Plabel lbl
+
+type range = Short | Long
+
 let branch_range = function
-  | Pbc _ | Pcbnz _ | Pcbz _ -> Some 262144
-  | Ptbnz _ | Ptbz _ -> Some 8192
+  | Pbc _ | Pcbnz _ | Pcbz _ -> Some Long
+  | Ptbnz _ | Ptbz _ -> Some Short
   | _ -> None
 
-(** Emit long-jump version of [instr]. *)
-let expand_cond_branch fn_size instr : unit =
-  match branch_range instr with
-  | Some range when fn_size > range ->
-     let lbl = new_label () in
-     emit @@ negate_cond_branch lbl instr;
-     emit @@ Pb (tgt_of_branch instr);
-     emit @@ Plabel lbl
-  | _ ->
-     emit instr
+let expand_instruction' range instr : unit =
+  if branch_range instr = Some range then
+    expand_cond_branch instr
+  else
+    emit instr
 
 let expand_function id fn =
   try
     set_current_function fn;
     (* Do main expansion pass, including builtins *)
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
-    (* Then reset and do another pass to expand branches *)
+    (* Then if function is large, reset and expand tbnz and tbz branches *)
     let fn' = get_current_function () in
-    set_current_function fn';
-    expand id (* sp= *) 31 preg_to_dwarf
-      (expand_cond_branch @@ List.length fn'.fn_code) fn'.fn_code;
-    Errors.OK (get_current_function ())
+    if List.length fn'.fn_code > 8192 then begin
+        set_current_function fn';
+        expand id (* sp= *) 31 preg_to_dwarf (expand_instruction' Short)
+          fn'.fn_code;
+        (* Then if function is very large, reset again and expand bc,
+           cbnz, and cbz branches *)
+        let fn'' = get_current_function () in
+        if List.length fn''.fn_code > 262144 then begin
+            set_current_function fn'';
+            expand id (* sp= *) 31 preg_to_dwarf (expand_instruction' Long)
+              fn''.fn_code;
+            Errors.OK (get_current_function ())
+          end
+        else
+          Errors.OK fn''
+      end
+    else
+      Errors.OK fn'
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
