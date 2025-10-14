@@ -686,14 +686,14 @@ let expand_function id fn =
     set_current_function fn;
     (* Do main expansion pass, including builtins *)
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
-    (* Then if function is large, reset and expand tbnz and tbz branches *)
+    (* Then if function is large, reset and expand tbnz and tbz *)
     let fn' = get_current_function () in
     if List.length fn'.fn_code > 8192 then begin
         set_current_function fn';
         expand id (* sp= *) 31 preg_to_dwarf (expand_instruction' Short)
           fn'.fn_code;
         (* Then if function is very large, reset again and expand bc,
-           cbnz, and cbz branches *)
+           cbnz, and cbz *)
         let fn'' = get_current_function () in
         if List.length fn''.fn_code > 262144 then begin
             set_current_function fn'';
