@@ -63,6 +63,7 @@ let is_current_function_variadic () =
 let get_current_function_sig () =
   (!current_function).fn_sig
 
+(* Tail-recursive list append *)
 let[@tail_mod_cons] rec app (l1 : 'a list) (l2 : 'a list) : 'a list =
   match l1 with
   | [] -> l2
