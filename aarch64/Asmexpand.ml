@@ -419,79 +419,142 @@ let maj_vote_float sz = maj_vote
 (** DMR checks. *)
 let check
       (cmp : 'a -> 'a -> instruction)
-      (call_handler : 'a -> 'a -> instruction list)
+      (call_handler : 'a -> 'a -> label)
       (a : 'a) (b : 'a) : unit =
   if a == b then begin
       raise (Error "ill-formed DMR check")
     end;
-  let lbl_done = new_label () in
-  let lbl_fault = new_label () in
-  side_emit @@ Plabel lbl_fault;
-  List.iter side_emit @@ call_handler a b;
-  side_emit @@ Pb lbl_done;
+  let lbl_fault = call_handler a b in
   emit @@ cmp a b;
-  emit @@ Pbc (TCne, lbl_fault);
-  emit @@ Plabel lbl_done
+  emit @@ Pbc (TCne, lbl_fault)
+
+(** Maps with keys of type Ireg*Ireg. *)
+module Iregpair = struct
+  type t = ireg * ireg
+  let compare (a1, b1) (a2, b2) =
+    let c = Int.compare (int_reg_to_dwarf a1) (int_reg_to_dwarf a2) in
+    if c <> 0 then c else
+      Int.compare (int_reg_to_dwarf b1) (int_reg_to_dwarf b2)
+end
+module Iregmap = Map.Make(Iregpair)
+
+(** Maps with keys of type Freg*freg. *)
+module Fregpair = struct
+  type t = freg * freg
+  let compare (a1, b1) (a2, b2) =
+    let c = Int.compare (float_reg_to_dwarf a1) (float_reg_to_dwarf a2) in
+    if c <> 0 then c else
+      Int.compare (float_reg_to_dwarf b1) (float_reg_to_dwarf b2)
+end
+module Fregmap = Map.Make(Fregpair)
 
 (** Check 32-bit integers. *)
-let check_int =
-  check
-    (fun a b -> Pcmp (W, RR0 a, b, SOnone))
-    (fun a b -> [
-         Pmov (RR1 X2, RR1 a)
-       ; Pmov (RR1 X3, RR1 b)
-       ; Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
-       ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
-       ; Pbl (intern_string "__fault_int",
-              { sig_args = [Xint; Xint; Xint; Xint]
-              ; sig_res = Xvoid
-              ; sig_cc = cc_default })
-    ])
+let int_handlers : label Iregmap.t ref = ref Iregmap.empty
+let handle_int (a : ireg) (b : ireg) : label =
+  match Iregmap.find_opt (a, b) !int_handlers with
+  | Some lbl -> lbl
+  | _ ->
+     let lbl = new_label () in
+     side_emit @@ Plabel lbl;
+     if b = X2 then begin
+         side_emit @@ Pmov (RR1 X16, RR1 b);
+         side_emit @@ Pmov (RR1 X2, RR1 a);
+         side_emit @@ Pmov (RR1 X3, RR1 X16)
+       end
+     else begin
+         side_emit @@ Pmov (RR1 X2, RR1 a);
+         side_emit @@ Pmov (RR1 X3, RR1 b)
+       end;
+     side_emit @@ Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero);
+     side_emit @@ Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero);
+     side_emit @@ Pbs (intern_string "__fault_int",
+                       { sig_args = [Xint; Xint; Xint; Xint]
+                       ; sig_res = Xvoid
+                       ; sig_cc = cc_default });
+     int_handlers := Iregmap.add (a, b) lbl !int_handlers;
+     lbl
+let check_int = check (fun a b -> Pcmp (W, RR0 a, b, SOnone)) handle_int
 
 (** Check 64-bit integers. *)
-let check_long =
-  check
-    (fun a b -> Pcmp (X, RR0 a, b, SOnone))
-    (fun a b -> [
-         Pmov (RR1 X2, RR1 a)
-       ; Pmov (RR1 X3, RR1 b)
-       ; Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero)
-       ; Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero)
-       ; Pbl (intern_string "__fault_long",
-              { sig_args = [Xint; Xint; Xlong; Xlong]
-              ; sig_res = Xvoid
-              ; sig_cc = cc_default })
-    ])
+let long_handlers : label Iregmap.t ref = ref Iregmap.empty
+let handle_long (a : ireg) (b : ireg) : label =
+  match Iregmap.find_opt (a, b) !long_handlers with
+  | Some lbl -> lbl
+  | _ ->
+     let lbl = new_label () in
+     side_emit @@ Plabel lbl;
+     if b = X2 then begin
+         side_emit @@ Pmov (RR1 X16, RR1 b);
+         side_emit @@ Pmov (RR1 X2, RR1 a);
+         side_emit @@ Pmov (RR1 X3, RR1 X16)
+       end
+     else begin
+         side_emit @@ Pmov (RR1 X2, RR1 a);
+         side_emit @@ Pmov (RR1 X3, RR1 b)
+       end;
+     side_emit @@ Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero);
+     side_emit @@ Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero);
+     side_emit @@ Pbs (intern_string "__fault_long",
+                       { sig_args = [Xint; Xint; Xlong; Xlong]
+                       ; sig_res = Xvoid
+                       ; sig_cc = cc_default });
+     long_handlers := Iregmap.add (a, b) lbl !long_handlers;
+     lbl
+let check_long = check (fun a b -> Pcmp (X, RR0 a, b, SOnone)) handle_long
 
 (** Check single-precision floats. *)
-let check_single =
-  check
-    (fun a b -> Pfcmp (S, a, b))
-    (fun a b -> [
-         Pfmov (D0, a)
-       ; Pfmov (D1, b)
-       ; Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
-       ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
-       ; Pbl (intern_string "__fault_single",
-              { sig_args = [Xint; Xint; Xsingle; Xsingle]
-              ; sig_res = Xvoid
-              ; sig_cc = cc_default })
-    ])
+let single_handlers : label Fregmap.t ref = ref Fregmap.empty
+let handle_single (a : freg) (b : freg) : label =
+  match Fregmap.find_opt (a, b) !single_handlers with
+  | Some lbl -> lbl
+  | _ ->
+     let lbl = new_label () in
+     side_emit @@ Plabel lbl;
+     if b = D2 then begin
+         side_emit @@ Pfmov (D2, b);
+         side_emit @@ Pfmov (D0, a);
+         side_emit @@ Pfmov (D1, D2)
+       end
+     else begin
+         side_emit @@ Pfmov (D0, a);
+         side_emit @@ Pfmov (D1, b)
+       end;
+     side_emit @@ Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero);
+     side_emit @@ Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero);
+     side_emit @@ Pbs (intern_string "__fault_single",
+                       { sig_args = [Xint; Xint; Xsingle; Xsingle]
+                       ; sig_res = Xvoid
+                       ; sig_cc = cc_default });
+     single_handlers := Fregmap.add (a, b) lbl !single_handlers;
+     lbl
+let check_single = check (fun a b -> Pfcmp (S, a, b)) handle_single
 
 (** Check double-precision floats. *)
-let check_float =
-  check
-    (fun a b -> Pfcmp (D, a, b))
-    (fun a b -> [
-         Pfmov (D0, a)
-       ; Pfmov (D1, b)
-       ; Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero)
-       ; Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero)
-       ; Pbl (intern_string "__fault_float",
-              { sig_args = [Xint; Xint; Xfloat; Xfloat]
-              ; sig_res = Xvoid
-              ; sig_cc = cc_default })
-    ])
+let float_handlers : label Fregmap.t ref = ref Fregmap.empty
+let handle_float (a : freg) (b : freg) : label =
+  match Fregmap.find_opt (a, b) !float_handlers with
+  | Some lbl -> lbl
+  | _ ->
+     let lbl = new_label () in
+     side_emit @@ Plabel lbl;
+     if b = D2 then begin
+         side_emit @@ Pfmov (D2, b);
+         side_emit @@ Pfmov (D0, a);
+         side_emit @@ Pfmov (D1, D2)
+       end
+     else begin
+         side_emit @@ Pfmov (D0, a);
+         side_emit @@ Pfmov (D1, b)
+       end;
+     side_emit @@ Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero);
+     side_emit @@ Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero);
+     side_emit @@ Pbs (intern_string "__fault_float",
+                       { sig_args = [Xint; Xint; Xfloat; Xfloat]
+                       ; sig_res = Xvoid
+                       ; sig_cc = cc_default });
+     float_handlers := Fregmap.add (a, b) lbl !float_handlers;
+     lbl
+let check_float = check (fun a b -> Pfcmp (D, a, b)) handle_float
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -683,6 +746,10 @@ let expand_instruction' range instr : unit =
 
 let expand_function id fn =
   try
+    int_handlers := Iregmap.empty;
+    long_handlers := Iregmap.empty;
+    single_handlers := Fregmap.empty;
+    float_handlers := Fregmap.empty;
     set_current_function fn;
     (* Do main expansion pass, including builtins *)
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
