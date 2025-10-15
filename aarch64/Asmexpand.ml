@@ -457,9 +457,15 @@ let handle_int (a : ireg) (b : ireg) : label =
      let lbl = new_label () in
      side_emit @@ Plabel lbl;
      if b = X2 then begin
-         side_emit @@ Pmov (RR1 X16, RR1 b);
-         side_emit @@ Pmov (RR1 X2, RR1 a);
-         side_emit @@ Pmov (RR1 X3, RR1 X16)
+         if a = X3 then begin
+             side_emit @@ Pmov (RR1 X16, RR1 b);
+             side_emit @@ Pmov (RR1 X2, RR1 a);
+             side_emit @@ Pmov (RR1 X3, RR1 X16)
+           end
+         else begin
+             side_emit @@ Pmov (RR1 X3, RR1 b);
+             side_emit @@ Pmov (RR1 X2, RR1 a)
+           end
        end
      else begin
          side_emit @@ Pmov (RR1 X2, RR1 a);
@@ -484,9 +490,15 @@ let handle_long (a : ireg) (b : ireg) : label =
      let lbl = new_label () in
      side_emit @@ Plabel lbl;
      if b = X2 then begin
-         side_emit @@ Pmov (RR1 X16, RR1 b);
-         side_emit @@ Pmov (RR1 X2, RR1 a);
-         side_emit @@ Pmov (RR1 X3, RR1 X16)
+         if a = X3 then begin
+             side_emit @@ Pmov (RR1 X16, RR1 b);
+             side_emit @@ Pmov (RR1 X2, RR1 a);
+             side_emit @@ Pmov (RR1 X3, RR1 X16)
+           end
+         else begin
+             side_emit @@ Pmov (RR1 X2, RR1 a);
+             side_emit @@ Pmov (RR1 X3, RR1 b)
+           end
        end
      else begin
          side_emit @@ Pmov (RR1 X2, RR1 a);
@@ -510,10 +522,16 @@ let handle_single (a : freg) (b : freg) : label =
   | _ ->
      let lbl = new_label () in
      side_emit @@ Plabel lbl;
-     if b = D2 then begin
-         side_emit @@ Pfmov (D2, b);
-         side_emit @@ Pfmov (D0, a);
-         side_emit @@ Pfmov (D1, D2)
+     if b = D0 then begin
+         if a = D1 then begin
+             side_emit @@ Pfmov (D2, b);
+             side_emit @@ Pfmov (D0, a);
+             side_emit @@ Pfmov (D1, D2)
+           end
+         else begin
+             side_emit @@ Pfmov (D1, b);
+             side_emit @@ Pfmov (D0, a)
+           end
        end
      else begin
          side_emit @@ Pfmov (D0, a);
@@ -537,10 +555,16 @@ let handle_float (a : freg) (b : freg) : label =
   | _ ->
      let lbl = new_label () in
      side_emit @@ Plabel lbl;
-     if b = D2 then begin
-         side_emit @@ Pfmov (D2, b);
-         side_emit @@ Pfmov (D0, a);
-         side_emit @@ Pfmov (D1, D2)
+     if b = D0 then begin
+         if a = D1 then begin
+             side_emit @@ Pfmov (D2, b);
+             side_emit @@ Pfmov (D0, a);
+             side_emit @@ Pfmov (D1, D2)
+           end
+         else begin
+             side_emit @@ Pfmov (D1, b);
+             side_emit @@ Pfmov (D0, a)
+           end
        end
      else begin
          side_emit @@ Pfmov (D0, a);
@@ -746,19 +770,23 @@ let expand_instruction' range instr : unit =
 
 let expand_function id fn =
   try
+    (* Reset fault handler caches *)
     int_handlers := Iregmap.empty;
     long_handlers := Iregmap.empty;
     single_handlers := Fregmap.empty;
     float_handlers := Fregmap.empty;
     set_current_function fn;
+
     (* Do main expansion pass, including builtins *)
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
+
     (* Then if function is large, reset and expand tbnz and tbz *)
     let fn' = get_current_function () in
     if List.length fn'.fn_code > 8192 then begin
         set_current_function fn';
         expand id (* sp= *) 31 preg_to_dwarf (expand_instruction' Short)
           fn'.fn_code;
+
         (* Then if function is very large, reset again and expand bc,
            cbnz, and cbz *)
         let fn'' = get_current_function () in
