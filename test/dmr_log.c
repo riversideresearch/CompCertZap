@@ -1,9 +1,7 @@
 // Test DMR detection with handler functions that print the offending
 // registers and their contents and terminate the program.
 
-// To test fault detection with this program, you need to either
-// induce a fault in simulation (e.g., with spike) or modify the
-// builtins to pretend that a fault has occurred in [f] or [main].
+// Currently assumes ccomp 3.16 targeting aarch64.
 
 #include <stdio.h>
 #include <stdlib.h>
