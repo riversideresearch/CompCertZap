@@ -428,30 +428,31 @@ let check
   emit @@ cmp a b;
   emit @@ Pbc (TCne, lbl_fault)
 
-(** Maps with keys of type Ireg*Ireg. *)
-module Iregpair = struct
-  type t = ireg * ireg
+(** Diagonal functor, with [sorted] function to convert pairs into
+    canonical (sorted) form. *)
+module Diag (A : Map.OrderedType) = struct
+  type t = A.t * A.t
+
   let compare (a1, b1) (a2, b2) =
-    let c = Int.compare (int_reg_to_dwarf a1) (int_reg_to_dwarf a2) in
-    if c <> 0 then c else
-      Int.compare (int_reg_to_dwarf b1) (int_reg_to_dwarf b2)
+    let c = A.compare a1 a2 in
+    if c <> 0 then c else A.compare b1 b2
+
+  let sorted (a : A.t) (b : A.t) : t =
+    if A.compare a b <= 0 then (a, b) else (b, a)
 end
+
+(** Maps with keys of type ireg*ireg. *)
+module Iregpair = Diag(struct type t = ireg let compare = compare end)
 module Iregmap = Map.Make(Iregpair)
 
-(** Maps with keys of type Freg*freg. *)
-module Fregpair = struct
-  type t = freg * freg
-  let compare (a1, b1) (a2, b2) =
-    let c = Int.compare (float_reg_to_dwarf a1) (float_reg_to_dwarf a2) in
-    if c <> 0 then c else
-      Int.compare (float_reg_to_dwarf b1) (float_reg_to_dwarf b2)
-end
+(** Maps with keys of type freg*freg. *)
+module Fregpair = Diag(struct type t = freg let compare = compare end)
 module Fregmap = Map.Make(Fregpair)
 
 (** Check 32-bit integers. *)
 let int_handlers : label Iregmap.t ref = ref Iregmap.empty
 let handle_int (a : ireg) (b : ireg) : label =
-  match Iregmap.find_opt (a, b) !int_handlers with
+  match Iregmap.find_opt (Iregpair.sorted a b) !int_handlers with
   | Some lbl -> lbl
   | _ ->
      let lbl = new_label () in
@@ -484,7 +485,7 @@ let check_int = check (fun a b -> Pcmp (W, RR0 a, b, SOnone)) handle_int
 (** Check 64-bit integers. *)
 let long_handlers : label Iregmap.t ref = ref Iregmap.empty
 let handle_long (a : ireg) (b : ireg) : label =
-  match Iregmap.find_opt (a, b) !long_handlers with
+  match Iregmap.find_opt (Iregpair.sorted a b) !long_handlers with
   | Some lbl -> lbl
   | _ ->
      let lbl = new_label () in
@@ -517,7 +518,7 @@ let check_long = check (fun a b -> Pcmp (X, RR0 a, b, SOnone)) handle_long
 (** Check single-precision floats. *)
 let single_handlers : label Fregmap.t ref = ref Fregmap.empty
 let handle_single (a : freg) (b : freg) : label =
-  match Fregmap.find_opt (a, b) !single_handlers with
+  match Fregmap.find_opt (Fregpair.sorted a b) !single_handlers with
   | Some lbl -> lbl
   | _ ->
      let lbl = new_label () in
@@ -550,7 +551,7 @@ let check_single = check (fun a b -> Pfcmp (S, a, b)) handle_single
 (** Check double-precision floats. *)
 let float_handlers : label Fregmap.t ref = ref Fregmap.empty
 let handle_float (a : freg) (b : freg) : label =
-  match Fregmap.find_opt (a, b) !float_handlers with
+  match Fregmap.find_opt (Fregpair.sorted a b) !float_handlers with
   | Some lbl -> lbl
   | _ ->
      let lbl = new_label () in
