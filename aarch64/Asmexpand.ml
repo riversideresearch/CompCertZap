@@ -452,7 +452,8 @@ module Fregmap = Map.Make(Fregpair)
 (** Check 32-bit integers. *)
 let int_handlers : label Iregmap.t ref = ref Iregmap.empty
 let handle_int (a : ireg) (b : ireg) : label =
-  match Iregmap.find_opt (Iregpair.sorted a b) !int_handlers with
+  let key = Iregpair.sorted a b in
+  match Iregmap.find_opt key !int_handlers with
   | Some lbl -> lbl
   | _ ->
      let lbl = new_label () in
@@ -478,14 +479,15 @@ let handle_int (a : ireg) (b : ireg) : label =
                        { sig_args = [Xint; Xint; Xint; Xint]
                        ; sig_res = Xvoid
                        ; sig_cc = cc_default });
-     int_handlers := Iregmap.add (a, b) lbl !int_handlers;
+     int_handlers := Iregmap.add key lbl !int_handlers;
      lbl
 let check_int = check (fun a b -> Pcmp (W, RR0 a, b, SOnone)) handle_int
 
 (** Check 64-bit integers. *)
 let long_handlers : label Iregmap.t ref = ref Iregmap.empty
 let handle_long (a : ireg) (b : ireg) : label =
-  match Iregmap.find_opt (Iregpair.sorted a b) !long_handlers with
+  let key = Iregpair.sorted a b in
+  match Iregmap.find_opt key !long_handlers with
   | Some lbl -> lbl
   | _ ->
      let lbl = new_label () in
@@ -511,14 +513,15 @@ let handle_long (a : ireg) (b : ireg) : label =
                        { sig_args = [Xint; Xint; Xlong; Xlong]
                        ; sig_res = Xvoid
                        ; sig_cc = cc_default });
-     long_handlers := Iregmap.add (a, b) lbl !long_handlers;
+     long_handlers := Iregmap.add key lbl !long_handlers;
      lbl
 let check_long = check (fun a b -> Pcmp (X, RR0 a, b, SOnone)) handle_long
 
 (** Check single-precision floats. *)
 let single_handlers : label Fregmap.t ref = ref Fregmap.empty
 let handle_single (a : freg) (b : freg) : label =
-  match Fregmap.find_opt (Fregpair.sorted a b) !single_handlers with
+  let key = Fregpair.sorted a b in
+  match Fregmap.find_opt key !single_handlers with
   | Some lbl -> lbl
   | _ ->
      let lbl = new_label () in
@@ -544,14 +547,15 @@ let handle_single (a : freg) (b : freg) : label =
                        { sig_args = [Xint; Xint; Xsingle; Xsingle]
                        ; sig_res = Xvoid
                        ; sig_cc = cc_default });
-     single_handlers := Fregmap.add (a, b) lbl !single_handlers;
+     single_handlers := Fregmap.add key lbl !single_handlers;
      lbl
 let check_single = check (fun a b -> Pfcmp (S, a, b)) handle_single
 
 (** Check double-precision floats. *)
 let float_handlers : label Fregmap.t ref = ref Fregmap.empty
 let handle_float (a : freg) (b : freg) : label =
-  match Fregmap.find_opt (Fregpair.sorted a b) !float_handlers with
+  let key = Fregpair.sorted a b in
+  match Fregmap.find_opt key !float_handlers with
   | Some lbl -> lbl
   | _ ->
      let lbl = new_label () in
@@ -577,7 +581,7 @@ let handle_float (a : freg) (b : freg) : label =
                        { sig_args = [Xint; Xint; Xfloat; Xfloat]
                        ; sig_res = Xvoid
                        ; sig_cc = cc_default });
-     float_handlers := Fregmap.add (a, b) lbl !float_handlers;
+     float_handlers := Fregmap.add key lbl !float_handlers;
      lbl
 let check_float = check (fun a b -> Pfcmp (D, a, b)) handle_float
 
