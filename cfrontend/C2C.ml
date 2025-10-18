@@ -694,11 +694,11 @@ let z_of_str hex str fst =
     let d = int_of_char str.[i] in
     let d =
       if hex && d >= int_of_char 'a' && d <= int_of_char 'f' then
-	d - int_of_char 'a' + 10
+  d - int_of_char 'a' + 10
       else if hex && d >= int_of_char 'A' && d <= int_of_char 'F' then
-	d - int_of_char 'A' + 10
+  d - int_of_char 'A' + 10
       else
-	d - int_of_char '0'
+  d - int_of_char '0'
     in
     assert (d >= 0 && d < base);
     res := Z.add (Z.mul (Z.of_uint base) !res) (Z.of_uint d)
@@ -723,11 +723,11 @@ let convertFloat f kind =
       begin match kind with
       | FFloat16 ->
           unsupported "'_Float16' type";
-	  Ctyping.econst_single (Float.to_single Float.zero)
+    Ctyping.econst_single (Float.to_single Float.zero)
       | FFloat ->
-	  Ctyping.econst_single (Float.to_single Float.zero)
+    Ctyping.econst_single (Float.to_single Float.zero)
       | FDouble | FLongDouble ->
-	  Ctyping.econst_float Float.zero
+    Ctyping.econst_float Float.zero
       end
     | Z.Zpos mant ->
 
@@ -735,7 +735,7 @@ let convertFloat f kind =
       let exp = z_of_str false f.C.exp (if sgExp then 1 else 0) in
       let exp = if f.C.exp.[0] = '-' then Z.neg exp else exp in
       let shift_exp =
-	(if f.C.hex then 4 else 1) * String.length f.C.fracPart in
+  (if f.C.hex then 4 else 1) * String.length f.C.fracPart in
       let exp = Z.sub exp (Z.of_uint shift_exp) in
 
       let base = P.of_int (if f.C.hex then 2 else 10) in
@@ -743,13 +743,13 @@ let convertFloat f kind =
       begin match kind with
       | FFloat16 ->
           unsupported "'_Float16' type";
-	  Ctyping.econst_single (Float.to_single Float.zero)
+    Ctyping.econst_single (Float.to_single Float.zero)
       | FFloat ->
-	  let f = Float32.from_parsed base mant exp in
+    let f = Float32.from_parsed base mant exp in
           checkFloatOverflow f "float";
           Ctyping.econst_single f
       | FDouble | FLongDouble ->
-	  let f = Float.from_parsed base mant exp in
+    let f = Float.from_parsed base mant exp in
           checkFloatOverflow f "double";
           Ctyping.econst_float f
       end
