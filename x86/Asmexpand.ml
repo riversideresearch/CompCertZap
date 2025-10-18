@@ -137,24 +137,24 @@ let addressing_of_builtin_arg = function
 let expand_builtin_memcpy_small sz al src dst =
   let rec copy src dst sz =
     if sz >= 8 && Archi.ptr64 then begin
-	emit (Pmovq_rm (RCX, src));
-	emit (Pmovq_mr (dst, RCX));
+  emit (Pmovq_rm (RCX, src));
+  emit (Pmovq_mr (dst, RCX));
         copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
     end else if sz >= 8 && !Clflags.option_ffpu then begin
-	emit (Pmovsq_rm (XMM7, src));
-	emit (Pmovsq_mr (dst, XMM7));
+  emit (Pmovsq_rm (XMM7, src));
+  emit (Pmovsq_mr (dst, XMM7));
         copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
       end else if sz >= 4 then begin
-	emit (Pmovl_rm (RCX, src));
-	emit (Pmovl_mr (dst, RCX));
+  emit (Pmovl_rm (RCX, src));
+  emit (Pmovl_mr (dst, RCX));
         copy (offset_addressing src _4z) (offset_addressing dst _4z) (sz - 4)
       end else if sz >= 2 then begin
-	emit (Pmovw_rm (RCX, src));
-	emit (Pmovw_mr (dst, RCX));
+  emit (Pmovw_rm (RCX, src));
+  emit (Pmovw_mr (dst, RCX));
         copy (offset_addressing src _2z) (offset_addressing dst _2z) (sz - 2)
       end else if sz >= 1 then begin
-	emit (Pmovb_rm (RCX, src));
-	emit (Pmovb_mr (dst, RCX));
+  emit (Pmovb_rm (RCX, src));
+  emit (Pmovb_mr (dst, RCX));
         copy (offset_addressing src _1z) (offset_addressing dst _1z) (sz - 1)
       end in
   copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
@@ -193,11 +193,11 @@ let expand_builtin_vload_common chunk addr res =
   | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
      let addr' = offset_addressing addr _4z in
      if not (Asmgen.addressing_mentions addr res2) then begin
-	 emit (Pmovl_rm (res2,addr));
-	 emit (Pmovl_rm (res1,addr'))
+   emit (Pmovl_rm (res2,addr));
+   emit (Pmovl_rm (res1,addr'))
        end else begin
-	 emit (Pmovl_rm (res1,addr'));
-	 emit (Pmovl_rm (res2,addr))
+   emit (Pmovl_rm (res1,addr'));
+   emit (Pmovl_rm (res2,addr))
        end
   | Mfloat32, BR(FR res) ->
      emit (Pmovss_fm (res,addr))
@@ -695,7 +695,7 @@ let expand_instruction instr =
      begin
        match ef with
        | EF_builtin(name, sg) ->
-	  expand_builtin_inline (camlstring_of_coqstring name) args res
+    expand_builtin_inline (camlstring_of_coqstring name) args res
        | EF_vload chunk ->
           expand_builtin_vload chunk args res
        | EF_vstore chunk ->

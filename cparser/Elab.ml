@@ -180,7 +180,7 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_extern,Storage_extern
     | Storage_default,Storage_default -> sto
     | _,Storage_static ->
-	error loc "static declaration of '%s' follows non-static declaration" s;
+        error loc "static declaration of '%s' follows non-static declaration" s;
         sto
     | Storage_static,_ -> Storage_static (* Static stays static *)
     | Storage_extern,_ -> if is_function_type env new_ty then Storage_extern else sto
@@ -196,8 +196,8 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_auto,_
     | _,Storage_register
     | Storage_register,_ ->
-	error loc "unexpected %s declaration of '%s'"
-                  (name_of_storage_class sto) s;
+        error loc "unexpected %s declaration of '%s'"
+          (name_of_storage_class sto) s;
         sto
   in
     (new_sto, new_ty)
@@ -453,7 +453,7 @@ let elab_string_literal loc enc chars =
         (fun i c -> Bytes.set res i (Char.unsafe_chr (Int64.to_int c)))
         chars;
       CStr (Bytes.to_string res)
-  | EncWide | EncU16 | EncU32 -> 
+  | EncWide | EncU16 | EncU32 ->
       CWStr(chars, ik)
 
 let warn_C11_literals loc enc kind =
@@ -755,7 +755,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
      - A use of an already-defined struct/union/enum.  In this case
        the name-related attributes should go to the name being declared.
        Sending them to the struct/union/enum would cause them to be ignored,
-       with a warning.  The struct-related attributes go to the 
+       with a warning.  The struct-related attributes go to the
        struct/union/enum, are ignored, and cause a warning.
      - An incomplete declaration of a struct/union.  In this case
        the name- and struct-related attributes are just ignored,
@@ -815,7 +815,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
     | [Cabs.Tunsigned; Cabs.Tlong; Cabs.Tlong; Cabs.Tint] -> simple (TInt(IULongLong, []))
 
     | [Cabs.Tfloat] -> simple (TFloat(FFloat, []))
-    | [Cabs.Tfloat16] -> simple (TFloat(FFloat16, [])) 
+    | [Cabs.Tfloat16] -> simple (TFloat(FFloat16, []))
     | [Cabs.Tdouble] -> simple (TFloat(FDouble, []))
 
     | [Cabs.Tlong; Cabs.Tdouble] -> simple (TFloat(FLongDouble, []))
@@ -1115,7 +1115,7 @@ and elab_field_group env = function
 | Field_group_static_assert(exp, loc_exp, msg, loc_msg, loc) ->
     elab_static_assert env exp loc_exp msg loc_msg loc;
     ([], env)
-  
+
 (* Elaboration of a struct or union. C99 section 6.7.2.1 *)
 
 and elab_struct_or_union_info kind loc env members attrs =
@@ -2111,7 +2111,7 @@ let elab_expr ctx loc env a =
       | _ -> fatal_error "request for member '%s' in something not a structure or union" mem in
     let rec offset_of_list acc env ty = function
       | [] -> acc,ty
-      | fld::rest -> 
+      | fld::rest ->
         if fld.fld_bitfield <> None then
           fatal_error "cannot compute offset of bit-field '%s'" fld.fld_name;
         let off = offsetof env ty fld in
