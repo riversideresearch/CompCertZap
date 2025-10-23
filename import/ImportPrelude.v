@@ -38,14 +38,24 @@ Module prelude.
   Definition sig_f_l := [Xfloat ---> Xlong]%asttyp.
   Definition sig_ll_l := [Xlong; Xlong ---> Xlong]%asttyp.
   Definition sig_li_l := [Xlong; Xint ---> Xlong]%asttyp.
+  Definition sig_i_v := [Xint ---> Xvoid]%asttyp.
 
-  Definition helper_function (p : string * signature) : ident * globdef :=
+  Definition external_function (p : string * signature) : ident * globdef :=
+    let '(name, sg) := p in
+    (intern name, Gfun (External (EF_external name sg))).
+
+  Definition runtime_function (p : string * signature) : ident * globdef :=
     let '(name, sg) := p in
     (intern name, Gfun (External (EF_runtime name sg))).
 
   Local Open Scope string_scope.
   Definition defs : list (ident * globdef) :=
-    map helper_function $
+    app 
+    (map external_function $
+      ("exit", sig_i_v) ::
+      nil
+    )
+    (map runtime_function $
       ("__compcert_i64_dtos", sig_f_l) ::
       ("__compcert_i64_dtou", sig_f_l) ::
       ("__compcert_i64_stod", sig_l_f) ::
@@ -61,5 +71,5 @@ Module prelude.
       ("__compcert_i64_sar", sig_li_l) ::
       ("__compcert_i64_umulh", sig_ll_l) ::
       ("__compcert_i64_smulh", sig_ll_l) ::
-      nil.
+      nil).
 End prelude.
