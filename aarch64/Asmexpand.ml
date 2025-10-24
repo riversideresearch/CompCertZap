@@ -17,6 +17,8 @@ open Asm
 open Asmexpandaux
 open AST
 open Camlcoq
+open Maps
+open TargetPrinter
 module Ptrofs = Integers.Ptrofs
 
 exception Error of string
@@ -177,7 +179,7 @@ let offset_in_range ofs =
   (* The 512 upper bound comes from ldp/stp.  Single-register load/store
      instructions support bigger offsets. *)
   let ofs = Z.to_int64 ofs in 0L <= ofs && ofs < 512L
-  
+
 let memcpy_small_arg sz arg tmp =
   match arg with
   | BA (IR r) ->
@@ -719,7 +721,43 @@ let expand_instruction instr =
   | _ ->
      emit instr
 
-(** Conditional branch rewriting *)
+(* Branch relaxation *)
+
+(** Number of actual machine code instructions corresponding to a
+    given Asm.instruction. Derived from [print_instruction] in
+    TargetPrinter.ml. *)
+let instr_size = function
+  | Plabel _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
+  | Pfmovimmd (_, f) ->
+     let d = camlint64_of_coqint (Floats.Float.to_bits f) in
+     if is_immediate_float64 d then 1 else 2
+  | Pfmovimms(_, f) ->
+     let d = camlint_of_coqint (Floats.Float32.to_bits f) in
+     if is_immediate_float32 d then 1 else 2
+  | Ploadsymbol _ -> 2
+  | Pbtbl (_, tbl) -> 4 + List.length tbl
+  | Pbuiltin(EF_inline_asm (txt, sg, clob), args, res) ->
+     (* Conservatively count number of lines. Possibly over-estimating
+        if, e.g., any of them are labels. *)
+     List.length @@ String.split_on_char '\n' @@ camlstring_of_coqstring txt
+  | Pbuiltin(_, args, res) -> assert false
+  | Pallocframe _ -> assert false
+  | Pfreeframe _ -> assert false
+  | Pcvtx2w _ -> assert false
+  | _ -> 1
+
+(** Compute label position map for function with code [c]. The
+    position of a label is its distance (in # of instructions, i.e., #
+    bytes divided by 4) from the start of the function. *)
+let label_positions (c : code) : int PTree.t =
+  let rec go (m : int PTree.t) (pos : int) = function
+    | [] -> m
+    | Plabel lbl :: rest ->
+       go (PTree.set lbl pos m) pos rest
+    | instr :: rest ->
+       go m (pos + instr_size instr) rest
+  in
+  go PTree.Empty 0 c
 
 let negate_testcond = function
   | TCeq -> TCne
@@ -753,25 +791,56 @@ let tgt_of_branch = function
   | Pcbz (_, _, tgt) -> tgt
   | _ -> raise (Error "tgt_of_branch: expected conditional branch")
 
-(** Emit long-jump version of [instr]. *)
-let expand_cond_branch instr : unit =
-  let lbl = new_label () in
-  emit @@ negate_cond_branch lbl instr;
-  emit @@ Pb (tgt_of_branch instr);
-  emit @@ Plabel lbl
+(** This is reset to false before every iteration of
+    [relax_branches_pass]. *)
+let branch_changed : bool ref = ref false
 
-type range = Short | Long
+(** Emit relaxed version of [br_instr]. *)
+let relax_branch br_instr : unit =
+  let lbl = new_label () in
+  emit @@ negate_cond_branch lbl br_instr;
+  emit @@ Pb (tgt_of_branch br_instr);
+  emit @@ Plabel lbl;
+  branch_changed := true
 
 let branch_range = function
-  | Pbc _ | Pcbnz _ | Pcbz _ -> Some Long
-  | Ptbnz _ | Ptbz _ -> Some Short
+  | Pbc _ | Pcbnz _ | Pcbz _ -> Some 262144
+  | Ptbnz _ | Ptbz _ -> Some 8192
   | _ -> None
 
-let expand_instruction' range instr : unit =
-  if branch_range instr = Some range then
-    expand_cond_branch instr
-  else
-    emit instr
+(** Single pass of rewriting conditional branches whose target labels
+    are out of range. Precomputes the positions of labels (as offsets
+    from the beginning of the function) before running the pass. *)
+let relax_branches_pass (c : code) : unit =
+  let rec go (lbl_positions : int PTree.t) (cur_pos : int) = function
+    | [] -> ()
+    | instr :: rest -> begin
+       match branch_range instr with
+        | Some range -> begin
+            let lbl_pos = Option.get @@
+                            PTree.get (tgt_of_branch instr) lbl_positions in
+            let displacement = lbl_pos - cur_pos in
+            if displacement < -range || range <= displacement then
+              relax_branch instr
+            else
+              emit instr
+          end
+        | None ->
+           emit instr
+      end;
+      go lbl_positions (cur_pos + instr_size instr) rest
+  in
+  go (label_positions c) 0 c
+
+(** Repeat branch relaxation pass until fixed point. *)
+let relax_branches () : unit =
+  branch_changed := true;
+  while !branch_changed do
+    branch_changed := false;
+    let fn = get_current_function () in
+    set_current_function fn;
+    relax_branches_pass fn.fn_code
+  done
 
 let expand_function id fn =
   try
@@ -780,32 +849,15 @@ let expand_function id fn =
     long_handlers := Iregmap.empty;
     single_handlers := Fregmap.empty;
     float_handlers := Fregmap.empty;
-    set_current_function fn;
 
-    (* Do main expansion pass, including builtins *)
+    (* Main expansion pass *)
+    set_current_function fn;
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
 
-    (* Then if function is large, reset and expand tbnz and tbz *)
-    let fn' = get_current_function () in
-    if List.length fn'.fn_code > 8192 then begin
-        set_current_function fn';
-        expand id (* sp= *) 31 preg_to_dwarf (expand_instruction' Short)
-          fn'.fn_code;
+    (* Then branch relaxation *)
+    relax_branches ();
 
-        (* Then if function is very large, reset again and expand bc,
-           cbnz, and cbz *)
-        let fn'' = get_current_function () in
-        if List.length fn''.fn_code > 262144 then begin
-            set_current_function fn'';
-            expand id (* sp= *) 31 preg_to_dwarf (expand_instruction' Long)
-              fn''.fn_code;
-            Errors.OK (get_current_function ())
-          end
-        else
-          Errors.OK fn''
-      end
-    else
-      Errors.OK fn'
+    Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
