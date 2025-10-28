@@ -470,6 +470,9 @@ Section PRESERVATION.
     intro Hused.
     apply in_elements, Regset.union_2, in_regset_of_list; auto.
   Qed.
+  
+  Section VOTE.
+  Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
   Lemma checkR_step
     r1 r2 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
@@ -1672,5 +1675,7 @@ Section PRESERVATION.
     - intros s1 t s1' Hstep s2 Hmatch.
       eapply step_simulation; eauto; intuition.
   Qed.
+
+  End VOTE.
 
 End PRESERVATION.

@@ -746,7 +746,7 @@ Proof.
     repeat lr_case.
     simpl in *.
     assert (p < st_nextnode s'0).
-    { clear H; inv s2; simpl in *; unfold Ple in *; lia. }
+    { clear H; inv s2; simpl in *; extlia. }
     assert (Hn0: n0 < s'0.(st_nextnode)).
     { eapply maj_vote_regs_succ_lt_nextnode.
       2: { eauto. }
@@ -887,7 +887,7 @@ Proof.
        { eapply IHl; eauto. }
        eapply state_incr_match_instr; eauto. }
   eapply transf_instr_match_instr; eauto.
-  clear Hiter; inv s0; unfold Ple in *; lia.
+  clear Hiter; inv s0; extlia.
 Qed.
 
 Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
@@ -1156,8 +1156,7 @@ Proof.
   intro Hin.
   apply in_elements in Hin.
   destruct (Regset.max_elt s) eqn:Hmax.
-  { eapply Regset.max_elt_2 in Hmax; eauto.
-    unfold Plt in Hmax; lia. }
+  { eapply Regset.max_elt_2 in Hmax; eauto; extlia. }
   apply Regset.max_elt_3 in Hmax.
   apply Regset.is_empty_1 in Hmax.
   destruct s; simpl in *.
@@ -1384,7 +1383,7 @@ Proof.
          apply lt_nextnode_init_state' in Hpi.
          clear H0 H H1.
          repeat state_incr_inv.
-         unfold Ple in *; simpl in *; lia. }
+         extlia. }
     destruct f.
     simpl in *.
     econstructor.

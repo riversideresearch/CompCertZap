@@ -151,6 +151,9 @@ Inductive state: Type :=
              (m: mem),                  (**r memory state *)
       state.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+  
 Section RELSEM.
 
 Variable ge: genv.
@@ -467,6 +470,8 @@ Inductive final_state: state -> int -> Prop :=
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
+End VOTE.
+
 Global Hint Constructors eval_expr eval_exprlist eval_condexpr: evalexpr.
 
 (** * Lifting of let-bound variables *)
@@ -545,6 +550,9 @@ Proof.
   apply IHinsert_lenv. exact H0. lia.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Lemma eval_lift_expr:
   forall ge sp e m w le a v,
   eval_expr ge sp e m le a v ->
@@ -593,6 +601,8 @@ Proof.
   induction 1; simpl; eauto using eval_lift, eval_exprlist.
 Qed.
 
+End VOTE.
+
 Global Hint Resolve eval_lift eval_lift_list: evalexpr.
 
 (** Some operations over [exprlist]. *)
@@ -602,6 +612,9 @@ Fixpoint length_exprlist (al: exprlist) : nat :=
 
 Fixpoint app_exprlist (al bl: exprlist) : exprlist :=
   match al with Enil => bl | Econs a al => Econs a (app_exprlist al bl) end.
+
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Lemma eval_app_exprlist: forall ge sp e m le al1 al2 vl1 vl2,
   eval_exprlist ge sp e m le al1 vl1 ->
@@ -674,3 +687,5 @@ Proof.
   intros. exploit (eval_bind_exprs_gen (fun v' => v' = v)); eauto.
   intros (v' & A & B). subst v'; auto.
 Qed.
+
+End VOTE.

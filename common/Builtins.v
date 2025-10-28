@@ -39,14 +39,16 @@ Definition builtin_function_sig (b: builtin_function) : signature :=
   | BI_replicate b => replicate_builtin_sig b
   end.
 
-Definition builtin_function_sem (b: builtin_function) : builtin_sem (sig_res (builtin_function_sig b)) :=
+Definition builtin_function_sem {VT: vote_type} `{HVT: VoteSemantics VT}
+  (b: builtin_function) : builtin_sem (sig_res (builtin_function_sig b)) :=
   match b with
   | BI_standard b => standard_builtin_sem b
   | BI_platform b => platform_builtin_sem b
   | BI_replicate b => replicate_builtin_sem b
   end.
 
-Lemma builtin_function_sem_inject: forall b vargs vres f vargs',
+Lemma builtin_function_sem_inject {VT: vote_type} `{HVT: VoteSemantics VT}
+  : forall b vargs vres f vargs',
   builtin_function_sem b vargs = Some vres ->
   Val.inject_list f vargs vargs' ->
   exists vres', builtin_function_sem b vargs' = Some vres' /\ Val.inject f vres vres'.
@@ -57,7 +59,8 @@ Proof.
   exists vres'; auto.
 Qed.
 
-Lemma builtin_function_sem_lessdef: forall b vargs vres vargs',
+Lemma builtin_function_sem_lessdef {VT: vote_type} `{HVT: VoteSemantics VT}
+  : forall b vargs vres vargs',
   builtin_function_sem b vargs = Some vres ->
   Val.lessdef_list vargs vargs' ->
   exists vres', builtin_function_sem b vargs' = Some vres' /\ Val.lessdef vres vres'.

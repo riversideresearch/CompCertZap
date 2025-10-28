@@ -378,6 +378,203 @@ Qed.
 Definition vote_float_sem : builtin_sem Xfloat :=
   mkbuiltin_v3t Xfloat vote_float vote_float_well_typed vote_float_compat_inject.
 
+Definition vote_int3 (x y z : val) : val :=
+  match (x, y, z) with
+  | (Vint a, Vint b, Vint c) =>
+      if Int.eq_dec a b && Int.eq_dec b c
+      then x
+      else Vundef
+  | (Vptr a i, Vptr b j, Vptr c k) =>
+      if negb Archi.ptr64
+      then if (eq_block a b && Ptrofs.eq_dec i j) &&
+                (eq_block b c && Ptrofs.eq_dec j k)
+           then x
+           else Vundef
+      else Vundef
+  | _ => Vundef
+  end.
+
+Lemma vote_int3_well_typed x y z :
+  Val.has_rettype (vote_int3 x y z) Xint.
+Proof.
+  unfold Val.has_rettype, vote_int3.
+  destruct x, y, z; auto.
+  - repeat destruct (Int.eq_dec _ _); simpl; auto.
+  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
+    repeat ((try destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); simpl; auto)).
+Qed.
+
+Lemma vote_int3_compat_inject j v1 v1' v2 v2' v3 v3' :
+  Val.inject j v1 v1' ->
+  Val.inject j v2 v2' ->
+  Val.inject j v3 v3' ->
+  Val.inject j (vote_int3 v1 v2 v3) (vote_int3 v1' v2' v3').
+Proof.
+  unfold vote_int3.
+  intros H0 H1 H2.
+  inv H0; simpl; auto; inv H1; inv H2; simpl; auto;
+    (* This is necessary for riscv but not x86_64. Why? *)
+    try solve [destruct Archi.ptr64 eqn:Harchi; simpl; auto;
+               repeat ((try destruct (eq_block _ _); subst; simpl);
+                       (try destruct (Ptrofs.eq_dec _ _); subst; simpl);
+                       (try solve [econstructor; eauto; congruence]);
+                       (try congruence))].
+  repeat destruct (Int.eq_dec _ _); subst; simpl; auto.
+Qed.
+
+Definition vote_int3_sem : builtin_sem Xint :=
+  mkbuiltin_v3t Xint vote_int3 vote_int3_well_typed vote_int3_compat_inject.
+
+Definition vote_long3 (x y z : val) : val :=
+  match (x, y, z) with
+  | (Vlong a, Vlong b, Vlong c) =>
+      if Int64.eq_dec a b && Int64.eq_dec b c
+      then x
+      else Vundef
+  | (Vptr a i, Vptr b j, Vptr c k) =>
+      if Archi.ptr64
+      then if (eq_block a b && Ptrofs.eq_dec i j) &&
+                (eq_block b c && Ptrofs.eq_dec j k)
+           then x
+           else Vundef
+      else Vundef
+  | _ => Vundef
+  end.
+
+Lemma vote_long3_well_typed x y z :
+  Val.has_rettype (vote_long3 x y z) Xlong.
+Proof.
+  unfold Val.has_rettype, vote_long3.
+  destruct x, y, z; auto.
+  - repeat destruct (Int64.eq_dec _ _); simpl; auto.
+  - destruct Archi.ptr64 eqn:Harchi; simpl; auto.
+    repeat ((try destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); simpl; auto)).
+Qed.
+
+Lemma vote_long3_compat_inject j v1 v1' v2 v2' v3 v3' :
+  Val.inject j v1 v1' ->
+  Val.inject j v2 v2' ->
+  Val.inject j v3 v3' ->
+  Val.inject j (vote_long3 v1 v2 v3) (vote_long3 v1' v2' v3').
+Proof.
+  unfold vote_long3.
+  intros H0 H1 H2.
+  inv H0; simpl; auto; inv H1; inv H2; simpl; auto;
+    repeat destruct (Int64.eq_dec _ _); subst; simpl; auto;
+    destruct Archi.ptr64 eqn:Harchi; simpl; auto;
+    repeat ((try destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); subst; simpl);
+            (try solve [econstructor; eauto; congruence]);
+            (try congruence)).
+Qed.
+
+Definition vote_long3_sem : builtin_sem Xlong :=
+  mkbuiltin_v3t Xlong vote_long3 vote_long3_well_typed vote_long3_compat_inject.
+
+Definition vote_single3 (x y z : val) : val :=
+  match (x, y, z) with
+  | (Vsingle a, Vsingle b, Vsingle c) =>
+      if Float32.eq_dec a b && Float32.eq_dec b c
+      then x
+      else Vundef
+  | _ => Vundef
+  end.
+
+Lemma vote_single3_well_typed x y z :
+  Val.has_rettype (vote_single3 x y z) Xsingle.
+Proof.
+  unfold Val.has_rettype, vote_single3.
+  destruct x, y, z; auto.
+  repeat destruct (Float32.eq_dec _ _); simpl; auto.
+Qed.
+
+Lemma vote_single3_compat_inject j v1 v1' v2 v2' v3 v3' :
+  Val.inject j v1 v1' ->
+  Val.inject j v2 v2' ->
+  Val.inject j v3 v3' ->
+  Val.inject j (vote_single3 v1 v2 v3) (vote_single3 v1' v2' v3').
+Proof.
+  unfold vote_single3.
+  intros H0 H1 H2.
+  inv H0; simpl; auto.
+  inv H1; simpl; auto.
+  inv H2; simpl; auto.
+  repeat destruct (Float32.eq_dec _ _); simpl; auto.
+Qed.
+
+Definition vote_single3_sem : builtin_sem Xsingle :=
+  mkbuiltin_v3t Xsingle vote_single3 vote_single3_well_typed vote_single3_compat_inject.
+
+Definition vote_float3 (x y z : val) : val :=
+  match (x, y, z) with
+  | (Vfloat a, Vfloat b, Vfloat c) =>
+      if Float.eq_dec a b && Float.eq_dec b c
+      then x
+      else Vundef
+  | _ => Vundef
+  end.
+
+Lemma vote_float3_well_typed x y z :
+  Val.has_rettype (vote_float3 x y z) Xfloat.
+Proof.
+  unfold Val.has_rettype, vote_float3.
+  destruct x, y, z; auto.
+  repeat destruct (Float.eq_dec _ _); simpl; auto.
+Qed.
+
+Lemma vote_float3_compat_inject j v1 v1' v2 v2' v3 v3' :
+  Val.inject j v1 v1' ->
+  Val.inject j v2 v2' ->
+  Val.inject j v3 v3' ->
+  Val.inject j (vote_float3 v1 v2 v3) (vote_float3 v1' v2' v3').
+Proof.
+  unfold vote_float3.
+  intros H0 H1 H2.
+  inv H0; simpl; auto.
+  inv H1; simpl; auto.
+  inv H2; simpl; auto.
+  repeat destruct (Float.eq_dec _ _); simpl; auto.
+Qed.
+
+Definition vote_float3_sem : builtin_sem Xfloat :=
+  mkbuiltin_v3t Xfloat vote_float3 vote_float3_well_typed vote_float3_compat_inject.
+
+Record vote_sem : Type :=
+  { vote_sem_int : builtin_sem Xint
+  ; vote_sem_long : builtin_sem Xlong
+  ; vote_sem_single : builtin_sem Xsingle
+  ; vote_sem_float : builtin_sem Xfloat
+  }.
+
+Inductive vote_type : Type :=
+| Two
+| Three.
+
+Definition vote_type_sem (vty: vote_type) : vote_sem :=
+  match vty with
+  | Two => {| vote_sem_int := vote_int_sem
+           ; vote_sem_long := vote_long_sem
+           ; vote_sem_single := vote_single_sem
+           ; vote_sem_float := vote_float_sem |}
+  | Three => {| vote_sem_int := vote_int3_sem
+             ; vote_sem_long := vote_long3_sem
+             ; vote_sem_single := vote_single3_sem
+             ; vote_sem_float := vote_float3_sem |}
+  end.
+
+(* When all three arguments are equal, the output is equal to them. *)
+Definition vote_sem_ok {tret: xtype} (sem : builtin_sem tret) : Prop :=
+  forall a, Val.has_rettype a tret -> sem.(bs_sem _) [a; a; a] = Some a.
+
+Class VoteSemantics (vty : vote_type) : Prop :=
+  { vote_sem_int_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_int)
+  ; vote_sem_long_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_long)
+  ; vote_sem_single_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_single)
+  ; vote_sem_float_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_float)
+  }.
+
 (** ******************)
 (** DMR checks. *)
 
@@ -396,19 +593,170 @@ Proof. auto. Qed.
 Definition check_sem : builtin_sem Xvoid :=
   mkbuiltin_v2t Xvoid check check_well_typed check_compat_inject.
 
-Definition replicate_builtin_sem (b: replicate_builtin)
+Definition replicate_builtin_sem {VT: vote_type} `{VoteSemantics VT}
+  (b: replicate_builtin)
   : builtin_sem (sig_res (replicate_builtin_sig b)) :=
   match b with
   | BI_smove_int => smove_int_sem
   | BI_smove_long => smove_long_sem
   | BI_smove_single => smove_single_sem
   | BI_smove_float => smove_float_sem
-  | BI_vote_int => vote_int_sem
-  | BI_vote_long => vote_long_sem
-  | BI_vote_single => vote_single_sem
-  | BI_vote_float => vote_float_sem
+  | BI_vote_int => (vote_type_sem VT).(vote_sem_int)
+  | BI_vote_long => (vote_type_sem VT).(vote_sem_long)
+  | BI_vote_single => (vote_type_sem VT).(vote_sem_single)
+  | BI_vote_float => (vote_type_sem VT).(vote_sem_float)
   | BI_check_int => check_sem
   | BI_check_long => check_sem
   | BI_check_single => check_sem
   | BI_check_float => check_sem
   end.
+
+Section VOTE_SEMANTICS.
+
+Program Instance VoteSemantics_Two : VoteSemantics Two.
+Next Obligation.
+  intros a Ha; simpl; f_equal.
+  unfold vote_int.
+  destruct a; auto; try contradiction.
+  - destruct (Int.eq_dec _ _); simpl; congruence.
+  - simpl in Ha; rewrite Ha; simpl.
+    destruct (eq_block _ _); simpl; try congruence.
+    destruct (Ptrofs.eq_dec _ _); simpl; congruence.
+Qed.
+Next Obligation.
+Admitted.
+Next Obligation.
+Admitted.
+Next Obligation.
+Admitted.
+
+
+(* (* Inductive TwoVote : Type := . *) *)
+(* (* #[export] *) *)
+(* Program Instance VoteSemantics_Two : VoteSemantics Two := *)
+(*   { vote_sem_int := vote_int_sem *)
+(*   ; vote_sem_long := vote_long_sem *)
+(*   ; vote_sem_single := vote_single_sem *)
+(*   ; vote_sem_float := vote_float_sem *)
+(*   }. *)
+(* Next Obligation. *)
+(*   intros a Ha; simpl; f_equal. *)
+(*   unfold vote_int. *)
+(*   destruct a; auto; try contradiction. *)
+(*   - destruct (Int.eq_dec _ _); simpl; congruence. *)
+(*   - simpl in Ha; rewrite Ha; simpl. *)
+(*     destruct (eq_block _ _); simpl; try congruence. *)
+(*     destruct (Ptrofs.eq_dec _ _); simpl; congruence. *)
+(* Qed. *)
+(* Next Obligation. *)
+(* Admitted. *)
+(* Next Obligation. *)
+(* Admitted. *)
+(* Next Obligation. *)
+(* Admitted. *)
+
+Program Instance VoteSemantics_Three : VoteSemantics Three.
+Next Obligation.
+    intros a Ha; simpl; f_equal.
+    unfold vote_int3.
+    destruct a; auto; try contradiction.
+    - destruct (Int.eq_dec _ _); simpl; congruence.
+    - simpl in Ha; rewrite Ha; simpl.
+      destruct (eq_block _ _); simpl; try congruence.
+      destruct (Ptrofs.eq_dec _ _); simpl; congruence.
+Qed.
+Next Obligation.
+Admitted.
+Next Obligation.
+Admitted.
+Next Obligation.
+Admitted.
+
+(* (* Inductive ThreeVote : Type := . *) *)
+(* (* #[export] *) *)
+(* Program Instance VoteSemantics_Three : VoteSemantics Three := *)
+(*   { vote_sem_int := vote_int3_sem *)
+(*   ; vote_sem_long := vote_long3_sem *)
+(*   ; vote_sem_single := vote_single3_sem *)
+(*   ; vote_sem_float := vote_float3_sem *)
+(*   }. *)
+(* Next Obligation. *)
+(*     intros a Ha; simpl; f_equal. *)
+(*     unfold vote_int3. *)
+(*     destruct a; auto; try contradiction. *)
+(*     - destruct (Int.eq_dec _ _); simpl; congruence. *)
+(*     - simpl in Ha; rewrite Ha; simpl. *)
+(*       destruct (eq_block _ _); simpl; try congruence. *)
+(*       destruct (Ptrofs.eq_dec _ _); simpl; congruence. *)
+(* Qed. *)
+(* Next Obligation. *)
+(* Admitted. *)
+(* Next Obligation. *)
+(* Admitted. *)
+(* Next Obligation. *)
+(* Admitted. *)
+
+End VOTE_SEMANTICS.
+
+(* Definition replicate_builtin_sem (vty: vote_type) (b: replicate_builtin) *)
+(*   : builtin_sem (sig_res (replicate_builtin_sig b)) := *)
+(*   match b with *)
+(*   | BI_smove_int => smove_int_sem *)
+(*   | BI_smove_long => smove_long_sem *)
+(*   | BI_smove_single => smove_single_sem *)
+(*   | BI_smove_float => smove_float_sem *)
+(*   | BI_vote_int => match vty with *)
+(*                   | Two => vote_int_sem *)
+(*                   | Three => vote_int3_sem *)
+(*                   end *)
+(*   | BI_vote_long => match vty with *)
+(*                    | Two => vote_long_sem *)
+(*                    | Three => vote_long3_sem *)
+(*                    end *)
+(*   | BI_vote_single => match vty with *)
+(*                      | Two => vote_single_sem *)
+(*                      | Three => vote_single3_sem *)
+(*                      end *)
+(*   | BI_vote_float => match vty with *)
+(*                     | Two => vote_float_sem *)
+(*                     | Three => vote_float3_sem *)
+(*                     end *)
+(*   end. *)
+
+Lemma vote_int3_vote_int (x y z : val) :
+  Val.lessdef (vote_int3 x y z) (vote_int x y z).
+Proof.
+  unfold vote_int3, vote_int.
+  destruct x, y, z; auto;
+    repeat destruct (Int.eq_dec _ _); auto;
+    destruct Archi.ptr64 eqn:Harchi; simpl; auto;
+    repeat ((destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); subst; simpl)); auto.
+Qed.
+
+Lemma vote_long3_vote_long (x y z : val) :
+  Val.lessdef (vote_long3 x y z) (vote_long x y z).
+Proof.
+  unfold vote_long3, vote_long.
+  destruct x, y, z; auto;
+    repeat destruct (Int64.eq_dec _ _); auto;
+    destruct Archi.ptr64 eqn:Harchi; simpl; auto;
+    repeat ((destruct (eq_block _ _); subst; simpl);
+            (try destruct (Ptrofs.eq_dec _ _); subst; simpl)); auto.
+Qed.
+
+Lemma vote_single3_vote_single (x y z : val) :
+  Val.lessdef (vote_single3 x y z) (vote_single x y z).
+Proof.
+  unfold vote_single3, vote_single.
+  destruct x, y, z; auto.
+  repeat destruct (Float32.eq_dec _ _); auto.
+Qed.
+
+Lemma vote_float3_vote_float (x y z : val) :
+  Val.lessdef (vote_float3 x y z) (vote_float x y z).
+Proof.
+  unfold vote_float3, vote_float.
+  destruct x, y, z; auto.
+  repeat destruct (Float.eq_dec _ _); auto.
+Qed.

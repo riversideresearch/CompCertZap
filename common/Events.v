@@ -1410,6 +1410,9 @@ Proof.
   split. constructor. auto.
 Qed.
 
+Section VOTE.
+Context {VT: vote_type} {HVT: VoteSemantics VT}.
+
 (** ** Semantics of known built-in functions. *)
 
 (** Some built-in functions and runtime support functions have known semantics
@@ -1648,6 +1651,8 @@ Proof.
   intros. exploit external_call_determ. eexact H. eexact H0. intuition.
 Qed.
 
+End VOTE.
+
 (** * Evaluation of builtin arguments *)
 
 Section EVAL_BUILTIN_ARG.
@@ -1816,4 +1821,3 @@ Proof.
 Qed.
 
 End EVAL_BUILTIN_ARG_LESSDEF.
-
