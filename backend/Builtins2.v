@@ -613,6 +613,7 @@ Definition replicate_builtin_sem {VT: vote_type} `{VoteSemantics VT}
 
 Section VOTE_SEMANTICS.
 
+(* #[export] *)
 Program Instance VoteSemantics_Two : VoteSemantics Two.
 Next Obligation.
   intros a Ha; simpl; f_equal.
@@ -629,7 +630,6 @@ Next Obligation.
 Admitted.
 Next Obligation.
 Admitted.
-
 
 (* (* Inductive TwoVote : Type := . *) *)
 (* (* #[export] *) *)
@@ -655,6 +655,7 @@ Admitted.
 (* Next Obligation. *)
 (* Admitted. *)
 
+(* #[export] *)
 Program Instance VoteSemantics_Three : VoteSemantics Three.
 Next Obligation.
     intros a Ha; simpl; f_equal.
