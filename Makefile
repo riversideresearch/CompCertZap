@@ -165,6 +165,7 @@ BACKEND=\
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   RTLdmr.v RTLdmrspec.v RTLdmrproof.v \
   RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
+  RTLcolor.v RTLfault.v RTLtolerant.v \
   Novotes.v \
   Tailcall.v Tailcallproof.v \
   Inlining.v Inliningspec.v Inliningproof.v \

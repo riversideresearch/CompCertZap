@@ -17,6 +17,7 @@ Require Import Coqlib Errors.
 Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
+Require Import RTLcolor RTLfault RTLtolerant Novotes.
 
 Section VOTE.
 Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
@@ -41,7 +42,50 @@ Proof.
   apply transf_c_program_correct; auto.
 Qed.
 
+Theorem transf_c_program_to_rtl_preservation:
+  forall p tp beh,
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (RTL.semantics tp) beh ->
+  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh.
+Proof.
+  intros. eapply backward_simulation_behavior_improves; eauto.
+  eapply transf_c_program_to_rtl_correct; eauto.
+Qed.
+
+Theorem transf_c_program_to_rtl_preservation_faulty:
+  forall p tp beh,
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh ->
+  exists beh', program_behaves (@Csem.semantics Builtins2.Three Builtins2.VoteSemantics_Three p) beh'
+          /\ behavior_improves beh' beh
+          /\ (check_program tp = true ->
+             forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
+                     behavior_improves beh' fbeh).
+Proof.
+  intros p tp beh Hp Hbeh.
+  pose proof Hp as Hp'.
+  pose proof Hbeh as H.
+  eapply backward_simulation_behavior_improves in H.
+  2: { eapply transf_c_program_to_rtl_correct; eauto. }
+  destruct H as (beh1 & Hbeh1 & Himp).
+  exists beh1; repeat split; auto.
+  intros Hcheck fbeh Hfbeh.
+  eapply behavior_improves_trans; eauto.
+  eapply faulty_behavior_improves; eauto.
+  apply check_program_sound; auto.
+Qed.
+
 (* End VOTE. *)
+
+Lemma no_votes_Two_implies_Three p tp beh :
+  no_votes p -> 
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh ->
+  program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh.
+Proof.
+Admitted.
+
+
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is
