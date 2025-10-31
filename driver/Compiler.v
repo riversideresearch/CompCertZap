@@ -179,7 +179,7 @@ Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
 (** Force [Initializers] and [Cexec] to be extracted as well. *)
 
 Definition transl_init := Initializers.transl_init.
-Definition cexec_do_step := Cexec.do_step.
+Definition cexec_do_step := @Cexec.do_step.
 
 (** The following lemmas help reason over compositions of passes. *)
 
@@ -369,6 +369,9 @@ Proof.
   intros. unfold match_if in *. destruct (flag tt). eauto. subst. apply forward_simulation_identity.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Theorem cstrategy_semantic_preservation:
   forall p tp,
   match_prog p tp ->
@@ -407,15 +410,17 @@ Ltac DestructM :=
   eapply compose_forward_simulations.
     eapply match_if_simulation. eassumption. exact Renumberproof.transf_program_correct.
   eapply compose_forward_simulations.
-    eapply match_if_simulation. eassumption. exact CSEproof.transf_program_correct.
+    eapply match_if_simulation. eassumption. exact CSEproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply match_if_simulation. eassumption. exact Deadcodeproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply Unusedglobproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
-    eapply match_if_simulation. eassumption. exact RTLdmrproof.transf_program_correct; eassumption.
+  eapply match_if_simulation. eassumption.
+  apply RTLdmrproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
-    eapply match_if_simulation. eassumption. exact RTLtmrproof.transf_program_correct; eassumption.
+  eapply match_if_simulation. eassumption.
+  apply RTLtmrproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply Renumberproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
@@ -504,3 +509,5 @@ Proof.
   destruct H2 as (asm_program & P & Q).
   exists asm_program; split; auto. apply c_semantic_preservation; auto.
 Qed.
+
+End VOTE.

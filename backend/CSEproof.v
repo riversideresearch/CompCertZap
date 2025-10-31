@@ -19,6 +19,9 @@ Require Import Op Registers RTL.
 Require Import ValueDomain ValueAOp ValueAnalysis.
 Require Import CSEdomain CombineOp CombineOpproof CSE.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Definition match_prog (prog tprog: RTL.program) :=
   match_program (fun cu f tf => transf_fundef (prog_defmap cu) (romem_for cu) f = OK tf) eq prog tprog.
 
@@ -1574,7 +1577,7 @@ Qed.
 (* TODO: make this theorem take Novotes as extra hypothesis, and
 precede this step in the compiler with one that checks that
 property. *)
-Theorem transf_program_correct {VT: Builtins2.vote_type} {HVT: Builtins2.VoteSemantics VT} :
+Theorem transf_program_correct :
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
 (*   eapply forward_simulation_eventually_plus with *)
@@ -1597,3 +1600,5 @@ Proof.
 Admitted.
 
 End PRESERVATION.
+
+End VOTE.

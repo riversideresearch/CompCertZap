@@ -72,6 +72,9 @@ Proof.
   try contradiction; try discriminate; econstructor; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section PRESERVATION.
 
 Variable return_address_offset: Mach.function -> Mach.code -> ptrofs -> Prop.
@@ -2221,3 +2224,5 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+End VOTE.

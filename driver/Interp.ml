@@ -462,7 +462,7 @@ let diagnose_stuck_expr p ge w f a kont e m =
     | RV, Ebuiltin(ef, tyargs, rargs, ty) -> diagnose_list rargs
     | _, _ -> false in
   if found then true else begin
-    let l = Cexec.step_expr ge do_external_function do_inline_assembly e w k a m in
+    let l = Cexec.step_expr Builtins2.Two ge do_external_function do_inline_assembly e w k a m in
     if List.exists (fun (ctx,red) -> red = Cexec.Stuckred) l then begin
       PrintCsyntax.print_pointer_hook := print_pointer ge.genv_genv e;
       fprintf p "@[<hov 2>Stuck subexpression:@ %a@]@."
@@ -496,7 +496,7 @@ let do_step p prog ge time s w =
       | First | Random -> exit (Int32.to_int (camlint_of_coqint r))
       end
   | None ->
-      let l = Cexec.do_step ge do_external_function do_inline_assembly w s in
+      let l = Cexec.do_step Builtins2.Two ge do_external_function do_inline_assembly w s in
       if l = []
       || List.exists (fun (Cexec.TR(r,t,s)) -> s = Stuckstate) l
       then begin

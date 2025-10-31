@@ -18,6 +18,9 @@ Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 (** * Preservation of whole-program behaviors *)
 
 (** From the simulation diagrams proved in file [Compiler]. it follows that
@@ -37,6 +40,8 @@ Proof.
   intros. eapply backward_simulation_behavior_improves; eauto.
   apply transf_c_program_correct; auto.
 Qed.
+
+(* End VOTE. *)
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is
@@ -302,3 +307,5 @@ Proof.
 Qed.
 
 End SEPARATE_COMPILATION.
+
+End VOTE.

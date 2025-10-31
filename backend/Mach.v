@@ -205,6 +205,9 @@ Proof.
   intros; red; intros. eapply is_tail_incl; eauto. eapply find_label_tail; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section RELSEM.
 
 Variable return_address_offset: function -> code -> ptrofs -> Prop.
@@ -502,3 +505,5 @@ Lemma wf_initial:
 Proof.
   intros. inv H. fold ge. constructor. constructor.
 Qed.
+
+End VOTE.

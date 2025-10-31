@@ -27,6 +27,9 @@ Import ListNotations.
 
 Local Open Scope positive_scope.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Definition match_prog (prog tprog: program) :=
   match_program (fun cu f tf => transf_fundef f = OK tf) eq prog tprog.
 
@@ -470,9 +473,6 @@ Section PRESERVATION.
     intro Hused.
     apply in_elements, Regset.union_2, in_regset_of_list; auto.
   Qed.
-  
-  Section VOTE.
-  Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
   Lemma checkR_step
     r1 r2 ty pc succ tstk sig params stacksize c entrypoint sp rs m :
@@ -1676,6 +1676,6 @@ Section PRESERVATION.
       eapply step_simulation; eauto; intuition.
   Qed.
 
-  End VOTE.
-
 End PRESERVATION.
+
+End VOTE.
