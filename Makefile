@@ -165,8 +165,8 @@ BACKEND=\
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   RTLdmr.v RTLdmrspec.v RTLdmrproof.v \
   RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
-  RTLcolor.v RTLfault.v RTLtolerant.v \
-  Novotes.v \
+  RTLagreement.v RTLcolor.v RTLfault.v RTLtolerant.v \
+  Novotes.v Novotesproof.v \
   Tailcall.v Tailcallproof.v \
   Inlining.v Inliningspec.v Inliningproof.v \
   Renumber.v Renumberproof.v \
@@ -186,7 +186,8 @@ BACKEND=\
   Debugvar.v Debugvarproof.v \
   Mach.v \
   Bounds.v Stacklayout.v Stacking.v Stackingproof.v \
-  Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v
+  Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v \
+  Asmagreement.v
 
 # C front-end modules (in cfrontend/)
 

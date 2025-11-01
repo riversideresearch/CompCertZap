@@ -17,7 +17,17 @@ Require Import Coqlib Errors.
 Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
-Require Import RTLcolor RTLfault RTLtolerant Novotes.
+Require Import Compopts.
+Require Import RTLagreement RTLcolor RTLfault RTLtolerant.
+Require Import Novotes Novotesproof.
+Require Import Asmagreement.
+
+Lemma transf_rtl_program'_forward_simulation
+  {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT} p tp :
+  transf_rtl_program' p = OK tp ->
+  forward_simulation (RTL.semantics p) (Asm.semantics tp).
+Proof.
+Admitted.
 
 Section VOTE.
 Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
@@ -58,7 +68,7 @@ Theorem transf_c_program_to_rtl_preservation_faulty:
   program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh ->
   exists beh', program_behaves (@Csem.semantics Builtins2.Three Builtins2.VoteSemantics_Three p) beh'
           /\ behavior_improves beh' beh
-          /\ (check_program tp = true ->
+          /\ (RTLcolor.check_program tp = true ->
              forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
                      behavior_improves beh' fbeh).
 Proof.
@@ -72,19 +82,99 @@ Proof.
   intros Hcheck fbeh Hfbeh.
   eapply behavior_improves_trans; eauto.
   eapply faulty_behavior_improves; eauto.
-  apply check_program_sound; auto.
+  apply RTLcolor.check_program_sound; auto.
 Qed.
 
-(* End VOTE. *)
-
 Lemma no_votes_Two_implies_Three p tp beh :
-  no_votes p -> 
+  (* no_votes p ->  *)
   transf_c_program_to_rtl p = OK tp ->
   program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh ->
   program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh.
 Proof.
 Admitted.
 
+Lemma no_votes_asm_weak_agreement p tp :
+  (* no_votes p -> *)
+  transf_c_program p = OK tp ->
+  asm_weak_agreement tp.
+Proof.
+  intros Htransf Hbeh.
+
+  unfold transf_c_program, time in Htransf; simpl in Htransf.
+  destruct (SimplExpr.transl_program p) as [p1|e] eqn:P1;
+    simpl in Htransf; try discriminate.
+  unfold transf_clight_program, time in Htransf.
+  rewrite ! compose_print_identity in Htransf. simpl in Htransf.
+  destruct (SimplLocals.transf_program p1) as [p2|e] eqn:P2;
+    simpl in Htransf; try discriminate.
+  destruct (Cshmgen.transl_program p2) as [p3|e] eqn:P3;
+    simpl in Htransf; try discriminate.
+  destruct (Cminorgen.transl_program p3) as [p4|e] eqn:P4;
+    simpl in Htransf; try discriminate.
+  unfold transf_cminor_program, time in Htransf.
+  rewrite ! compose_print_identity in Htransf. simpl in Htransf.
+  destruct (Selection.sel_program p4) as [p5|e] eqn:P5;
+    simpl in Htransf; try discriminate.
+  destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6;
+    simpl in Htransf; try discriminate.
+  unfold transf_rtl_program, time in Htransf.
+  rewrite ! compose_print_identity in Htransf. simpl in Htransf.
+  set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *.
+  destruct (Inlining.transf_program p7) as [p8|e] eqn:P8;
+    simpl in Htransf; try discriminate.
+  set (p9 := Renumber.transf_program p8) in *.
+  set (p10 := total_if optim_constprop Constprop.transf_program p9) in *.
+  set (p11 := total_if optim_constprop Renumber.transf_program p10) in *.
+  destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12;
+    simpl in Htransf; try discriminate.
+  destruct (partial_if optim_redundancy Deadcode.transf_program p12)
+    as [p13|e] eqn:P13;
+    simpl in Htransf; try discriminate.
+  destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14;
+    simpl in Htransf; try discriminate.
+  destruct (Novotes.check_program p14) as [pnovotes|e] eqn:Pnovotes;
+    simpl in Htransf; try discriminate.
+  apply Novotesproof.check_program_sound in Pnovotes.
+  apply no_votes_weak_agreement in Pnovotes.
+  (* unfold rtl_weak_agreement in Pnovotes. *)
+  pose proof Htransf as Htransf'.
+  (* apply (@transf_rtl_program'_forward_simulation Builtins2.Two *)
+  (*          Builtins2.VoteSemantics_Two) in Htransf. *)
+  (* apply (@transf_rtl_program'_forward_simulation Builtins2.Three *)
+  (*          Builtins2.VoteSemantics_Three) in Htransf'. *)
+
+  eapply forward_simulation_preserves_weak_agreement; eauto.
+  2: { apply transf_rtl_program'_forward_simulation; auto. }
+  2: { apply transf_rtl_program'_forward_simulation; auto. }
+  
+  (* backward_simulation_same_safe_behavior *)
+  
+Admitted.
+
+Theorem transf_c_program_to_rtl_preservation_faulty':
+  forall p tp beh,
+  (* no_votes p -> *)
+  transf_c_program_to_rtl p = OK tp ->
+  program_behaves (@RTL.semantics Builtins2.Two Builtins2.VoteSemantics_Two tp) beh ->
+  exists beh', program_behaves (@Csem.semantics Builtins2.Two Builtins2.VoteSemantics_Two p) beh'
+          /\ behavior_improves beh' beh
+          /\ (RTLcolor.check_program tp = true ->
+             forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
+                     behavior_improves beh' fbeh).
+Proof.
+  intros p tp beh Hp Hbeh.
+  pose proof Hp as Hp'.
+  pose proof Hbeh as H.
+  eapply backward_simulation_behavior_improves in H.
+  2: { eapply transf_c_program_to_rtl_correct; eauto. }
+  destruct H as (beh1 & Hbeh1 & Himp).
+  exists beh1; repeat split; auto.
+  intros Hcheck fbeh Hfbeh.
+  eapply behavior_improves_trans; eauto.
+  eapply faulty_behavior_improves; eauto.
+  - apply RTLcolor.check_program_sound; auto.
+  - eapply no_votes_Two_implies_Three; eauto.
+Qed.
 
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
@@ -121,7 +211,7 @@ Proof.
   assert (WBT: forall p, well_behaved_traces (Cstrategy.semantics p)).
     intros. eapply ssr_well_behaved. apply Cstrategy.semantics_strongly_receptive.
   intros.
-  assert (MATCH: match_prog p tp) by (apply transf_c_program_match; auto).
+  assert (MATCH: Compiler.match_prog p tp) by (apply transf_c_program_match; auto).
   intuition auto.
   eapply forward_simulation_behavior_improves; eauto.
     apply (proj1 (cstrategy_semantic_preservation _ _ MATCH)).
