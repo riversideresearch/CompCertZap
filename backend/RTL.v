@@ -361,6 +361,11 @@ Proof.
   eapply external_call_trace_length; eauto.
 Qed.
 
+Lemma semantics_determinate :
+  forall p, determinate (semantics p).
+Proof.
+Admitted.
+
 (** * Operations on RTL abstract syntax *)
 
 (** Transformation of a RTL function instruction by instruction.

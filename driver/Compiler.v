@@ -142,7 +142,7 @@ Definition transf_rtl_program' (f: RTL.program) : res Asm.program :=
    @@ print print_Mach
   @@@ time "Asm generation" Asmgen.transf_program.
 
-Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
+Definition transf_rtl_program (f: RTL.program) : res RTL.program :=
    OK f
    @@ print (print_RTL 0)
    @@ total_if Compopts.optim_tailcalls (time "Tail calls" Tailcall.transf_program)
@@ -161,17 +161,17 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print (print_RTL 7)
   @@@ time "Unused globals" Unusedglob.transform_program
    @@ print (print_RTL 8)
-  @@@ time "Novotes" Novotes.check_program
-  @@@ transf_rtl_program'.
+  @@@ time "Novotes" Novotes.check_program.
+  (* @@@ transf_rtl_program'. *)
 
-Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
+Definition transf_cminor_program (p: Cminor.program) : res RTL.program :=
    OK p
    @@ print print_Cminor
   @@@ time "Instruction selection" Selection.sel_program
   @@@ time "RTL generation" RTLgen.transl_program
   @@@ transf_rtl_program.
 
-Definition transf_clight_program (p: Clight.program) : res Asm.program :=
+Definition transf_clight_program (p: Clight.program) : res RTL.program :=
   OK p
    @@ print print_Clight
   @@@ time "Simplification of locals" SimplLocals.transf_program
@@ -182,7 +182,8 @@ Definition transf_clight_program (p: Clight.program) : res Asm.program :=
 Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
   OK p
   @@@ time "Clight generation" SimplExpr.transl_program
-  @@@ transf_clight_program.
+  @@@ transf_clight_program
+  @@@ transf_rtl_program'.
 
 Definition transf_rtl_program_to_rtl (f: RTL.program)
   : res RTL.program :=
@@ -586,8 +587,6 @@ Ltac DestructM :=
   apply Asm.semantics_determinate.
 Qed.
 
-Axiom RTL_semantics_determinate : forall p, determinate (RTL.semantics p).
-
 Theorem cstrategy_semantic_preservation_rtl:
   forall p tp,
   match_prog_rtl p tp ->
@@ -637,9 +636,9 @@ Proof.
   split. auto.
   apply forward_to_backward_simulation.
   apply factor_forward_simulation. auto. eapply sd_traces.
-  { apply RTL_semantics_determinate. }
+  { apply RTL.semantics_determinate. }
   apply atomic_receptive. apply Cstrategy.semantics_strongly_receptive.
-  apply RTL_semantics_determinate.
+  apply RTL.semantics_determinate.
 Qed.
 
 Theorem c_semantic_preservation:
@@ -664,7 +663,7 @@ Theorem c_semantic_preservation_rtl:
 Proof.
   intros.
   apply compose_backward_simulation with (atomic (Cstrategy.semantics p)).
-  eapply sd_traces; apply RTL_semantics_determinate.
+  eapply sd_traces; apply RTL.semantics_determinate.
   apply factor_backward_simulation.
   apply Cstrategy.strategy_simulation.
   apply Csem.semantics_single_events.

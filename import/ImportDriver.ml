@@ -53,8 +53,9 @@ let compile_to_asm sourcename ofile =
   let prog = ImportProgram.prog in
   let asm =
     match Compiler.apply_partial
-               (Compiler.transf_cminor_program prog)
-               Asmexpand.expand_program with
+            (Compiler.transf_cminor_program prog)
+            (fun rtl -> Compiler.apply_partial (Compiler.transf_rtl_program' rtl)
+                          Asmexpand.expand_program) with
     | Errors.OK asm ->
         asm
     | Errors.Error msg ->
