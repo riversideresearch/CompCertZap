@@ -26,6 +26,15 @@ Lemma val_compat_refl (v : val) :
   val_compat v v.
 Proof. destruct v; constructor. Qed.
 
+Lemma val_compat_trans (v1 v2 v3 : val) :
+  val_compat v1 v2 ->
+  val_compat v2 v3 ->
+  val_compat v1 v3.
+Proof.
+  intros H1 H2.
+  inversion H1; inversion H2; subst; try solve [constructor]; congruence.
+Qed.
+
 Lemma val_lessdef_compat (v1 v2 : val) :
   Val.lessdef v1 v2 ->
   val_compat v1 v2.
@@ -63,9 +72,9 @@ Definition zap_allowed (i : instruction) : Prop :=
   | _ => True
   end.
 
-(* Should this just fault the result register of the current
-   instruction? That would let us allow faults on smoves, for
-   example. *)
+(* Should this just fault the result register of the current *)
+(*    instruction? That would let us allow faults on smoves, for *)
+(*    example. *)
 Inductive maybe_zap : RTL.state -> bool -> RTL.state -> bool -> Prop :=
 | maybe_zap_refl : forall s b,
     maybe_zap s b s b
@@ -80,6 +89,15 @@ Inductive fstep (ge : genv) : fstate -> trace -> fstate -> Prop :=
     (ZAP: maybe_zap s' b s'' b'),
     fstep ge {| fs_state := s; fault := b |} t {| fs_state := s''; fault := b'|}.
 
+(* Inductive fstep (ge : genv) : fstate -> trace -> fstate -> Prop := *)
+(* | fstep_zap : forall stk f sp pc rs m r v t *)
+(*   (COMPAT: val_compat (rs # r) v), *)
+(*     fstep ge {| fs_state := State stk f sp pc rs m; fault := false |} t *)
+(*              {| fs_state := State stk f sp pc (rs # r <- v) m; fault := true |} *)
+(* | fstep_step : forall s b t s' *)
+(*   (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge s t s'), *)
+(*     fstep ge {| fs_state := s; fault := b |} t {| fs_state := s'; fault := b|}. *)
+
 Inductive initial_state (p : program) : fstate -> Prop :=
 | initial_state_intro : forall s,
     RTL.initial_state p s ->
@@ -90,3 +108,6 @@ Definition final_state (s : fstate) (r : int) : Prop :=
 
 Definition faulty_semantics (p : program) :=
   Semantics fstep (initial_state p) final_state (Genv.globalenv p).
+
+(* dec 4 2:20pm with espinoza *)
+(* beavercreek 2365 lakeview dr *)

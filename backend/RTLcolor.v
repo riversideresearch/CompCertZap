@@ -30,6 +30,9 @@ Inductive color : Type :=
 | Clear
 .
 
+Lemma color_eq: forall (c1 c2: color), { c1 = c2 } + { c1 <> c2 }.
+Proof. decide equality. Defined.
+
 (* Inductive is_basic_color : color -> Prop := *)
 (* | is_basic_color_red : is_basic_color Red *)
 (* | is_basic_color_green : is_basic_color Green *)
@@ -68,30 +71,38 @@ Inductive is_basic' : option color -> Prop :=
 (*   | Some c' => c = c' *)
 (*   end. *)
 
-Inductive is_color : option color -> color -> Prop :=
-| is_color_c : forall c,
-    is_color (Some c) c.
+(* Inductive is_color : option color -> color -> Prop := *)
+(* | is_color_c : forall c, *)
+(*     is_color (Some c) c. *)
 
-Definition is_red (c : option color) : Prop :=
-  is_color c Red.
+(* Definition is_red (c : option color) : Prop := *)
+(*   is_color c Red. *)
 
-Definition is_clear (c : option color) : Prop :=
-  is_color c Clear.
+(* Definition is_clear (c : option color) : Prop := *)
+(*   is_color c Clear. *)
+
+Definition is_color (x : option color) (c : color) := x = Some c.
+Notation is_clear x := (is_color x Clear).
+Notation is_red x := (is_color x Red).
 
 Section wc.
   Variable col : node -> reg -> option color.
 
   (** An instruction is well-colored wrt. coloring [col]. *)
   Inductive wc_instruction (pc : node) : instruction -> Prop :=
-  | wc_Inop : forall succ, wc_instruction pc (Inop succ)
+  | wc_Inop : forall succ,
+      (forall r c, col pc r = Some c -> col succ r = Some c) ->
+      wc_instruction pc (Inop succ)
+    (* TODO: coloring is the same at
+       pc and succ *)
   | wc_Iop : forall op args res succ,
       is_basic' (col pc res) ->
       Forall (fun arg => col pc arg = col succ res) args ->
-      (forall r c, is_color (col pc r) c -> is_color (col succ r) c) ->
+      (forall r c, col pc r = Some c -> col succ r = Some c) ->
       wc_instruction pc (Iop op args res succ)
   | wc_Iload : forall chunk addr args res succ,
-      Forall (fun arg => is_clear (col pc arg) /\ is_red (col succ arg)) args ->
-      is_red (col succ res) ->
+      Forall (fun arg => col pc arg = Some Clear /\ col succ arg = Some Red) args ->
+      col succ res = Some Red ->
       (forall r c, ~ In r args -> r <> res ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Iload chunk addr args res succ)
@@ -146,15 +157,15 @@ Definition wc_program (p : program) : Prop :=
 
 Axiom infer_coloring : function -> option (node -> reg -> option color).
 
-(* TODO: coloring validator. Might need coloring to be PMap or PTree
-   instead of just a function, so that we can iterate over all the
-   registers that are assigned a color at a given node. Probably will
-   use PTree (the one that uses option). *)
-
-Section coloring_validator.
-  Variable col : node -> PTree.t color.
-  (* Perform validation and transform into abstracted type (reg -> color) with  *)
-End coloring_validator.
+(* (* TODO: coloring validator. Might need coloring to be PMap or PTree *)
+(*    instead of just a function, so that we can iterate over all the *)
+(*    registers that are assigned a color at a given node. Probably will *)
+(*    use PTree (the one that uses option). *) *)
+(* Section coloring_validator. *)
+(*   Variable col : node -> PTree.t color. *)
+(*   (* Perform validation and transform into abstracted type (reg -> color) with  *) *)
+(* End coloring_validator. *)
+(* ^ why? I forget... *)
 
 Section color_checker.
   Variable col : node -> reg -> option color.

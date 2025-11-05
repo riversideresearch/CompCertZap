@@ -23,12 +23,12 @@ Local Open Scope string_scope.
 Definition match_rs (col : reg -> option color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
     exists c, is_basic c /\
-           forall r, (col r <> Some c -> Val.lessdef (rs1 # r) (rs2 # r)) /\
-                  (* TODO: remove this second condition? Need to use
-                     more permissive vote semantics. *)
-                  (col r = Some c -> val_compat (rs1 # r) (rs2 # r))
+           forall r, col r <> Some c -> Val.lessdef (rs1 # r) (rs2 # r)
   else
     forall r, Val.lessdef (rs1 # r) (rs2 # r).
+
+Definition rs_compat (rs1 rs2 : regset) : Prop :=
+  forall r, val_compat (rs1 # r) (rs2 # r).
 
 Lemma trace_prefix_cons e t1 t2 :
   trace_prefix t1 t2 ->
@@ -101,17 +101,15 @@ Section match_states.
   Lemma match_rs_fault col (pc : node) (rs1 rs2 : regset) :
     match_rs (col pc) false rs1 rs2 ->
     match_rs (col pc) true rs1 rs2.
-  Proof.
-    intro H; exists Red; split; constructor; auto.
-    intro Hcol; apply val_lessdef_compat; auto.
-  Qed.
+  Proof. intro H; exists Red; split; auto; constructor. Qed.
 
   Inductive match_stackframes (faulted : bool)
     : RTL.stackframe -> RTL.stackframe -> Prop :=
   | match_stackframes_Stackframe : forall col res f1 f2 sp pc rs1 rs2
-      (* (MATCH: match_votes_function f1 f2) *)
-      (WC: wc_function col f1)
-      (RS: match_rs (col pc) faulted rs1 rs2),
+                                          (* (MATCH: match_votes_function f1 f2) *)
+                                          (WC_FUN: wc_function col f1)
+                                          (RS_COMPAT: rs_compat rs1 rs2)
+                                          (RS: match_rs (col pc) faulted rs1 rs2),
       match_stackframes faulted
         (Stackframe res f1 sp pc rs1)
         (Stackframe res f2 sp pc rs2).
@@ -134,23 +132,24 @@ Section match_states.
   (* TODO: need lessdef on memories. *)
   | match_states_State :
     forall col stk1 stk2 f sp pc rs1 rs2 m (b : bool)
-      (STK: Forall2 (match_stackframes b) stk1 stk2)
-      (* (VOTE: match_votes_function f1 f2) *)
-      (WC: wc_function col f)
-      (RS: match_rs (col pc) b rs1 rs2),
+           (STK: Forall2 (match_stackframes b) stk1 stk2)
+           (* (VOTE: match_votes_function f1 f2) *)
+           (WC_FUN: wc_function col f)
+           (RS_COMPAT: rs_compat rs1 rs2)
+           (RS: match_rs (col pc) b rs1 rs2),
       match_states (State stk1 f sp pc rs1 m)
                    {| fs_state := State stk2 f sp pc rs2 m; fault := b |}
   | match_states_Callstate :
     forall stk1 stk2 fd args1 args2 m b
-      (STK: Forall2 (match_stackframes b) stk1 stk2)
-      (* (VOTE: match_votes_fundef fd1 fd2) *)
-      (LESSDEF: Forall2 Val.lessdef args1 args2),
+           (STK: Forall2 (match_stackframes b) stk1 stk2)
+           (* (VOTE: match_votes_fundef fd1 fd2) *)
+           (LESSDEF: Forall2 Val.lessdef args1 args2),
       match_states (Callstate stk1 fd args1 m)
                    {| fs_state := Callstate stk2 fd args2 m; fault := b |}
   | match_state_Returnstate :
     forall stk1 stk2 v1 v2 m b
-      (STK: Forall2 (match_stackframes b) stk1 stk2)
-      (LESSDEF: Val.lessdef v1 v2),
+           (STK: Forall2 (match_stackframes b) stk1 stk2)
+           (LESSDEF: Val.lessdef v1 v2),
       match_states (Returnstate stk1 v1 m)
                    {| fs_state := Returnstate stk2 v2 m; fault := b |}.
 
@@ -163,7 +162,7 @@ Section TOLERANCE.
   Let ge := Genv.globalenv prog.
   (* Let ge2 := Genv.globalenv prog2. *)
 
-  Hypothesis WC : wc_program prog.
+  Hypothesis WC_prog : wc_program prog.
 
   (* Corollary wc_prog2 : wc_program col prog2. *)
   (* Proof. eapply match_votes_wc; eauto. Qed. *)
@@ -183,6 +182,19 @@ Section TOLERANCE.
   (*   rewrite <- H0 in Hpc; inv Hpc. *)
   (*   inv Hi. *)
   (* Qed. *)
+  
+  Lemma eval_operation_lessdef rs1 rs2 m args op sp v :
+    Forall (fun arg => Val.lessdef (rs1 # arg) (rs2 # arg)) args ->
+    Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v ->
+    exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'
+          /\ Val.lessdef v v'.
+  Proof.
+    intros Hlessdef Hop.
+    eapply Op.eval_operation_lessdef; eauto.
+    2: { apply Memory.Mem.extends_refl. }
+    revert Hlessdef; clear Hop; revert rs1 rs2.
+    induction args; intros rs1 rs2 Hrs; simpl; inv Hrs; constructor; auto.
+  Qed.
 
   Theorem faulty_step_exists s t s' fs :
     match_states s fs ->
@@ -199,13 +211,28 @@ Section TOLERANCE.
       + constructor.
     - destruct fs.
       inv Hmatch.
-      eexists; eexists.
-      econstructor.
-      + eapply exec_Iop; eauto.
-        (* By RS, in rs2 all the args are at least as defined as (and
-           compatible with) their values in rs.  *)
-        admit.
-      + constructor.
+      destruct fault.
+      (* fault = true *)
+      + destruct RS as (faulted_c & Hc & RS).
+        eexists; eexists.
+        inv WC_FUN.
+        specialize (wc_fn_code pc _ H).
+        inv wc_fn_code; inv H4.
+        destruct (color_eq c faulted_c).
+        (* The color of this operation has been faulted *)
+        * admit.
+        (* The color of this operation has *not* been faulted *)
+        * admit.
+      (* fault = false *)
+      + (* all arguments are lessdef, so result exists (and is lessdef *)
+   (*          but that doesn't matter here) *)
+        apply eval_operation_lessdef with (rs2:=rs2) in H0.
+        2: { apply Forall_forall; intros; apply RS. }
+        destruct H0 as (v' & Hop & Hv').
+        eexists; eexists.
+        econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Iop; eauto.
     - admit.
     - admit.
     - admit.
@@ -219,45 +246,127 @@ Section TOLERANCE.
     - admit.
   Admitted.
 
-  Theorem faulty_step_simulation s t s' fs t' fs' :
-    match_states s fs ->
-    Step (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    Step (faulty_semantics prog) fs t' fs' ->
-    t = t' /\ match_states s' fs'.
+  Lemma forall2_match_stackframes_fault stk1 stk2 :
+    Forall2 (match_stackframes false) stk1 stk2 ->
+    Forall2 (match_stackframes true) stk1 stk2.
   Proof.
-    intros Hmatch Hstep Hfstep.
-    inv Hstep.
+    induction 1; constructor; auto.
+    apply match_stackframes_fault; auto.
+  Qed.
+
+  Lemma zap_preserves_match_states s s1 s2 b1 b2 :
+    match_states s {| fs_state := s1; fault := b1 |} ->
+    maybe_zap s1 b1 s2 b2 ->
+    match_states s {| fs_state := s2; fault := b2 |}.
+  Proof.
+    intros Hmatch Hzap.
+    inv Hzap; auto.
+    inv Hmatch.
+    econstructor; eauto.
+    - apply forall2_match_stackframes_fault; auto.
+    - unfold rs_compat.
+      intro x.
+      unfold rs_compat in RS_COMPAT.
+      specialize (RS_COMPAT x).
+      destruct (DecidableTypeEx.Positive_as_DT.eq_dec x r); subst.
+      + rewrite Regmap.gss; auto.
+        eapply val_compat_trans; eauto.
+      + rewrite Regmap.gso; auto.
+    - unfold match_rs in *.
+      (* exists color of faulted register r *)
+      admit.
+  Admitted.
+
+  Lemma eval_operation_compat rs1 rs2 m args op sp v :
+    Forall (fun arg => val_compat (rs1 # arg) (rs2 # arg)) args ->
+    Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v ->
+    exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'
+          /\ val_compat v v'.
+  Proof.
+    (* Maybe base proof on Op.eval_operation_inj *)
+  Admitted.
+
+  Lemma Forall_lessdef_list P rs1 rs2 args :
+    Forall P args ->
+    (forall r, P r -> Val.lessdef rs1 # r rs2 # r) ->
+    Val.lessdef_list rs1 ## args rs2 ## args.
+  Proof.
+    revert rs1 rs2; induction args; intros rs1 rs2 Hforall Hlessdef;
+      inv Hforall; constructor; auto.
+    apply IHargs; auto.
+  Qed.
+  
+  Lemma two_three_step_simulation s1 s1' s2 s2' t1 t2 b :
+    match_states s1 {| fs_state := s2; fault := b |} ->
+    Step (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s1 t1 s1' ->
+    Step (@RTL.semantics Builtins2.Two VoteSemantics_Two prog) s2 t2 s2' ->
+    t1 = t2 /\ match_states s1' {| fs_state := s2'; fault := b |}.
+  Proof.
+    intros Hmatch Hstep2 Hstep3.
+    inv Hstep2.
 
     (* exec_Inop *)
     - inv Hmatch.
-      (* inv VOTE. *)
-      simpl in *.
-      (* generalize (CODE pc); intro Hmatchvote. *)
-      (* inv Hmatchvote; try congruence. *)
-      (* inv HR; try congruence. *)
-      inv Hfstep.
-      inv ZAP.
-      + inv STEP; simpl in *; try congruence.
-        split; auto.
-        rewrite H in H8; inv H8.
-        econstructor; eauto.
-        admit.
-      + inv STEP; simpl in *; try congruence.
-        split; auto.
-        rewrite H in H8; inv H8.
-        econstructor; eauto.
-        { eapply Forall2_impl.
-          2: { eauto. }
-          intros; apply match_stackframes_fault; auto. }
-        (* { constructor; auto. } *)
-        (* unfold match_rs. *)
-        (* exists (col pc0 r); split. *)
-        (* * admit. *)
-    (* * admit. *)
-        admit.
+      inv Hstep3; simpl in *; try congruence.
+      split; auto.
+      rewrite H in H8; inv H8.
+      econstructor; eauto.
+      unfold match_rs in *.
+      destruct b; auto.
+      inv WC_FUN.
+      specialize (wc_fn_code _ _ H); inv wc_fn_code.
+      destruct RS as (c & Hc & Hdef).
+      exists c; split; auto.
 
     (* exec_Iop *)
-    - admit.
+    - inv Hmatch.
+      inv Hstep3; simpl in *; try congruence.
+      split; auto.
+      rewrite H in H9; inv H9.
+      econstructor; eauto.
+      + intro x.
+        destruct (DecidableTypeEx.Positive_as_DT.eq_dec x res0); subst.
+        * rewrite 2!Regmap.gss.
+          eapply eval_operation_compat in H0.
+          2: { apply Forall_forall; intros r Hin; apply RS_COMPAT. }
+          destruct H0 as (v' & Hop & Hv').
+          rewrite H10 in Hop; inv Hop; auto.
+        * rewrite 2!Regmap.gso; auto.
+      + unfold match_rs in *.
+        destruct b.
+        * destruct RS as (c & Hc & RS).
+          exists c; split; auto.
+          intros r Hr.
+          assert (Hcol: col pc r <> Some c).
+          { intro HC; apply Hr; inv WC_FUN.
+            apply wc_fn_code in H; inv H; auto. }
+          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
+          { rewrite 2!Regmap.gss.
+            eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m) in H0.
+            - destruct H0 as (v' & Hop & Hv').
+              rewrite H10 in Hop; inv Hop; auto.
+            - eapply Forall_lessdef_list.
+              2: { apply RS. }
+              apply Forall_forall; intros r Hin.
+              intro HC; apply Hr.
+              inv WC_FUN; apply wc_fn_code in H; inv H.
+              rewrite Forall_forall in H6.
+              apply H6 in Hin.
+              rewrite <- Hin; auto.
+            - apply Memory.Mem.extends_refl. }
+          rewrite 2!Regmap.gso; auto.
+        * intro r.
+          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
+          { rewrite 2!Regmap.gss.
+            eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m) in H0.
+            - destruct H0 as (v' & Hop & Hv').
+              rewrite H10 in Hop; inv Hop; auto.
+            - eapply Forall_lessdef_list with (P := fun _ => True).
+              { apply Forall_forall; auto. }
+              intros r _; auto.
+            - apply Memory.Mem.extends_refl. }
+          rewrite 2!Regmap.gso; auto.
+
     (* exec_Iload *)
     - admit.
     (* exec_Istore *)
@@ -281,6 +390,20 @@ Section TOLERANCE.
     (* exec_return *)
     - admit.
   Admitted.
+
+  Theorem faulty_step_simulation s t s' fs t' fs' :
+    match_states s fs ->
+    Step (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
+    Step (faulty_semantics prog) fs t' fs' ->
+    t = t' /\ match_states s' fs'.
+  Proof.
+    intros Hmatch Hstep Hfstep.
+    inv Hfstep.
+    eapply two_three_step_simulation in Hmatch; eauto.
+    destruct Hmatch as [? Hmatch]; subst.
+    split; auto.
+    eapply zap_preserves_match_states; eauto.
+  Qed.
 
   Corollary faulty_star_step_exists s t s' fs :
     match_states s fs ->
@@ -507,7 +630,7 @@ Section TOLERANCE.
   Lemma match_states_forever_silent s fs :
     match_states s fs ->
     Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
-      Forever_silent (faulty_semantics prog) fs.
+    Forever_silent (faulty_semantics prog) fs.
   Proof.
     revert s fs.
     cofix CH.
@@ -525,7 +648,7 @@ Section TOLERANCE.
   Lemma match_states_forever_reactive s fs T :
     match_states s fs ->
     Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
-      Forever_reactive (faulty_semantics prog) fs T.
+    Forever_reactive (faulty_semantics prog) fs T.
   Proof.
     revert s fs T.
     cofix CH.
@@ -808,8 +931,8 @@ Section TOLERANCE.
 
   Lemma prefixes_comparable_traceinf_sim T1 T2 :
     (forall t1 t2, traceinf_prefix t1 T1 ->
-              traceinf_prefix t2 T2 ->
-              trace_prefix t1 t2 \/ trace_prefix t2 t1) ->
+                   traceinf_prefix t2 T2 ->
+                   trace_prefix t1 t2 \/ trace_prefix t2 t1) ->
     traceinf_sim T1 T2.
   Proof.
     revert T1 T2.
@@ -1078,41 +1201,20 @@ Section TOLERANCE.
       2: { exfalso.
            inv H.
            simpl in *.
-           (* pose proof PROG as Hmatch. *)
-           (* eapply Genv.find_funct_ptr_match in Hmatch; eauto. *)
-           (* destruct Hmatch as (cunt & tf & Htf & Hmatch & Hlink). *)
            apply (H1 {| fs_state := Callstate [] f [] m0; fault := false |}).
            constructor; econstructor; eauto. }
-           (* - eapply Genv.init_mem_match in PROG; eauto. *)
-           (* - replace (prog_main prog2) with (prog_main prog1) in * by *)
-           (*       (eapply match_program_main in PROG; auto). *)
-           (*   eapply Genv.find_symbol_match in PROG. *)
-           (*   rewrite PROG; eauto. *)
-           (* - inv Hmatch; auto. *)
-           (*   inv FUN; simpl in *; auto. } *)
       eapply rtl_state_behaves_faulty_improves; eauto.
     - inv Hbeh2.
       { exfalso.
         inv H0.
         inv H2.
         simpl in *.
-        (* pose proof PROG as Hmatch. *)
-        (* rename f into tf. *)
-        (* eapply Genv.find_funct_ptr_match' in Hmatch; eauto. *)
-        (* destruct Hmatch as (cunt & f & Hf & Hmatch & Hlink). *)
         apply (H (Callstate [] f [] m0)).
         econstructor; eauto. }
-        (* - eapply Genv.init_mem_match' in PROG; eauto. *)
-        (* - replace (prog_main prog1) with (prog_main prog2) in * by *)
-        (*       (eapply match_program_main in PROG; auto). *)
-        (*   eapply Genv.find_symbol_match in PROG. *)
-        (*   rewrite <- PROG; eauto. *)
-        (* - inv Hmatch; auto. *)
-        (*   inv FUN; simpl in *; auto. } *)
       constructor; reflexivity.
   Qed.
 
-  (* Alternate formulation that might avoid the need for traceinf_sim
+(* Alternate formulation that might avoid the need for traceinf_sim
      extensionality. EDIT: actually no, it just pushes the need for
      extensionality to the higher-level theorem in
      driver/Complements.v. *)
