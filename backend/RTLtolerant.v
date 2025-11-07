@@ -27,8 +27,8 @@ Definition match_rs (col : reg -> option color) (faulted : bool) (rs1 rs2 : regs
   else
     forall r, Val.lessdef (rs1 # r) (rs2 # r).
 
-Definition rs_compat (rs1 rs2 : regset) : Prop :=
-  forall r, val_compat (rs1 # r) (rs2 # r).
+(* Definition rs_compat (rs1 rs2 : regset) : Prop := *)
+(*   forall r, val_compat (rs1 # r) (rs2 # r). *)
 
 Lemma trace_prefix_cons e t1 t2 :
   trace_prefix t1 t2 ->
@@ -108,7 +108,7 @@ Section match_states.
   | match_stackframes_Stackframe : forall col res f1 f2 sp pc rs1 rs2
                                           (* (MATCH: match_votes_function f1 f2) *)
                                           (WC_FUN: wc_function col f1)
-                                          (RS_COMPAT: rs_compat rs1 rs2)
+                                          (* (RS_COMPAT: rs_compat rs1 rs2) *)
                                           (RS: match_rs (col pc) faulted rs1 rs2),
       match_stackframes faulted
         (Stackframe res f1 sp pc rs1)
@@ -135,7 +135,7 @@ Section match_states.
            (STK: Forall2 (match_stackframes b) stk1 stk2)
            (* (VOTE: match_votes_function f1 f2) *)
            (WC_FUN: wc_function col f)
-           (RS_COMPAT: rs_compat rs1 rs2)
+           (* (RS_COMPAT: rs_compat rs1 rs2) *)
            (RS: match_rs (col pc) b rs1 rs2),
       match_states (State stk1 f sp pc rs1 m)
                    {| fs_state := State stk2 f sp pc rs2 m; fault := b |}
@@ -224,8 +224,8 @@ Section TOLERANCE.
         (* The color of this operation has *not* been faulted *)
         * admit.
       (* fault = false *)
-      + (* all arguments are lessdef, so result exists (and is lessdef *)
-   (*          but that doesn't matter here) *)
+      + (* all arguments are lessdef, so result exists (and is lessdef
+           but that doesn't matter here) *)
         apply eval_operation_lessdef with (rs2:=rs2) in H0.
         2: { apply Forall_forall; intros; apply RS. }
         destruct H0 as (v' & Hop & Hv').
@@ -264,27 +264,76 @@ Section TOLERANCE.
     inv Hmatch.
     econstructor; eauto.
     - apply forall2_match_stackframes_fault; auto.
-    - unfold rs_compat.
-      intro x.
-      unfold rs_compat in RS_COMPAT.
-      specialize (RS_COMPAT x).
-      destruct (DecidableTypeEx.Positive_as_DT.eq_dec x r); subst.
-      + rewrite Regmap.gss; auto.
-        eapply val_compat_trans; eauto.
-      + rewrite Regmap.gso; auto.
+    (* - unfold rs_compat. *)
+    (*   intro x. *)
+    (*   unfold rs_compat in RS_COMPAT. *)
+    (*   specialize (RS_COMPAT x). *)
+    (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec x r); subst. *)
+    (*   + rewrite Regmap.gss; auto. *)
+    (*     eapply val_compat_trans; eauto. *)
+    (*   + rewrite Regmap.gso; auto. *)
     - unfold match_rs in *.
       (* exists color of faulted register r *)
       admit.
   Admitted.
 
-  Lemma eval_operation_compat rs1 rs2 m args op sp v :
-    Forall (fun arg => val_compat (rs1 # arg) (rs2 # arg)) args ->
-    Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v ->
-    exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'
-          /\ val_compat v v'.
-  Proof.
-    (* Maybe base proof on Op.eval_operation_inj *)
-  Admitted.
+  (* Lemma eval_operation_compat rs1 rs2 m args op sp v : *)
+  (*   Forall (fun arg => val_compat (rs1 # arg) (rs2 # arg)) args -> *)
+  (*   Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v -> *)
+  (*   exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v' *)
+  (*         /\ val_compat v v'. *)
+  (* Proof. *)
+  (*   (* Maybe base proof on Op.eval_operation_inj *) *)
+  (* Admitted. *)
+
+  (* Lemma eval_operation_compat rs1 rs2 m args op sp v : *)
+  (*   Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v -> *)
+  (*   exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'. *)
+  (* Proof. *)
+  (*   intro H. *)
+  (*   destruct op; simpl in *; *)
+  (*     destruct args; simpl in *; try congruence; *)
+  (*     try solve [eexists; eauto]; *)
+  (*     destruct args; simpl in *; try congruence; *)
+  (*     try solve [eexists; eauto]; *)
+  (*     try destruct args; simpl in *; try congruence; *)
+  (*     try solve [eexists; eauto]. *)
+  (*   (* Maybe base proof on Op.eval_operation_inj *) *)
+  (* Admitted. *)
+
+  (* Lemma eval_addressing_compat rs1 rs2 addr args sp a : *)
+  (*   Forall (fun arg => val_compat (rs1 # arg) (rs2 # arg)) args -> *)
+  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs1 ## args = Some a -> *)
+  (*   exists a', Op.eval_addressing (Genv.globalenv prog) sp addr rs2 ## args = Some a' *)
+  (*         /\ val_compat a a'. *)
+  (* Proof. *)
+  (* Admitted. *)
+
+  (* Lemma load_compat chunk m b i i' v v' : *)
+  (*   Memory.Mem.load chunk m b (Integers.Ptrofs.unsigned i) = Some v -> *)
+  (*   Memory.Mem.load chunk m b (Integers.Ptrofs.unsigned i') = Some v' -> *)
+  (*   val_compat v v'. *)
+  (* Proof. *)
+  (*   intros H0 H1. *)
+  (*   apply Memory.Mem.load_result in H0. *)
+  (*   subst. *)
+  (*   val_compat *)
+  (*   Memdata.decode_val *)
+  (*   compute. *)
+  (*   destruct i; simpl. compute. *)
+  (*   Memory.Mem.load_type *)
+  (*   unfold Memory.Mem.load. *)
+
+  (* Lemma loadv_compat chunk m a a' v v' : *)
+  (*   Memory.Mem.loadv chunk m a = Some v -> *)
+  (*   Memory.Mem.loadv chunk m a' = Some v' -> *)
+  (*   val_compat v v'. *)
+  (* Proof. *)
+  (*   unfold Memory.Mem.loadv. *)
+  (*   intros H0 H1. *)
+  (*   destruct a; try congruence. *)
+  (*   destruct a'; try congruence. *)
+    
 
   Lemma Forall_lessdef_list P rs1 rs2 args :
     Forall P args ->
@@ -324,14 +373,14 @@ Section TOLERANCE.
       split; auto.
       rewrite H in H9; inv H9.
       econstructor; eauto.
-      + intro x.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec x res0); subst.
-        * rewrite 2!Regmap.gss.
-          eapply eval_operation_compat in H0.
-          2: { apply Forall_forall; intros r Hin; apply RS_COMPAT. }
-          destruct H0 as (v' & Hop & Hv').
-          rewrite H10 in Hop; inv Hop; auto.
-        * rewrite 2!Regmap.gso; auto.
+      (* + intro x. *)
+      (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec x res0); subst. *)
+      (*   * rewrite 2!Regmap.gss. *)
+      (*     eapply eval_operation_compat in H0. *)
+      (*     (* 2: { apply Forall_forall; intros r Hin; apply RS_COMPAT. } *) *)
+      (*     destruct H0 as (v' & Hop & Hv'). *)
+      (*     rewrite H10 in Hop; inv Hop; auto. *)
+      (*   * rewrite 2!Regmap.gso; auto. *)
       + unfold match_rs in *.
         destruct b.
         * destruct RS as (c & Hc & RS).
@@ -368,7 +417,54 @@ Section TOLERANCE.
           rewrite 2!Regmap.gso; auto.
 
     (* exec_Iload *)
-    - admit.
+    - inv Hmatch.
+      inv Hstep3; simpl in *; try congruence.
+      split; auto.
+      rewrite H in H10; inv H10.
+      econstructor; eauto.
+      + unfold match_rs in *.
+        destruct b.
+        * destruct RS as (c & Hc & RS).
+          exists c; split; auto.
+          intros r Hr.
+          (* assert (Hcol: col pc r <> Some c). *)
+          (* { intro HC; apply Hr; inv WC_FUN. *)
+    (*   apply wc_fn_code in H; inv H; auto. } *)
+          
+        (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst0); subst. *)
+        (*   { rewrite 2!Regmap.gss. *)
+        (*     eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args0) in H0. *)
+        (*     - destruct H0 as (v' & Hop & Hv'). *)
+        (*       rewrite H11 in Hop; inv Hop; auto. *)
+        (*       eapply Memory.Mem.loadv_extends in H1; eauto. *)
+        (*       2: { apply Memory.Mem.extends_refl. } *)
+        (*       destruct H1 as (v2 & Hv2 & Hv2'). *)
+        (*       rewrite H12 in Hv2; inv Hv2; auto. *)
+        (*     - eapply Forall_lessdef_list. *)
+        (*       2: { apply RS. } *)
+        (*       apply Forall_forall; intros r Hin. *)
+        (*       intro HC; apply Hr. *)
+        (*       inv WC_FUN; apply wc_fn_code in H; inv H. *)
+        (*       rewrite Forall_forall in H5. *)
+        (*       apply H5 in Hin. *)
+        (*       rewrite <- Hin; auto. *)
+        (*     - apply Memory.Mem.extends_refl. } *)
+        (*   rewrite 2!Regmap.gso; auto. *)
+        (* * intro r. *)
+        (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst. *)
+        (*   { rewrite 2!Regmap.gss. *)
+        (*     eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m) in H0. *)
+        (*     - destruct H0 as (v' & Hop & Hv'). *)
+        (*       rewrite H10 in Hop; inv Hop; auto. *)
+        (*     - eapply Forall_lessdef_list with (P := fun _ => True). *)
+        (*       { apply Forall_forall; auto. } *)
+        (*       intros r _; auto. *)
+        (*     - apply Memory.Mem.extends_refl. } *)
+        (*   rewrite 2!Regmap.gso; auto. *)
+
+          admit.
+        * admit.
+      
     (* exec_Istore *)
     - admit.
     (* exec_Icall *)
@@ -399,11 +495,12 @@ Section TOLERANCE.
   Proof.
     intros Hmatch Hstep Hfstep.
     inv Hfstep.
-    eapply two_three_step_simulation in Hmatch; eauto.
-    destruct Hmatch as [? Hmatch]; subst.
-    split; auto.
-    eapply zap_preserves_match_states; eauto.
-  Qed.
+  (*   eapply two_three_step_simulation in Hmatch; eauto. *)
+  (*   destruct Hmatch as [? Hmatch]; subst. *)
+  (*   split; auto. *)
+  (*   eapply zap_preserves_match_states; eauto. *)
+    (* Qed. *)
+  Admitted.
 
   Corollary faulty_star_step_exists s t s' fs :
     match_states s fs ->
@@ -626,39 +723,39 @@ Section TOLERANCE.
     eapply star_forever_reactive; eauto.
   Qed.
 
-  (* Can't do other direction because prog1 can get stuck. *)
-  Lemma match_states_forever_silent s fs :
-    match_states s fs ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
-    Forever_silent (faulty_semantics prog) fs.
-  Proof.
-    revert s fs.
-    cofix CH.
-    intros s fs Hmatch Hsil.
-    inv Hsil.
-    pose proof H as Hstep.
-    eapply faulty_step_exists in Hstep; eauto.
-    destruct Hstep as (t' & fs' & Hfstep).
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    econstructor; eauto.
-  Qed.
+  (* (* Can't do other direction because prog1 can get stuck. *) *)
+  (* Lemma match_states_forever_silent s fs : *)
+  (*   match_states s fs -> *)
+  (*   Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s -> *)
+  (*   Forever_silent (faulty_semantics prog) fs. *)
+  (* Proof. *)
+  (*   revert s fs. *)
+  (*   cofix CH. *)
+  (*   intros s fs Hmatch Hsil. *)
+  (*   inv Hsil. *)
+  (*   pose proof H as Hstep. *)
+  (*   eapply faulty_step_exists in Hstep; eauto. *)
+  (*   destruct Hstep as (t' & fs' & Hfstep). *)
+  (*   eapply faulty_step_simulation in H; eauto. *)
+  (*   destruct H as [? Hmatch']; subst. *)
+  (*   econstructor; eauto. *)
+  (* Qed. *)
 
-  (* Can't do other direction because prog1 can get stuck. *)
-  Lemma match_states_forever_reactive s fs T :
-    match_states s fs ->
-    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
-    Forever_reactive (faulty_semantics prog) fs T.
-  Proof.
-    revert s fs T.
-    cofix CH.
-    intros s fs T Hmatch Hreact.
-    inv Hreact.
-    pose proof H as Hstar.
-    eapply faulty_star_step_exists in Hstar; eauto.
-    destruct Hstar as (t' & fs' & Hstar').
-    econstructor; eauto.
-  Qed.
+  (* (* Can't do other direction because prog1 can get stuck. *) *)
+  (* Lemma match_states_forever_reactive s fs T : *)
+  (*   match_states s fs -> *)
+  (*   Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T -> *)
+  (*   Forever_reactive (faulty_semantics prog) fs T. *)
+  (* Proof. *)
+  (*   revert s fs T. *)
+  (*   cofix CH. *)
+  (*   intros s fs T Hmatch Hreact. *)
+  (*   inv Hreact. *)
+  (*   pose proof H as Hstar. *)
+  (*   eapply faulty_star_step_exists in Hstar; eauto. *)
+  (*   destruct Hstar as (t' & fs' & Hstar'). *)
+  (*   econstructor; eauto. *)
+  (* Qed. *)
 
   Lemma star_faulty_silent_trace s fs t fs' :
     match_states s fs ->
