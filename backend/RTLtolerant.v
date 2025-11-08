@@ -129,29 +129,31 @@ Section match_states.
       all registers. When a fault has occurred, it should hold between
       all registers except those of the affected color. *)
   Inductive match_states : RTL.state -> fstate -> Prop :=
-  (* TODO: need lessdef on memories. *)
   | match_states_State :
-    forall col stk1 stk2 f sp pc rs1 rs2 m (b : bool)
+    forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool)
            (STK: Forall2 (match_stackframes b) stk1 stk2)
            (* (VOTE: match_votes_function f1 f2) *)
            (WC_FUN: wc_function col f)
            (* (RS_COMPAT: rs_compat rs1 rs2) *)
-           (RS: match_rs (col pc) b rs1 rs2),
-      match_states (State stk1 f sp pc rs1 m)
-                   {| fs_state := State stk2 f sp pc rs2 m; fault := b |}
+           (RS: match_rs (col pc) b rs1 rs2)
+           (MEM: Memory.Mem.extends m1 m2),
+      match_states (State stk1 f sp pc rs1 m1)
+                   {| fs_state := State stk2 f sp pc rs2 m2; fault := b |}
   | match_states_Callstate :
-    forall stk1 stk2 fd args1 args2 m b
+    forall stk1 stk2 fd args1 args2 m1 m2 b
            (STK: Forall2 (match_stackframes b) stk1 stk2)
            (* (VOTE: match_votes_fundef fd1 fd2) *)
-           (LESSDEF: Forall2 Val.lessdef args1 args2),
-      match_states (Callstate stk1 fd args1 m)
-                   {| fs_state := Callstate stk2 fd args2 m; fault := b |}
+           (LESSDEF: Forall2 Val.lessdef args1 args2)
+           (MEM: Memory.Mem.extends m1 m2),
+      match_states (Callstate stk1 fd args1 m1)
+                   {| fs_state := Callstate stk2 fd args2 m2; fault := b |}
   | match_state_Returnstate :
-    forall stk1 stk2 v1 v2 m b
+    forall stk1 stk2 v1 v2 m1 m2 b
            (STK: Forall2 (match_stackframes b) stk1 stk2)
-           (LESSDEF: Val.lessdef v1 v2),
-      match_states (Returnstate stk1 v1 m)
-                   {| fs_state := Returnstate stk2 v2 m; fault := b |}.
+           (LESSDEF: Val.lessdef v1 v2)
+           (MEM: Memory.Mem.extends m1 m2),
+      match_states (Returnstate stk1 v1 m1)
+                   {| fs_state := Returnstate stk2 v2 m2; fault := b |}.
 
 End match_states.
 
@@ -344,6 +346,27 @@ Section TOLERANCE.
       inv Hforall; constructor; auto.
     apply IHargs; auto.
   Qed.
+
+  Lemma find_function_lessdef rs1 rs2 r fd1 fd2 :
+    Val.lessdef (rs1 # r) (rs2 # r) ->
+    RTL.find_function (Genv.globalenv prog) (inl r) rs1 = Some fd1 ->
+    RTL.find_function (Genv.globalenv prog) (inl r) rs2 = Some fd2 ->
+    fd1 = fd2.
+  Proof.
+    intros Hlessdef H1 H2.
+    unfold RTL.find_function in *.
+    inv Hlessdef.
+    - rewrite H3 in H1; rewrite H1 in H2; inv H2; reflexivity.
+    - rewrite <- H0 in H1.
+      simpl in H1; inv H1.
+  Qed.
+
+  Lemma forall2_lessdef rs1 rs2 args :
+    Forall (fun arg => Val.lessdef (rs1 # arg) (rs2 # arg)) args ->
+    Forall2 Val.lessdef rs1 ## args rs2 ## args.
+  Proof.
+    induction args; simpl; intro Hargs; constructor; inv Hargs; auto.
+  Qed.
   
   Lemma two_three_step_simulation s1 s1' s2 s2' t1 t2 b :
     match_states s1 {| fs_state := s2; fault := b |} ->
@@ -373,14 +396,6 @@ Section TOLERANCE.
       split; auto.
       rewrite H in H9; inv H9.
       econstructor; eauto.
-      (* + intro x. *)
-      (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec x res0); subst. *)
-      (*   * rewrite 2!Regmap.gss. *)
-      (*     eapply eval_operation_compat in H0. *)
-      (*     (* 2: { apply Forall_forall; intros r Hin; apply RS_COMPAT. } *) *)
-      (*     destruct H0 as (v' & Hop & Hv'). *)
-      (*     rewrite H10 in Hop; inv Hop; auto. *)
-      (*   * rewrite 2!Regmap.gso; auto. *)
       + unfold match_rs in *.
         destruct b.
         * destruct RS as (c & Hc & RS).
@@ -391,7 +406,7 @@ Section TOLERANCE.
             apply wc_fn_code in H; inv H; auto. }
           destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
           { rewrite 2!Regmap.gss.
-            eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m) in H0.
+            eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m2) in H0; auto.
             - destruct H0 as (v' & Hop & Hv').
               rewrite H10 in Hop; inv Hop; auto.
             - eapply Forall_lessdef_list.
@@ -401,19 +416,17 @@ Section TOLERANCE.
               inv WC_FUN; apply wc_fn_code in H; inv H.
               rewrite Forall_forall in H6.
               apply H6 in Hin.
-              rewrite <- Hin; auto.
-            - apply Memory.Mem.extends_refl. }
+              rewrite <- Hin; auto. }
           rewrite 2!Regmap.gso; auto.
         * intro r.
           destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
           { rewrite 2!Regmap.gss.
-            eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m) in H0.
+            eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m2) in H0; auto.
             - destruct H0 as (v' & Hop & Hv').
               rewrite H10 in Hop; inv Hop; auto.
             - eapply Forall_lessdef_list with (P := fun _ => True).
               { apply Forall_forall; auto. }
-              intros r _; auto.
-            - apply Memory.Mem.extends_refl. }
+              intros r _; auto. }
           rewrite 2!Regmap.gso; auto.
 
     (* exec_Iload *)
@@ -427,50 +440,192 @@ Section TOLERANCE.
         * destruct RS as (c & Hc & RS).
           exists c; split; auto.
           intros r Hr.
-          (* assert (Hcol: col pc r <> Some c). *)
-          (* { intro HC; apply Hr; inv WC_FUN. *)
-    (*   apply wc_fn_code in H; inv H; auto. } *)
-          
-        (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst0); subst. *)
-        (*   { rewrite 2!Regmap.gss. *)
-        (*     eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args0) in H0. *)
-        (*     - destruct H0 as (v' & Hop & Hv'). *)
-        (*       rewrite H11 in Hop; inv Hop; auto. *)
-        (*       eapply Memory.Mem.loadv_extends in H1; eauto. *)
-        (*       2: { apply Memory.Mem.extends_refl. } *)
-        (*       destruct H1 as (v2 & Hv2 & Hv2'). *)
-        (*       rewrite H12 in Hv2; inv Hv2; auto. *)
-        (*     - eapply Forall_lessdef_list. *)
-        (*       2: { apply RS. } *)
-        (*       apply Forall_forall; intros r Hin. *)
-        (*       intro HC; apply Hr. *)
-        (*       inv WC_FUN; apply wc_fn_code in H; inv H. *)
-        (*       rewrite Forall_forall in H5. *)
-        (*       apply H5 in Hin. *)
-        (*       rewrite <- Hin; auto. *)
-        (*     - apply Memory.Mem.extends_refl. } *)
-        (*   rewrite 2!Regmap.gso; auto. *)
-        (* * intro r. *)
-        (*   destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst. *)
-        (*   { rewrite 2!Regmap.gss. *)
-        (*     eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m) in H0. *)
-        (*     - destruct H0 as (v' & Hop & Hv'). *)
-        (*       rewrite H10 in Hop; inv Hop; auto. *)
-        (*     - eapply Forall_lessdef_list with (P := fun _ => True). *)
-        (*       { apply Forall_forall; auto. } *)
-        (*       intros r _; auto. *)
-        (*     - apply Memory.Mem.extends_refl. } *)
-        (*   rewrite 2!Regmap.gso; auto. *)
+          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst0); subst.
+          { rewrite 2!Regmap.gss.
+            eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args0) in H0.
+            - destruct H0 as (v' & Hop & Hv').
+              rewrite H11 in Hop; inv Hop; auto.
+              eapply Memory.Mem.loadv_extends in H1; eauto.
+              destruct H1 as (v2 & Hv2 & Hv2').
+              rewrite H12 in Hv2; inv Hv2; auto.
+            - eapply Forall_lessdef_list.
+              2: { apply RS. }
+              apply Forall_forall; intros r Hin.
+              inv WC_FUN; apply wc_fn_code in H; inv H.
+              rewrite Forall_forall in H5.
+              apply H5 in Hin; destruct Hin as [Hclear _].
+              intro HC; rewrite Hclear in HC; inv HC.
+              inv Hc. }
+          rewrite 2!Regmap.gso; auto.
+          destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0).
+          { inv WC_FUN; apply wc_fn_code in H; inv H.
+            rewrite Forall_forall in H5.
+            apply H5 in i; destruct i as [Hclear _].
+            apply RS; intro HC; rewrite Hclear in HC; inv HC; inv Hc. }
+          inv WC_FUN; apply wc_fn_code in H; inv H.
+          apply RS; intro HC; apply Hr.
+          apply H9; auto.
+        * intro r.
+          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst0); subst.
+          { rewrite 2!Regmap.gss.
+            eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args0) in H0.
+            - destruct H0 as (v' & Hop & Hv').
+              rewrite H11 in Hop; inv Hop; auto.
+              eapply Memory.Mem.loadv_extends in H1; eauto.
+              destruct H1 as (v2 & Hv2 & Hv2').
+              rewrite H12 in Hv2; inv Hv2; auto.
+            - eapply Forall_lessdef_list with (P := fun _ => True).
+              2: { intros; apply RS. }
+              apply Forall_forall; intros r Hin; auto. }
+          rewrite 2!Regmap.gso; auto.
 
-          admit.
-        * admit.
-      
     (* exec_Istore *)
-    - admit.
+    - inv Hmatch.
+      inv Hstep3; simpl in *; try congruence.
+      split; auto.
+      rewrite H in H10; inv H10.
+      econstructor; eauto.
+      + unfold match_rs in *.
+        destruct b.
+        * destruct RS as (c & Hc & RS).
+          exists c; split; auto.
+          intros r Hr.
+          destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0).
+          { inv WC_FUN; apply wc_fn_code in H; inv H.
+            rewrite Forall_forall in H9.
+            apply H9 in i; destruct i as [Hclear _].
+            apply RS; intro HC; rewrite Hclear in HC; inv HC; inv Hc. }
+          inv WC_FUN; apply wc_fn_code in H; inv H.
+          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r src0); subst.
+          { apply RS; intro HC.
+            unfold is_clear in *.
+            rewrite H6 in HC; inv HC; inv Hc. }
+          apply RS; intro HC; apply Hr.
+          apply H10; auto.
+        * intro r; apply RS.
+      + eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args0) in H0.
+        * destruct H0 as (v2 & Hop & Hv2).
+          rewrite Hop in H11; inv H11.
+          pose proof H1 as H1'.
+          eapply Memory.Mem.storev_extends with (v2 := rs2 # src0) in H1'.
+          2: { eauto. }
+          2: { eauto. }
+          2: { destruct b.
+               - destruct RS as (c & Hc & RS).
+                 apply RS.
+                 inv WC_FUN; apply wc_fn_code in H; inv H.
+                 intro HC. rewrite H5 in HC; inv HC; inv Hc.
+               - apply RS. }
+          destruct H1' as (m2' & Hstore & Hm2').
+          rewrite Hstore in H12; inv H12; auto.
+        * unfold match_rs in *.
+          destruct b.
+          { destruct RS as (c & Hc & RS).
+            eapply Forall_lessdef_list.
+            2: { apply RS. }
+            apply Forall_forall; intros r Hin.
+            inv WC_FUN; apply wc_fn_code in H; inv H.
+            rewrite Forall_forall in H9; apply H9 in Hin.
+            destruct Hin as [Hclear _].
+            rewrite Hclear; intro HC; inv HC; inv Hc. }
+          eapply Forall_lessdef_list with (P := fun _ => True).
+          2: { intros; apply RS. }
+          apply Forall_forall; auto.
+
     (* exec_Icall *)
-    - admit.
+    - inv Hmatch.
+      inv Hstep3; simpl in *; try congruence.
+      split; auto.
+      rewrite H in H9; inv H9.
+      assert (fd = fd0).
+      { destruct ros0.
+        - eapply find_function_lessdef in H10.
+          3: { apply H0. }
+          2: { unfold match_rs in RS.
+               destruct b.
+               - destruct RS as (c & Hc & RS).
+                 apply RS; intro HC.
+                 inv WC_FUN; apply wc_fn_code in H; inv H.
+                 destruct (H6 r eq_refl) as [Hclear _].
+                 rewrite Hclear in HC; inv HC; inv Hc.
+               - auto. }
+          assumption.
+        - simpl in *.
+          destruct (Genv.find_symbol (Genv.globalenv prog) i); try inv H0.
+          rewrite H10 in H3; inv H3; reflexivity. }
+      subst.
+      econstructor; eauto.
+      * constructor; auto.
+        econstructor; eauto.
+        unfold match_rs in *.
+        destruct b.
+        { destruct RS as (c & Hc & RS).
+          exists c; split; auto.
+          intros r Hr.
+          inv WC_FUN; apply wc_fn_code in H; inv H.
+          apply RS; intro HC; apply Hr.
+          destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0).
+          - rewrite Forall_forall in H8.
+            apply H8 in i.
+            destruct i as [Hclear _].
+            rewrite Hclear in HC; inv HC; inv Hc.
+          - destruct ros0.
+            + destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r0); subst.
+              * destruct (H6 r0 eq_refl) as [Hclear _].
+                rewrite Hclear in HC; inv HC; inv Hc.
+              * apply H11; auto.
+                intros ? H; inv H; auto.
+            + apply H11; auto.
+              intros; congruence. }
+        intro r; apply RS; intro HC; apply Hr.
+      * apply forall2_lessdef.
+        apply Forall_forall; intros r Hr.
+        unfold match_rs in RS.
+        destruct b; auto.
+        destruct RS as (c & Hc & RS).
+        apply RS; intro HC.
+        inv WC_FUN; apply wc_fn_code in H; inv H.
+        rewrite Forall_forall in H8.
+        apply H8 in Hr; destruct Hr as [Hclear _].
+        rewrite Hclear in HC; inv HC; inv Hc.
+
     (* exec_Itailcall *)
-    - admit.
+    - inv Hmatch.
+      inv Hstep3; simpl in *; try congruence.
+      split; auto.
+      rewrite H in H10; inv H10.
+      assert (fd = fd0).
+      { destruct ros0.
+        - eapply find_function_lessdef in H11.
+          3: { apply H0. }
+          2: { unfold match_rs in RS.
+               destruct b.
+               - destruct RS as (c & Hc & RS).
+                 apply RS; intro HC.
+                 inv WC_FUN; apply wc_fn_code in H; inv H.
+                 specialize (H5 r eq_refl).
+                 rewrite H5 in HC; inv HC; inv Hc.
+               - auto. }
+          assumption.
+        - simpl in *.
+          destruct (Genv.find_symbol (Genv.globalenv prog) i); try inv H0.
+          rewrite H11 in H4; inv H4; reflexivity. }
+      subst.
+      econstructor; eauto.
+      * apply forall2_lessdef.
+        apply Forall_forall; intros r Hr.
+        unfold match_rs in RS.
+        destruct b; auto.
+        destruct RS as (c & Hc & RS).
+        apply RS; intro HC.
+        inv WC_FUN; apply wc_fn_code in H; inv H.
+        rewrite Forall_forall in H7.
+        apply H7 in Hr; rewrite Hr in HC; inv HC; inv Hc.
+      * eapply Memory.Mem.free_parallel_extends in H2.
+        2: { eauto. }
+        destruct H2 as (m2' & Hfree & Hm2').
+        rewrite Hfree in H13; inv H13; auto.
+
     (* exec_Ibuiltin *)
     - admit.
     (* exec_Icond *)
@@ -539,6 +694,7 @@ Section TOLERANCE.
     rewrite H in H4; inv H4.
     rewrite H1 in H6; inv H6.
     constructor; auto.
+    apply Memory.Mem.extends_refl.
   Qed.
 
   Lemma final_state_faulty_nostep s fs r :

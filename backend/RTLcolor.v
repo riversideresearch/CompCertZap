@@ -110,12 +110,18 @@ Section wc.
       is_clear (col pc src) ->
       is_red (col succ src) ->
       Forall (fun arg => is_clear (col pc arg) /\ is_red (col succ arg)) args ->
+      (forall r c, ~ In r args -> r <> src ->
+              is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Istore chunk addr args src succ)
   | wc_Icall : forall sig fn args res succ,
-      Forall (fun arg => is_clear (col pc arg)) args ->
-      is_red (col succ res) ->
+      (forall r, fn = inl r -> is_clear (col pc r) /\ is_red (col succ r)) ->
+      Forall (fun arg => is_clear (col pc arg) /\ is_red (col succ arg)) args ->
+      is_red (col pc res) ->
+      (forall r c, ~ In r args -> (forall r', fn = inl r' -> r <> r') ->
+              is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Icall sig fn args res succ)
   | wc_Itailcall : forall sig fn args,
+      (forall r, fn = inl r -> is_clear (col pc r)) ->
       Forall (fun arg => is_clear (col pc arg)) args ->
       wc_instruction pc (Itailcall sig fn args)
   (* | wc_Ibuiltin : TODO *)
