@@ -367,6 +367,13 @@ Section TOLERANCE.
   Proof.
     induction args; simpl; intro Hargs; constructor; inv Hargs; auto.
   Qed.
+
+  (* Theorem two_three_backward_simulation : *)
+  (*   backward_simulation *)
+  (*     (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) *)
+  (*     (faulty_semantics prog). *)
+  (* Proof. *)
+  (*   econstructor. *)
   
   Lemma two_three_step_simulation s1 s1' s2 s2' t1 t2 b :
     match_states s1 {| fs_state := s2; fault := b |} ->
@@ -626,8 +633,84 @@ Section TOLERANCE.
         destruct H2 as (m2' & Hfree & Hm2').
         rewrite Hfree in H13; inv H13; auto.
 
+(* (** External calls must be receptive to changes of traces by another, matching trace. *) *)
+(*   ec_receptive: *)
+(*     forall ge vargs m t1 vres1 m1 t2, *)
+(*     sem ge vargs m t1 vres1 m1 -> match_traces ge t1 t2 -> *)
+(*     exists vres2, exists m2, sem ge vargs m t2 vres2 m2; *)
+
     (* exec_Ibuiltin *)
-    - admit.
+    - inv Hmatch.
+      inv Hstep3; simpl in *; try congruence.
+      (* rewrite H in H10; inv H10. *)
+      (* generalize (@external_call_spec Three VoteSemantics_Three ef0). *)
+      (* intros [_ _ _ _ _ ? _ _ ? _]. *)
+      
+      (* destruct ef0; simpl in *. *)
+      (* simpl in *. *)
+      (* + admit. *)
+      (* + admit. *)
+      (* + admit. *)
+      (* + inv H1. *)
+      (*   inv H2. *)
+      (*   inv H12. *)
+      (*   inv H2. *)
+
+      (* split; auto. *)
+      (* { destruct ef0. *)
+      (* assert (fd = fd0). *)
+      (* { destruct ros0. *)
+      (*   - eapply find_function_lessdef in H10. *)
+      (*     3: { apply H0. } *)
+      (*     2: { unfold match_rs in RS. *)
+      (*          destruct b. *)
+      (*          - destruct RS as (c & Hc & RS). *)
+      (*            apply RS; intro HC. *)
+      (*            inv WC_FUN; apply wc_fn_code in H; inv H. *)
+      (*            destruct (H6 r eq_refl) as [Hclear _]. *)
+      (*            rewrite Hclear in HC; inv HC; inv Hc. *)
+      (*          - auto. } *)
+      (*     assumption. *)
+      (*   - simpl in *. *)
+      (*     destruct (Genv.find_symbol (Genv.globalenv prog) i); try inv H0. *)
+      (*     rewrite H10 in H3; inv H3; reflexivity. } *)
+      (* subst. *)
+      (* econstructor; eauto. *)
+      (* * constructor; auto. *)
+      (*   econstructor; eauto. *)
+      (*   unfold match_rs in *. *)
+      (*   destruct b. *)
+      (*   { destruct RS as (c & Hc & RS). *)
+      (*     exists c; split; auto. *)
+      (*     intros r Hr. *)
+      (*     inv WC_FUN; apply wc_fn_code in H; inv H. *)
+      (*     apply RS; intro HC; apply Hr. *)
+      (*     destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0). *)
+      (*     - rewrite Forall_forall in H8. *)
+      (*       apply H8 in i. *)
+      (*       destruct i as [Hclear _]. *)
+      (*       rewrite Hclear in HC; inv HC; inv Hc. *)
+      (*     - destruct ros0. *)
+      (*       + destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r0); subst. *)
+      (*         * destruct (H6 r0 eq_refl) as [Hclear _]. *)
+      (*           rewrite Hclear in HC; inv HC; inv Hc. *)
+      (*         * apply H11; auto. *)
+      (*           intros ? H; inv H; auto. *)
+      (*       + apply H11; auto. *)
+      (*         intros; congruence. } *)
+      (*   intro r; apply RS; intro HC; apply Hr. *)
+      (* * apply forall2_lessdef. *)
+      (*   apply Forall_forall; intros r Hr. *)
+      (*   unfold match_rs in RS. *)
+      (*   destruct b; auto. *)
+      (*   destruct RS as (c & Hc & RS). *)
+      (*   apply RS; intro HC. *)
+      (*   inv WC_FUN; apply wc_fn_code in H; inv H. *)
+      (*   rewrite Forall_forall in H8. *)
+      (*   apply H8 in Hr; destruct Hr as [Hclear _]. *)
+      (*   rewrite Hclear in HC; inv HC; inv Hc. *)
+      admit.
+
     (* exec_Icond *)
     - admit.
     (* exec_Ijumptable *)

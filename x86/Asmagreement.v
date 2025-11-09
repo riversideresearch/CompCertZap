@@ -47,6 +47,12 @@ Section ASM_WEAK_AGREEMENT.
 
   (* Definition asm_weak_agreement := weak_agreement (@Asm.semantics). *)
 
+  (* Definition asm_weak_agreement' := backward_simulation asm_sem2 asm_sem3. *)
+
+  Definition asm_weak_agreement' :=
+    forall beh3, program_behaves asm_sem3 beh3 ->
+            exists beh2, program_behaves asm_sem2 beh2 /\ behavior_improves beh2 beh3.
+
 End ASM_WEAK_AGREEMENT.
 
 Section AGREEMENT_PRESERVATION.
@@ -89,6 +95,28 @@ Section AGREEMENT_PRESERVATION.
     2: { eauto. }
     - eapply forward_simulation_same_safe_behavior; eauto.
     - intros beh' Hbeh'; eauto.
+  Qed.
+  
+  Theorem forward_simulation_preserves_weak_agreement' :
+    (forall beh, program_behaves (rtl_sem2 p) beh -> not_wrong beh) ->
+    forward_simulation (rtl_sem2 p) (asm_sem2 tp) ->
+    forward_simulation (rtl_sem3 p) (asm_sem3 tp) ->
+    rtl_weak_agreement' p ->
+    asm_weak_agreement' tp.
+  Proof.
+    unfold rtl_weak_agreement', asm_weak_agreement'.
+    intros Hsafe Hforward2 Hforward3 Hagree beh3 Hbeh3.
+    assert (Hbackward: backward_simulation (rtl_sem3 p) (asm_sem3 tp)).
+    { apply forward_to_backward_simulation; auto.
+      - apply RTL.semantics_receptive.
+      - apply Asm.semantics_determinate. }
+    eapply backward_simulation_behavior_improves in Hbackward; eauto.
+    destruct Hbackward as (beh1 & Hbeh1 & Himp).
+    eapply Hagree in Hbeh1.
+    destruct Hbeh1 as (beh2 & Hbeh2 & Himp').
+    exists beh2; split.
+    2: { eapply behavior_improves_trans; eauto. }
+    eapply forward_simulation_same_safe_behavior; eauto.
   Qed.
   
 End AGREEMENT_PRESERVATION.

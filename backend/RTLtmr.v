@@ -230,6 +230,8 @@ Definition transf_instr
       update_instr pc (Inop n)
   (* For data operations, simply execute the instruction in the
      regular and two shadow worlds. *)
+  (* TODO: treat most builtins like this, except certain ones like
+     malloc, memcpy, etc. *)
   | Iop op args dst _succ =>
       do n1 <- reserve_instr;
       do n2 <- reserve_instr;
@@ -275,7 +277,6 @@ Definition Regset_of_option (x : option positive) : Regset.t :=
 
 (** All registers that appear in an instruction (arguments or
     destination). *)
-(* TODO: relate to instr_uses and instr_defined? *)
 Definition instr_regs (i : instruction) : Regset.t :=
   match i with
   | Inop _ => Regset.empty

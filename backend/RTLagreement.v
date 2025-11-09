@@ -80,6 +80,12 @@ Section RTL_WEAK_AGREEMENT.
       program_behaves rtl_sem2 beh ->
       program_behaves rtl_sem3 beh.
 
+  (* Definition rtl_weak_agreement' := backward_simulation rtl_sem2 rtl_sem3. *)
+
+  Definition rtl_weak_agreement' :=
+    forall beh3, program_behaves rtl_sem3 beh3 ->
+            exists beh2, program_behaves rtl_sem2 beh2 /\ behavior_improves beh2 beh3.
+
   (* Definition weak_agreement' := *)
   (*   forall beh, *)
   (*     program_behaves sem2 beh -> *)
