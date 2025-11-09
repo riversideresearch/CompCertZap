@@ -223,34 +223,35 @@ Proof.
   eapply transf_c_program_to_rtl_correct; eauto.
 Qed.
 
+Lemma compiled_rtl_weak_agreement p tp :
+  transf_c_program_to_rtl p = OK tp ->
+  rtl_weak_agreement' tp.
+Proof.
+Admitted.
+
 Theorem transf_c_program_to_rtl_preservation_faulty:
   forall p tp beh,
-  transf_c_program_to_rtl p = OK tp ->
-  program_behaves (@RTL.semantics Builtins2.Three Builtins2.VoteSemantics_Three tp) beh ->
-  exists beh', program_behaves (@Csem.semantics Builtins2.Three Builtins2.VoteSemantics_Three p) beh'
-          /\ behavior_improves beh' beh
-          /\ (RTLcolor.check_program tp = true ->
-             forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
-                     behavior_improves beh' fbeh).
+    transf_c_program_to_rtl p = OK tp ->
+    RTLcolor.check_program tp = true ->
+    program_behaves (faulty_semantics tp) beh ->
+    exists beh', program_behaves (@Csem.semantics Builtins2.Two Builtins2.VoteSemantics_Two p) beh'
+          /\ behavior_improves beh' beh.
 Proof.
-  intros p tp beh Hp Hbeh.
+  intros p tp beh Hp Hcheck Hbeh.
   pose proof Hp as Hp'.
   pose proof Hbeh as H.
   eapply backward_simulation_behavior_improves in H.
-  2: { eapply transf_c_program_to_rtl_correct; eauto. }
+  2: { apply faulty_backward_simulation.
+       apply RTLcolor.check_program_sound; auto. }
   destruct H as (beh1 & Hbeh1 & Himp).
-  exists beh1; repeat split; auto.
-  intros Hcheck fbeh Hfbeh.
-  eapply behavior_improves_trans; eauto.
-  eapply faulty_behavior_improves; eauto.
-  apply RTLcolor.check_program_sound; auto.
+  eapply compiled_rtl_weak_agreement in Hbeh1; eauto.
+  destruct Hbeh1 as (beh2 & Hbeh2 & Himp').
+  eapply backward_simulation_behavior_improves in Hbeh2.
+  2: { eapply transf_c_program_to_rtl_correct; eauto. }
+  destruct Hbeh2 as (beh3 & Hbeh3 & Himp'').
+  exists beh3; repeat split; auto.
+  repeat (eapply behavior_improves_trans; eauto).
 Qed.
-
-Lemma compiled_rtl_weak_agreement p tp :
-  transf_c_program_to_rtl p = OK tp ->
-  rtl_weak_agreement tp.
-Proof.
-Admitted.
 
 Lemma apply_partial_factor {A B : Type} (f : res A) (g : A -> res B) x :
   f @@@ (fun y => g y) = OK x -> exists z, f = OK z /\ g z = OK x.
@@ -310,7 +311,7 @@ Lemma compiled_asm_weak_agreement p tp :
   (forall beh, program_behaves (@Csem.semantics Two VoteSemantics_Two p) beh ->
           not_wrong beh) ->
   transf_c_program p = OK tp ->
-  asm_weak_agreement tp.
+  asm_weak_agreement' tp.
 Proof.
   intros Hsafe Htransf beh Hbeh.
   unfold transf_c_program, time in Htransf.
@@ -355,37 +356,13 @@ Proof.
   destruct (Novotes.check_program p14) as [pnovotes|e] eqn:Pnovotes;
     simpl in Htransf; try discriminate.
   apply Novotesproof.check_program_sound in Pnovotes.
-  apply no_votes_weak_agreement in Pnovotes.
-  eapply forward_simulation_preserves_weak_agreement; eauto.
+  apply no_votes_weak_agreement' in Pnovotes.
+  eapply forward_simulation_preserves_weak_agreement'; eauto.
   - apply transf_rtl_program'_forward_simulation; auto.
     apply transf_rtl_to_asm_match_prog; auto.
   - apply transf_rtl_program'_forward_simulation; auto.
     apply transf_rtl_to_asm_match_prog; auto.
   - inv Htransf; auto.
-Qed.
-
-Theorem transf_c_program_to_rtl_preservation_faulty':
-  forall p tp beh,
-  transf_c_program_to_rtl p = OK tp ->
-  program_behaves (@RTL.semantics Two VoteSemantics_Two tp) beh ->
-  exists beh', program_behaves (@Csem.semantics Two VoteSemantics_Two p) beh'
-          /\ behavior_improves beh' beh
-          /\ (RTLcolor.check_program tp = true ->
-             forall fbeh, program_behaves (faulty_semantics tp) fbeh ->
-                     behavior_improves beh' fbeh).
-Proof.
-  intros p tp beh Hp Hbeh.
-  pose proof Hp as Hp'.
-  pose proof Hbeh as H.
-  eapply backward_simulation_behavior_improves in H.
-  2: { eapply transf_c_program_to_rtl_correct; eauto. }
-  destruct H as (beh1 & Hbeh1 & Himp).
-  exists beh1; repeat split; auto.
-  intros Hcheck fbeh Hfbeh.
-  eapply behavior_improves_trans; eauto.
-  eapply faulty_behavior_improves; eauto.
-  - apply RTLcolor.check_program_sound; auto.
-  - eapply compiled_rtl_weak_agreement; eauto.
 Qed.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of

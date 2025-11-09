@@ -648,3 +648,84 @@ Proof.
 Qed. 
 
 End VOTE.
+
+
+(** Helpers for CompCertZap *)
+
+Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
+  match arg with
+  | BA r => r :: nil
+  | BA_splitlong hi lo => regs_of_builtin_arg hi ++ regs_of_builtin_arg lo
+  | BA_addptr a1 a2 => regs_of_builtin_arg a1 ++ regs_of_builtin_arg a2
+  | _ => nil
+  end.
+
+(** Pull out registers from builtin_args. *)
+Fixpoint regs_of_builtin_args (args : list (builtin_arg reg)) : list reg :=
+  match args with
+  | nil => nil
+  | ba :: rest => regs_of_builtin_arg ba ++ regs_of_builtin_args rest
+  end.
+
+Definition regs_of_fn (fn : reg + ident) : list reg :=
+  match fn with
+  | inl r => r :: nil
+  | inr _ => nil
+  end.
+
+Definition args_of_instruction (instr : instruction) : list reg :=
+  match instr with
+  | Inop _ => nil
+  | Iop _ args _ _ => args
+  | Iload _  _ args _ _ => args
+  | Istore _ _ args src _ => src :: args
+  | Icall _ fn args _ _ => regs_of_fn fn ++ args
+  | Itailcall _ fn args => regs_of_fn fn ++ args
+  | Ibuiltin _ args _ _ => regs_of_builtin_args args
+  | Icond _ args _ _ => args
+  | Ijumptable arg _ => arg :: nil
+  | Ireturn (Some r) => r :: nil
+  | Ireturn None => nil
+  end.
+
+Definition succ_of_instruction (instr : instruction) : option node :=
+  match instr with
+  | Inop succ => Some succ
+  | Iop _ _ _ succ => Some succ
+  | Iload _ _ _ _ succ => Some succ
+  | Istore _ _ _ _ succ => Some succ
+  | Icall _ _ _ _ succ => Some succ
+  | Ibuiltin _ _ _ succ => Some succ
+  | _ => None
+  end.
+
+(** Modify [instr] to jump to [new_succ]. *)
+Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
+  match instr with
+  | Inop _ => Inop new_succ
+  | Iop op args dst _ => Iop op args dst new_succ
+  | Iload chunk addr args dst _ => Iload chunk addr args dst new_succ
+  | Istore chunk addr args src _ => Istore chunk addr args src new_succ
+  | Icall sig fn args dst _ => Icall sig fn args dst new_succ
+  | Ibuiltin ef args dst _ => Ibuiltin ef args dst new_succ
+  | _ => instr
+  end.
+
+(** This ignores the recursive cases because according to
+    [exec_Ibuiltin] (specifically [regmap_setres]) the result is used
+    only in the [BR] case.  *)
+Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
+  match res with
+  | BR r => Some r
+  | _ => None
+  end.
+
+(** Result register of instruction. *)
+Definition res_of_instruction (instr : instruction) : option reg :=
+  match instr with
+  | Iop _ _ res _ => Some res
+  | Iload _ _ _ res _ => Some res
+  | Icall _ _ _ res _ => Some res
+  | Ibuiltin _ _ res _ => reg_of_builtin_res res
+  | _ => None
+  end.

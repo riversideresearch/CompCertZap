@@ -270,6 +270,13 @@ Inductive vote_type : Type :=
 | Two
 | Three.
 
+Definition vote_eqb (v1 v2 : vote_type) : bool :=
+  match v1, v2 with
+  | Two, Two => true
+  | Three, Three => true
+  | _, _ => false
+  end.
+
 Definition vote_type_sem (vty: vote_type) : vote_sems :=
   match vty with
   | Two => {| vote_sem_int := vote_sem Tint

@@ -23,76 +23,9 @@ Local Open Scope string_scope.
 Definition match_rs (col : reg -> option color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
     exists c, is_basic c /\
-           forall r, col r <> Some c -> Val.lessdef (rs1 # r) (rs2 # r)
+           forall r, col r <> Some c -> rs1 # r = rs2 # r
   else
-    forall r, Val.lessdef (rs1 # r) (rs2 # r).
-
-(* Definition rs_compat (rs1 rs2 : regset) : Prop := *)
-(*   forall r, val_compat (rs1 # r) (rs2 # r). *)
-
-Lemma trace_prefix_cons e t1 t2 :
-  trace_prefix t1 t2 ->
-  trace_prefix (e :: t1) (e :: t2).
-Proof.
-  intros [? ?]; subst.
-  eexists; reflexivity.
-Qed.
-
-Lemma Eappinf_eq_trace_prefix t1 t2 T1 T2 :
-  t1 *** T1 = t2 *** T2 ->
-  trace_prefix t1 t2 \/ trace_prefix t2 t1.
-Proof.
-  revert t2 T1 T2.
-  induction t1; simpl; intros t2 T1 T2 Heq; subst.
-  { left; eexists; reflexivity. }
-  destruct t2.
-  { right; eexists; reflexivity. }
-  inv Heq.
-  apply IHt1 in H1.
-  destruct H1 as [Hpre | Hpre].
-  - left; apply trace_prefix_cons; auto.
-  - right; apply trace_prefix_cons; auto.
-Qed.
-
-Lemma traceinf_prefix_trace_prefix t t' T :
-  (length t' >= length t)%nat ->
-  traceinf_prefix t' (t *** T) ->
-  trace_prefix t t'.
-Proof.
-  revert t T.
-  induction t'; simpl; intros t T Hlen Hpre.
-  { destruct t; simpl in *; try lia.
-    eexists; reflexivity. }
-  destruct t.
-  { eexists; reflexivity. }
-  simpl in Hlen.
-  simpl in Hpre.
-  destruct Hpre as [T' H].
-  inv H.
-  apply trace_prefix_cons.
-  apply Eappinf_eq_trace_prefix in H2.
-  destruct H2 as [Hpre | Hpre].
-  - auto.
-  - destruct Hpre as [? ?]; subst.
-    eapply IHt'; try lia.
-    exists (x *** T).
-    apply Eappinf_assoc.
-Qed.
-
-Lemma reactive_prefix_exists_star sem s t T :
-  Forever_reactive sem s T ->
-  traceinf_prefix t T ->
-  exists s' t', Star sem s t' s' /\ trace_prefix t t'.
-Proof.
-  intros Hreact [T' Hpre]; subst.
-  rename T' into T.
-  apply forever_reactive_forever_reactive' in Hreact.
-  unfold forever_reactive' in Hreact.
-  specialize (Hreact (length t)).
-  destruct Hreact as (s' & t' & Hstar & Hlen & Hpre).
-  exists s', t'; split; auto.
-  eapply traceinf_prefix_trace_prefix; eauto.
-Qed.
+    forall r, rs1 # r = rs2 # r.
 
 Section match_states.
 
@@ -125,37 +58,46 @@ Section match_states.
     apply match_rs_fault; auto.
   Qed.
 
-  (** When a fault hasn't occurred, Val.lessdef should hold between
-      all registers. When a fault has occurred, it should hold between
-      all registers except those of the affected color. *)
-  Inductive match_states : RTL.state -> fstate -> Prop :=
+  (** When a fault hasn't occurred, equality should hold between all
+      registers. When a fault has occurred, it should hold between all
+      registers except those of the affected color. *)
+  Inductive match_states : bool -> RTL.state -> fstate -> Prop :=
   | match_states_State :
-    forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool)
-           (STK: Forall2 (match_stackframes b) stk1 stk2)
-           (* (VOTE: match_votes_function f1 f2) *)
-           (WC_FUN: wc_function col f)
-           (* (RS_COMPAT: rs_compat rs1 rs2) *)
-           (RS: match_rs (col pc) b rs1 rs2)
-           (MEM: Memory.Mem.extends m1 m2),
-      match_states (State stk1 f sp pc rs1 m1)
-                   {| fs_state := State stk2 f sp pc rs2 m2; fault := b |}
+    forall col stk1 stk2 f sp pc rs1 rs2 m (b : bool)
+      (STK: Forall2 (match_stackframes b) stk1 stk2)
+      (* (VOTE: match_votes_function f1 f2) *)
+      (WC_FUN: wc_function col f)
+      (* (RS_COMPAT: rs_compat rs1 rs2) *)
+      (RS: match_rs (col pc) b rs1 rs2),
+      (* (MEM: Memory.Mem.extends m1 m2), *)
+      match_states b (State stk1 f sp pc rs1 m)
+                   {| fs_state := State stk2 f sp pc rs2 m; fault := b |}
   | match_states_Callstate :
-    forall stk1 stk2 fd args1 args2 m1 m2 b
-           (STK: Forall2 (match_stackframes b) stk1 stk2)
-           (* (VOTE: match_votes_fundef fd1 fd2) *)
-           (LESSDEF: Forall2 Val.lessdef args1 args2)
-           (MEM: Memory.Mem.extends m1 m2),
-      match_states (Callstate stk1 fd args1 m1)
-                   {| fs_state := Callstate stk2 fd args2 m2; fault := b |}
+    forall stk1 stk2 fd args m b
+      (STK: Forall2 (match_stackframes b) stk1 stk2),
+      (* (VOTE: match_votes_fundef fd1 fd2) *)
+      (* (LESSDEF: Forall2 Val.lessdef args1 args2) *)
+      (* (MEM: Memory.Mem.extends m1 m2), *)
+      match_states b (Callstate stk1 fd args m)
+                   {| fs_state := Callstate stk2 fd args m; fault := b |}
   | match_state_Returnstate :
-    forall stk1 stk2 v1 v2 m1 m2 b
-           (STK: Forall2 (match_stackframes b) stk1 stk2)
-           (LESSDEF: Val.lessdef v1 v2)
-           (MEM: Memory.Mem.extends m1 m2),
-      match_states (Returnstate stk1 v1 m1)
-                   {| fs_state := Returnstate stk2 v2 m2; fault := b |}.
+    forall stk1 stk2 v m b
+      (STK: Forall2 (match_stackframes b) stk1 stk2),
+      (* (LESSDEF: Val.lessdef v1 v2) *)
+      (* (MEM: Memory.Mem.extends m1 m2), *)
+      match_states b (Returnstate stk1 v m)
+                   {| fs_state := Returnstate stk2 v m; fault := b |}.
 
 End match_states.
+
+Lemma init_match_states_refl p s :
+  RTL.initial_state p s ->
+  match_states false s {| fs_state := s; fault := false |}.
+Proof.
+  intro Hinit; inv Hinit.
+  constructor; auto.
+  (* apply Memory.Mem.extends_refl. *)
+Qed.
 
 Section TOLERANCE.
   Variable prog : program.
@@ -166,88 +108,6 @@ Section TOLERANCE.
 
   Hypothesis WC_prog : wc_program prog.
 
-  (* Corollary wc_prog2 : wc_program col prog2. *)
-  (* Proof. eapply match_votes_wc; eauto. Qed. *)
-
-  (* Lemma match_votes_function_not_builtin f1 f2 pc i : *)
-  (*   not_builtin i -> *)
-  (*   (fn_code f1) ! pc = Some i -> *)
-  (*   (* match_votes_function f1 f2 -> *) *)
-  (*   (fn_code f2) ! pc = Some i. *)
-  (* Proof. *)
-  (*   intros Hi Hpc Hmatch. *)
-  (*   inv Hmatch. *)
-  (*   simpl in *. *)
-  (*   specialize (CODE pc). *)
-  (*   inv CODE; try congruence. *)
-  (*   inv HR; try congruence. *)
-  (*   rewrite <- H0 in Hpc; inv Hpc. *)
-  (*   inv Hi. *)
-  (* Qed. *)
-  
-  Lemma eval_operation_lessdef rs1 rs2 m args op sp v :
-    Forall (fun arg => Val.lessdef (rs1 # arg) (rs2 # arg)) args ->
-    Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v ->
-    exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'
-          /\ Val.lessdef v v'.
-  Proof.
-    intros Hlessdef Hop.
-    eapply Op.eval_operation_lessdef; eauto.
-    2: { apply Memory.Mem.extends_refl. }
-    revert Hlessdef; clear Hop; revert rs1 rs2.
-    induction args; intros rs1 rs2 Hrs; simpl; inv Hrs; constructor; auto.
-  Qed.
-
-  Theorem faulty_step_exists s t s' fs :
-    match_states s fs ->
-    Step (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    exists t' fs', Step (faulty_semantics prog) fs t' fs'.
-  Proof.
-    intros Hmatch Hstep.
-    inv Hstep.
-    - destruct fs.
-      inv Hmatch.
-      eexists; eexists.
-      econstructor.
-      + apply exec_Inop; eauto.
-      + constructor.
-    - destruct fs.
-      inv Hmatch.
-      destruct fault.
-      (* fault = true *)
-      + destruct RS as (faulted_c & Hc & RS).
-        eexists; eexists.
-        inv WC_FUN.
-        specialize (wc_fn_code pc _ H).
-        inv wc_fn_code; inv H4.
-        destruct (color_eq c faulted_c).
-        (* The color of this operation has been faulted *)
-        * admit.
-        (* The color of this operation has *not* been faulted *)
-        * admit.
-      (* fault = false *)
-      + (* all arguments are lessdef, so result exists (and is lessdef
-           but that doesn't matter here) *)
-        apply eval_operation_lessdef with (rs2:=rs2) in H0.
-        2: { apply Forall_forall; intros; apply RS. }
-        destruct H0 as (v' & Hop & Hv').
-        eexists; eexists.
-        econstructor.
-        2: { apply maybe_zap_refl. }
-        eapply exec_Iop; eauto.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-  Admitted.
-
   Lemma forall2_match_stackframes_fault stk1 stk2 :
     Forall2 (match_stackframes false) stk1 stk2 ->
     Forall2 (match_stackframes true) stk1 stk2.
@@ -256,10 +116,10 @@ Section TOLERANCE.
     apply match_stackframes_fault; auto.
   Qed.
 
-  Lemma zap_preserves_match_states s s1 s2 b1 b2 :
-    match_states s {| fs_state := s1; fault := b1 |} ->
-    maybe_zap s1 b1 s2 b2 ->
-    match_states s {| fs_state := s2; fault := b2 |}.
+  Lemma maybe_zap_preserves_match_states s s1 s2 b2 :
+    match_states false s {| fs_state := s1; fault := false |} ->
+    maybe_zap s1 s2 b2 ->
+    match_states b2 s {| fs_state := s2; fault := b2 |}.
   Proof.
     intros Hmatch Hzap.
     inv Hzap; auto.
@@ -279,438 +139,132 @@ Section TOLERANCE.
       admit.
   Admitted.
 
-  (* Lemma eval_operation_compat rs1 rs2 m args op sp v : *)
-  (*   Forall (fun arg => val_compat (rs1 # arg) (rs2 # arg)) args -> *)
-  (*   Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v -> *)
-  (*   exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v' *)
-  (*         /\ val_compat v v'. *)
-  (* Proof. *)
-  (*   (* Maybe base proof on Op.eval_operation_inj *) *)
-  (* Admitted. *)
+  Lemma match_states_fault_inv b1 b2 s1 s2 :
+    match_states b1 s1 {| fs_state := s2; fault := b2 |} ->
+    b1 = b2.
+  Proof. intro Hmatch; inv Hmatch; reflexivity. Qed.
 
-  (* Lemma eval_operation_compat rs1 rs2 m args op sp v : *)
-  (*   Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v -> *)
-  (*   exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'. *)
-  (* Proof. *)
-  (*   intro H. *)
-  (*   destruct op; simpl in *; *)
-  (*     destruct args; simpl in *; try congruence; *)
-  (*     try solve [eexists; eauto]; *)
-  (*     destruct args; simpl in *; try congruence; *)
-  (*     try solve [eexists; eauto]; *)
-  (*     try destruct args; simpl in *; try congruence; *)
-  (*     try solve [eexists; eauto]. *)
-  (*   (* Maybe base proof on Op.eval_operation_inj *) *)
-  (* Admitted. *)
+  Definition fault_order (b1 b2 : bool) : Prop :=
+    b1 = true /\ b2 = false.
 
-  (* Lemma eval_addressing_compat rs1 rs2 addr args sp a : *)
-  (*   Forall (fun arg => val_compat (rs1 # arg) (rs2 # arg)) args -> *)
-  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs1 ## args = Some a -> *)
-  (*   exists a', Op.eval_addressing (Genv.globalenv prog) sp addr rs2 ## args = Some a' *)
-  (*         /\ val_compat a a'. *)
-  (* Proof. *)
-  (* Admitted. *)
-
-  (* Lemma load_compat chunk m b i i' v v' : *)
-  (*   Memory.Mem.load chunk m b (Integers.Ptrofs.unsigned i) = Some v -> *)
-  (*   Memory.Mem.load chunk m b (Integers.Ptrofs.unsigned i') = Some v' -> *)
-  (*   val_compat v v'. *)
-  (* Proof. *)
-  (*   intros H0 H1. *)
-  (*   apply Memory.Mem.load_result in H0. *)
-  (*   subst. *)
-  (*   val_compat *)
-  (*   Memdata.decode_val *)
-  (*   compute. *)
-  (*   destruct i; simpl. compute. *)
-  (*   Memory.Mem.load_type *)
-  (*   unfold Memory.Mem.load. *)
-
-  (* Lemma loadv_compat chunk m a a' v v' : *)
-  (*   Memory.Mem.loadv chunk m a = Some v -> *)
-  (*   Memory.Mem.loadv chunk m a' = Some v' -> *)
-  (*   val_compat v v'. *)
-  (* Proof. *)
-  (*   unfold Memory.Mem.loadv. *)
-  (*   intros H0 H1. *)
-  (*   destruct a; try congruence. *)
-  (*   destruct a'; try congruence. *)
-    
-
-  Lemma Forall_lessdef_list P rs1 rs2 args :
-    Forall P args ->
-    (forall r, P r -> Val.lessdef rs1 # r rs2 # r) ->
-    Val.lessdef_list rs1 ## args rs2 ## args.
+  Lemma well_founded_fault_order :
+    well_founded fault_order.
   Proof.
-    revert rs1 rs2; induction args; intros rs1 rs2 Hforall Hlessdef;
-      inv Hforall; constructor; auto.
-    apply IHargs; auto.
+    intros [].
+    - constructor; intros b []; congruence.
+    - constructor; intros b []; subst.
+      constructor; intros b []; congruence.
   Qed.
 
-  Lemma find_function_lessdef rs1 rs2 r fd1 fd2 :
-    Val.lessdef (rs1 # r) (rs2 # r) ->
-    RTL.find_function (Genv.globalenv prog) (inl r) rs1 = Some fd1 ->
-    RTL.find_function (Genv.globalenv prog) (inl r) rs2 = Some fd2 ->
-    fd1 = fd2.
-  Proof.
-    intros Hlessdef H1 H2.
-    unfold RTL.find_function in *.
-    inv Hlessdef.
-    - rewrite H3 in H1; rewrite H1 in H2; inv H2; reflexivity.
-    - rewrite <- H0 in H1.
-      simpl in H1; inv H1.
-  Qed.
-
-  Lemma forall2_lessdef rs1 rs2 args :
-    Forall (fun arg => Val.lessdef (rs1 # arg) (rs2 # arg)) args ->
-    Forall2 Val.lessdef rs1 ## args rs2 ## args.
-  Proof.
-    induction args; simpl; intro Hargs; constructor; inv Hargs; auto.
-  Qed.
-
-  (* Theorem two_three_backward_simulation : *)
-  (*   backward_simulation *)
-  (*     (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) *)
-  (*     (faulty_semantics prog). *)
+  (* Lemma final_state_dec s r : { final_state (faulty_semantics prog) s r } + *)
+  (*                               { ~ final_state (faulty_semantics prog) s r }. *)
   (* Proof. *)
-  (*   econstructor. *)
-  
-  Lemma two_three_step_simulation s1 s1' s2 s2' t1 t2 b :
-    match_states s1 {| fs_state := s2; fault := b |} ->
-    Step (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s1 t1 s1' ->
-    Step (@RTL.semantics Builtins2.Two VoteSemantics_Two prog) s2 t2 s2' ->
-    t1 = t2 /\ match_states s1' {| fs_state := s2'; fault := b |}.
+  (*   simpl in *. *)
+  (*   destruct s. *)
+  (*   destruct fs_state. *)
+  (*   - right; intro HC; inv HC. *)
+  (*   - right; intro HC; inv HC. *)
+  (*   - *)
+  (*     destruct stack. *)
+  (*     2: { right; intro HC; inv HC. } *)
+  (*     destruct v; try solve [right; intro HC; inv HC]. *)
+  (*     destruct (Integers.Int.eq_dec i r); subst. *)
+  (*     + left; constructor. *)
+  (*     + right; intro HC; inv HC; congruence. *)
+  (* Qed. *)
+
+  Lemma final_state_dec s : { exists r, final_state (faulty_semantics prog) s r } +
+                              { ~ (exists r, final_state (faulty_semantics prog) s r) }.
   Proof.
-    intros Hmatch Hstep2 Hstep3.
-    inv Hstep2.
+    simpl in *.
+    destruct s.
+    destruct fs_state.
+    - right; intros [r HC]; inv HC.
+    - right; intros [r HC]; inv HC.
+    - destruct stack.
+      2: { right; intros [r HC]; inv HC. }
+      destruct v; try solve [right; intros [r HC]; inv HC].
+      left; exists i; constructor.
+  Qed.
+
+  Lemma match_states_final b s fs r :
+    match_states b s fs ->
+    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s r ->
+    final_state (faulty_semantics prog) fs r.
+  Proof.
+    intros Hmatch Hfin; inv Hfin.
+    inv Hmatch; inv STK; constructor.
+  Qed.
+
+  Lemma faulty_progress i s1 s2 :
+    match_states i s1 s2 ->
+    safe (@RTL.semantics Three VoteSemantics_Three prog) s1 ->
+    (exists r : Integers.Int.int, final_state (faulty_semantics prog) s2 r) \/
+      (exists (t : trace) (s2' : state (faulty_semantics prog)),
+          Step (faulty_semantics prog) s2 t s2').
+  Proof.
+    intros Hmatch Hsafe.
+    unfold safe in *.
+    destruct (final_state_dec s2).
+    { left; auto. }
+    right.
+    specialize (Hsafe _ (star_refl _ _ _)).
+    destruct Hsafe as [[r Hfin] | (t & s'' & Hstep)].
+    { exfalso; apply n; eexists; eauto.
+      eapply match_states_final; eauto. }
+    clear n.
+    exists t, {| fs_state := s''; fault := i |}.
+    destruct i.
+    - simpl.
+      destruct s2.
+      replace fault with true in *.
+      2: { eapply match_states_fault_inv; eauto. }
+      simpl in Hmatch.
+      constructor.
+  Admitted.
+
+  Lemma step_simulation {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    s2 t s2' b :
+    b = (vote_eqb VT Two) ->
+    Step (RTL.semantics prog) s2 t s2' ->
+    forall i (s1 : state (@RTL.semantics Three VoteSemantics_Three prog)),
+      match_states i s1 {| fs_state := s2; fault := b |} ->
+      safe (RTL.semantics prog) s1 ->
+      exists i' s1',
+        Plus (RTL.semantics prog) s1 t s1' /\
+          match_states i' s1' {| fs_state := s2'; fault := b |}.
+  Proof.
+    simpl; intros ? Hstep i s1 Hmatch Hsafe; subst.
+    exists i.
+    inv Hstep.
 
     (* exec_Inop *)
     - inv Hmatch.
-      inv Hstep3; simpl in *; try congruence.
-      split; auto.
-      rewrite H in H8; inv H8.
-      econstructor; eauto.
-      unfold match_rs in *.
-      destruct b; auto.
-      inv WC_FUN.
-      specialize (wc_fn_code _ _ H); inv wc_fn_code.
-      destruct RS as (c & Hc & Hdef).
-      exists c; split; auto.
+      eexists; split.
+      + econstructor.
+        2: { apply star_refl. }
+        2: { rewrite E0_right; reflexivity. }
+        eapply RTL.exec_Inop; eauto.
+      + econstructor; eauto.
+        inv WC_FUN.
+        apply wc_fn_code in H; inv H.
+        unfold match_rs in *.
+        destruct VT; simpl in *; auto.
+        destruct RS as (c & Hc & RS).
+        exists c; split; auto.
 
     (* exec_Iop *)
-    - inv Hmatch.
-      inv Hstep3; simpl in *; try congruence.
-      split; auto.
-      rewrite H in H9; inv H9.
-      econstructor; eauto.
-      + unfold match_rs in *.
-        destruct b.
-        * destruct RS as (c & Hc & RS).
-          exists c; split; auto.
-          intros r Hr.
-          assert (Hcol: col pc r <> Some c).
-          { intro HC; apply Hr; inv WC_FUN.
-            apply wc_fn_code in H; inv H; auto. }
-          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
-          { rewrite 2!Regmap.gss.
-            eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m2) in H0; auto.
-            - destruct H0 as (v' & Hop & Hv').
-              rewrite H10 in Hop; inv Hop; auto.
-            - eapply Forall_lessdef_list.
-              2: { apply RS. }
-              apply Forall_forall; intros r Hin.
-              intro HC; apply Hr.
-              inv WC_FUN; apply wc_fn_code in H; inv H.
-              rewrite Forall_forall in H6.
-              apply H6 in Hin.
-              rewrite <- Hin; auto. }
-          rewrite 2!Regmap.gso; auto.
-        * intro r.
-          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
-          { rewrite 2!Regmap.gss.
-            eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args0) (m2 := m2) in H0; auto.
-            - destruct H0 as (v' & Hop & Hv').
-              rewrite H10 in Hop; inv Hop; auto.
-            - eapply Forall_lessdef_list with (P := fun _ => True).
-              { apply Forall_forall; auto. }
-              intros r _; auto. }
-          rewrite 2!Regmap.gso; auto.
-
+    - admit.
     (* exec_Iload *)
-    - inv Hmatch.
-      inv Hstep3; simpl in *; try congruence.
-      split; auto.
-      rewrite H in H10; inv H10.
-      econstructor; eauto.
-      + unfold match_rs in *.
-        destruct b.
-        * destruct RS as (c & Hc & RS).
-          exists c; split; auto.
-          intros r Hr.
-          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst0); subst.
-          { rewrite 2!Regmap.gss.
-            eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args0) in H0.
-            - destruct H0 as (v' & Hop & Hv').
-              rewrite H11 in Hop; inv Hop; auto.
-              eapply Memory.Mem.loadv_extends in H1; eauto.
-              destruct H1 as (v2 & Hv2 & Hv2').
-              rewrite H12 in Hv2; inv Hv2; auto.
-            - eapply Forall_lessdef_list.
-              2: { apply RS. }
-              apply Forall_forall; intros r Hin.
-              inv WC_FUN; apply wc_fn_code in H; inv H.
-              rewrite Forall_forall in H5.
-              apply H5 in Hin; destruct Hin as [Hclear _].
-              intro HC; rewrite Hclear in HC; inv HC.
-              inv Hc. }
-          rewrite 2!Regmap.gso; auto.
-          destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0).
-          { inv WC_FUN; apply wc_fn_code in H; inv H.
-            rewrite Forall_forall in H5.
-            apply H5 in i; destruct i as [Hclear _].
-            apply RS; intro HC; rewrite Hclear in HC; inv HC; inv Hc. }
-          inv WC_FUN; apply wc_fn_code in H; inv H.
-          apply RS; intro HC; apply Hr.
-          apply H9; auto.
-        * intro r.
-          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst0); subst.
-          { rewrite 2!Regmap.gss.
-            eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args0) in H0.
-            - destruct H0 as (v' & Hop & Hv').
-              rewrite H11 in Hop; inv Hop; auto.
-              eapply Memory.Mem.loadv_extends in H1; eauto.
-              destruct H1 as (v2 & Hv2 & Hv2').
-              rewrite H12 in Hv2; inv Hv2; auto.
-            - eapply Forall_lessdef_list with (P := fun _ => True).
-              2: { intros; apply RS. }
-              apply Forall_forall; intros r Hin; auto. }
-          rewrite 2!Regmap.gso; auto.
-
+    - admit.
     (* exec_Istore *)
-    - inv Hmatch.
-      inv Hstep3; simpl in *; try congruence.
-      split; auto.
-      rewrite H in H10; inv H10.
-      econstructor; eauto.
-      + unfold match_rs in *.
-        destruct b.
-        * destruct RS as (c & Hc & RS).
-          exists c; split; auto.
-          intros r Hr.
-          destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0).
-          { inv WC_FUN; apply wc_fn_code in H; inv H.
-            rewrite Forall_forall in H9.
-            apply H9 in i; destruct i as [Hclear _].
-            apply RS; intro HC; rewrite Hclear in HC; inv HC; inv Hc. }
-          inv WC_FUN; apply wc_fn_code in H; inv H.
-          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r src0); subst.
-          { apply RS; intro HC.
-            unfold is_clear in *.
-            rewrite H6 in HC; inv HC; inv Hc. }
-          apply RS; intro HC; apply Hr.
-          apply H10; auto.
-        * intro r; apply RS.
-      + eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args0) in H0.
-        * destruct H0 as (v2 & Hop & Hv2).
-          rewrite Hop in H11; inv H11.
-          pose proof H1 as H1'.
-          eapply Memory.Mem.storev_extends with (v2 := rs2 # src0) in H1'.
-          2: { eauto. }
-          2: { eauto. }
-          2: { destruct b.
-               - destruct RS as (c & Hc & RS).
-                 apply RS.
-                 inv WC_FUN; apply wc_fn_code in H; inv H.
-                 intro HC. rewrite H5 in HC; inv HC; inv Hc.
-               - apply RS. }
-          destruct H1' as (m2' & Hstore & Hm2').
-          rewrite Hstore in H12; inv H12; auto.
-        * unfold match_rs in *.
-          destruct b.
-          { destruct RS as (c & Hc & RS).
-            eapply Forall_lessdef_list.
-            2: { apply RS. }
-            apply Forall_forall; intros r Hin.
-            inv WC_FUN; apply wc_fn_code in H; inv H.
-            rewrite Forall_forall in H9; apply H9 in Hin.
-            destruct Hin as [Hclear _].
-            rewrite Hclear; intro HC; inv HC; inv Hc. }
-          eapply Forall_lessdef_list with (P := fun _ => True).
-          2: { intros; apply RS. }
-          apply Forall_forall; auto.
-
+    - admit.
     (* exec_Icall *)
-    - inv Hmatch.
-      inv Hstep3; simpl in *; try congruence.
-      split; auto.
-      rewrite H in H9; inv H9.
-      assert (fd = fd0).
-      { destruct ros0.
-        - eapply find_function_lessdef in H10.
-          3: { apply H0. }
-          2: { unfold match_rs in RS.
-               destruct b.
-               - destruct RS as (c & Hc & RS).
-                 apply RS; intro HC.
-                 inv WC_FUN; apply wc_fn_code in H; inv H.
-                 destruct (H6 r eq_refl) as [Hclear _].
-                 rewrite Hclear in HC; inv HC; inv Hc.
-               - auto. }
-          assumption.
-        - simpl in *.
-          destruct (Genv.find_symbol (Genv.globalenv prog) i); try inv H0.
-          rewrite H10 in H3; inv H3; reflexivity. }
-      subst.
-      econstructor; eauto.
-      * constructor; auto.
-        econstructor; eauto.
-        unfold match_rs in *.
-        destruct b.
-        { destruct RS as (c & Hc & RS).
-          exists c; split; auto.
-          intros r Hr.
-          inv WC_FUN; apply wc_fn_code in H; inv H.
-          apply RS; intro HC; apply Hr.
-          destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0).
-          - rewrite Forall_forall in H8.
-            apply H8 in i.
-            destruct i as [Hclear _].
-            rewrite Hclear in HC; inv HC; inv Hc.
-          - destruct ros0.
-            + destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r0); subst.
-              * destruct (H6 r0 eq_refl) as [Hclear _].
-                rewrite Hclear in HC; inv HC; inv Hc.
-              * apply H11; auto.
-                intros ? H; inv H; auto.
-            + apply H11; auto.
-              intros; congruence. }
-        intro r; apply RS; intro HC; apply Hr.
-      * apply forall2_lessdef.
-        apply Forall_forall; intros r Hr.
-        unfold match_rs in RS.
-        destruct b; auto.
-        destruct RS as (c & Hc & RS).
-        apply RS; intro HC.
-        inv WC_FUN; apply wc_fn_code in H; inv H.
-        rewrite Forall_forall in H8.
-        apply H8 in Hr; destruct Hr as [Hclear _].
-        rewrite Hclear in HC; inv HC; inv Hc.
-
+    - admit.
     (* exec_Itailcall *)
-    - inv Hmatch.
-      inv Hstep3; simpl in *; try congruence.
-      split; auto.
-      rewrite H in H10; inv H10.
-      assert (fd = fd0).
-      { destruct ros0.
-        - eapply find_function_lessdef in H11.
-          3: { apply H0. }
-          2: { unfold match_rs in RS.
-               destruct b.
-               - destruct RS as (c & Hc & RS).
-                 apply RS; intro HC.
-                 inv WC_FUN; apply wc_fn_code in H; inv H.
-                 specialize (H5 r eq_refl).
-                 rewrite H5 in HC; inv HC; inv Hc.
-               - auto. }
-          assumption.
-        - simpl in *.
-          destruct (Genv.find_symbol (Genv.globalenv prog) i); try inv H0.
-          rewrite H11 in H4; inv H4; reflexivity. }
-      subst.
-      econstructor; eauto.
-      * apply forall2_lessdef.
-        apply Forall_forall; intros r Hr.
-        unfold match_rs in RS.
-        destruct b; auto.
-        destruct RS as (c & Hc & RS).
-        apply RS; intro HC.
-        inv WC_FUN; apply wc_fn_code in H; inv H.
-        rewrite Forall_forall in H7.
-        apply H7 in Hr; rewrite Hr in HC; inv HC; inv Hc.
-      * eapply Memory.Mem.free_parallel_extends in H2.
-        2: { eauto. }
-        destruct H2 as (m2' & Hfree & Hm2').
-        rewrite Hfree in H13; inv H13; auto.
-
-(* (** External calls must be receptive to changes of traces by another, matching trace. *) *)
-(*   ec_receptive: *)
-(*     forall ge vargs m t1 vres1 m1 t2, *)
-(*     sem ge vargs m t1 vres1 m1 -> match_traces ge t1 t2 -> *)
-(*     exists vres2, exists m2, sem ge vargs m t2 vres2 m2; *)
-
+    - admit.
     (* exec_Ibuiltin *)
-    - inv Hmatch.
-      inv Hstep3; simpl in *; try congruence.
-      (* rewrite H in H10; inv H10. *)
-      (* generalize (@external_call_spec Three VoteSemantics_Three ef0). *)
-      (* intros [_ _ _ _ _ ? _ _ ? _]. *)
-      
-      (* destruct ef0; simpl in *. *)
-      (* simpl in *. *)
-      (* + admit. *)
-      (* + admit. *)
-      (* + admit. *)
-      (* + inv H1. *)
-      (*   inv H2. *)
-      (*   inv H12. *)
-      (*   inv H2. *)
-
-      (* split; auto. *)
-      (* { destruct ef0. *)
-      (* assert (fd = fd0). *)
-      (* { destruct ros0. *)
-      (*   - eapply find_function_lessdef in H10. *)
-      (*     3: { apply H0. } *)
-      (*     2: { unfold match_rs in RS. *)
-      (*          destruct b. *)
-      (*          - destruct RS as (c & Hc & RS). *)
-      (*            apply RS; intro HC. *)
-      (*            inv WC_FUN; apply wc_fn_code in H; inv H. *)
-      (*            destruct (H6 r eq_refl) as [Hclear _]. *)
-      (*            rewrite Hclear in HC; inv HC; inv Hc. *)
-      (*          - auto. } *)
-      (*     assumption. *)
-      (*   - simpl in *. *)
-      (*     destruct (Genv.find_symbol (Genv.globalenv prog) i); try inv H0. *)
-      (*     rewrite H10 in H3; inv H3; reflexivity. } *)
-      (* subst. *)
-      (* econstructor; eauto. *)
-      (* * constructor; auto. *)
-      (*   econstructor; eauto. *)
-      (*   unfold match_rs in *. *)
-      (*   destruct b. *)
-      (*   { destruct RS as (c & Hc & RS). *)
-      (*     exists c; split; auto. *)
-      (*     intros r Hr. *)
-      (*     inv WC_FUN; apply wc_fn_code in H; inv H. *)
-      (*     apply RS; intro HC; apply Hr. *)
-      (*     destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0). *)
-      (*     - rewrite Forall_forall in H8. *)
-      (*       apply H8 in i. *)
-      (*       destruct i as [Hclear _]. *)
-      (*       rewrite Hclear in HC; inv HC; inv Hc. *)
-      (*     - destruct ros0. *)
-      (*       + destruct (DecidableTypeEx.Positive_as_DT.eq_dec r r0); subst. *)
-      (*         * destruct (H6 r0 eq_refl) as [Hclear _]. *)
-      (*           rewrite Hclear in HC; inv HC; inv Hc. *)
-      (*         * apply H11; auto. *)
-      (*           intros ? H; inv H; auto. *)
-      (*       + apply H11; auto. *)
-      (*         intros; congruence. } *)
-      (*   intro r; apply RS; intro HC; apply Hr. *)
-      (* * apply forall2_lessdef. *)
-      (*   apply Forall_forall; intros r Hr. *)
-      (*   unfold match_rs in RS. *)
-      (*   destruct b; auto. *)
-      (*   destruct RS as (c & Hc & RS). *)
-      (*   apply RS; intro HC. *)
-      (*   inv WC_FUN; apply wc_fn_code in H; inv H. *)
-      (*   rewrite Forall_forall in H8. *)
-      (*   apply H8 in Hr; destruct Hr as [Hclear _]. *)
-      (*   rewrite Hclear in HC; inv HC; inv Hc. *)
-      admit.
-
+    - admit.
     (* exec_Icond *)
     - admit.
     (* exec_Ijumptable *)
@@ -725,838 +279,63 @@ Section TOLERANCE.
     - admit.
   Admitted.
 
-  Theorem faulty_step_simulation s t s' fs t' fs' :
-    match_states s fs ->
-    Step (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    Step (faulty_semantics prog) fs t' fs' ->
-    t = t' /\ match_states s' fs'.
+  Lemma faulty_simulation s2 t s2' :
+    Step (faulty_semantics prog) s2 t s2' ->
+    forall i (s1 : state (@RTL.semantics Three VoteSemantics_Three prog)),
+      match_states i s1 s2 ->
+      safe (RTL.semantics prog) s1 ->
+      exists i' s1',
+        (Plus (RTL.semantics prog) s1 t s1' \/
+           Star (RTL.semantics prog) s1 t s1' /\ fault_order i' i) /\
+          match_states i' s1' s2'.
   Proof.
-    intros Hmatch Hstep Hfstep.
-    inv Hfstep.
-  (*   eapply two_three_step_simulation in Hmatch; eauto. *)
-  (*   destruct Hmatch as [? Hmatch]; subst. *)
-  (*   split; auto. *)
-  (*   eapply zap_preserves_match_states; eauto. *)
-    (* Qed. *)
-  Admitted.
-
-  Corollary faulty_star_step_exists s t s' fs :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    exists fs', Star (faulty_semantics prog) fs t fs' /\ match_states s' fs'.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs.
-    induction Hstar; intros fs Hmatch.
-    { exists fs; split; auto; apply star_refl. }
-    subst.
-    pose proof H as Hstep.
-    eapply faulty_step_exists in Hstep; eauto.
-    destruct Hstep as (t' & fs' & Hfstep).
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    eapply IHHstar in Hmatch'.
-    destruct Hmatch' as (fs'' & Hstar'' & Hmatch'').
-    exists fs''; split; auto.
-    eapply star_step; eauto.
+    intros Hstep i s1 Hmatch Hsafe.
+    inv Hstep.
+    - (* Fault hasn't occurred yet, may happen here after this step *)
+      eapply (@step_simulation Three VoteSemantics_Three) in STEP; eauto.
+      destruct STEP as (i' & s1' & Hstep & Hmatch').
+      exists b, s1'; split.
+      + left; auto.
+      + eapply maybe_zap_preserves_match_states; eauto.
+        replace i' with false in *.
+        2: { apply match_states_fault_inv in Hmatch'; auto. }
+        assumption.
+    - (* Fault has occurred already *)
+      eapply step_simulation in STEP; eauto.
+      destruct STEP as (i' & s1' & Hplus & Hmatch').
+      exists i', s1'; split; auto.
   Qed.
 
-  Lemma initial_states_match s fs :
-    initial_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
-    initial_state (faulty_semantics prog) fs ->
-    match_states s fs.
+  Theorem faulty_backward_simulation :
+    backward_simulation
+      (@RTL.semantics Builtins2.Three VoteSemantics_Three prog)
+      (faulty_semantics prog).
   Proof.
-    simpl; intros Hs Hfs.
-    inv Hs; inv Hfs; inv H3.
-    unfold ge0 in *.
-    unfold ge1 in *.
-    unfold ge0 in *.
-    unfold ge1 in *.
-    rewrite H0 in H5; inv H5.
-    rewrite H in H4; inv H4.
-    rewrite H1 in H6; inv H6.
-    constructor; auto.
-    apply Memory.Mem.extends_refl.
-  Qed.
-
-  Lemma final_state_faulty_nostep s fs r :
-    match_states s fs ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s r ->
-    Nostep (faulty_semantics prog) fs.
-  Proof.
-    intros Hmatch Hfin.
-    inv Hfin; inv Hmatch.
-    intros t fs' Hfstep.
-    inv Hfstep; inv STK; inv STEP.
-  Qed.
-
-  Lemma final_state_nostep s fs r :
-    match_states s fs ->
-    final_state (faulty_semantics prog) fs r ->
-    Nostep (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s.
-  Proof.
-    intros Hmatch Hfin t s' Hstep.
-    inv Hfin; inv Hmatch; simpl in *; try congruence.
-    inv H0; inv STK; inv LESSDEF; inv Hstep.
-  Qed.
-
-  Lemma star_final_prog1_not_forever_silent t s s' fs r :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
-    Forever_silent (faulty_semantics prog) fs ->
-    False.
-  Proof.
-    intros H Hstar.
-    revert H.
-    revert fs r.
-    induction Hstar; intros fs r Hmatch Hfin Hsil; inv Hsil.
-    - eapply final_state_faulty_nostep in Hfin; eauto.
-      eapply Hfin; eauto.
-    - eapply faulty_step_simulation in H; eauto.
-      destruct H as [? Hmatch']; subst.
-      eapply IHHstar; eauto.
-  Qed.
-
-  Lemma terminates_diverges_False t t' s s' fs fs' r :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
-    Star (faulty_semantics prog) fs t' fs' ->
-    Forever_silent (faulty_semantics prog) fs' ->
-    False.
-  Proof.
-    intros Hmatch Hstar Hfin Hstar' Hsil.
-    revert Hmatch Hstar Hfin Hsil.
-    revert s t s' r.
-    induction Hstar'; intros s0 t' s' r Hmatch Hstar Hfin Hsil.
-    - eapply star_final_prog1_not_forever_silent; eauto.
-    - inv Hstar.
-      + eapply final_state_faulty_nostep in Hfin; eauto.
-        eapply Hfin; eauto.
-      + eapply faulty_step_simulation in H; eauto.
-        destruct H as [? Hmatch']; subst.
-        eapply IHHstar'; eauto.
-  Qed.
-
-  (* This isn't true because RTL.final_state requires that the result
-     value be a Vint, but here it could be Vundef. *)
-  (* Lemma faulty_final_state_final s fs r : *)
-  (*   match_states col s fs -> *)
-  (*   final_state (faulty_semantics prog2) fs r -> *)
-  (*   final_state (RTL.semantics prog1) s r. *)
-  (* Proof. *)
-  (*   intros Hmatch Hfin. *)
-  (*   inv Hfin; inv Hmatch; simpl in *; try congruence. *)
-  (*   inv H0; inv STK. *)    
-
-  Lemma star_final_prog2_not_silent t s fs fs' r :
-    match_states s fs ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
-    Star (faulty_semantics prog) fs t fs' ->
-    final_state (faulty_semantics prog) fs' r ->
-    False.
-  Proof.
-    intros Hmatch Hsil Hstar.
-    revert Hmatch Hsil.
-    revert s r.
-    induction Hstar; intros s0 r Hmatch Hsil Hfin; inv Hsil.
-    - eapply final_state_nostep in Hfin; eauto.
-      eapply Hfin; eauto.
-    - eapply faulty_step_simulation in H1; eauto.
-      destruct H1 as [? Hmatch']; subst.
-      eapply IHHstar; eauto.
-  Qed.
-
-  Lemma diverges_terminates_False t t' s s' fs fs' r :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' ->
-    Star (faulty_semantics prog) fs t' fs' ->
-    final_state (faulty_semantics prog) fs' r ->
-    False.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs t' fs' r.
-    induction Hstar; intros fs t' fs' r Hmatch Hsil Hstar' Hfin.
-    - eapply star_final_prog2_not_silent; eauto.
-    - inv Hstar'.
-      + eapply final_state_nostep in Hfin; eauto.
-        eapply Hfin; eauto.
-      + eapply faulty_step_simulation in H1; eauto.
-        destruct H1 as [? Hmatch']; subst.
-        eapply IHHstar; eauto.
-  Qed.
-
-  Lemma reacts_terminates_False t s fs fs' r T :
-    match_states s fs ->
-    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
-    Star (faulty_semantics prog) fs t fs' ->
-    final_state (faulty_semantics prog) fs' r ->
-    False.
-  Proof.
-    intros Hmatch Hreact Hstar.
-    revert Hmatch Hreact.
-    revert s r T.
-    induction Hstar; intros s0 r T Hmatch Hreact Hfin.
-    { inv Hreact.
-      inv H; try congruence.
-      eapply final_state_nostep in Hfin; eauto.
-      eapply Hfin; eauto. }
-    subst.
-    inv Hreact.
-    inv H0; try congruence.
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    eapply IHHstar; eauto.
-    eapply star_forever_reactive; eauto.
-  Qed.
-
-  Lemma star_silent_trace s t s' fs :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' -> 
-    Forever_silent (faulty_semantics prog) fs ->
-    t = E0.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs.
-    induction Hstar; intros fs Hmatch Hsil; auto.
-    inv Hsil.
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst; simpl.
-    eapply IHHstar; eauto.
-  Qed.
-
-  Lemma reactive_not_silent s fs T :
-    match_states s fs ->
-    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
-    Forever_silent (faulty_semantics prog) fs ->
-    False.
-  Proof.
-    intros Hmatch Hreact Hsil.
-    inv Hreact.
-    eapply star_silent_trace in H; eauto.
-  Qed.
-
-  Lemma reacts_diverges_False t s fs fs' T :
-    match_states s fs ->
-    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
-    Star (faulty_semantics prog) fs t fs' ->
-    Forever_silent (faulty_semantics prog) fs' ->
-    False.
-  Proof.
-    intros Hmatch Hreact Hstar.
-    revert Hmatch Hreact.
-    revert s T.
-    induction Hstar; intros s0 T Hmatch Hreact Hfin.
-    { eapply reactive_not_silent; eauto. }
-    subst.
-    inv Hreact.
-    inv H0; try congruence.
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    eapply IHHstar; eauto.
-    eapply star_forever_reactive; eauto.
-  Qed.
-
-  (* (* Can't do other direction because prog1 can get stuck. *) *)
-  (* Lemma match_states_forever_silent s fs : *)
-  (*   match_states s fs -> *)
-  (*   Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s -> *)
-  (*   Forever_silent (faulty_semantics prog) fs. *)
-  (* Proof. *)
-  (*   revert s fs. *)
-  (*   cofix CH. *)
-  (*   intros s fs Hmatch Hsil. *)
-  (*   inv Hsil. *)
-  (*   pose proof H as Hstep. *)
-  (*   eapply faulty_step_exists in Hstep; eauto. *)
-  (*   destruct Hstep as (t' & fs' & Hfstep). *)
-  (*   eapply faulty_step_simulation in H; eauto. *)
-  (*   destruct H as [? Hmatch']; subst. *)
-  (*   econstructor; eauto. *)
-  (* Qed. *)
-
-  (* (* Can't do other direction because prog1 can get stuck. *) *)
-  (* Lemma match_states_forever_reactive s fs T : *)
-  (*   match_states s fs -> *)
-  (*   Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T -> *)
-  (*   Forever_reactive (faulty_semantics prog) fs T. *)
-  (* Proof. *)
-  (*   revert s fs T. *)
-  (*   cofix CH. *)
-  (*   intros s fs T Hmatch Hreact. *)
-  (*   inv Hreact. *)
-  (*   pose proof H as Hstar. *)
-  (*   eapply faulty_star_step_exists in Hstar; eauto. *)
-  (*   destruct Hstar as (t' & fs' & Hstar'). *)
-  (*   econstructor; eauto. *)
-  (* Qed. *)
-
-  Lemma star_faulty_silent_trace s fs t fs' :
-    match_states s fs ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
-    Star (faulty_semantics prog) fs t fs' ->
-    t = E0.
-  Proof.
-    intros Hmatch Hsil Hstar.
-    revert Hmatch Hsil.
-    revert s.
-    induction Hstar; intros s0 Hmatch Hsil; auto.
-    inv Hsil.
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst; simpl.
-    eapply IHHstar; eauto.
-  Qed.
-
-  Lemma silent_not_reactive s fs T :
-    match_states s fs ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
-    Forever_reactive (faulty_semantics prog) fs T ->
-    False.
-  Proof.
-    intros Hmatch Hsil Hreact.
-    inv Hreact.
-    eapply star_faulty_silent_trace in H; eauto.
-  Qed.
-
-  Lemma star_silent_not_reactive t s s' fs T :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' ->
-    Forever_reactive (faulty_semantics prog) fs T ->
-    False.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs T.
-    induction Hstar; intros fs T Hmatch Hsil Hreact.
-    - eapply silent_not_reactive; eauto.
-    - subst.
-      inv Hreact.
-      inv H0; try congruence.
-      eapply faulty_step_simulation in H3; eauto.
-      destruct H3 as [? Hmatch']; subst.
-      eapply IHHstar; eauto.
-      eapply star_forever_reactive; eauto.
-  Qed.
-
-  Lemma star_final_not_reactive t s s' fs r T :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
-    Forever_reactive (faulty_semantics prog) fs T ->
-    False.
-  Proof.
-    intros H Hstar.
-    revert H.
-    revert fs r T.
-    induction Hstar; intros fs r T Hmatch Hfin Hreact; inv Hreact.
-    - inv H; try congruence.
-      eapply final_state_faulty_nostep in Hfin; eauto.
-      eapply Hfin; eauto.
-    - inv H1; try congruence.
-      eapply faulty_step_simulation in H; eauto.
-      destruct H as [? Hmatch']; subst.
-      eapply IHHstar; eauto.
-      eapply star_forever_reactive; eauto.
-  Qed.
-
-  Lemma match_states_final s fs r :
-    match_states s fs ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s r ->
-    final_state (faulty_semantics prog) fs r.
-  Proof.
-    intros Hmatch Hfin; inv Hfin.
-    inv Hmatch; inv STK; inv LESSDEF.
+    apply Backward_simulation with (order := fault_order)
+                                   (match_states := match_states).
     constructor.
+    - (* bsim_order_wf *)
+      apply well_founded_fault_order.
+    - (* bsim_initial_states_exist *)
+      intros s Hs.
+      exists {| fs_state := s; fault := false |}.
+      constructor; auto.
+    - (* bsim_match_initial_states *)
+      intros s1 [s2 b] Hs1 Hs2; inv Hs2.
+      exists false, s2; split; auto.
+      eapply init_match_states_refl; eauto.
+    - (* bsim_match_final_states *)
+      intros b s1 [s2 b'] r Hmatch Hsafe Hfin.
+      inv Hfin; simpl in *; subst.
+      inv Hmatch; inv STK; eexists; split.
+      + apply star_refl.
+      + constructor.
+    - (* bsim_progress *)
+      apply faulty_progress.
+    - (* bsim_simulation *)
+      apply faulty_simulation.
+    - (* bsim_public_preserved *)
+      intros; reflexivity.
   Qed.
-
-  Lemma faulty_final_state_nostep fs r :
-    final_state (faulty_semantics prog) fs r ->
-    Nostep (faulty_semantics prog) fs.
-  Proof.
-    intro Hfin; inv Hfin.
-    destruct fs; simpl in *; rewrite <- H0.
-    intros t fs' Hstep; inv Hstep; inv STEP.
-  Qed.
-
-  Lemma star_final_nostep_final s t s' r fs :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
-    Nostep (faulty_semantics prog) fs ->
-    final_state (faulty_semantics prog) fs r.
-  Proof.
-    intros Hmatch Hstar Hfin Hnostep.
-    inv Hstar.
-    { eapply match_states_final; eauto. }
-    eapply faulty_step_exists in H; eauto.
-    destruct H as (t' & fs' & Hfstep).
-    exfalso; eapply Hnostep; eauto.
-  Qed.
-
-  Lemma star_final_star_nostep_final s t s' r fs t' fs' :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
-    Star (faulty_semantics prog) fs t' fs' ->
-    Nostep (faulty_semantics prog) fs' ->
-    final_state (faulty_semantics prog) fs' r.
-  Proof.
-    intros Hmatch Hstar Hfin Hstar'.
-    revert Hmatch Hstar Hfin.
-    revert s t s' r.
-    induction Hstar'; intros s0 t0 s' r Hmatch Hstar Hfin Hnostep.
-    { eapply star_final_nostep_final; eauto. }
-    inv Hstar.
-    - clear IHHstar'.
-      exfalso.
-      eapply match_states_final in Hfin; eauto.
-      eapply faulty_final_state_nostep; eauto.
-    - eapply IHHstar'; auto.
-      3: { eauto. }
-      2: { eauto. }
-      eapply faulty_step_simulation; eauto.
-  Qed.
-
-  Lemma star_final_final s t s' r fs r' :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
-    final_state (faulty_semantics prog) fs r' ->
-    t = E0 /\ r = r'.
-  Proof.
-    intros Hmatch Hstar Hfin Hfin'.
-    inv Hstar.
-    - split; auto.
-      inv Hfin; inv Hfin'; inv Hmatch.
-      inv H0; inv LESSDEF; reflexivity.
-    - exfalso; eapply final_state_nostep; eauto.
-  Qed.
-
-  Lemma star_final_star_final s t s' r fs t' fs' r' :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    final_state (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' r ->
-    Star (faulty_semantics prog) fs t' fs' ->
-    final_state (faulty_semantics prog) fs' r' ->
-    t = t' /\ r = r'.
-  Proof.
-    intros Hmatch Hstar Hfin Hstar'.
-    revert Hmatch Hstar Hfin.
-    revert s t s' r r'.
-    induction Hstar'; intros s0 t' s' r r' Hmatch Hstar Hfin Hfin'.
-    { eapply star_final_final; eauto. }
-    inv Hstar.
-    - exfalso; eapply final_state_faulty_nostep; eauto.
-    - cut (t3 = t2 /\ r = r').
-      { intros [? ?]; subst; split; auto; f_equal.
-        eapply faulty_step_simulation; eauto. }
-      eapply IHHstar'; eauto.
-      eapply faulty_step_simulation; eauto.
-  Qed.
-
-  Lemma star_silent_star_silent s t s' fs t' fs' :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' ->
-    Star (faulty_semantics prog) fs t' fs' ->
-    Forever_silent (faulty_semantics prog) fs' ->
-    t = t'.
-  Proof.
-    intros Hmatch Hstar Hsil Hstar'.
-    revert Hmatch Hstar Hsil.
-    revert s t s'.
-    induction Hstar'; intros s0 t' s' Hmatch Hstar Hsil Hsil'.
-    { eapply star_silent_trace; eauto. }
-    subst.
-    inv Hstar.
-    - inv Hsil.
-      eapply faulty_step_simulation in H0; eauto.
-      destruct H0 as [? Hmatch']; subst; simpl.
-      eapply IHHstar'; eauto.
-      apply star_refl.
-    - eapply faulty_step_simulation in H0; eauto.
-      destruct H0 as [? Hmatch']; subst; f_equal.
-      eapply IHHstar'; eauto.
-  Qed.
-
-  Lemma silent_not_star_stuck s fs t fs' :
-    match_states s fs ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s ->
-    Star (faulty_semantics prog) fs t fs' ->
-    Nostep (faulty_semantics prog) fs' ->
-    False.
-  Proof.
-    intros Hmatch Hsil Hstar.
-    revert Hmatch Hsil.
-    revert s.
-    induction Hstar; intros s0 Hmatch Hsil Hnostep.
-    { inv Hsil.
-      eapply faulty_step_exists in H; eauto.
-      destruct H as (t' & fs' & Hfstep).
-      eapply Hnostep; eauto. }
-    subst.
-    inv Hsil.
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    eapply IHHstar; eauto.
-  Qed.
-
-  Lemma star_silent_star_not_stuck s t s' fs t' fs' :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    Forever_silent (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s' ->
-    Star (faulty_semantics prog) fs t' fs' ->
-    Nostep (faulty_semantics prog) fs' ->
-    False.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs t' fs'.
-    induction Hstar; intros fs t' fs' Hmatch Hsil Hstar' Hnostep.
-    { eapply silent_not_star_stuck; eauto. }
-    subst.
-    inv Hstar'.
-    { eapply faulty_step_exists in H; eauto.
-      destruct H as (t' & fs'' & Hfstep).
-      eapply Hnostep; eauto. }
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    eapply IHHstar; eauto.
-  Qed.
-
-  Lemma reactive_star_not_stuck s fs t' fs' T :
-    match_states s fs ->
-    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T ->
-    Star (faulty_semantics prog) fs t' fs' ->
-    Nostep (faulty_semantics prog) fs' ->
-    False.
-  Proof.
-    intros Hmatch Hreact Hstar.
-    revert Hmatch Hreact.
-    revert s T.
-    induction Hstar; intros s0 T Hmatch Hreact Hnostep.
-    { inv Hreact.
-      inv H; try congruence.
-      eapply faulty_step_exists in H2; eauto.
-      destruct H2 as (t' & fs' & Hfstep).
-      eapply Hnostep; eauto. }
-    subst.
-    inv Hreact.
-    inv H0; try congruence.
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    eapply IHHstar; eauto.
-    eapply star_forever_reactive; eauto.
-  Qed.
-
-  Lemma traceinf_prefix_cons e t T :
-    traceinf_prefix t T ->
-    traceinf_prefix (e :: t) (Econsinf e T).
-  Proof.
-    intro Ht.
-    unfold traceinf_prefix; simpl.
-    destruct Ht as [T' Ht].
-    exists T'; f_equal; auto.
-  Qed.    
-
-  Lemma prefixes_comparable_traceinf_sim T1 T2 :
-    (forall t1 t2, traceinf_prefix t1 T1 ->
-                   traceinf_prefix t2 T2 ->
-                   trace_prefix t1 t2 \/ trace_prefix t2 t1) ->
-    traceinf_sim T1 T2.
-  Proof.
-    revert T1 T2.
-    cofix CH.
-    intros T1 T2 Ht.
-    destruct T1, T2.
-    replace e0 with e in *.
-    2: { specialize (Ht [e] [e0]).
-         assert (H0: traceinf_prefix [e] (Econsinf e T1)).
-         { exists T1; reflexivity. }
-         assert (H1: traceinf_prefix [e0] (Econsinf e0 T2)).
-         { exists T2; reflexivity. }
-         destruct (Ht H0 H1) as [Ht' | Ht'].
-         - destruct Ht' as [t' Ht'].
-           inv Ht'; auto.
-         - destruct Ht' as [t' Ht'].
-           inv Ht'; auto. }
-    constructor.
-    apply CH; auto.
-    intros t1 t2 Ht1 Ht2.
-    specialize (Ht (e :: t1) (e :: t2)).
-    eapply traceinf_prefix_cons in Ht1.
-    eapply traceinf_prefix_cons in Ht2.
-    destruct (Ht Ht1 Ht2) as [Ht' | Ht'].
-    - destruct Ht' as [T' Ht'].
-      simpl in Ht'.
-      inv Ht'.
-      left; exists T'; reflexivity.
-    - destruct Ht' as [T' Ht'].
-      simpl in Ht'.
-      inv Ht'.
-      right; exists T'; reflexivity.
-  Qed.
-
-  Lemma star_prefix s s' fs fs' t1 t2 :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t1 s' ->
-    Star (faulty_semantics prog) fs t2 fs' ->
-    trace_prefix t1 t2 \/ trace_prefix t2 t1.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs fs' t2.
-    induction Hstar; intros fs fs' t2' Hmatch Hstar'.
-    { left; eexists; reflexivity. }
-    subst.
-    inv Hstar'.
-    { right; eexists; reflexivity. }
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    cut (trace_prefix t2 t3 \/ trace_prefix t3 t2).
-    { intros [[t' H] | [t' H]]; subst.
-      - left; eexists; rewrite Eapp_assoc; reflexivity.
-      - right; eexists; rewrite Eapp_assoc; reflexivity. }
-    eapply IHHstar; eauto.
-  Qed.
-
-  Lemma trace_cub_comparable t1 t1' t2 :
-    trace_prefix t1 t2 ->
-    trace_prefix t1' t2 ->
-    trace_prefix t1 t1' \/ trace_prefix t1' t1.
-  Proof.
-    unfold trace_prefix.
-    intros [t ?]; subst.
-    intros [t' ?]; subst.
-    revert H.
-    revert t1' t t'.
-    induction t1; simpl; intros t1' t t' Heq.
-    { subst; left; exists t1'; reflexivity. }
-    destruct t1'; simpl in *.
-    { subst; right; exists (a :: t1); reflexivity. }
-    inv Heq.
-    apply IHt1 in H1.
-    destruct H1 as [[t'' ?] | [t'' ?]]; subst.
-    - left; eexists; reflexivity.
-    - right; eexists; reflexivity.
-  Qed.
-
-  Lemma trace_prefix_trans t1 t2 t3 :
-    trace_prefix t1 t2 ->
-    trace_prefix t2 t3 ->
-    trace_prefix t1 t3.
-  Proof.
-    intros [t ?] [t' ?]; subst.
-    eexists; rewrite Eapp_assoc; reflexivity.
-  Qed.
-
-  Lemma reactive_reactive s fs T1 T2 :
-    match_states s fs ->
-    Forever_reactive (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s T1 ->
-    Forever_reactive (faulty_semantics prog) fs T2 ->
-    traceinf_sim T1 T2.
-  Proof.
-    intros Hmatch Hreact Hreact'.
-    apply prefixes_comparable_traceinf_sim.
-    intros t1 t2 Ht1 Ht2.
-    eapply reactive_prefix_exists_star in Hreact; eauto.
-    eapply reactive_prefix_exists_star in Hreact'; eauto.
-    destruct Hreact as (s' & t1' & Hstar & Ht1').
-    destruct Hreact' as (fs' & t2' & Hstar' & Ht2').
-    pose proof Hstar as H.
-    eapply star_prefix in H; eauto.
-    destruct H as [H | H].
-    - eapply trace_cub_comparable.
-      2: { eauto. }
-      eapply trace_prefix_trans; eauto.
-    - eapply trace_cub_comparable; eauto.
-      eapply trace_prefix_trans; eauto.
-  Qed.
-
-  Lemma star_final_state_trace_prefix s s' fs fs' t1 t2 r :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t1 s' ->
-    Star (faulty_semantics prog) fs t2 fs' ->
-    final_state (faulty_semantics prog) fs' r ->
-    trace_prefix t1 t2.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs fs' t2 r.
-    induction Hstar; intros fs fs' t2' r Hmatch Hstar' Hfin.
-    { eexists; reflexivity. }
-    subst.
-    inv Hstar'.
-    { eapply faulty_step_exists in H; eauto.
-      destruct H as (t' & fs'' & Hfstep).
-      exfalso; eapply faulty_final_state_nostep; eauto. }
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    apply trace_prefix_app.
-    eapply IHHstar; eauto.
-  Qed.
-
-  Lemma star_silent_trace_prefix s s' fs fs' t1 t2 :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t1 s' ->
-    Star (faulty_semantics prog) fs t2 fs' ->
-    Forever_silent (faulty_semantics prog) fs' ->
-    trace_prefix t1 t2.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs fs' t2.
-    induction Hstar; intros fs fs' t2' Hmatch Hstar' Hsil.
-    { eexists; reflexivity. }
-    subst.
-    inv Hstar'.
-    { inv Hsil.
-      eapply faulty_step_simulation in H; eauto.
-      destruct H as [? Hmatch']; subst; simpl.
-      eapply IHHstar; eauto.
-      apply star_refl. }
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    apply trace_prefix_app.
-    eapply IHHstar; eauto.
-  Qed.
-
-  Lemma star_nostep_trace_prefix s s' fs fs' t1 t2 :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t1 s' ->
-    Star (faulty_semantics prog) fs t2 fs' ->
-    Nostep (faulty_semantics prog) fs' ->
-    trace_prefix t1 t2.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs fs' t2.
-    induction Hstar; intros fs fs' t2' Hmatch Hstar' Hnostep.
-    { eexists; reflexivity. }
-    subst.
-    inv Hstar'.
-    { eapply faulty_step_exists in H; eauto.
-      destruct H as (t' & fs'' & Hfstep).
-      exfalso; eapply Hnostep; eauto. }
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    apply trace_prefix_app.
-    eapply IHHstar; eauto.
-  Qed.
-
-  Lemma star_reactive_trace_prefix s s' fs t T :
-    match_states s fs ->
-    Star (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s t s' ->
-    Forever_reactive (faulty_semantics prog) fs T ->
-    traceinf_prefix t T.
-  Proof.
-    intros Hmatch Hstar.
-    revert Hmatch.
-    revert fs T.
-    induction Hstar; intros fs T Hmatch Hreact.
-    { eexists; reflexivity. }
-    subst.
-    inv Hreact.
-    inv H0; try congruence.
-    eapply faulty_step_simulation in H; eauto.
-    destruct H as [? Hmatch']; subst.
-    rewrite Eappinf_assoc.
-    apply traceinf_prefix_app.
-    eapply IHHstar; eauto.
-    eapply star_forever_reactive; eauto.
-  Qed.
-
-  Lemma rtl_state_behaves_faulty_improves (s : RTL.state) (fs : fstate) beh1 beh2 :
-    RTL.initial_state prog s ->
-    initial_state (faulty_semantics prog) fs ->
-    state_behaves (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) s beh1 ->
-    state_behaves (faulty_semantics prog) fs beh2 ->
-    behavior_improves beh1 beh2.
-  Proof.
-    intros Hinit1 Hinit2 Hbeh1 Hbeh2.
-    generalize (initial_states_match _ _ Hinit1 Hinit2); intro Hmatch.
-    inv Hbeh1.
-    - left; inv Hbeh2.
-      + f_equal; eapply star_final_star_final; eauto.
-      + exfalso; eapply terminates_diverges_False; eauto.
-      + exfalso; eapply star_final_not_reactive; eauto.
-      + exfalso; eapply H3, star_final_star_nostep_final; eauto.
-    - left; inv Hbeh2.
-      + exfalso; eapply diverges_terminates_False; eauto.
-      + f_equal; eapply star_silent_star_silent; eauto.
-      + exfalso; eapply star_silent_not_reactive; eauto.
-      + exfalso; eapply star_silent_star_not_stuck; eauto.
-    - left; inv Hbeh2.
-      + exfalso; eapply reacts_terminates_False; eauto.
-      + exfalso; eapply reacts_diverges_False; eauto.
-      + f_equal; eapply reactive_reactive in H; eauto.
-        apply traceinf_sim_ext; assumption.
-      + exfalso; eapply reactive_star_not_stuck; eauto.
-    - right.
-      exists t; split; auto.
-      pose proof H as Hstar.
-      eapply faulty_star_step_exists in Hstar; eauto.
-      destruct Hstar as (fs' & Hstar' & Hmatch').
-      destruct beh2.
-      + assert (Hpre: trace_prefix t t0).
-        { clear Hmatch'; inv Hbeh2.
-          eapply star_final_state_trace_prefix; eauto. }
-        destruct Hpre as [t' ?]; subst.
-        exists (Terminates t' i); reflexivity.
-      + assert (Hpre: trace_prefix t t0).
-        { clear Hmatch'; inv Hbeh2.
-          eapply star_silent_trace_prefix; eauto. }
-        destruct Hpre as [t' ?]; subst.
-        exists (Diverges t'); reflexivity.
-      + assert (Hpre: traceinf_prefix t t0).
-        { clear Hmatch'; inv Hbeh2.
-          eapply star_reactive_trace_prefix; eauto. }
-        destruct Hpre as [t' ?]; subst.
-        exists (Reacts t'); reflexivity.
-      + assert (Hpre: trace_prefix t t0).
-        { clear Hmatch'; inv Hbeh2.
-          eapply star_nostep_trace_prefix; eauto. }
-        destruct Hpre as [t' ?]; subst.
-        exists (Goes_wrong t'); reflexivity.
-  Qed.
-
-  Theorem faulty_behavior_improves beh1 beh2 :
-    program_behaves (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) beh1 ->
-    program_behaves (faulty_semantics prog) beh2 ->
-    behavior_improves beh1 beh2.
-  Proof.
-    intros Hbeh1 Hbeh2.
-    inv Hbeh1.
-    - inv Hbeh2.
-      2: { exfalso.
-           inv H.
-           simpl in *.
-           apply (H1 {| fs_state := Callstate [] f [] m0; fault := false |}).
-           constructor; econstructor; eauto. }
-      eapply rtl_state_behaves_faulty_improves; eauto.
-    - inv Hbeh2.
-      { exfalso.
-        inv H0.
-        inv H2.
-        simpl in *.
-        apply (H (Callstate [] f [] m0)).
-        econstructor; eauto. }
-      constructor; reflexivity.
-  Qed.
-
-(* Alternate formulation that might avoid the need for traceinf_sim
-     extensionality. EDIT: actually no, it just pushes the need for
-     extensionality to the higher-level theorem in
-     driver/Complements.v. *)
-  (* Theorem faulty_behavior_improves' beh2 : *)
-  (*   program_behaves (faulty_semantics prog) beh2 -> *)
-  (*   exists beh1, program_behaves (@RTL.semantics Builtins2.Three VoteSemantics_Three prog) beh1 /\ behavior_improves beh1 beh2. *)
-  (* Admitted. *)
 
 End TOLERANCE.

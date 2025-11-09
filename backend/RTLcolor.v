@@ -27,7 +27,8 @@ Inductive color : Type :=
 | Red
 | Green
 | Blue
-| Clear
+| White
+| Pink
 .
 
 Lemma color_eq: forall (c1 c2: color), { c1 = c2 } + { c1 <> c2 }.
@@ -82,7 +83,8 @@ Inductive is_basic' : option color -> Prop :=
 (*   is_color c Clear. *)
 
 Definition is_color (x : option color) (c : color) := x = Some c.
-Notation is_clear x := (is_color x Clear).
+Notation is_white x := (is_color x White).
+Notation is_pink x := (is_color x Pink).
 Notation is_red x := (is_color x Red).
 
 Section wc.
@@ -101,38 +103,38 @@ Section wc.
       (forall r c, col pc r = Some c -> col succ r = Some c) ->
       wc_instruction pc (Iop op args res succ)
   | wc_Iload : forall chunk addr args res succ,
-      Forall (fun arg => col pc arg = Some Clear /\ col succ arg = Some Red) args ->
+      Forall (fun arg => is_white (col pc arg) /\ is_red (col succ arg)) args ->
       col succ res = Some Red ->
       (forall r c, ~ In r args -> r <> res ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Iload chunk addr args res succ)
   | wc_Istore : forall chunk addr args src succ,
-      is_clear (col pc src) ->
+      is_white (col pc src) ->
       is_red (col succ src) ->
-      Forall (fun arg => is_clear (col pc arg) /\ is_red (col succ arg)) args ->
+      Forall (fun arg => is_white (col pc arg) /\ is_red (col succ arg)) args ->
       (forall r c, ~ In r args -> r <> src ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Istore chunk addr args src succ)
   | wc_Icall : forall sig fn args res succ,
-      (forall r, fn = inl r -> is_clear (col pc r) /\ is_red (col succ r)) ->
-      Forall (fun arg => is_clear (col pc arg) /\ is_red (col succ arg)) args ->
+      (forall r, fn = inl r -> is_white (col pc r) /\ is_red (col succ r)) ->
+      Forall (fun arg => is_white (col pc arg) /\ is_red (col succ arg)) args ->
       is_red (col pc res) ->
       (forall r c, ~ In r args -> (forall r', fn = inl r' -> r <> r') ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Icall sig fn args res succ)
   | wc_Itailcall : forall sig fn args,
-      (forall r, fn = inl r -> is_clear (col pc r)) ->
-      Forall (fun arg => is_clear (col pc arg)) args ->
+      (forall r, fn = inl r -> is_white (col pc r)) ->
+      Forall (fun arg => is_white (col pc arg)) args ->
       wc_instruction pc (Itailcall sig fn args)
   (* | wc_Ibuiltin : TODO *)
   | wc_Icond : forall cond args ifso ifnot,
-      Forall (fun arg => is_clear (col pc arg)) args ->
+      Forall (fun arg => is_white (col pc arg)) args ->
       wc_instruction pc (Icond cond args ifso ifnot)
   | wc_Ijumptable : forall arg tbl,
-      is_clear (col pc arg) ->
+      is_white (col pc arg) ->
       wc_instruction pc (Ijumptable arg tbl)
   | wc_Ireturn : forall or,
-      optionP (fun r => is_clear (col pc r)) or ->
+      optionP (fun r => is_white (col pc r)) or ->
       wc_instruction pc (Ireturn or).
 
   Definition wc_code (c : code) : Prop :=
