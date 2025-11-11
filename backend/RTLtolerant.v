@@ -27,6 +27,9 @@ Definition match_rs (col : reg -> option color) (faulted : bool) (rs1 rs2 : regs
   else
     forall r, rs1 # r = rs2 # r.
 
+(* Definition rs_compat (rs1 rs2 : regset) : Prop := *)
+(*   forall r, val_compat (rs1 # r) (rs2 # r). *)
+
 Section match_states.
 
   (** When a fault has occurred elsewhere and regsets [rs1] and [rs2]
@@ -156,23 +159,6 @@ Section TOLERANCE.
       constructor; intros b []; congruence.
   Qed.
 
-  (* Lemma final_state_dec s r : { final_state (faulty_semantics prog) s r } + *)
-  (*                               { ~ final_state (faulty_semantics prog) s r }. *)
-  (* Proof. *)
-  (*   simpl in *. *)
-  (*   destruct s. *)
-  (*   destruct fs_state. *)
-  (*   - right; intro HC; inv HC. *)
-  (*   - right; intro HC; inv HC. *)
-  (*   - *)
-  (*     destruct stack. *)
-  (*     2: { right; intro HC; inv HC. } *)
-  (*     destruct v; try solve [right; intro HC; inv HC]. *)
-  (*     destruct (Integers.Int.eq_dec i r); subst. *)
-  (*     + left; constructor. *)
-  (*     + right; intro HC; inv HC; congruence. *)
-  (* Qed. *)
-
   Lemma final_state_dec s : { exists r, final_state (faulty_semantics prog) s r } +
                               { ~ (exists r, final_state (faulty_semantics prog) s r) }.
   Proof.
@@ -196,6 +182,158 @@ Section TOLERANCE.
     inv Hmatch; inv STK; constructor.
   Qed.
 
+  (* Lemma kdsfgd v1 v1' v2 v2' v : *)
+  (*   val_compat v1 v1' -> *)
+  (*   val_compat v2 v2' -> *)
+  (*   Val.divs v1 v2 = Some v -> *)
+  (*   exists v', Val.divs v1' v2' = Some v'. *)
+  (* Proof. *)
+  (*   intros H0 H1 Hdivs. *)
+  (*   inv H0; simpl in *; try congruence. *)
+  (*   inv H1; simpl in *; try congruence. *)
+  (*   eexists. *)
+  (*   destruct (Integers.Int.eq _ _). *)
+
+  (* TODO: vote on division and mod operations so we have guaranteed
+     equality of register contents for them, so we don't need the
+     rs_compat invariant. Probably admit soundness proof for them at
+     first since we know it won't be a problem. *)
+
+  (* Lemma rs_compat_eval_operation rs1 rs2 sp op args m v : *)
+  (*   rs_compat rs1 rs2 -> *)
+  (*   Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v -> *)
+  (*   exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'. *)
+  (* Proof. *)
+  (*   intros Hcompat Hop. *)
+  (*   destruct op; simpl in *; *)
+  (*     try (destruct args; simpl in *; try congruence); *)
+  (*     try (destruct args; simpl in *; try congruence); *)
+  (*     try (destruct args; simpl in *; try congruence); *)
+  (*     inv Hop; eexists; eauto. *)
+  (*   - unfold Val.divs in *. *)
+  (*     simpl in *. *)
+  (* Admitted. *)
+
+  Ltac inv_Forall :=
+    repeat match goal with
+      | [H : Forall _ (_ :: _) |- _] => inv H
+      end.
+
+  (* Lemma rs_eq_eval_addressing sp addr rs1 rs2 args a : *)
+  (*   (forall r, rs1 # r = rs2 # r) -> *)
+  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs1 ## args = Some a -> *)
+  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs2 ## args = Some a. *)
+  (* Proof. *)
+  (*   unfold Op.eval_addressing. *)
+  (*   destruct Archi.ptr64 eqn: Harchi. *)
+  (*   - intros Heq Heval. *)
+  (*     destruct addr; simpl in *; *)
+  (*       repeat (destruct args; simpl in *; try congruence). *)
+  (*   - intros Heq Heval. *)
+  (*     destruct addr; simpl in *; try rewrite Harchi in *; *)
+  (*       repeat (destruct args; simpl in *; try congruence). *)
+  (* Qed. *)
+
+  Lemma rs_eq_eval_addressing sp addr rs1 rs2 args a :
+    Forall (fun r => rs1 # r = rs2 # r) args ->
+    Op.eval_addressing (Genv.globalenv prog) sp addr rs1 ## args = Some a ->
+    Op.eval_addressing (Genv.globalenv prog) sp addr rs2 ## args = Some a.
+  Proof.
+    unfold Op.eval_addressing.
+    destruct Archi.ptr64 eqn: Harchi.
+    - intros Heq Heval.
+      destruct addr; simpl in *;
+        repeat (destruct args; inv_Forall; simpl in *; try congruence).
+    - intros Heq Heval.
+      destruct addr; simpl in *; try rewrite Harchi in *;
+        repeat (destruct args; inv_Forall; simpl in *; try congruence).
+  Qed.
+
+  Lemma rs_eq_eval_condition cond rs1 rs2 args m b :
+    Forall (fun r => rs1 # r = rs2 # r) args ->
+    Op.eval_condition cond rs1 ## args m = Some b ->
+    Op.eval_condition cond rs2 ## args m = Some b.
+  Proof.
+    intros Hforall Heval.
+    destruct cond; simpl in *;
+      repeat (destruct args; simpl in *; inv_Forall; try congruence).
+  Qed.
+
+  Lemma rs_eq_eval_operation rs1 rs2 sp op args m v :
+    Forall (fun a => rs1 # a = rs2 # a) args ->
+    Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v ->
+    Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v.
+  Proof.
+    intros Heq Hop.
+    destruct op; simpl in *;
+      try (destruct args; simpl in *; try congruence);
+      inv_Forall;
+      try (destruct args; simpl in *; try congruence);
+      inv_Forall;
+      try (destruct args; simpl in *; try congruence);
+      inv_Forall.
+    - rewrite <- H1, <- H2, <- H3; auto.
+    - rewrite <- H1, <- H2, <- H3; auto.
+    - rewrite <- H1, <- H2, <- H3; auto.
+    - inv Hop.
+      rewrite <- H1, <- H2, <- H3; auto.
+      f_equal.
+      f_equal.
+      replace (rs1 # p1 :: rs2 ## args) with (rs2 ## (p1 :: args)).
+      2: { simpl; rewrite H2; reflexivity. }
+      (* TODO: probably need another lemma for this equation. *)
+  Admitted.
+
+  Fixpoint builtin_arg_rs_eq (rs1 rs2 : Regmap.t val) (barg : builtin_arg reg) : Prop :=
+    match barg with
+    | BA r => rs1 # r = rs2 # r
+    | BA_splitlong hi lo => builtin_arg_rs_eq rs1 rs2 hi /\ builtin_arg_rs_eq rs1 rs2 lo
+    | BA_addptr a1 a2 => builtin_arg_rs_eq rs1 rs2 a1 /\ builtin_arg_rs_eq rs1 rs2 a2
+    | _ => True
+    end.
+
+  Lemma in_builtin_arg_rs_eq rs1 rs2 arg :
+    (forall r, in_builtin_arg r arg -> rs1 # r = rs2 # r) ->
+    builtin_arg_rs_eq rs1 rs2 arg.
+  Proof.
+    induction arg; simpl; intros Hin; auto.
+    - apply Hin; constructor.
+    - split; try apply IHarg1; try apply IHarg2;
+        intros x Hx; apply Hin; solve [constructor; auto].
+    - split; try apply IHarg1; try apply IHarg2;
+        intros x Hx; apply Hin; solve [constructor; auto].
+  Qed.
+
+  Lemma rs_eq_eval_builtin_arg rs1 rs2 barg sp m b :
+    builtin_arg_rs_eq rs1 rs2 barg ->
+    eval_builtin_arg (Genv.globalenv prog) (fun r : positive => rs1 # r) sp m barg b ->
+    eval_builtin_arg (Genv.globalenv prog) (fun r : positive => rs2 # r) sp m barg b.
+  Proof.
+    revert b.
+    induction barg; simpl; intros b Heq Heval; inv Heval; try solve [constructor; auto].
+    - rewrite Heq; constructor.
+    - destruct Heq as [Heq0 Heq1]; constructor; auto.
+    - destruct Heq as [Heq0 Heq1]; constructor; auto.
+  Qed.
+
+  Lemma rs_eq_eval_builtin_args rs1 rs2 sp m args vargs :
+    Forall (builtin_arg_rs_eq rs1 rs2) args ->
+    eval_builtin_args (Genv.globalenv prog) (fun r : positive => rs1 # r) sp m args vargs ->
+    eval_builtin_args (Genv.globalenv prog) (fun r : positive => rs2 # r) sp m args vargs.
+  Proof.
+    revert vargs; induction args; intro vargs;
+      intros Hforall Heval; inv Heval; constructor; inv Hforall.
+    - eapply rs_eq_eval_builtin_arg; eauto.
+    - apply IHargs; auto.
+  Qed.
+
+  Ltac inv_stk :=
+    match goal with
+    | [ H : Forall2 (match_stackframes false)
+              (Stackframe ?res ?f ?sp ?pc ?rs :: ?s) ?stk2 |- _ ] =>
+        inv H
+    end.
+
   Lemma faulty_progress i s1 s2 :
     match_states i s1 s2 ->
     safe (@RTL.semantics Three VoteSemantics_Three prog) s1 ->
@@ -213,14 +351,52 @@ Section TOLERANCE.
     { exfalso; apply n; eexists; eauto.
       eapply match_states_final; eauto. }
     clear n.
-    exists t, {| fs_state := s''; fault := i |}.
+    exists t.
+    destruct s2.
     destruct i.
-    - simpl.
-      destruct s2.
+    - (* Fault has occurred *)
       replace fault with true in *.
       2: { eapply match_states_fault_inv; eauto. }
-      simpl in Hmatch.
-      constructor.
+      eexists; constructor.
+      admit.
+    - (* Fault has NOT occurred *)
+      replace fault with false in *.
+      2: { eapply match_states_fault_inv; eauto. }
+      simpl.
+      inv Hstep; inv Hmatch; try (inv_stk; destruct y);
+        (* try (eapply rs_compat_eval_operation in H0; eauto; *)
+        (*      destruct H0 as [v' Hv']); *)
+        eexists; econstructor; try solve [apply maybe_zap_refl].
+      + eapply exec_Inop; eauto.
+      + eapply exec_Iop; eauto.
+        admit.
+      + eapply exec_Iload; eauto.
+        eapply rs_eq_eval_addressing; eauto.
+        apply Forall_forall; intros; auto.
+      + eapply exec_Istore; eauto.
+        * eapply rs_eq_eval_addressing; eauto.
+          apply Forall_forall; intros; auto.
+        * rewrite <- RS; eauto.
+      + eapply exec_Icall; eauto.
+        destruct ros; simpl in *; auto.
+        rewrite <- RS; auto.
+      + eapply exec_Itailcall; eauto.
+        destruct ros; simpl in *; auto.
+        rewrite <- RS; auto.
+      + eapply exec_Ibuiltin; eauto.
+        eapply rs_eq_eval_builtin_args; eauto.
+        apply Forall_forall; intros r Hr.
+        apply in_builtin_arg_rs_eq.
+        intros; apply RS.
+      + eapply exec_Icond; eauto.
+        eapply rs_eq_eval_condition; eauto.
+        apply Forall_forall; intros; auto.
+      + eapply exec_Ijumptable; eauto.
+        rewrite <- RS; assumption.
+      + eapply exec_Ireturn; eauto.
+      + eapply exec_function_internal; eauto.
+      + eapply exec_function_external; eauto.
+      + apply exec_return.
   Admitted.
 
   Lemma step_simulation {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}

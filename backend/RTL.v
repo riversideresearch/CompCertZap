@@ -729,3 +729,44 @@ Definition res_of_instruction (instr : instruction) : option reg :=
   | Ibuiltin _ _ res _ => reg_of_builtin_res res
   | _ => None
   end.
+
+Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
+| in_builtin_arg_BA : in_builtin_arg a (BA a)
+| in_builtin_arg_splitlong_hi : forall hi lo,
+    in_builtin_arg a hi ->
+    in_builtin_arg a (BA_splitlong hi lo)
+| in_builtin_arg_splitlong_lo : forall hi lo,
+    in_builtin_arg a lo ->
+    in_builtin_arg a (BA_splitlong hi lo)
+| in_builtin_arg_addptr_a1 : forall a1 a2,
+    in_builtin_arg a a1 ->
+    in_builtin_arg a (BA_addptr a1 a2)
+| in_builtin_arg_addptr_a2 : forall a1 a2,
+    in_builtin_arg a a2 ->
+    in_builtin_arg a (BA_addptr a1 a2).
+
+Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
+  In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.
+Proof.
+  split.
+  - induction barg; simpl; intro Hin; try contradiction;
+      try (destruct Hin; subst; try contradiction; constructor);
+      apply in_app_or in Hin; destruct Hin as [Hin | Hin];
+      solve [constructor; auto].
+  - induction barg; simpl; intro Hin; inv Hin; auto; apply in_or_app; auto.
+Qed.
+
+Lemma in_regs_of_builtin_args_exists_in_builtin_arg r bargs :
+  In r (regs_of_builtin_args bargs) <-> Exists (in_builtin_arg r) bargs.
+Proof.
+  split.
+  - induction bargs; simpl; intro Hin; try contradiction.
+    apply in_app_or in Hin.
+    destruct Hin as [Hin | Hin].
+    + constructor; apply in_regs_of_builtin_arg_in_builtin_arg; auto.
+    + right; auto.
+  - induction bargs; simpl; intro Hin; inv Hin.
+    + apply in_or_app; left.
+      apply in_regs_of_builtin_arg_in_builtin_arg; auto.
+    + apply in_or_app; right; auto.
+Qed.
