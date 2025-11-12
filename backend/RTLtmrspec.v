@@ -638,7 +638,7 @@ Lemma maj_voteR_ptree_set c ty r1 r2 r3 pc succ n i :
 Proof.
   intros Hc Hmaj; inv Hmaj.
   econstructor; eauto.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+  destruct (peq n pc);
     subst; try congruence.
   rewrite PTree.gso; eauto.
 Qed.
@@ -662,9 +662,9 @@ Lemma smoveR_ptree_set c ty r1 r2 r3 pc succ n i :
 Proof.
   intros Hc Hmove; inv Hmove.
   econstructor; eauto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+  - destruct (peq n pc);
       subst; try congruence; rewrite PTree.gso; eauto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n n0);
+  - destruct (peq n n0);
       subst; try congruence; rewrite PTree.gso; eauto.
 Qed.
 
@@ -970,7 +970,7 @@ Proof.
   apply PTree_Properties.fold_ind; intros t Ht p i Htp.
   { specialize (Ht p); congruence. }
   intros Hcp HI p' i' Htp'.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec p p'); subst.
+  destruct (peq p p'); subst.
   { lia. }
   assert (H: (PTree.remove p t) ! p' = Some i').
   { rewrite PTree.gro; auto. }
@@ -1067,7 +1067,7 @@ Proof.
   split.
   - intros r1 r2 r3 Hin Hr1.
     inv s0; simpl in *; unfold Ple in *.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
+    destruct (peq a r1); subst.
     + clear Hin.
       rewrite PMap.gss in Hr1; inv Hr1.
       split.
@@ -1110,7 +1110,7 @@ Proof.
       * specialize (H r1 r2 r3 Hin Hr1); intuition.
       * specialize (H r1 r2 r3 Hin Hr1); destruct H as [H H'].
         intros r1' r2' r3' Hin' Hneq Hr1'; try congruence.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1'); subst.
+        destruct (peq a r1'); subst.
         { rewrite PMap.gss in Hr1'; inv Hr1'.
           clear Hin' n.
           constructor.
@@ -1151,7 +1151,7 @@ Proof.
   - simpl.
     apply Forall_forall; intros r1 Hin r2 r3 Hr1.
     inv s0; simpl in *; unfold Ple in *.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
+    destruct (peq a r1); subst.
     { rewrite PMap.gss in Hr1; inv Hr1; lia. }
     inv Hin; try congruence.
     rewrite PMap.gso in Hr1; auto.
@@ -1216,7 +1216,7 @@ Proof.
     + apply Regset.add_2, IHl, Hin.
   - revert p; induction l; simpl; intros p Hin.
     { inv Hin. }
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst; auto.
+    destruct (peq a p); subst; auto.
     right; apply Regset.add_3 in Hin; auto.
 Qed.
 
@@ -1335,7 +1335,7 @@ Proof.
   repeat state_incr_inv.
   unfold Ple in *; simpl in *.
   intros x1 x2 x3 Hx1 Hin.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec a x1); subst.
+  destruct (peq a x1); subst.
   - rewrite PMap.gss in Hx1; inv Hx1; split; lia.
   - destruct Hin as [?|Hin]; try congruence.
     rewrite PMap.gso in Hx1; auto.

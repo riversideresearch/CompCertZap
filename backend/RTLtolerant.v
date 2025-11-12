@@ -133,7 +133,7 @@ Section TOLERANCE.
       intro x.
       unfold rs_compat in RS_COMPAT.
       specialize (RS_COMPAT x).
-      destruct (DecidableTypeEx.Positive_as_DT.eq_dec x r); subst.
+      destruct (peq x r); subst.
       + rewrite Regmap.gss; auto.
         eapply val_compat_trans; eauto.
       + rewrite Regmap.gso; auto.
@@ -216,6 +216,14 @@ Section TOLERANCE.
       | [H : Forall2 _ (_ :: _) _ |- _] => inv H
       | [H : Forall2 _ _ (_ :: _) |- _] => inv H
       end.
+
+  Ltac inv_rs :=
+    match goal with
+    | [ H : exists c : color,
+          is_basic c /\ (forall r : reg, ?col ?pc r <> Some c -> ?rs1 # r = ?rs2 # r) |- _ ] =>
+        destruct H as (c & Hc & H)
+    | [ H : match_rs _ true _ _ |- _ ] => destruct H as (c & Hc & H)
+    end.
 
   Lemma val_compat_eval_addressing32 args1 args2 sp a v :
     Forall2 val_compat args1 args2 ->
@@ -470,6 +478,47 @@ Section TOLERANCE.
       eapply builtin_or_external_sem_Three_Two; eauto.
   Qed.
 
+  Inductive list_eq_mod_1 {A : Type} : list A -> list A -> Prop :=
+  | list_eq_mod_1_nil : list_eq_mod_1 nil nil
+  | list_eq_mod_1_cons_eq : forall x l1 l2,
+      list_eq_mod_1 l1 l2 ->
+      list_eq_mod_1 (x :: l1 ) (x :: l2)
+  | list_eq_mod_1_cons_neq : forall x y l,
+      x <> y ->
+      list_eq_mod_1 (x :: l) (y :: l).
+  
+  Lemma idgf ef vs1 vs2 m t v m' :
+    is_vote_builtin ef ->
+    list_eq_mod_1 vs1 vs2 ->
+    @external_call Three VoteSemantics_Three ef (Genv.globalenv prog) vs1 m t v m' ->
+    @external_call Two VoteSemantics_Two ef (Genv.globalenv prog) vs2 m t v m'.
+  Proof.
+    intros Hbuiltin Heq Hext.
+    inv Hbuiltin; simpl in *.
+    - unfold builtin_or_external_sem in *.
+      unfold Builtins.lookup_builtin_function in *; simpl in *.
+      destruct (signature_eq _ _); simpl in *; try congruence.
+      clear e.
+      inv Hext; constructor; simpl in *.
+      inv Heq; try congruence.
+      + inv H0; try congruence.
+        * inv H1; try congruence.
+          { inv H0; try congruence.
+            admit. }
+          destruct l; try congruence.
+          admit.
+        * destruct l; try congruence.
+          destruct l; try congruence.
+          admit.
+      + destruct l; try congruence.
+        destruct l; try congruence.
+        destruct l; try congruence.
+        admit.
+    - admit.
+    - admit.
+    - admit.
+  Admitted.
+
   Lemma faulty_progress i s1 s2 :
     match_states i s1 s2 ->
     safe (@RTL.semantics Three VoteSemantics_Three prog) s1 ->
@@ -527,44 +576,106 @@ Section TOLERANCE.
         destruct ros; auto; simpl.
         inv_wc.
         destruct (H5 _ eq_refl) as [Hwhite _].
-        destruct RS as (c & Hc & RS).
+        inv_rs.
         rewrite <- RS; auto.
         intro HC; rewrite Hwhite in HC; inv HC; inv Hc.
       + eexists; constructor.
         eapply exec_Itailcall; eauto.
         destruct ros; auto; simpl.
         inv_wc.
-        destruct RS as (c & Hc & RS).
+        inv_rs.
         rewrite <- RS; auto.
         intro HC; rewrite H4 in HC; auto; inv HC; inv Hc.
-      + eapply external_call_Three_Two in H1.
+        
+      (* + eapply external_call_Three_Two in H1. *)
+      (*   destruct H1 as (v' & m'' & Hef). *)
+      (*   eexists; constructor. *)
+      (*   eapply exec_Ibuiltin; eauto; simpl. *)
+      (*   * unfold match_rs in RS. *)
+      (*     eapply rs_eq_eval_builtin_args; eauto. *)
+      (*     apply Forall_forall; intros r Hr. *)
+      (*     apply in_builtin_arg_rs_eq. *)
+      (*     inv_rs. *)
+      (*     intros x Hin; apply RS. *)
+      (*     intro HC. *)
+      (*     inv_wc. *)
+      (*     { inv Hr. *)
+      (*       2: { inv H. } *)
+      (*       eapply in_builtin_arg_forall in H6; eauto. *)
+      (*       rewrite H6 in HC; inv HC; inv Hc. } *)
+      (*     { inv Hr. *)
+      (*       2: { inv H. } *)
+      (*       eapply in_builtin_arg_forall in H6; eauto. *)
+      (*       rewrite H6 in HC; inv HC; inv Hc. } *)
+      (*     { admit. } *)
+      (*     rewrite Forall_forall in H7. *)
+      (*     apply H7 in Hr. *)
+      (*     destruct Hr as [Hwhite _]. *)
+      (*     eapply in_builtin_arg_forall in Hin; eauto. *)
+      (*     rewrite Hin in HC; inv HC; inv Hc. *)
+
+      + pose proof H1 as Hcall.
+        eapply external_call_Three_Two in H1.
         destruct H1 as (v' & m'' & Hef).
+        inv_rs.
         eexists; constructor.
+        simpl.
+        destruct (is_vote_builtinb_spec ef) as [Hbuiltin|Hbuiltin].
+        { inv_wc; try solve [apply vote_not_smove in Hbuiltin; congruence].
+          simpl in *.
+          destruct vargs.
+          { inv H0. }
+          destruct vargs.
+          { inv H0; inv H11. }
+          destruct vargs.
+          { inv H0; inv H11; inv H12. }
+          destruct vargs.
+          2: { inv H0; inv H11; inv H12; inv H13. }
+          inv H0.
+          inv H11.
+          inv H12.
+          inv H13.
+
+          
+          
+          eval_builtin_args
+          eapply exec_Ibuiltin.
+          { eauto. }
+          
+        
         eapply exec_Ibuiltin; eauto; simpl.
-        * eapply rs_eq_eval_builtin_args; eauto.
+        * unfold match_rs in RS.
+          eapply rs_eq_eval_builtin_args; eauto.
           apply Forall_forall; intros r Hr.
           apply in_builtin_arg_rs_eq.
-          destruct RS as (c & Hc & RS).
           intros x Hin; apply RS.
           intro HC.
           inv_wc.
-          rewrite Forall_forall in H4.
-          apply H4 in Hr.
+          { inv Hr.
+            2: { inv H. }
+            eapply in_builtin_arg_forall in H6; eauto.
+            rewrite H6 in HC; inv HC; inv Hc. }
+          { inv Hr.
+            2: { inv H. }
+            eapply in_builtin_arg_forall in H6; eauto.
+            rewrite H6 in HC; inv HC; inv Hc. }
+          rewrite Forall_forall in H7.
+          apply H7 in Hr.
           destruct Hr as [Hwhite _].
           eapply in_builtin_arg_forall in Hin; eauto.
           rewrite Hin in HC; inv HC; inv Hc.
+
       + eexists; constructor.
         eapply exec_Icond; eauto.
         inv_wc.
         erewrite rs_eq_map; eauto.
         apply Forall_forall; intros r Hr.
         rewrite Forall_forall in H2; apply H2 in Hr.
-        destruct RS as (c & Hc & RS); rewrite RS; auto.
+        inv_rs; rewrite RS; auto.
         intro HC; rewrite Hr in HC; inv HC; inv Hc.
       + eexists; constructor.
         eapply exec_Ijumptable; eauto.
-        destruct RS as (c & Hc & RS).
-        rewrite <- RS; auto.
+        inv_rs; rewrite <- RS; auto.
         inv_wc.
         intro HC; rewrite H3 in HC; inv HC; inv Hc.
       + eexists; constructor.
@@ -646,8 +757,7 @@ Section TOLERANCE.
         apply wc_fn_code in H; inv H.
         unfold match_rs in *.
         destruct VT; simpl in *; auto.
-        destruct RS as (c & Hc & RS).
-        exists c; split; auto.
+        inv_rs; exists c; split; auto.
 
     (* exec_Iop *)
     - inv Hmatch.
@@ -663,26 +773,27 @@ Section TOLERANCE.
       rewrite H in H9; inv H9.
       econstructor; eauto.
       + intro r.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
+        destruct (peq r res0); subst.
         * rewrite 2!Regmap.gss.
           eapply eval_operation_val_compat; eauto.
         * rewrite 2!Regmap.gso; auto.
       + unfold match_rs in *.
         destruct VT; simpl in *.
-        * destruct RS as (c & Hc & RS).
-          exists c; split; auto.
+        * inv_rs; exists c; split; auto.
           intros r Hr.
-          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
+          destruct (peq r res0); subst.
           { rewrite 2!Regmap.gss.
             erewrite rs_eq_map in H10.
             2: { apply Forall_forall; intros r Hin.
                  apply RS.
                  inv_wc.
-                 - intro HC; apply Hr.
+                 - (* Safe op (replicated) *)
+                   intro HC; apply Hr.
                    rewrite Forall_forall in H7.
                    apply H7 in Hin.
                    rewrite <- Hin; auto.
-                 - rewrite Forall_forall in H6; apply H6 in Hin.
+                 - (* Unsafe op (voted) *)
+                   rewrite Forall_forall in H6; apply H6 in Hin.
                    destruct Hin as [Hwhite _]; rewrite Hwhite.
                    intro HC; inv HC; inv Hc. }
             rewrite H0 in H10; inv H10; reflexivity. }
@@ -690,14 +801,14 @@ Section TOLERANCE.
           inv_wc.
           { apply RS; intro HC; apply H8 in HC; congruence. }
           { apply RS; intro HC.
-            destruct (in_dec DecidableTypeEx.Positive_as_DT.eq_dec r args0).
+            destruct (in_dec peq r args0).
             - rewrite Forall_forall in H6.
               apply H6 in i.
               destruct i as [Hwhite _].
               rewrite Hwhite in HC; inv HC; inv Hc.
             - apply Hr, H8; auto. }
         * intro r.
-          destruct (DecidableTypeEx.Positive_as_DT.eq_dec r res0); subst.
+          destruct (peq r res0); subst.
           { rewrite 2!Regmap.gss.
             erewrite rs_eq_map in H10; eauto.
             2: { apply Forall_forall; intros r Hin; apply RS. }
@@ -718,14 +829,13 @@ Section TOLERANCE.
       rewrite H in H10; inv H10.
       econstructor; eauto.
       + intro r.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec r dst0); subst.
+        destruct (peq r dst0); subst.
         * rewrite 2!Regmap.gss.
           erewrite rs_eq_map in H11.
           2: { apply Forall_forall; intros r Hin.
                unfold match_rs in RS.
                destruct VT; simpl in RS.
-               - destruct RS as (c & Hc & RS).
-                 apply RS.
+               - inv_rs; apply RS.
                  inv_wc.
                  rewrite Forall_forall in H5; apply H5 in Hin.
                  destruct Hin as [Hwhite _].
@@ -737,17 +847,115 @@ Section TOLERANCE.
         * rewrite 2!Regmap.gso; auto.
       + unfold match_rs in *.
         destruct VT; simpl in *.
-        * admit.
-        * admit.
-        
+        * inv_rs; exists c; split; auto.
+          intros r Hr.
+          destruct (peq r dst0); subst.
+          { rewrite 2!Regmap.gss.
+            erewrite rs_eq_map in H11.
+            2: { apply Forall_forall; intros r Hin.
+                 apply RS.
+                 inv_wc.
+                 rewrite Forall_forall in H5; apply H5 in Hin.
+                 destruct Hin as [Hwhite _]; rewrite Hwhite.
+                 intro HC; inv HC; inv Hc. }
+            rewrite H0 in H11; inv H11.
+            rewrite H1 in H12; inv H12; reflexivity. }
+          rewrite 2!PMap.gso; auto.
+          inv_wc.
+          apply RS; intro HC.
+          destruct (in_dec peq r args0).
+          { rewrite Forall_forall in H5.
+            apply H5 in i.
+            destruct i as [Hwhite _].
+            rewrite Hwhite in HC; inv HC; inv Hc. }
+          apply Hr, H9; auto.
+        * intro r.
+          destruct (peq r dst0); subst.
+          { rewrite 2!Regmap.gss.
+            erewrite rs_eq_map in H11; eauto.
+            2: { apply Forall_forall; intros r Hin; apply RS. }
+            rewrite H0 in H11; inv H11.
+            rewrite H1 in H12; inv H12; reflexivity. }
+          rewrite 2!Regmap.gso; auto.
+
     (* exec_Istore *)
-    - admit.
+    - inv Hmatch.
+      
+      specialize (Hsafe _ (star_refl _ _ _)).
+      destruct Hsafe as [[r Hfin] | (t & s'' & Hstep)].
+      { inv Hfin. }
+
+      inv Hstep; try congruence.
+      eexists; split.
+      { apply plus_one.
+        eapply exec_Istore; eauto. }
+      rewrite H in H10; inv H10.
+
+      replace m'0 with m'.
+      2: { erewrite rs_eq_map in H11; eauto.
+           2: { apply Forall_forall; intros r Hin.
+                destruct VT; simpl in *.
+                2: { auto. }
+                inv_rs; apply RS; intro HC.
+                inv_wc.
+                rewrite Forall_forall in H9.
+                apply H9 in Hin.
+                destruct Hin as [Hwhite _].
+                rewrite Hwhite in HC; inv HC; inv Hc. }
+           simpl in H11; rewrite H0 in H11; inv H11.
+           replace (rs1 # src0) with (rs # src0) in H12.
+           2: { destruct VT; simpl in *.
+                2: { auto. }
+                inv_rs; inv_wc.
+                rewrite RS; auto.
+                intro HC; rewrite H6 in HC; inv HC; inv Hc. }
+           rewrite H1 in H12; inv H12; reflexivity. }
+      econstructor; eauto.
+      unfold match_rs in *.
+      destruct VT; simpl in *; auto.
+      inv_rs; exists c; split; auto.
+      intros r Hr.
+      inv_wc.
+      apply RS; intro HC.
+      destruct (peq r src0); subst.
+      { rewrite H6 in HC; inv HC; inv Hc. }
+      destruct (in_dec peq r args0).
+      { rewrite Forall_forall in H9; apply H9 in i.
+        destruct i as [Hwhite _].
+        rewrite Hwhite in HC; inv HC; inv Hc. }
+      apply Hr, H10; auto.
+
     (* exec_Icall *)
     - admit.
     (* exec_Itailcall *)
     - admit.
+
     (* exec_Ibuiltin *)
-    - admit.
+    - inv Hmatch.
+      
+      specialize (Hsafe _ (star_refl _ _ _)).
+      destruct Hsafe as [[r Hfin] | (t' & s'' & Hstep)].
+      { inv Hfin. }
+
+      inv Hstep; try congruence.
+
+      rewrite H in H10; inv H10.
+      replace vargs0 with vargs in *.
+      2: { admit. }
+
+      destruct VT; simpl in *.
+      inv_rs.
+      
+      eexists; split.
+      { apply plus_one.
+        eapply exec_Ibuiltin; eauto.
+        apply H1.
+        eauto.
+        admit.
+        
+      rewrite H in H10; inv H10.
+
+
     (* exec_Icond *)
     - admit.
     (* exec_Ijumptable *)

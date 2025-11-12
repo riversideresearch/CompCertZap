@@ -771,6 +771,15 @@ Proof.
     + apply in_or_app; right; auto.
 Qed.
 
+Inductive in_builtin_res {A : Type} (a : A) : builtin_res A -> Prop :=
+| in_builtin_res_BR : in_builtin_res a (BR a)
+| in_builtin_res_splitlong_hi : forall hi lo,
+    in_builtin_res a hi ->
+    in_builtin_res a (BR_splitlong hi lo)
+| in_builtin_res_splitlong_lo : forall hi lo,
+    in_builtin_res a lo ->
+    in_builtin_res a (BR_splitlong hi lo).
+
 (* TODO: some of these (e.g., Oshrximm) can be checked statically for
    safety, even here if we want (check that n is small enough). For
    now we just consider them unsafe. *)
@@ -822,3 +831,85 @@ Proof.
   revert x; induction barg; simpl; intros y Hforall Hin; inv Hin; auto;
     try solve [apply IHbarg1; intuition]; apply IHbarg2; intuition.
 Qed.
+
+Inductive is_smove_builtin : external_function -> Prop :=
+| is_smove_int :
+  is_smove_builtin (EF_builtin "__smove_int" [Xint ---> Xint]%asttyp)
+| is_smove_long :
+  is_smove_builtin (EF_builtin "__smove_long" [Xlong ---> Xlong]%asttyp)
+| is_smove_single :
+  is_smove_builtin (EF_builtin "__smove_single" [Xsingle ---> Xsingle]%asttyp)
+| is_smove_float :
+  is_smove_builtin (EF_builtin "__smove_float" [Xfloat ---> Xfloat]%asttyp).
+
+Inductive is_vote_builtin : external_function -> Prop :=
+| is_vote_int :
+  is_vote_builtin (EF_builtin "__builtin_vote_int"
+                     [Xint; Xint; Xint ---> Xint]%asttyp)
+| is_vote_long :
+  is_vote_builtin (EF_builtin "__builtin_vote_long"
+                     [Xlong; Xlong; Xlong ---> Xlong]%asttyp)
+| is_vote_single :
+  is_vote_builtin (EF_builtin "__builtin_vote_single"
+                     [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp)
+| is_vote_float :
+  is_vote_builtin (EF_builtin "__builtin_vote_float"
+                     [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp).
+
+Definition is_vote_builtinb (ef : external_function) : bool :=
+  match ef with
+  | EF_builtin name sg =>
+      (String.eqb name "__builtin_vote_int" &&
+         proj_sumbool (signature_eq sg
+                         [Xint; Xint; Xint ---> Xint]%asttyp)) ||
+        (String.eqb name "__builtin_vote_long" &&
+           proj_sumbool (signature_eq sg
+                           [Xlong; Xlong; Xlong ---> Xlong]%asttyp)) ||
+        (String.eqb name "__builtin_vote_single" &&
+           proj_sumbool (signature_eq sg
+                           [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp)) ||
+        (String.eqb name "__builtin_vote_float" &&
+           proj_sumbool (signature_eq sg
+                           [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp))
+  | _ => false
+  end.
+
+Lemma is_vote_builtinb_spec (ef : external_function) :
+  reflect (is_vote_builtin ef) (is_vote_builtinb ef).
+Proof.
+  destruct ef; try solve [right; intro HC; inv HC].
+  simpl.
+  destruct (String.eqb name "__builtin_vote_single") eqn:H0.
+  { rewrite String.eqb_eq in H0; subst.
+    destruct (signature_eq sg
+                [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H0.
+  destruct (String.eqb name "__builtin_vote_int") eqn:H1.
+  { rewrite String.eqb_eq in H1; subst.
+    destruct (signature_eq sg
+                [Xint; Xint; Xint ---> Xint]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H1.
+  destruct (String.eqb name "__builtin_vote_float") eqn:H2.
+  { rewrite String.eqb_eq in H2; subst.
+    destruct (signature_eq sg
+                [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H2.
+  destruct (String.eqb name "__builtin_vote_long") eqn:H3.
+  { rewrite String.eqb_eq in H3; subst.
+    destruct (signature_eq sg
+                [Xlong; Xlong; Xlong ---> Xlong]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H3.
+  right; intro HC; inv HC; congruence.
+Qed.
+  
+Lemma vote_not_smove (ef : external_function) :
+  is_vote_builtin ef -> ~ is_smove_builtin ef.
+Proof. intro H; inv H; intro HC; inv HC. Qed.

@@ -86,6 +86,8 @@ Definition is_color (x : option color) (c : color) := x = Some c.
 Notation is_white x := (is_color x White).
 Notation is_pink x := (is_color x Pink).
 Notation is_red x := (is_color x Red).
+Notation is_green x := (is_color x Green).
+Notation is_blue x := (is_color x Blue).
 
 Section wc.
   Variable col : node -> reg -> option color.
@@ -132,11 +134,39 @@ Section wc.
       (forall r, fn = inl r -> is_white (col pc r)) ->
       Forall (fun arg => is_white (col pc arg)) args ->
       wc_instruction pc (Itailcall sig fn args)
+  | wc_Ibuiltin_smove_white : forall ef arg res succ,
+      is_smove_builtin ef ->
+      builtin_arg_forall (fun r => is_white (col pc r)) arg ->
+      builtin_arg_forall (fun r => is_pink (col succ r)) arg ->
+      builtin_res_forall (fun r => is_green (col succ r)) res ->
+      (forall r c, ~ in_builtin_arg r arg -> ~ in_builtin_res r res ->
+              is_color (col pc r) c -> is_color (col succ r) c) ->
+      wc_instruction pc (Ibuiltin ef (arg :: nil) res succ)
+  | wc_Ibuiltin_smove_pink : forall ef arg res succ,
+      is_smove_builtin ef ->
+      builtin_arg_forall (fun r => is_pink (col pc r)) arg ->
+      builtin_arg_forall (fun r => is_red (col succ r)) arg ->
+      builtin_res_forall (fun r => is_blue (col succ r)) res ->
+      (forall r c, ~ in_builtin_arg r arg -> ~ in_builtin_res r res ->
+              is_color (col pc r) c -> is_color (col succ r) c) ->
+      wc_instruction pc (Ibuiltin ef (arg :: nil) res succ)
+  | wc_Ibuiltin_vote : forall ef arg1 arg2 arg3 res succ,
+      is_vote_builtin ef ->
+      builtin_arg_forall (fun r => is_red (col pc r)) arg1 ->
+      builtin_arg_forall (fun r => is_green (col pc r)) arg2 ->
+      builtin_arg_forall (fun r => is_blue (col pc r)) arg3 ->
+      builtin_res_forall (fun r => is_white (col succ r)) res ->
+      (forall r c, Forall (fun arg => ~ in_builtin_arg r arg) (arg1 :: arg2 :: arg3 :: nil) ->
+              ~ in_builtin_res r res ->
+              is_color (col pc r) c -> is_color (col succ r) c) ->
+      wc_instruction pc (Ibuiltin ef (arg1 :: arg2 :: arg3 :: nil) res succ)
   | wc_Ibuiltin : forall ef args res succ,
+      ~ is_smove_builtin ef ->
+      ~ is_vote_builtin ef ->
       Forall (fun barg => builtin_arg_forall (fun r => is_white (col pc r)) barg /\
                          builtin_arg_forall (fun r => is_red (col succ r)) barg) args ->
       builtin_res_forall (fun r => is_white (col succ r)) res ->
-      (forall r c, ~ Exists (fun barg => in_builtin_arg r barg) args ->
+      (forall r c, ~ Exists (in_builtin_arg r) args ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Ibuiltin ef args res succ)
   | wc_Icond : forall cond args ifso ifnot,

@@ -12,16 +12,6 @@ Require Import
 .
 Import ListNotations.
 
-Inductive is_vote_builtin : external_function -> Prop :=
-| is_vote_int : forall sg,
-    is_vote_builtin (EF_builtin "__builtin_vote_int" sg)
-| is_vote_long : forall sg,
-    is_vote_builtin (EF_builtin "__builtin_vote_long" sg)
-| is_vote_single : forall sg,
-    is_vote_builtin (EF_builtin "__builtin_vote_single" sg)
-| is_vote_float : forall sg,
-    is_vote_builtin (EF_builtin "__builtin_vote_float" sg).
-
 Section CHECKER.
 
 Definition check_function (f : function) : Errors.res function :=
