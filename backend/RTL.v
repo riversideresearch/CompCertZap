@@ -770,3 +770,55 @@ Proof.
       apply in_regs_of_builtin_arg_in_builtin_arg; auto.
     + apply in_or_app; right; auto.
 Qed.
+
+(* TODO: some of these (e.g., Oshrximm) can be checked statically for
+   safety, even here if we want (check that n is small enough). For
+   now we just consider them unsafe. *)
+Inductive is_unsafe : operation -> Prop :=
+| is_unsafe_Odiv : is_unsafe Odiv
+| is_unsafe_Odivu : is_unsafe Odivu
+| is_unsafe_Omod : is_unsafe Omod
+| is_unsafe_Omodu : is_unsafe Omodu
+| is_unsafe_Odivl : is_unsafe Odivl
+| is_unsafe_Odivlu : is_unsafe Odivlu
+| is_unsafe_Omodl : is_unsafe Omodl
+| is_unsafe_Omodlu : is_unsafe Omodlu
+| is_unsafe_Oshrximm : forall n, is_unsafe (Oshrximm n)
+| is_unsafe_Oshrxlimm : forall n, is_unsafe (Oshrxlimm n).
+
+Definition is_unsafeb (op : operation) : bool :=
+  match op with
+  | Odiv | Odivu | Omod | Omodu
+  | Odivl | Odivlu | Omodl | Omodlu
+  | Oshrximm _ | Oshrxlimm _ => true
+  | _ => false
+  end.
+
+Lemma is_unsafeb_spec (op : operation) : reflect (is_unsafe op) (is_unsafeb op).
+Proof.
+  destruct op; try solve [right; intro HC; inv HC]; left; constructor.
+Qed.
+
+Fixpoint builtin_arg_forall {A : Type} (P : A -> Prop) (barg : builtin_arg A) : Prop :=
+  match barg with
+  | BA x => P x
+  | BA_splitlong hi lo => builtin_arg_forall P hi /\ builtin_arg_forall P lo
+  | BA_addptr a1 a2 => builtin_arg_forall P a1 /\ builtin_arg_forall P a2
+  | _ => True
+  end.
+
+Fixpoint builtin_res_forall {A : Type} (P : A -> Prop) (bres : builtin_res A) : Prop :=
+  match bres with
+  | BR x => P x
+  | BR_none => True
+  | BR_splitlong hi lo => builtin_res_forall P hi /\ builtin_res_forall P lo
+  end.
+
+Lemma in_builtin_arg_forall {A : Type} (P : A -> Prop) barg x :
+  builtin_arg_forall P barg ->
+  in_builtin_arg x barg ->
+  P x.
+Proof.
+  revert x; induction barg; simpl; intros y Hforall Hin; inv Hin; auto;
+    try solve [apply IHbarg1; intuition]; apply IHbarg2; intuition.
+Qed.

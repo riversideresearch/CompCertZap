@@ -95,16 +95,22 @@ Section wc.
   | wc_Inop : forall succ,
       (forall r c, col pc r = Some c -> col succ r = Some c) ->
       wc_instruction pc (Inop succ)
-    (* TODO: coloring is the same at
-       pc and succ *)
-  | wc_Iop : forall op args res succ,
+  | wc_Iop_safe : forall op args res succ,
+      ~ is_unsafe op ->
       is_basic' (col pc res) ->
       Forall (fun arg => col pc arg = col succ res) args ->
       (forall r c, col pc r = Some c -> col succ r = Some c) ->
       wc_instruction pc (Iop op args res succ)
+  | wc_Iop_unsafe : forall op args res succ,
+      is_unsafe op ->
+      Forall (fun arg => is_white (col pc arg) /\ is_red (col succ arg)) args ->
+      is_white (col succ res) ->
+      (forall r c, ~ In r args -> r <> res ->
+              is_color (col pc r) c -> is_color (col succ r) c) ->
+      wc_instruction pc (Iop op args res succ)
   | wc_Iload : forall chunk addr args res succ,
       Forall (fun arg => is_white (col pc arg) /\ is_red (col succ arg)) args ->
-      col succ res = Some Red ->
+      is_white (col succ res) ->
       (forall r c, ~ In r args -> r <> res ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Iload chunk addr args res succ)
@@ -118,7 +124,7 @@ Section wc.
   | wc_Icall : forall sig fn args res succ,
       (forall r, fn = inl r -> is_white (col pc r) /\ is_red (col succ r)) ->
       Forall (fun arg => is_white (col pc arg) /\ is_red (col succ arg)) args ->
-      is_red (col pc res) ->
+      is_white (col succ res) ->
       (forall r c, ~ In r args -> (forall r', fn = inl r' -> r <> r') ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Icall sig fn args res succ)
@@ -126,7 +132,13 @@ Section wc.
       (forall r, fn = inl r -> is_white (col pc r)) ->
       Forall (fun arg => is_white (col pc arg)) args ->
       wc_instruction pc (Itailcall sig fn args)
-  (* | wc_Ibuiltin : TODO *)
+  | wc_Ibuiltin : forall ef args res succ,
+      Forall (fun barg => builtin_arg_forall (fun r => is_white (col pc r)) barg /\
+                         builtin_arg_forall (fun r => is_red (col succ r)) barg) args ->
+      builtin_res_forall (fun r => is_white (col succ r)) res ->
+      (forall r c, ~ Exists (fun barg => in_builtin_arg r barg) args ->
+              is_color (col pc r) c -> is_color (col succ r) c) ->
+      wc_instruction pc (Ibuiltin ef args res succ)
   | wc_Icond : forall cond args ifso ifnot,
       Forall (fun arg => is_white (col pc arg)) args ->
       wc_instruction pc (Icond cond args ifso ifnot)

@@ -32,6 +32,10 @@ Lemma val_compat_refl (v : val) :
   val_compat v v.
 Proof. destruct v; constructor. Qed.
 
+(* Lemma val_compat_symm (v1 v2 : val) : *)
+(*   val_compat v1 v2 -> val_compat v2 v1. *)
+(* Proof. intro H; inv H. *)
+
 Lemma val_compat_trans (v1 v2 v3 : val) :
   val_compat v1 v2 ->
   val_compat v2 v3 ->
@@ -80,7 +84,15 @@ Variable ge: genv.
 
 (* Use 3-vote semantics until a fault has occurred, then switch to
    2-vote semantics. Can do this on a per-function basis if we
-   generalize to one fault per function. *)
+   generalize to one fault per function. The reason for doing this is
+   to avoid the edge case in the simulation proof in which a fault
+   hasn't occurred but two out of three arguments to a vote are
+   equal. The 3-voting semantics will produce Vundef there but the
+   2-voting semantics will not, so our match relation between register
+   contents needs to use Val.lessdef instead of equality. I was
+   thinking at some point that this was necessary but now I suspect
+   otherwise; it would just be a little more annoying to use
+   lessdef. *)
 Inductive fstep : fstate -> trace -> fstate -> Prop :=
 | fstep_step_not_zapped : forall s t s' s'' b
     (STEP: @RTL.step Builtins2.Three Builtins2.VoteSemantics_Three ge s t s')

@@ -140,6 +140,20 @@ Fixpoint copy_all_to_shadows
       copy_all_to_shadows re rm rs' n
   end.
 
+(* Definition can_replicate_instr (instr : instruction) : bool := *)
+(*   match instr with *)
+(*   | Iop op _ _ _ => *)
+(*       match op with *)
+(*       | Odiv | Odivu | Omod | Omodu => false *)
+(*       | _ => true *)
+(*       end *)
+(*   (* TODO: return true for some builtins *) *)
+(*   | _ => false *)
+(*   end. *)
+
+(* Definition replicate_instruction (instr : instruction) : mon unit := *)
+(*   ret tt. *)
+
 (** Generate fault-tolerant instruction sequence corresponding to the
     input instruction. [re] is the register typing context of the
     original function. [rm] (the replication map) maps registers to
@@ -151,24 +165,30 @@ Definition transf_instr
   match instr with
   | Inop n =>
       update_instr pc (Inop n)
-  (* For data operations, simply execute the instruction in the
-     regular and two shadow worlds. *)
-  (* TODO: treat most builtins like this, except certain ones like
-     malloc, memcpy, etc. *)
   | Iop op args dst _succ =>
-      do n1 <- reserve_instr;
-      do n2 <- reserve_instr;
-      do _ <- update_instr pc
-               (Iop op
-                  (List.map (fun arg => fst (rm # arg)) args)
-                  (fst (rm # dst))
-                  n1);
-      do _ <- update_instr n1
-               (Iop op
-                  (List.map (fun arg => snd (rm # arg)) args)
-                  (snd (rm # dst))
-                  n2);
-      update_instr n2 instr
+      if is_unsafeb op then
+        do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
+        match res_of_instruction instr, succ_of_instruction instr with
+        | Some res, Some succ =>
+            do m <- reserve_instr;
+            do _ <- copy_to_shadows rm (re res) res m succ;
+            update_instr n (change_succ instr m)
+        | _, _ => update_instr n instr
+        end
+      else
+        do n1 <- reserve_instr;
+        do n2 <- reserve_instr;
+        do _ <- update_instr pc
+                 (Iop op
+                    (List.map (fun arg => fst (rm # arg)) args)
+                    (fst (rm # dst))
+                    n1);
+        do _ <- update_instr n1
+                 (Iop op
+                    (List.map (fun arg => snd (rm # arg)) args)
+                    (snd (rm # dst))
+                    n2);
+        update_instr n2 instr
   (* For other instructions, majority vote the argument registers and
      then execute the instruction only in the regular world. For
      instructions with result registers (Icall and Ibuiltin), copy the
@@ -183,6 +203,62 @@ Definition transf_instr
       | _, _ => update_instr n instr
       end
   end.
+
+(* (** Generate fault-tolerant instruction sequence corresponding to the *)
+(*     input instruction. [re] is the register typing context of the *)
+(*     original function. [rm] (the replication map) maps registers to *)
+(*     their corresponding shadow registers. *) *)
+(* Definition transf_instr *)
+(*   (re : regenv) (rm : PMap.t (reg * reg)) (ni : node * instruction) *)
+(*   : mon unit := *)
+(*   let (pc, instr) := ni in *)
+(*   match instr with *)
+(*   | Inop n => *)
+(*       update_instr pc (Inop n) *)
+(*   (* For data operations, simply execute the instruction in the *)
+(*      regular and two shadow worlds. *) *)
+(*   (* TODO: treat most builtins like this, except certain ones like *)
+(*      malloc, memcpy, etc. *) *)
+(*   | Iop op args dst _succ => *)
+(*       match op with *)
+(*       | Odiv | Odivu | Omod | Omodu => *)
+(*                                 do n <- maj_vote_regs re rm (args_of_instruction instr) pc; *)
+(*                                 match res_of_instruction instr, succ_of_instruction instr with *)
+(*                                 | Some res, Some succ => *)
+(*                                     do m <- reserve_instr; *)
+(*                                     do _ <- copy_to_shadows rm (re res) res m succ; *)
+(*                                     update_instr n (change_succ instr m) *)
+(*                                 | _, _ => update_instr n instr *)
+(*                                 end *)
+(*       | _ =>                     *)
+(*           do n1 <- reserve_instr; *)
+(*           do n2 <- reserve_instr; *)
+(*           do _ <- update_instr pc *)
+(*                    (Iop op *)
+(*                       (List.map (fun arg => fst (rm # arg)) args) *)
+(*                       (fst (rm # dst)) *)
+(*                       n1); *)
+(*           do _ <- update_instr n1 *)
+(*                    (Iop op *)
+(*                       (List.map (fun arg => snd (rm # arg)) args) *)
+(*                       (snd (rm # dst)) *)
+(*                       n2); *)
+(*           update_instr n2 instr *)
+(*       end *)
+(*   (* For other instructions, majority vote the argument registers and *)
+(*      then execute the instruction only in the regular world. For *)
+(*      instructions with result registers (Icall and Ibuiltin), copy the *)
+(*      result into its shadow registers. *) *)
+(*   | _ => *)
+(*       do n <- maj_vote_regs re rm (args_of_instruction instr) pc; *)
+(*       match res_of_instruction instr, succ_of_instruction instr with *)
+(*       | Some res, Some succ => *)
+(*           do m <- reserve_instr; *)
+(*           do _ <- copy_to_shadows rm (re res) res m succ; *)
+(*           update_instr n (change_succ instr m) *)
+(*       | _, _ => update_instr n instr *)
+(*       end *)
+(*   end. *)
 
 (** Transform function code by transforming the instructions. *)
 Definition transf_code (re : regenv) (rm : PMap.t (reg * reg)) (c : code)

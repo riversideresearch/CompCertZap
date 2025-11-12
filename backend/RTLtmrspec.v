@@ -221,14 +221,23 @@ Inductive match_instr
   forall n,
     c ! pc = Some (Inop n) ->
     match_instr re rm c pc (Inop n)
-| match_Iop :
+| match_Iop_safe :
   forall op args1 args2 args3 res1 res2 res3 n1 n2 succ
+    (DIV: ~ is_unsafe op)
     (ARGS : rm_l rm args1 args2 args3)
     (RM_RES : rm !! res1 = (res2, res3))
     (PC : c ! pc = Some (Iop op args2 res2 n1))
     (N1 : c ! n1 = Some (Iop op args3 res3 n2))
     (N2 : c ! n2 = Some (Iop op args1 res1 succ)),
     match_instr re rm c pc (Iop op args1 res1 succ)
+| match_Iop_unsafe :
+  forall op args res1 res2 res3 n1 n2 succ
+    (DIV: is_unsafe op)
+    (VOTE_ARGS : maj_vote_regsR c re rm args pc n1)
+    (N1 : c ! n1 = Some (Iop op args res1 n2))
+    (RM_RES : rm !! res1 = (res2, res3))
+    (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
+    match_instr re rm c pc (Iop op args res1 succ)
 | match_iload :
   forall chunk addr args res1 res2 res3 n1 n2 succ
     (VOTE_ARGS : maj_vote_regsR c re rm args pc n1)
@@ -480,10 +489,20 @@ Proof.
   - destruct (H1 p) as [?|Hs']; try congruence.
     destruct (H1 n1) as [?|Hs'1]; try congruence.
     destruct (H1 n2) as [?|Hs'2]; try congruence.
-    econstructor; eauto.
+    eapply match_Iop_safe; eauto.
     + rewrite Hs'; eauto.
     + rewrite Hs'1; eauto.
     + rewrite Hs'2; eauto.
+  - inv MOVE.
+    destruct (H1 n) as [?|Hn]; try congruence.
+    destruct (H1 n1) as [?|Hn1]; try congruence.
+    destruct (H1 n2) as [?|Hn2]; try congruence.
+    eapply match_Iop_unsafe; eauto.
+    + eapply state_incr_maj_vote_regsR; eauto.
+    + rewrite Hn1; eauto.
+    + econstructor; eauto.
+      * rewrite Hn2; eauto.
+      * rewrite Hn; auto.
   - inv MOVE.
     destruct (H1 n) as [?|Hn]; try congruence.
     destruct (H1 n1) as [?|Hn1]; try congruence.
@@ -676,7 +695,9 @@ Proof.
     simpl; constructor; rewrite PTree.gss; reflexivity.
 
   (* Iop *)
-  - unfold RTLgen.bind in Htransf.
+  - destruct (is_unsafeb o) eqn:Hisdiv.
+    { admit. }
+    unfold RTLgen.bind in Htransf.
     repeat egen_case.
     unfold update_instr in *.
     repeat lr_case.
@@ -684,10 +705,11 @@ Proof.
     destruct (rm # r) eqn:Hrmr; simpl in *.
     (* assert (p < st_nextnode s). auto. *)
     (* { inv s1; simpl in *; unfold Ple in *; lia. } *)
-    eapply match_Iop with (pc := p)
-                          (n1 := s.(st_nextnode))
-                          (n2 := Pos.succ (s.(st_nextnode))); eauto.
-      { apply rm_l_map_rm. }
+    eapply match_Iop_safe with (pc := p)
+                               (n1 := s.(st_nextnode))
+                               (n2 := Pos.succ (s.(st_nextnode))); eauto.
+    { intro HC; inv HC; discriminate Hisdiv. }
+    { apply rm_l_map_rm. }
     + rewrite 2!PTree.gso; try lia.
       rewrite PTree.gss; reflexivity.
     + rewrite PTree.gso; try lia.
@@ -864,7 +886,7 @@ Proof.
       repeat lr_case; simpl.
       econstructor.
       rewrite PTree.gss; reflexivity.
-Qed.
+Admitted.
 
 Lemma iterM_match_instr
   (l : list (positive * instruction)) re rm s s' pf u :
