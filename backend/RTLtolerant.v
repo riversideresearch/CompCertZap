@@ -23,9 +23,9 @@ Local Open Scope string_scope.
 Definition match_rs (col : reg -> option color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
     exists c, is_basic c /\
-           forall r, col r <> Some c -> rs1 # r = rs2 # r
+           forall r, col r <> Some c -> Val.lessdef (rs1 # r) (rs2 # r)
   else
-    forall r, rs1 # r = rs2 # r.
+    forall r, Val.lessdef (rs1 # r) (rs2 # r).
 
 Definition rs_compat (rs1 rs2 : regset) : Prop :=
   forall r, val_compat (rs1 # r) (rs2 # r).
@@ -66,30 +66,30 @@ Section match_states.
       registers except those of the affected color. *)
   Inductive match_states : bool -> RTL.state -> fstate -> Prop :=
   | match_states_State :
-    forall col stk1 stk2 f sp pc rs1 rs2 m (b : bool)
+    forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool)
       (STK: Forall2 (match_stackframes b) stk1 stk2)
       (* (VOTE: match_votes_function f1 f2) *)
       (WC_FUN: wc_function col f)
       (RS_COMPAT: rs_compat rs1 rs2)
-      (RS: match_rs (col pc) b rs1 rs2),
-      (* (MEM: Memory.Mem.extends m1 m2), *)
-      match_states b (State stk1 f sp pc rs1 m)
-                   {| fs_state := State stk2 f sp pc rs2 m; fault := b |}
+      (RS: match_rs (col pc) b rs1 rs2)
+      (MEM: Memory.Mem.extends m1 m2),
+      match_states b (State stk1 f sp pc rs1 m1)
+                   {| fs_state := State stk2 f sp pc rs2 m2; fault := b |}
   | match_states_Callstate :
-    forall stk1 stk2 fd args m b
-      (STK: Forall2 (match_stackframes b) stk1 stk2),
+    forall stk1 stk2 fd args1 args2 m1 m2 b
+      (STK: Forall2 (match_stackframes b) stk1 stk2)
       (* (VOTE: match_votes_fundef fd1 fd2) *)
-      (* (LESSDEF: Forall2 Val.lessdef args1 args2) *)
-      (* (MEM: Memory.Mem.extends m1 m2), *)
-      match_states b (Callstate stk1 fd args m)
-                   {| fs_state := Callstate stk2 fd args m; fault := b |}
+      (LESSDEF: Forall2 Val.lessdef args1 args2)
+      (MEM: Memory.Mem.extends m1 m2),
+      match_states b (Callstate stk1 fd args1 m1)
+                   {| fs_state := Callstate stk2 fd args2 m2; fault := b |}
   | match_state_Returnstate :
-    forall stk1 stk2 v m b
-      (STK: Forall2 (match_stackframes b) stk1 stk2),
-      (* (LESSDEF: Val.lessdef v1 v2) *)
-      (* (MEM: Memory.Mem.extends m1 m2), *)
-      match_states b (Returnstate stk1 v m)
-                   {| fs_state := Returnstate stk2 v m; fault := b |}.
+    forall stk1 stk2 v1 v2 m1 m2 b
+      (STK: Forall2 (match_stackframes b) stk1 stk2)
+      (LESSDEF: Val.lessdef v1 v2)
+      (MEM: Memory.Mem.extends m1 m2),
+      match_states b (Returnstate stk1 v1 m1)
+                   {| fs_state := Returnstate stk2 v2 m2; fault := b |}.
 
 End match_states.
 
@@ -99,7 +99,7 @@ Lemma init_match_states_refl p s :
 Proof.
   intro Hinit; inv Hinit.
   constructor; auto.
-  (* apply Memory.Mem.extends_refl. *)
+  apply Memory.Mem.extends_refl.
 Qed.
 
 Section TOLERANCE.
@@ -119,9 +119,9 @@ Section TOLERANCE.
     apply match_stackframes_fault; auto.
   Qed.
 
-  Lemma maybe_zap_preserves_match_states s s1 s2 b2 :
-    match_states false s {| fs_state := s1; fault := false |} ->
-    maybe_zap s1 s2 b2 ->
+  Lemma maybe_zap_preserves_match_states s s1 s2 b1 b2 :
+    match_states b1 s {| fs_state := s1; fault := b1 |} ->
+    maybe_zap s1 b1 s2 b2 ->
     match_states b2 s {| fs_state := s2; fault := b2 |}.
   Proof.
     intros Hmatch Hzap.
@@ -179,7 +179,7 @@ Section TOLERANCE.
     final_state (faulty_semantics prog) fs r.
   Proof.
     intros Hmatch Hfin; inv Hfin.
-    inv Hmatch; inv STK; constructor.
+    inv Hmatch; inv STK; inv LESSDEF; constructor.
   Qed.
 
   (* Lemma kdsfgd v1 v1' v2 v2' v : *)
@@ -220,7 +220,8 @@ Section TOLERANCE.
   Ltac inv_rs :=
     match goal with
     | [ H : exists c : color,
-          is_basic c /\ (forall r : reg, ?col ?pc r <> Some c -> ?rs1 # r = ?rs2 # r) |- _ ] =>
+          is_basic c /\ (forall r : reg, ?col ?pc r <> Some c ->
+                                   Val.lessdef (?rs1 # r) (?rs2 # r)) |- _ ] =>
         destruct H as (c & Hc & H)
     | [ H : match_rs _ true _ _ |- _ ] => destruct H as (c & Hc & H)
     end.
@@ -414,27 +415,27 @@ Section TOLERANCE.
         apply Hwc in Hpc; inv Hpc; try congruence
     end.
 
-  Ltac inv_match_rs :=
-    inv_wc;
-    erewrite rs_eq_map; eauto; apply Forall_forall; intros r Hin;
-    match goal with
-    | [ Hrs : match_rs _ true _ _ |- _ ] =>
-        destruct Hrs as (c & Hc & Hrs); rewrite Hrs; auto;
-        match goal with
-        | [ H : Forall (fun arg : reg => is_white _ /\ is_red _) _ |- _ ] =>
-            rewrite Forall_forall in H;
-            apply H in Hin; destruct Hin as [Hwhite _];
-            intros HC; rewrite Hwhite in HC; inv HC; inv Hc
-        end
-    end.
+  (* Ltac inv_match_rs := *)
+  (*   inv_wc; *)
+  (*   erewrite rs_eq_map; eauto; apply Forall_forall; intros r Hin; *)
+  (*   match goal with *)
+  (*   | [ Hrs : match_rs _ true _ _ |- _ ] => *)
+  (*       destruct Hrs as (c & Hc & Hrs); rewrite Hrs; auto; *)
+  (*       match goal with *)
+  (*       | [ H : Forall (fun arg : reg => is_white _ /\ is_red _) _ |- _ ] => *)
+  (*           rewrite Forall_forall in H; *)
+  (*           apply H in Hin; destruct Hin as [Hwhite _]; *)
+  (*           intros HC; rewrite Hwhite in HC; inv HC; inv Hc *)
+  (*       end *)
+  (*   end. *)
 
-  Ltac inv_match_rs' :=
-    inv_wc;
-    match goal with
-    | [ Hrs : match_rs _ true _ _, Hwhite : is_white _ |- _ ] =>
-        destruct Hrs as (c & Hc & Hrs); rewrite <- Hrs; eauto;
-        intros HC; rewrite Hwhite in HC; inv HC; inv Hc
-    end.
+  (* Ltac inv_match_rs' := *)
+  (*   inv_wc; *)
+  (*   match goal with *)
+  (*   | [ Hrs : match_rs _ true _ _, Hwhite : is_white _ |- _ ] => *)
+  (*       destruct Hrs as (c & Hc & Hrs); rewrite <- Hrs; eauto; *)
+  (*       intros HC; rewrite Hwhite in HC; inv HC; inv Hc *)
+  (*   end. *)
 
   Lemma known_builtin_sem_Three_Two b vargs m t v m' :
     @known_builtin_sem Three VoteSemantics_Three b (Genv.globalenv prog) vargs m t v m' ->
@@ -478,22 +479,35 @@ Section TOLERANCE.
       eapply builtin_or_external_sem_Three_Two; eauto.
   Qed.
 
-  Inductive list_eq_mod_1 {A : Type} : list A -> list A -> Prop :=
-  | list_eq_mod_1_nil : list_eq_mod_1 nil nil
-  | list_eq_mod_1_cons_eq : forall x l1 l2,
-      list_eq_mod_1 l1 l2 ->
-      list_eq_mod_1 (x :: l1 ) (x :: l2)
-  | list_eq_mod_1_cons_neq : forall x y l,
-      x <> y ->
-      list_eq_mod_1 (x :: l) (y :: l).
+  (* Inductive list_eq_mod_1 {A : Type} : list A -> list A -> Prop := *)
+  (* | list_eq_mod_1_nil : list_eq_mod_1 nil nil *)
+  (* | list_eq_mod_1_cons_eq : forall x l1 l2, *)
+  (*     list_eq_mod_1 l1 l2 -> *)
+  (*     list_eq_mod_1 (x :: l1 ) (x :: l2) *)
+  (* | list_eq_mod_1_cons_neq : forall x y l, *)
+  (*     x <> y -> *)
+  (*     list_eq_mod_1 (x :: l) (y :: l). *)
+
+  Inductive list_lessdef_mod_1 : list val -> list val -> Prop :=
+  | list_lessdef_mod_1_nil : list_lessdef_mod_1 nil nil
+  | list_lessdef_mod_1_cons_eq : forall x y l1 l2,
+      Val.lessdef x y ->
+      list_lessdef_mod_1 l1 l2 ->
+      list_lessdef_mod_1 (x :: l1 ) (y :: l2)
+  | list_lessdef_mod_1_cons_neq : forall x y l1 l2,
+      ~ Val.lessdef x y ->
+      Forall2 Val.lessdef l1 l2 ->
+      list_lessdef_mod_1 (x :: l1) (y :: l2).
   
-  Lemma idgf ef vs1 vs2 m t v m' :
+  Lemma idgf ef vs1 vs2 m1 m2 t v m' :
     is_vote_builtin ef ->
-    list_eq_mod_1 vs1 vs2 ->
-    @external_call Three VoteSemantics_Three ef (Genv.globalenv prog) vs1 m t v m' ->
-    @external_call Two VoteSemantics_Two ef (Genv.globalenv prog) vs2 m t v m'.
+    list_lessdef_mod_1 vs1 vs2 ->
+    Memory.Mem.extends m1 m2 ->
+    @external_call Three VoteSemantics_Three ef (Genv.globalenv prog) vs1 m1 t v m' ->
+    @external_call Two VoteSemantics_Two ef (Genv.globalenv prog) vs2 m2 t v m2.
+  (* /\ Memory.Mem.extends m' m''. *)
   Proof.
-    intros Hbuiltin Heq Hext.
+    intros Hbuiltin Heq Hmem Hext.
     inv Hbuiltin; simpl in *.
     - unfold builtin_or_external_sem in *.
       unfold Builtins.lookup_builtin_function in *; simpl in *.
@@ -501,23 +515,28 @@ Section TOLERANCE.
       clear e.
       inv Hext; constructor; simpl in *.
       inv Heq; try congruence.
-      + inv H0; try congruence.
-        * inv H1; try congruence.
-          { inv H0; try congruence.
+      + inv H1; try congruence.
+        * inv H3; try congruence.
+          { inv H4; try congruence.
             admit. }
-          destruct l; try congruence.
+          inv H4; try congruence.
           admit.
-        * destruct l; try congruence.
-          destruct l; try congruence.
+        * inv H3; try congruence.
+          inv H4; try congruence.
           admit.
-      + destruct l; try congruence.
-        destruct l; try congruence.
-        destruct l; try congruence.
+      + inv H1; try congruence.
+        inv H3; try congruence.
+        inv H4; try congruence.
         admit.
     - admit.
     - admit.
     - admit.
   Admitted.
+
+  Lemma forall_lessdef_list rs1 rs2 args :
+    Forall (fun arg => Val.lessdef (rs1 # arg) (rs2 # arg)) args ->
+    Val.lessdef_list rs1 ## args rs2 ## args.
+  Proof. induction 1; constructor; auto. Qed.
 
   Lemma faulty_progress i s1 s2 :
     match_states i s1 s2 ->
@@ -537,198 +556,228 @@ Section TOLERANCE.
     clear n.
     exists t.
     destruct s2.
-    destruct i.
-    - (* Fault has occurred *)
-      replace fault with true in *.
-      2: { eapply match_states_fault_inv; eauto. }
-      inv Hstep; inv Hmatch; try (inv_stk; destruct y).
-      + eexists; constructor.
-        eapply exec_Inop; eauto.
-      + destruct (is_unsafeb_spec op).
-        * (* op is unsafe *)
-          eexists; constructor.
-          eapply exec_Iop; eauto.
-          inv_match_rs.
-        (* inv WC_FUN. *)
-        (* apply wc_fn_code in H; inv H; try congruence. *)
-        (* erewrite rs_eq_map; eauto. *)
-        (* apply Forall_forall; intros r Hin. *)
-        (* destruct RS as (c & Hc & RS). *)
-        (* rewrite RS; auto. *)
-        (* intro HC. *)
-        (* rewrite Forall_forall in H6. *)
-        (* apply H6 in Hin; destruct Hin as [Hwhite _]. *)
-        (* rewrite Hwhite in HC; inv HC; inv Hc. *)
-        * (* op is safe *)
-          eapply rs_compat_eval_operation in H0; eauto.
-          destruct H0 as [v' Hop].
-          eexists; constructor.
-          eapply exec_Iop; eauto.
-      + eexists; constructor.
-        eapply exec_Iload; eauto.
-        inv_match_rs.
-      + eexists; constructor.
-        eapply exec_Istore with (a:=a); eauto.
-        * inv_match_rs.
-        * inv_match_rs'.
-      + eexists; constructor.
-        eapply exec_Icall; eauto.
-        destruct ros; auto; simpl.
-        inv_wc.
-        destruct (H5 _ eq_refl) as [Hwhite _].
-        inv_rs.
-        rewrite <- RS; auto.
-        intro HC; rewrite Hwhite in HC; inv HC; inv Hc.
-      + eexists; constructor.
-        eapply exec_Itailcall; eauto.
-        destruct ros; auto; simpl.
-        inv_wc.
-        inv_rs.
-        rewrite <- RS; auto.
-        intro HC; rewrite H4 in HC; auto; inv HC; inv Hc.
-        
-      (* + eapply external_call_Three_Two in H1. *)
-      (*   destruct H1 as (v' & m'' & Hef). *)
-      (*   eexists; constructor. *)
-      (*   eapply exec_Ibuiltin; eauto; simpl. *)
-      (*   * unfold match_rs in RS. *)
-      (*     eapply rs_eq_eval_builtin_args; eauto. *)
-      (*     apply Forall_forall; intros r Hr. *)
-      (*     apply in_builtin_arg_rs_eq. *)
-      (*     inv_rs. *)
-      (*     intros x Hin; apply RS. *)
-      (*     intro HC. *)
-      (*     inv_wc. *)
-      (*     { inv Hr. *)
-      (*       2: { inv H. } *)
-      (*       eapply in_builtin_arg_forall in H6; eauto. *)
-      (*       rewrite H6 in HC; inv HC; inv Hc. } *)
-      (*     { inv Hr. *)
-      (*       2: { inv H. } *)
-      (*       eapply in_builtin_arg_forall in H6; eauto. *)
-      (*       rewrite H6 in HC; inv HC; inv Hc. } *)
-      (*     { admit. } *)
-      (*     rewrite Forall_forall in H7. *)
-      (*     apply H7 in Hr. *)
-      (*     destruct Hr as [Hwhite _]. *)
-      (*     eapply in_builtin_arg_forall in Hin; eauto. *)
-      (*     rewrite Hin in HC; inv HC; inv Hc. *)
 
-      + pose proof H1 as Hcall.
-        eapply external_call_Three_Two in H1.
-        destruct H1 as (v' & m'' & Hef).
-        inv_rs.
-        eexists; constructor.
-        simpl.
-        destruct (is_vote_builtinb_spec ef) as [Hbuiltin|Hbuiltin].
-        { inv_wc; try solve [apply vote_not_smove in Hbuiltin; congruence].
-          simpl in *.
-          destruct vargs.
-          { inv H0. }
-          destruct vargs.
-          { inv H0; inv H11. }
-          destruct vargs.
-          { inv H0; inv H11; inv H12. }
-          destruct vargs.
-          2: { inv H0; inv H11; inv H12; inv H13. }
-          inv H0.
-          inv H11.
-          inv H12.
-          inv H13.
+    inv Hstep; inv Hmatch; try (inv_stk; destruct y).
+    - (* exec_Inop *)
+      eexists; econstructor.
+      2: { apply maybe_zap_refl. }
+      eapply exec_Inop; eauto.
 
-          
-          
-          eval_builtin_args
-          eapply exec_Ibuiltin.
-          { eauto. }
-          
-        
-        eapply exec_Ibuiltin; eauto; simpl.
-        * unfold match_rs in RS.
-          eapply rs_eq_eval_builtin_args; eauto.
-          apply Forall_forall; intros r Hr.
-          apply in_builtin_arg_rs_eq.
-          intros x Hin; apply RS.
-          intro HC.
-          inv_wc.
-          { inv Hr.
-            2: { inv H. }
-            eapply in_builtin_arg_forall in H6; eauto.
-            rewrite H6 in HC; inv HC; inv Hc. }
-          { inv Hr.
-            2: { inv H. }
-            eapply in_builtin_arg_forall in H6; eauto.
-            rewrite H6 in HC; inv HC; inv Hc. }
-          rewrite Forall_forall in H7.
-          apply H7 in Hr.
-          destruct Hr as [Hwhite _].
-          eapply in_builtin_arg_forall in Hin; eauto.
-          rewrite Hin in HC; inv HC; inv Hc.
+    - (* exec_Iop *)
+      destruct (is_unsafeb_spec op).
+      + (* op is unsafe *)
+        eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args) in H0; eauto.
+        2: { apply forall_lessdef_list.
+             apply Forall_forall; intros r Hin.
+             unfold match_rs in RS.
+             destruct fault; auto.
+             inv_rs; inv_wc.
+             apply RS.
+             rewrite Forall_forall in H6; apply H6 in Hin.
+             destruct Hin as [Hwhite _].
+             intro HC; rewrite Hwhite in HC; inv HC; inv Hc. }
+        destruct H0 as (v2 & Hop & Hv2).
+        eexists; econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Iop; eauto.
+      + (* op is safe *)
+        eapply rs_compat_eval_operation in H0; eauto.
+        destruct H0 as [v' Hop].
+        eapply Op.eval_operation_lessdef in Hop; eauto.
+        2: { apply Val.lessdef_list_refl. }
+        destruct Hop as (v2 & Hop & Hv2).
+        eexists; econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Iop; eauto.
 
-      + eexists; constructor.
-        eapply exec_Icond; eauto.
-        inv_wc.
-        erewrite rs_eq_map; eauto.
-        apply Forall_forall; intros r Hr.
-        rewrite Forall_forall in H2; apply H2 in Hr.
-        inv_rs; rewrite RS; auto.
-        intro HC; rewrite Hr in HC; inv HC; inv Hc.
-      + eexists; constructor.
-        eapply exec_Ijumptable; eauto.
-        inv_rs; rewrite <- RS; auto.
-        inv_wc.
-        intro HC; rewrite H3 in HC; inv HC; inv Hc.
-      + eexists; constructor.
-        eapply exec_Ireturn; eauto.
-      + eexists; constructor.
-        eapply exec_function_internal; eauto.
-      + apply external_call_Three_Two in H.
-        destruct H as (v' & m'' & Hef).
-        eexists; constructor.
-        eapply exec_function_external; eauto.
-      + inv STK; inv H1.
-        eexists; constructor.
-        eapply exec_return.
-    - (* Fault has NOT occurred *)
-      replace fault with false in *.
-      2: { eapply match_states_fault_inv; eauto. }
-      simpl.
-      inv Hstep; inv Hmatch; try (inv_stk; destruct y);
-        (* try (eapply rs_compat_eval_operation in H0; eauto; *)
-        (*      destruct H0 as [v' Hv']); *)
-        eexists; econstructor; try solve [apply maybe_zap_refl].
-      + eapply exec_Inop; eauto.
-      + eapply exec_Iop; eauto.
-        erewrite rs_eq_map; eauto.
-        apply Forall_forall; intros; auto.
-      + eapply exec_Iload; eauto.
-        erewrite rs_eq_map; eauto.
-        apply Forall_forall; intros; auto.
-      + eapply exec_Istore; eauto.
-        * erewrite rs_eq_map; eauto.
-          apply Forall_forall; intros; auto.
-        * rewrite <- RS; eauto.
-      + eapply exec_Icall; eauto.
-        destruct ros; simpl in *; auto.
-        rewrite <- RS; auto.
-      + eapply exec_Itailcall; eauto.
-        destruct ros; simpl in *; auto.
-        rewrite <- RS; auto.
-      + eapply exec_Ibuiltin; eauto.
-        eapply rs_eq_eval_builtin_args; eauto.
-        apply Forall_forall; intros r Hr.
-        apply in_builtin_arg_rs_eq.
-        intros; apply RS.
-      + eapply exec_Icond; eauto.
-        erewrite rs_eq_map; eauto.
-        apply Forall_forall; intros; auto.
-      + eapply exec_Ijumptable; eauto.
-        rewrite <- RS; assumption.
-      + eapply exec_Ireturn; eauto.
-      + eapply exec_function_internal; eauto.
-      + eapply exec_function_external; eauto.
-      + apply exec_return.
-  Qed.
+    - (* exec_Iload *)
+      eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args) in H0.
+      2: { apply forall_lessdef_list.
+           apply Forall_forall; intros r Hin.
+           unfold match_rs in RS.
+           destruct fault; auto.
+           inv_rs; inv_wc.
+           apply RS.
+           rewrite Forall_forall in H5; apply H5 in Hin.
+           destruct Hin as [Hwhite _].
+           intro HC; rewrite Hwhite in HC; inv HC; inv Hc. }
+      destruct H0 as (v2 & Hop & Hv2).
+      eapply Memory.Mem.loadv_extends in H1; eauto.
+      destruct H1 as (v3 & Hmem & Hv3).
+      eexists; econstructor.
+      2: { apply maybe_zap_refl. }
+      eapply exec_Iload; eauto.
+
+      (* + eexists; constructor. *)
+      (*   eapply exec_Istore with (a:=a); eauto. *)
+      (*   * inv_match_rs. *)
+      (*   * inv_match_rs'. *)
+      (* + eexists; constructor. *)
+      (*   eapply exec_Icall; eauto. *)
+      (*   destruct ros; auto; simpl. *)
+      (*   inv_wc. *)
+      (*   destruct (H5 _ eq_refl) as [Hwhite _]. *)
+      (*   inv_rs. *)
+      (*   rewrite <- RS; auto. *)
+      (*   intro HC; rewrite Hwhite in HC; inv HC; inv Hc. *)
+      (* + eexists; constructor. *)
+      (*   eapply exec_Itailcall; eauto. *)
+      (*   destruct ros; auto; simpl. *)
+      (*   inv_wc. *)
+      (*   inv_rs. *)
+      (*   rewrite <- RS; auto. *)
+      (*   intro HC; rewrite H4 in HC; auto; inv HC; inv Hc. *)
+
+    - admit.
+    - admit.
+    - admit.
+
+    - destruct (is_vote_builtinb_spec ef) as [Hbuiltin|Hbuiltin].
+      + pose proof H as Hpc.
+        inv_wc; try solve [apply vote_not_smove in Hbuiltin; congruence].
+        simpl in *.
+        destruct vargs.
+        { inv H0. }
+        destruct vargs.
+        { inv H0; inv H13. }
+        destruct vargs.
+        { inv H0; inv H13; inv H14. }
+        destruct vargs.
+        2: { inv H0; inv H13; inv H14; inv H15. }
+        inv H0.
+        inv H13; inv H14; inv H15.
+        inv H5; inv H4; inv H12.
+
+        unfold match_rs in RS.
+        destruct fault.
+        2: { eapply external_call_mem_extends with
+          (vargs' := rs2 ## (arg1 :: arg2 :: arg3 :: nil)) in H1; eauto.
+             2: { constructor; auto. }
+             destruct H1 as (vres' & m2' & Hext & Hvres & Hmem & Hmem').
+             apply external_call_Three_Two in Hext.
+             destruct Hext as (v' & m'' & Hext).
+             eexists; econstructor.
+             2: { apply maybe_zap_refl. }
+             eapply exec_Ibuiltin; eauto.
+             repeat constructor. }
+
+        eapply idgf with (vs2 := rs2 ## (arg1 :: arg2 :: arg3 :: nil)) in H1; eauto.
+        2: { admit. }
+        eexists; econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Ibuiltin; eauto.
+        repeat constructor.
+      + unfold match_rs in RS.
+        eapply eval_builtin_args_lessdef' with (e2 := fun r => rs2 # r) in H0; eauto.
+        2: { apply Forall_forall.
+             intros barg Hin.
+             inv_wc.
+             - inv Hin; simpl.
+               + unfold match_rs in RS.
+                 destruct fault; auto.
+                 inv_rs; apply RS.
+                 intro HC; rewrite H7 in HC; inv HC; inv Hc.
+               + inv H.
+             - inv Hin; simpl.
+               + unfold match_rs in RS.
+                 destruct fault; auto.
+                 inv_rs; apply RS.
+                 intro HC; rewrite H7 in HC; inv HC; inv Hc.
+               + inv H.
+             - rewrite Forall_forall in H8.
+               apply H8 in Hin.
+               destruct Hin as [Hwhite _].
+               destruct fault.
+               + inv_rs.
+                 eapply builtin_arg_forall_impl; eauto.
+                 simpl; intros a Ha.
+                 apply RS; intro HC; rewrite Ha in HC; inv HC; inv Hc.
+               + eapply builtin_arg_forall_impl with (P := fun _ => True); auto.
+                 apply builtin_arg_forall_true. }
+
+        destruct H0 as (vl2 & Heval & Hvl2).
+
+        eapply external_call_mem_extends in H1; eauto.
+        destruct H1 as (vres' & m2' & Hext & Hvres' & Hmem & Hmem').
+        apply external_call_Three_Two in Hext.
+        destruct Hext as (v' & m'' & Hext).
+
+        eexists; econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Ibuiltin; eauto.             
+
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+  Admitted.
+
+  (*     + eexists; constructor. *)
+  (*       eapply exec_Icond; eauto. *)
+  (*       inv_wc. *)
+  (*       erewrite rs_eq_map; eauto. *)
+  (*       apply Forall_forall; intros r Hr. *)
+  (*       rewrite Forall_forall in H2; apply H2 in Hr. *)
+  (*       inv_rs; rewrite RS; auto. *)
+  (*       intro HC; rewrite Hr in HC; inv HC; inv Hc. *)
+  (*     + eexists; constructor. *)
+  (*       eapply exec_Ijumptable; eauto. *)
+  (*       inv_rs; rewrite <- RS; auto. *)
+  (*       inv_wc. *)
+  (*       intro HC; rewrite H3 in HC; inv HC; inv Hc. *)
+  (*     + eexists; constructor. *)
+  (*       eapply exec_Ireturn; eauto. *)
+  (*     + eexists; constructor. *)
+  (*       eapply exec_function_internal; eauto. *)
+  (*     + apply external_call_Three_Two in H. *)
+  (*       destruct H as (v' & m'' & Hef). *)
+  (*       eexists; constructor. *)
+  (*       eapply exec_function_external; eauto. *)
+  (*     + inv STK; inv H1. *)
+  (*       eexists; constructor. *)
+  (*       eapply exec_return. *)
+  (*   - (* Fault has NOT occurred *) *)
+  (*     replace fault with false in *. *)
+  (*     2: { eapply match_states_fault_inv; eauto. } *)
+  (*     simpl. *)
+  (*     inv Hstep; inv Hmatch; try (inv_stk; destruct y); *)
+  (*       (* try (eapply rs_compat_eval_operation in H0; eauto; *) *)
+  (*       (*      destruct H0 as [v' Hv']); *) *)
+  (*       eexists; econstructor; try solve [apply maybe_zap_refl]. *)
+  (*     + eapply exec_Inop; eauto. *)
+  (*     + eapply exec_Iop; eauto. *)
+  (*       erewrite rs_eq_map; eauto. *)
+  (*       apply Forall_forall; intros; auto. *)
+  (*     + eapply exec_Iload; eauto. *)
+  (*       erewrite rs_eq_map; eauto. *)
+  (*       apply Forall_forall; intros; auto. *)
+  (*     + eapply exec_Istore; eauto. *)
+  (*       * erewrite rs_eq_map; eauto. *)
+  (*         apply Forall_forall; intros; auto. *)
+  (*       * rewrite <- RS; eauto. *)
+  (*     + eapply exec_Icall; eauto. *)
+  (*       destruct ros; simpl in *; auto. *)
+  (*       rewrite <- RS; auto. *)
+  (*     + eapply exec_Itailcall; eauto. *)
+  (*       destruct ros; simpl in *; auto. *)
+  (*       rewrite <- RS; auto. *)
+  (*     + eapply exec_Ibuiltin; eauto. *)
+  (*       eapply rs_eq_eval_builtin_args; eauto. *)
+  (*       apply Forall_forall; intros r Hr. *)
+  (*       apply in_builtin_arg_rs_eq. *)
+  (*       intros; apply RS. *)
+  (*     + eapply exec_Icond; eauto. *)
+  (*       erewrite rs_eq_map; eauto. *)
+  (*       apply Forall_forall; intros; auto. *)
+  (*     + eapply exec_Ijumptable; eauto. *)
+  (*       rewrite <- RS; assumption. *)
+  (*     + eapply exec_Ireturn; eauto. *)
+  (*     + eapply exec_function_internal; eauto. *)
+  (*     + eapply exec_function_external; eauto. *)
+  (*     + apply exec_return. *)
+  (* Qed. *)
 
   Lemma step_simulation {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
     s2 t s2' b :

@@ -2,7 +2,7 @@ Require Import
   AST
   Errors
   Coqlib
-  (* Events *)
+  Events
   (* Globalenvs *)
   Integers
   List
@@ -136,30 +136,30 @@ Section wc.
       wc_instruction pc (Itailcall sig fn args)
   | wc_Ibuiltin_smove_white : forall ef arg res succ,
       is_smove_builtin ef ->
-      builtin_arg_forall (fun r => is_white (col pc r)) arg ->
-      builtin_arg_forall (fun r => is_pink (col succ r)) arg ->
-      builtin_res_forall (fun r => is_green (col succ r)) res ->
-      (forall r c, ~ in_builtin_arg r arg -> ~ in_builtin_res r res ->
+      is_white (col pc arg) ->
+      is_pink (col succ arg) ->
+      is_green (col succ res) ->
+      (forall r c, r <> arg -> r <> res ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
-      wc_instruction pc (Ibuiltin ef (arg :: nil) res succ)
+      wc_instruction pc (Ibuiltin ef (BA arg :: nil) (BR res) succ)
   | wc_Ibuiltin_smove_pink : forall ef arg res succ,
       is_smove_builtin ef ->
-      builtin_arg_forall (fun r => is_pink (col pc r)) arg ->
-      builtin_arg_forall (fun r => is_red (col succ r)) arg ->
-      builtin_res_forall (fun r => is_blue (col succ r)) res ->
-      (forall r c, ~ in_builtin_arg r arg -> ~ in_builtin_res r res ->
+      is_pink (col pc arg) ->
+      is_red (col succ arg) ->
+      is_blue (col succ res) ->
+      (forall r c, r <> arg -> r <> res ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
-      wc_instruction pc (Ibuiltin ef (arg :: nil) res succ)
+      wc_instruction pc (Ibuiltin ef (BA arg :: nil) (BR res) succ)
   | wc_Ibuiltin_vote : forall ef arg1 arg2 arg3 res succ,
       is_vote_builtin ef ->
-      builtin_arg_forall (fun r => is_red (col pc r)) arg1 ->
-      builtin_arg_forall (fun r => is_green (col pc r)) arg2 ->
-      builtin_arg_forall (fun r => is_blue (col pc r)) arg3 ->
-      builtin_res_forall (fun r => is_white (col succ r)) res ->
-      (forall r c, Forall (fun arg => ~ in_builtin_arg r arg) (arg1 :: arg2 :: arg3 :: nil) ->
-              ~ in_builtin_res r res ->
+      is_red (col pc arg1) ->
+      is_green (col pc arg2) ->
+      is_blue (col pc arg3) ->
+      is_white (col succ res) ->
+      (forall r c, Forall (fun arg => r <> arg) (arg1 :: arg2 :: arg3 :: nil) ->
+              r <> res ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
-      wc_instruction pc (Ibuiltin ef (arg1 :: arg2 :: arg3 :: nil) res succ)
+      wc_instruction pc (Ibuiltin ef (BA arg1 :: BA arg2 :: BA arg3 :: nil) (BR res) succ)
   | wc_Ibuiltin : forall ef args res succ,
       ~ is_smove_builtin ef ->
       ~ is_vote_builtin ef ->

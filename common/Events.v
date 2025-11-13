@@ -1823,3 +1823,74 @@ Proof.
 Qed.
 
 End EVAL_BUILTIN_ARG_LESSDEF.
+
+(** Stronger version of the above, that only assumes lessdef on
+    registers that appear in the arguments (rather than *all*
+    registers in the environment). *)
+
+Fixpoint builtin_arg_forall {A : Type} (P : A -> Prop) (barg : builtin_arg A) : Prop :=
+  match barg with
+  | BA x => P x
+  | BA_splitlong hi lo => builtin_arg_forall P hi /\ builtin_arg_forall P lo
+  | BA_addptr a1 a2 => builtin_arg_forall P a1 /\ builtin_arg_forall P a2
+  | _ => True
+  end.
+
+Section EVAL_BUILTIN_ARG_LESSDEF.
+
+Variable A: Type.
+Variable ge: Senv.t.
+Variables e1 e2: A -> val.
+Variable sp: val.
+Variables m1 m2: mem.
+
+Hypothesis mem_extends: Mem.extends m1 m2.
+
+Lemma eval_builtin_arg_lessdef':
+  forall a v1,
+    builtin_arg_forall (fun r => Val.lessdef (e1 r) (e2 r)) a ->
+    eval_builtin_arg ge e1 sp m1 a v1 ->
+  exists v2, eval_builtin_arg ge e2 sp m2 a v2 /\ Val.lessdef v1 v2.
+Proof.
+  intros a v1 Hforall eval_builtin_arg.
+  revert Hforall.
+  induction eval_builtin_arg; intro Hforall; simpl in Hforall.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- econstructor; eauto with barg.
+- eexists; split.
+  + constructor.
+  + apply Val.lessdef_refl.
+- exploit Mem.loadv_extends; eauto. intros (v' & P & Q). exists v'; eauto with barg.
+- econstructor; eauto with barg.
+- exploit Mem.loadv_extends; eauto. intros (v' & P & Q). exists v'; eauto with barg.
+- econstructor; eauto with barg.
+- destruct Hforall as [H0 H1].
+  destruct (IHeval_builtin_arg1 H0) as (vhi' & P & Q).
+  destruct (IHeval_builtin_arg2 H1) as (vlo' & R & S).
+  econstructor; split; eauto with barg. apply Val.longofwords_lessdef; auto.
+- destruct Hforall as [H0 H1].
+  destruct (IHeval_builtin_arg1 H0) as (vhi' & P & Q).
+  destruct (IHeval_builtin_arg2 H1) as (vlo' & R & S).
+  econstructor; split; eauto with barg. 
+  destruct Archi.ptr64; auto using Val.add_lessdef, Val.addl_lessdef.
+Qed.
+
+Lemma eval_builtin_args_lessdef':
+  forall al vl1,
+    Forall (builtin_arg_forall (fun r => Val.lessdef (e1 r) (e2 r))) al ->
+    eval_builtin_args ge e1 sp m1 al vl1 ->
+  exists vl2, eval_builtin_args ge e2 sp m2 al vl2 /\ Val.lessdef_list vl1 vl2.
+Proof.
+  intro al; induction al; intros v1l Hforall Heval; inv Heval; inv Hforall.
+  { exists nil; split; constructor. }
+  eapply IHal in H4; eauto.
+  destruct H4 as (vl2 & Heval & Hvl2).
+  apply eval_builtin_arg_lessdef' in H1; auto.
+  destruct H1 as (x2 & Heval' & Hv2).
+  eexists; split; eauto.
+  constructor; auto.
+Qed.
+
+End EVAL_BUILTIN_ARG_LESSDEF.

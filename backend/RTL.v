@@ -808,14 +808,6 @@ Proof.
   destruct op; try solve [right; intro HC; inv HC]; left; constructor.
 Qed.
 
-Fixpoint builtin_arg_forall {A : Type} (P : A -> Prop) (barg : builtin_arg A) : Prop :=
-  match barg with
-  | BA x => P x
-  | BA_splitlong hi lo => builtin_arg_forall P hi /\ builtin_arg_forall P lo
-  | BA_addptr a1 a2 => builtin_arg_forall P a1 /\ builtin_arg_forall P a2
-  | _ => True
-  end.
-
 Fixpoint builtin_res_forall {A : Type} (P : A -> Prop) (bres : builtin_res A) : Prop :=
   match bres with
   | BR x => P x
@@ -831,6 +823,19 @@ Proof.
   revert x; induction barg; simpl; intros y Hforall Hin; inv Hin; auto;
     try solve [apply IHbarg1; intuition]; apply IHbarg2; intuition.
 Qed.
+
+Lemma builtin_arg_forall_impl {A : Type} (P Q : A -> Prop ) barg :
+  (forall a, P a -> Q a) ->
+  builtin_arg_forall P barg ->
+  builtin_arg_forall Q barg.
+Proof.
+  induction barg; simpl; intros Hpq Hforall; auto;
+    destruct Hforall; auto.
+Qed.
+
+Lemma builtin_arg_forall_true {A : Type} barg :
+   builtin_arg_forall (fun _ : A => True) barg.
+Proof. induction barg; simpl; auto. Qed.
 
 Inductive is_smove_builtin : external_function -> Prop :=
 | is_smove_int :

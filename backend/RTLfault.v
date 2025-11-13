@@ -32,10 +32,6 @@ Lemma val_compat_refl (v : val) :
   val_compat v v.
 Proof. destruct v; constructor. Qed.
 
-(* Lemma val_compat_symm (v1 v2 : val) : *)
-(*   val_compat v1 v2 -> val_compat v2 v1. *)
-(* Proof. intro H; inv H. *)
-
 Lemma val_compat_trans (v1 v2 v3 : val) :
   val_compat v1 v2 ->
   val_compat v2 v3 ->
@@ -70,37 +66,25 @@ Definition zap_allowed (i : instruction) : Prop :=
    able to use exact matching of register contents (of unfaulted
    colors) instead of Val.lessdef. *)
 
-Inductive maybe_zap : RTL.state -> RTL.state -> bool -> Prop :=
-| maybe_zap_refl : forall s, maybe_zap s s false
+Inductive maybe_zap : RTL.state -> bool -> RTL.state -> bool -> Prop :=
+| maybe_zap_refl : forall b s, maybe_zap s b s b
 | maybe_zap_reg : forall stk f sp pc rs m v i r,
     val_compat (rs # r) v ->
     f.(fn_code) ! pc = Some i ->
     zap_allowed i ->
     res_of_instruction i = Some r ->
-    maybe_zap (State stk f sp pc rs m) (State stk f sp pc (rs # r <- v) m) true.
+    maybe_zap
+      (State stk f sp pc rs m) false
+      (State stk f sp pc (rs # r <- v) m) true.
 
 Section RELSEM.
 Variable ge: genv.
 
-(* Use 3-vote semantics until a fault has occurred, then switch to
-   2-vote semantics. Can do this on a per-function basis if we
-   generalize to one fault per function. The reason for doing this is
-   to avoid the edge case in the simulation proof in which a fault
-   hasn't occurred but two out of three arguments to a vote are
-   equal. The 3-voting semantics will produce Vundef there but the
-   2-voting semantics will not, so our match relation between register
-   contents needs to use Val.lessdef instead of equality. I was
-   thinking at some point that this was necessary but now I suspect
-   otherwise; it would just be a little more annoying to use
-   lessdef. *)
 Inductive fstep : fstate -> trace -> fstate -> Prop :=
-| fstep_step_not_zapped : forall s t s' s'' b
-    (STEP: @RTL.step Builtins2.Three Builtins2.VoteSemantics_Three ge s t s')
-    (ZAP: maybe_zap s' s'' b),
-    fstep {| fs_state := s; fault := false |} t {| fs_state := s''; fault := b |}
-| fstep_step_zapped : forall s t s'
-    (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge s t s'),
-    fstep {| fs_state := s; fault := true |} t {| fs_state := s'; fault := true |}.
+| fstep_step : forall s t s' s'' b b'
+    (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge s t s')
+    (ZAP: maybe_zap s' b s'' b'),
+    fstep {| fs_state := s; fault := b |} t {| fs_state := s''; fault := b' |}.
 
 Inductive initial_state (p : program) : fstate -> Prop :=
 | initial_state_intro : forall s,
