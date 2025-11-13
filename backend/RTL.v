@@ -782,7 +782,14 @@ Inductive in_builtin_res {A : Type} (a : A) : builtin_res A -> Prop :=
 
 (* TODO: some of these (e.g., Oshrximm) can be checked statically for
    safety, even here if we want (check that n is small enough). For
-   now we just consider them unsafe. *)
+   now we just consider them unsafe.
+
+   Actually, we shouldn't need to worry about the shift instructions
+   anyway, because in the simulation if they get stuck in one
+   semantics they will get stuck in the other, regardless of argument
+   values. We do need to do this for the other operations because
+   whether they get stuck or not depends on the values of the
+   arguments, which may not be the same between the two executions. *)
 Inductive is_unsafe : operation -> Prop :=
 | is_unsafe_Odiv : is_unsafe Odiv
 | is_unsafe_Odivu : is_unsafe Odivu
