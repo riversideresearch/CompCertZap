@@ -490,22 +490,80 @@ Section TOLERANCE.
 
   Inductive list_lessdef_mod_1 : list val -> list val -> Prop :=
   | list_lessdef_mod_1_nil : list_lessdef_mod_1 nil nil
-  | list_lessdef_mod_1_cons_eq : forall x y l1 l2,
+  | list_lessdef_mod_1_cons_lessdef : forall x y l1 l2,
       Val.lessdef x y ->
       list_lessdef_mod_1 l1 l2 ->
       list_lessdef_mod_1 (x :: l1 ) (y :: l2)
-  | list_lessdef_mod_1_cons_neq : forall x y l1 l2,
-      ~ Val.lessdef x y ->
+  | list_lessdef_mod_1_cons : forall x y l1 l2,
+      (* ~ Val.lessdef x y -> *)
       Forall2 Val.lessdef l1 l2 ->
       list_lessdef_mod_1 (x :: l1) (y :: l2).
+
+  (* Lemma lessdef_vote3_vote x x0 x1 y y0 y1 : *)
+  (*   Val.lessdef x y -> *)
+  (*   Val.lessdef x0 y0 -> *)
+  (*   Val.lessdef x1 y1 -> *)
+  (*   Val.lessdef (vote3 Tint x x0 x1) (vote Tint y y0 y1). *)
+  (* Proof. *)
+  (*   intros H0 H1 H2. *)
+  (*   unfold vote3, vote. *)
+  (*   inv H0; inv H1; inv H2; simpl; *)
+  (*     destruct (Val.has_type_dec _ _); simpl; try constructor; *)
+  (*     destruct (Val.eq _ _); simpl; try constructor; subst; *)
+  (*     destruct (Val.eq _ _); subst; simpl; constructor. *)
+  (* Qed. *)
   
-  Lemma idgf ef vs1 vs2 m1 m2 t v m' :
+  Lemma lessdef_vote3_vote x x0 x1 y y0 y1 :
+    Val.lessdef x y ->
+    Val.lessdef x0 y0 ->
+    Val.lessdef (vote3 Tint x x0 x1) (vote Tint y y0 y1).
+  Proof.
+    intros H0 H1.
+    unfold vote3, vote.
+    inv H0; inv H1; simpl;
+      destruct (Val.has_type_dec _ _); simpl; try constructor;
+      destruct (Val.eq _ _); simpl; try constructor; subst;
+      destruct (Val.eq _ _); subst; simpl; constructor.
+  Qed.
+  
+  Lemma lessdef_vote3_vote' x x0 x1 y y0 y1 :
+    Val.lessdef x y ->
+    Val.lessdef x1 y1 ->
+    Val.lessdef (vote3 Tint x x0 x1) (vote Tint y y0 y1).
+  Proof.
+    intros H0 H1.
+    unfold vote3, vote.
+    inv H0; inv H1; simpl;
+      destruct (Val.has_type_dec _ _); simpl; try constructor;
+      destruct (Val.eq _ _); simpl; try constructor; subst;
+      destruct (Val.eq _ _); subst; simpl; try constructor;
+      destruct (Val.eq _ _); subst; simpl; constructor.
+  Qed.
+  
+  Lemma lessdef_vote3_vote'' x x0 x1 y y0 y1 :
+    Val.lessdef x0 y0 ->
+    Val.lessdef x1 y1 ->
+    Val.lessdef (vote3 Tint x x0 x1) (vote Tint y y0 y1).
+  Proof.
+    intros H0 H1.
+    unfold vote3, vote.
+    inv H0; inv H1; simpl;
+      destruct (Val.has_type_dec _ _); simpl; try constructor;
+      destruct (Val.eq _ _); simpl; try constructor; subst;
+      destruct (Val.eq _ _); subst; simpl; try constructor.
+    destruct (Val.has_type_dec _ _); simpl; try constructor.
+    - destruct (Val.eq _ _); subst; simpl; try constructor.
+      destruct (Val.has_type_dec _ _); simpl; try congruence; constructor.
+    - destruct (Val.has_type_dec _ _); simpl; try congruence; constructor.
+  Qed.
+  
+  Lemma external_call_vote_lessdef ef vs1 vs2 m1 m2 t v m' :
     is_vote_builtin ef ->
     list_lessdef_mod_1 vs1 vs2 ->
     Memory.Mem.extends m1 m2 ->
     @external_call Three VoteSemantics_Three ef (Genv.globalenv prog) vs1 m1 t v m' ->
-    @external_call Two VoteSemantics_Two ef (Genv.globalenv prog) vs2 m2 t v m2.
-  (* /\ Memory.Mem.extends m' m''. *)
+    exists v', @external_call Two VoteSemantics_Two ef (Genv.globalenv prog) vs2 m2 t v' m2 /\
+            Val.lessdef v v'.
   Proof.
     intros Hbuiltin Heq Hmem Hext.
     inv Hbuiltin; simpl in *.
@@ -513,21 +571,34 @@ Section TOLERANCE.
       unfold Builtins.lookup_builtin_function in *; simpl in *.
       destruct (signature_eq _ _); simpl in *; try congruence.
       clear e.
-      inv Hext; constructor; simpl in *.
+      inv Hext.
+      simpl in *.
       inv Heq; try congruence.
       + inv H1; try congruence.
         * inv H3; try congruence.
           { inv H4; try congruence.
-            admit. }
-          inv H4; try congruence.
-          admit.
-        * inv H3; try congruence.
-          inv H4; try congruence.
-          admit.
-      + inv H1; try congruence.
+            inv H.
+            exists (vote Tint y y0 y1); split.
+            - constructor; auto.
+            - apply lessdef_vote3_vote; auto. }
+          inv H1; try congruence.
+          inv H.
+          exists (vote Tint y y0 y1); split.
+          { constructor; auto. }
+          apply lessdef_vote3_vote; auto.
+        * inv H2; try congruence.
+          inv H3; try congruence.
+          inv H.
+          exists (vote Tint y y0 y1); split.
+          { constructor; auto. }
+          apply lessdef_vote3_vote'; auto.
+      + inv H0; try congruence.
+        inv H2; try congruence.
         inv H3; try congruence.
-        inv H4; try congruence.
-        admit.
+        inv H.
+        exists (vote Tint y y0 y1); split.
+        { constructor; auto. }
+        apply lessdef_vote3_vote''; auto.
     - admit.
     - admit.
     - admit.
@@ -661,8 +732,29 @@ Section TOLERANCE.
              eapply exec_Ibuiltin; eauto.
              repeat constructor. }
 
-        eapply idgf with (vs2 := rs2 ## (arg1 :: arg2 :: arg3 :: nil)) in H1; eauto.
-        2: { admit. }
+        eapply external_call_vote_lessdef
+          with (vs2 := rs2 ## (arg1 :: arg2 :: arg3 :: nil)) in H1; eauto.
+        destruct H1 as (v' & Hext & Hv').
+        2: { inv_rs.
+             destruct c.
+             - apply list_lessdef_mod_1_cons.
+               repeat constructor.
+               + apply RS; intro HC; rewrite H8 in HC; inv HC.
+               + apply RS; intro HC; rewrite H9 in HC; inv HC.
+             - apply list_lessdef_mod_1_cons_lessdef.
+               { apply RS; intro HC; rewrite H7 in HC; inv HC. }
+               apply list_lessdef_mod_1_cons.
+               repeat constructor.
+               + apply RS; intro HC; rewrite H9 in HC; inv HC.
+             - apply list_lessdef_mod_1_cons_lessdef.
+               { apply RS; intro HC; rewrite H7 in HC; inv HC. }
+               apply list_lessdef_mod_1_cons_lessdef.
+               { apply RS; intro HC; rewrite H8 in HC; inv HC. }
+               apply list_lessdef_mod_1_cons.
+               repeat constructor.
+             - inv Hc.
+             - inv Hc. }
+
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
         eapply exec_Ibuiltin; eauto.
@@ -704,7 +796,7 @@ Section TOLERANCE.
 
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
-        eapply exec_Ibuiltin; eauto.             
+        eapply exec_Ibuiltin; eauto.
 
     - admit.
     - admit.
