@@ -846,13 +846,13 @@ Proof. induction barg; simpl; auto. Qed.
 
 Inductive is_smove_builtin : external_function -> Prop :=
 | is_smove_int :
-  is_smove_builtin (EF_builtin "__smove_int" [Xint ---> Xint]%asttyp)
+  is_smove_builtin (EF_builtin "__builtin_smove_int" [Xint ---> Xint]%asttyp)
 | is_smove_long :
-  is_smove_builtin (EF_builtin "__smove_long" [Xlong ---> Xlong]%asttyp)
+  is_smove_builtin (EF_builtin "__builtin_smove_long" [Xlong ---> Xlong]%asttyp)
 | is_smove_single :
-  is_smove_builtin (EF_builtin "__smove_single" [Xsingle ---> Xsingle]%asttyp)
+  is_smove_builtin (EF_builtin "__builtin_smove_single" [Xsingle ---> Xsingle]%asttyp)
 | is_smove_float :
-  is_smove_builtin (EF_builtin "__smove_float" [Xfloat ---> Xfloat]%asttyp).
+  is_smove_builtin (EF_builtin "__builtin_smove_float" [Xfloat ---> Xfloat]%asttyp).
 
 Inductive is_vote_builtin : external_function -> Prop :=
 | is_vote_int :

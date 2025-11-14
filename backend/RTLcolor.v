@@ -156,9 +156,7 @@ Section wc.
       is_green (col pc arg2) ->
       is_blue (col pc arg3) ->
       is_white (col succ res) ->
-      (forall r c, Forall (fun arg => r <> arg) (arg1 :: arg2 :: arg3 :: nil) ->
-              r <> res ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      (forall r c, r <> res -> is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Ibuiltin ef (BA arg1 :: BA arg2 :: BA arg3 :: nil) (BR res) succ)
   | wc_Ibuiltin : forall ef args res succ,
       ~ is_smove_builtin ef ->

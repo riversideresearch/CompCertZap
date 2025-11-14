@@ -53,6 +53,7 @@ Qed.
    builtins, just not external function calls or votes themselves. *)
 Definition zap_allowed (i : instruction) : Prop :=
   match i with
+  | Iop op _ _ _ => ~ is_unsafe op
   | Iload _ _ _ _ _ => False
   | Istore _ _ _ _ _ => False
   | Icall _ _ _ _ _ => False
@@ -61,30 +62,40 @@ Definition zap_allowed (i : instruction) : Prop :=
   | _ => True
   end.
 
-(* NOTE: with the backward simulation approach (and fstep using
-   3-voting semantics when a fault hasn't occurred yet), we should be
-   able to use exact matching of register contents (of unfaulted
-   colors) instead of Val.lessdef. *)
-
-Inductive maybe_zap : RTL.state -> bool -> RTL.state -> bool -> Prop :=
-| maybe_zap_refl : forall b s, maybe_zap s b s b
-| maybe_zap_reg : forall stk f sp pc rs m v i r,
+Inductive maybe_zap (f : function) (pc : node)
+  : RTL.state -> bool -> RTL.state -> bool -> Prop :=
+| maybe_zap_refl : forall s b, maybe_zap f pc s b s b
+| maybe_zap_reg : forall stk sp pc' rs m i r v,
     val_compat (rs # r) v ->
     f.(fn_code) ! pc = Some i ->
     zap_allowed i ->
     res_of_instruction i = Some r ->
-    maybe_zap
-      (State stk f sp pc rs m) false
-      (State stk f sp pc (rs # r <- v) m) true.
+    maybe_zap f pc
+      (State stk f sp pc' rs m) false
+      (State stk f sp pc' (rs # r <- v) m) true.
 
 Section RELSEM.
 Variable ge: genv.
 
+Inductive not_regular_state : RTL.state -> Prop :=
+| not_regular_state_Callstate : forall stk f args m,
+    not_regular_state (Callstate stk f args m)
+| not_regular_state_Returnstate : forall stk v m,
+    not_regular_state (Returnstate stk v m).
+
 Inductive fstep : fstate -> trace -> fstate -> Prop :=
-| fstep_step : forall s t s' s'' b b'
-    (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge s t s')
-    (ZAP: maybe_zap s' b s'' b'),
-    fstep {| fs_state := s; fault := b |} t {| fs_state := s''; fault := b' |}.
+| fstep_step_State : forall stk f sp pc rs m t s' s'' b b'
+    (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge
+             (State stk f sp pc rs m) t s')
+    (ZAP: maybe_zap f pc s' b s'' b'),
+    fstep
+      {| fs_state := State stk f sp pc rs m; fault := b |}
+      t
+      {| fs_state := s''; fault := b' |}
+| fstep_step_other : forall s t s' b
+    (HS: not_regular_state s)
+    (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge s t s'),
+    fstep {| fs_state := s; fault := b |} t {| fs_state := s'; fault := b |}.
 
 Inductive initial_state (p : program) : fstate -> Prop :=
 | initial_state_intro : forall s,

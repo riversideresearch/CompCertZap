@@ -119,28 +119,113 @@ Section TOLERANCE.
     apply match_stackframes_fault; auto.
   Qed.
 
-  Lemma maybe_zap_preserves_match_states s s1 s2 b1 b2 :
-    match_states b1 s {| fs_state := s1; fault := b1 |} ->
-    maybe_zap s1 b1 s2 b2 ->
-    match_states b2 s {| fs_state := s2; fault := b2 |}.
+  Ltac inv_wc :=
+    match goal with
+    | [ H : wc_function _ _ |- _ ] => inv H
+    end;
+    match goal with
+    | [ Hwc : wc_code _ _, Hpc : (fn_code _) ! _ = Some _ |- _ ] =>
+        apply Hwc in Hpc; inv Hpc; try congruence
+    end.
+
+  Lemma wc_col_succ_exists f col pc i r succ :
+    (fn_code f) ! pc = Some i ->
+    res_of_instruction i = Some r ->
+    succ_of_instruction i = Some succ ->
+    wc_function col f ->
+    exists c, col succ r = Some c.
   Proof.
-    intros Hmatch Hzap.
+    intros Hpc Hr Hsucc Hwc.
+    inv_wc; simpl in *; try congruence; inv Hr; inv Hsucc;
+      try solve [exists White; auto]; try solve [eexists; eauto].
+    - inv H0; eexists; eauto.
+    - destruct res; simpl in *; try congruence.
+      inv H5; exists White; auto.
+  Qed.
+
+  Lemma res_exists_succ i r :
+    res_of_instruction i = Some r ->
+    exists succ, succ_of_instruction i = Some succ.
+  Proof.
+    intro Hres; destruct i; simpl in *;
+      try congruence; eexists; eauto.
+  Qed.
+
+  (* match_states b s1 {| fs_state := State stk f sp pc rs m; fault := b |} *)
+  (* ZAP : maybe_zap f pc s' b s'' b' *)
+  (* Hmatch' : match_states b s1' {| fs_state := s'; fault := b |} *)
+  (* match_states b' s1' {| fs_state := s''; fault := b' |} *)
+      
+  (* Lemma maybe_zap_preserves_match_states s s1 s2 b1 b2 : *)
+  (*   match_states b1 s {| fs_state := s1; fault := b1 |} -> *)
+  (*   maybe_zap s1 b1 s2 b2 -> *)
+  (*   match_states b2 s {| fs_state := s2; fault := b2 |}. *)
+  (* Proof. *)
+  (*   intros Hmatch Hzap. *)
+  (*   inv Hzap; auto. *)
+  (*   inv Hmatch. *)
+  (*   econstructor; eauto. *)
+  (*   - apply forall2_match_stackframes_fault; auto. *)
+  (*   - unfold rs_compat. *)
+  (*     intro x. *)
+  (*     unfold rs_compat in RS_COMPAT. *)
+  (*     specialize (RS_COMPAT x). *)
+  (*     destruct (peq x r); subst. *)
+  (*     + rewrite Regmap.gss; auto. *)
+  (*       eapply val_compat_trans; eauto. *)
+  (*     + rewrite Regmap.gso; auto. *)
+  (*   - unfold match_rs in *. *)
+  (*     pose proof H2 as Hres. *)
+  (*     apply res_exists_succ in Hres. *)
+  (*     destruct Hres as [succ Hsucc]. *)
+  (*     eapply wc_col_succ_exists in H0; eauto. *)
+  (*     destruct H0 as [c Hc]. *)
+  (*     exists c; split. *)
+  (*     + admit. *)
+  (*     + intros x Hx. *)
+  (*       destruct (peq x r); subst. *)
+  (*       * rewrite Regmap.gss.           *)
+  (* Admitted. *)
+
+  Lemma step_succ {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    stk f sp pc rs m t stk' sp' pc' rs' m' i :
+    RTL.step (Genv.globalenv prog) (State stk f sp pc rs m) t (State stk' f sp' pc' rs' m') ->
+    f.(fn_code) ! pc = Some i ->
+    succ_of_instruction i = Some pc'.
+  Proof.
+  Admitted.
+
+  Lemma maybe_zap_preserves_match_states b s1 stk f sp pc rs m s' s'' b' s1' t :
+    match_states b s1 {| fs_state := State stk f sp pc rs m; fault := b |} ->
+    maybe_zap f pc s' b s'' b' ->
+    Step (@RTL.semantics Three VoteSemantics_Three prog) s1 t s1' ->
+    match_states b s1' {| fs_state := s'; fault := b |} ->
+    match_states b' s1' {| fs_state := s''; fault := b' |}.
+  Proof.
+    intros Hmatch Hzap Hstep Hmatch'.
     inv Hzap; auto.
-    inv Hmatch.
+    inv Hmatch'.
     econstructor; eauto.
     - apply forall2_match_stackframes_fault; auto.
-    - unfold rs_compat.
-      intro x.
-      unfold rs_compat in RS_COMPAT.
-      specialize (RS_COMPAT x).
+    - intro x.
       destruct (peq x r); subst.
-      + rewrite Regmap.gss; auto.
+      + rewrite Regmap.gss.
         eapply val_compat_trans; eauto.
       + rewrite Regmap.gso; auto.
     - unfold match_rs in *.
-      (* exists color of faulted register r *)
-      admit.
-  Admitted.
+      assert (Hc: exists c, col pc' r = Some c /\ is_basic c).
+      { pose proof H0 as Hop.
+        inv Hmatch.
+        eapply step_succ in Hstep; eauto.
+        clear WC_FUN0.
+        inv_wc; simpl in *; try congruence; inv H2; inv Hstep; try contradiction.
+        inv H4; exists c; split; eauto. }
+      destruct Hc as (c & Hr & Hc).
+      exists c; split; auto.
+      intros x Hx.
+      destruct (peq x r); subst; try congruence.
+      rewrite Regmap.gso; auto.
+  Qed.
 
   Lemma match_states_fault_inv b1 b2 s1 s2 :
     match_states b1 s1 {| fs_state := s2; fault := b2 |} ->
@@ -406,15 +491,6 @@ Section TOLERANCE.
         inv H
     end.
 
-  Ltac inv_wc :=
-    match goal with
-    | [ H : wc_function _ _ |- _ ] => inv H
-    end;
-    match goal with
-    | [ Hwc : wc_code _ _, Hpc : (fn_code _) ! _ = Some _ |- _ ] =>
-        apply Hwc in Hpc; inv Hpc; try congruence
-    end.
-
   (* Ltac inv_match_rs := *)
   (*   inv_wc; *)
   (*   erewrite rs_eq_map; eauto; apply Forall_forall; intros r Hin; *)
@@ -450,6 +526,23 @@ Section TOLERANCE.
         repeat (destruct vargs; try congruence);
         destruct v0; inv H0; eexists; eexists; constructor; reflexivity.
   Qed.
+
+  Lemma known_builtin_sem_Three_Two' b vargs m t v m' :
+    @known_builtin_sem Three VoteSemantics_Three b (Genv.globalenv prog) vargs m t v m' ->
+    exists v',
+      @known_builtin_sem Two VoteSemantics_Two b (Genv.globalenv prog) vargs m t v' m' /\
+        Val.lessdef v v'.
+  Proof.
+    intro H; inv H.
+    destruct b; simpl in *.
+    - exists v; split; constructor; auto.
+    - exists v; split; constructor; auto.
+    - destruct b; simpl in *;
+        repeat (destruct vargs; try congruence);
+        destruct v0; inv H0; eexists; split; try solve[constructor; simpl; auto];
+        try solve [constructor; simpl; destruct Archi.ptr64; auto];
+        apply vote3_lessdef_vote.
+  Qed.
     
   (* Lemma builtin_or_external_sem_Three_Two name sg vargs m t v m' : *)
   (*   @builtin_or_external_sem Three VoteSemantics_Three *)
@@ -467,7 +560,6 @@ Section TOLERANCE.
   (*   - eexists; eexists; eauto. *)
   (* Qed. *)
   
-  
   Lemma builtin_or_external_sem_Three_Two name sg vargs m t v m' :
     @builtin_or_external_sem Three VoteSemantics_Three
       name sg (Genv.globalenv prog) vargs m t v m' ->
@@ -484,6 +576,22 @@ Section TOLERANCE.
     - eexists; eauto.
   Qed.
 
+  Lemma builtin_or_external_sem_Three_Two' name sg vargs m t v m' :
+    @builtin_or_external_sem Three VoteSemantics_Three
+      name sg (Genv.globalenv prog) vargs m t v m' ->
+    exists v', @builtin_or_external_sem Two VoteSemantics_Two
+            name sg (Genv.globalenv prog) vargs m t v' m' /\ Val.lessdef v v'.
+  Proof.
+    unfold builtin_or_external_sem.
+    intro Hsem.
+    destruct (Builtins.lookup_builtin_function _ _) eqn:Hlookup.
+    -  unfold Builtins.lookup_builtin_function in *.
+       simpl in *.
+       destruct (string_dec name _ && signature_eq sg _%asttyp);
+         eapply known_builtin_sem_Three_Two'; eauto.
+    - eexists; eauto.
+  Qed.
+
   (* Lemma external_call_Three_Two ef vargs m t v m' : *)
   (*   @external_call Three VoteSemantics_Three *)
   (*     ef (Genv.globalenv prog) vargs m t v m' -> *)
@@ -496,6 +604,7 @@ Section TOLERANCE.
   (*     eapply builtin_or_external_sem_Three_Two; eauto. *)
   (* Qed. *)
 
+  (* TODO: remove this and replace with better version below. *)
   Lemma external_call_Three_Two ef vargs m t v m' :
     @external_call Three VoteSemantics_Three
       ef (Genv.globalenv prog) vargs m t v m' ->
@@ -506,6 +615,18 @@ Section TOLERANCE.
     destruct ef; simpl in *;
       try solve [eexists; eauto];
       eapply builtin_or_external_sem_Three_Two; eauto.
+  Qed.
+
+  Lemma external_call_Three_Two' ef vargs m t v m' :
+    @external_call Three VoteSemantics_Three
+      ef (Genv.globalenv prog) vargs m t v m' ->
+    exists v', @external_call Two VoteSemantics_Two
+            ef (Genv.globalenv prog) vargs m t v' m' /\ Val.lessdef v v'.
+  Proof.
+    intro Hef.
+    destruct ef; simpl in *;
+      try solve [eexists; eauto];
+      eapply builtin_or_external_sem_Three_Two'; eauto.
   Qed.
 
   (* Inductive list_eq_mod_1 {A : Type} : list A -> list A -> Prop := *)
@@ -585,6 +706,50 @@ Section TOLERANCE.
       destruct (Val.has_type_dec _ _); simpl; try congruence; constructor.
     - destruct (Val.has_type_dec _ _); simpl; try congruence; constructor.
   Qed.
+
+  Lemma external_call_smove_E0 {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vs m t v m' :
+    is_smove_builtin ef ->
+    external_call ef (Genv.globalenv prog) vs m t v m' ->
+    t = E0.
+  Proof.
+    intros Hef Hcall.
+    unfold external_call, builtin_or_external_sem,
+      Builtins.lookup_builtin_function in Hcall.
+    simpl in Hcall.
+    inv Hef; simpl in *; destruct (signature_eq _ _);
+      try congruence; inv Hcall; auto.
+  Qed.
+
+  Lemma external_call_smove_mem {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vs m t v m' :
+    is_smove_builtin ef ->
+    external_call ef (Genv.globalenv prog) vs m t v m' ->
+    m = m'.
+  Proof.
+    intros Hef Hcall.
+    unfold external_call, builtin_or_external_sem,
+      Builtins.lookup_builtin_function in Hcall.
+    simpl in Hcall.
+    inv Hef; simpl in *; destruct (signature_eq _ _);
+      try congruence; inv Hcall; auto.
+  Qed.
+
+  (* Lemma external_call_smove_res {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT} *)
+  (*   ef m t v v' m' : *)
+  (*   is_smove_builtin ef -> *)
+  (*   external_call ef (Genv.globalenv prog) [v] m t v' m' -> *)
+  (*   v' = v. *)
+  (* Proof. *)
+  (*   intros Hef Hcall. *)
+  (*   unfold external_call, builtin_or_external_sem, *)
+  (*     Builtins.lookup_builtin_function in Hcall. *)
+  (*   simpl in Hcall. *)
+  (*   inv Hef; simpl in *; destruct (signature_eq _ _); *)
+  (*     try congruence; inv Hcall; auto. *)
+  (*   simpl in *. *)
+  (*   - destruct v; simpl in *; inv H; auto. *)
+  (* Qed. *)
 
   Lemma external_call_vote_E0 {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
     ef vs m t v m' :
@@ -906,7 +1071,7 @@ Section TOLERANCE.
       match_states i s1 {| fs_state := s2; fault := b |} ->
       safe (RTL.semantics prog) s1 ->
       exists i' s1',
-        Plus (RTL.semantics prog) s1 t s1' /\
+        Step (RTL.semantics prog) s1 t s1' /\
           match_states i' s1' {| fs_state := s2'; fault := b |}.
   Proof.
     simpl; intros Hstep i s1 Hmatch Hsafe; subst.
@@ -916,10 +1081,7 @@ Section TOLERANCE.
     (* exec_Inop *)
     - inv Hmatch.
       eexists; split.
-      + econstructor.
-        2: { apply star_refl. }
-        2: { rewrite E0_right; reflexivity. }
-        eapply exec_Inop; eauto.
+      + eapply exec_Inop; eauto.
       + econstructor; eauto.
         inv WC_FUN.
         apply wc_fn_code in H; inv H.
@@ -936,8 +1098,7 @@ Section TOLERANCE.
 
       inv Hstep; try congruence.
       eexists; split.
-      { apply plus_one.
-        eapply exec_Iop; eauto. }
+      { eapply exec_Iop; eauto. }
       rewrite H in H9; inv H9.
       econstructor; eauto.
       + intro r.
@@ -1128,49 +1289,113 @@ Section TOLERANCE.
 
         pose proof WC_FUN as Hwc.
         inv_wc.
-        * (* white smove *)
-          admit.
-        * (* pink smove *)
-          admit.
-        * (* vote *)
 
+        * (* white smove *)
           repeat match goal with
                  | [ H : eval_builtin_args _  _ _ _ _ _ |- _ ] => inv H
                  | [ H : list_forall2 _ _ _ |- _ ]  => inv H
                  | [ H : eval_builtin_arg _ _ _ _ (BA _) _ |- _ ] => inv H
                  end.
-          
-          (* inv H0. inv H5. inv H14. inv H15. *)
-          (* inv H11. inv H15. inv H16. inv H17. *)
-          (* simpl in *. *)
 
-          (* inv H3; inv H2; inv H4. *)
-          (* inv H5; inv H11; inv H14. *)
+          replace t with E0 in *.
+          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          replace t' with E0 in *.
+          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          replace m' with m in *.
+          2: { eapply external_call_smove_mem; eauto. }
+          replace m'0 with m1 in *.
+          2: { eapply external_call_smove_mem; eauto. }
 
-          
+          assert (Hlessdef: Val.lessdef vres0 vres).
+          { pose proof H12 as Hext.
+            apply external_call_Three_Two' in H12.
+            destruct H12 as (v' & Hext' & Hv').
+            eapply Events.external_call_mem_extends
+              with (vargs' := [rs # arg]) in Hext'; eauto.
+            2: { repeat constructor; apply RS.
+                 intro HC; rewrite H7 in HC; inv HC; inv Hc. }
+            destruct Hext' as (vres' & m2' & Hext' & Hvres' & Hmem & Hmem').
+            eapply external_call_deterministic in Hext'.
+            2: { eapply H1. }
+            destruct Hext'; subst.
+            eapply Val.lessdef_trans; eauto. }
 
-          (* eapply external_call_vote_lessdef *)
-          (*   with (vs2 := rs ## (arg1 :: arg2 :: arg3 :: nil)) in H12; auto. *)
-          (* 2: { destruct c. *)
-          (*      - apply list_lessdef_mod_1_cons. *)
-          (*        repeat constructor. *)
-          (*        + apply RS; intro HC; rewrite H8 in HC; inv HC. *)
-          (*        + apply RS; intro HC; rewrite H9 in HC; inv HC. *)
-          (*      - apply list_lessdef_mod_1_cons_lessdef. *)
-          (*        + apply RS; intro HC; rewrite H7 in HC; inv HC. *)
-          (*        + apply list_lessdef_mod_1_cons. *)
-          (*          * repeat constructor. *)
-          (*            apply RS; intro HC; rewrite H9 in HC; inv HC. *)
-          (*      - apply list_lessdef_mod_1_cons_lessdef. *)
-          (*        + apply RS; intro HC; rewrite H7 in HC; inv HC. *)
-          (*        + apply list_lessdef_mod_1_cons_lessdef. *)
-          (*          * apply RS; intro HC; rewrite H8 in HC; inv HC. *)
-          (*          * apply list_lessdef_mod_1_cons; constructor. *)
-          (*      - inv Hc. *)
-          (*      - inv Hc. } *)
-          (* 2: { apply Memory.Mem.extends_refl. } *)
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto.
+            repeat constructor. }
+          simpl in *.
+          econstructor; eauto.
+          { intro r.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss.
+              apply val_lessdef_compat; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          exists c; split; auto.
+          intros r Hr.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss; auto. }
+          rewrite 2!Regmap.gso; auto.
+          destruct (peq r arg); subst.
+          { apply RS; intro HC.
+            rewrite H7 in HC; inv HC; inv Hc. }
+          apply RS; intro HC; apply Hr, H10; auto.
 
-          (* destruct H12 as (v' & Hext & Hv'). *)
+        * (* pink smove *)
+          repeat match goal with
+                 | [ H : eval_builtin_args _  _ _ _ _ _ |- _ ] => inv H
+                 | [ H : list_forall2 _ _ _ |- _ ]  => inv H
+                 | [ H : eval_builtin_arg _ _ _ _ (BA _) _ |- _ ] => inv H
+                 end.
+
+          replace t with E0 in *.
+          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          replace t' with E0 in *.
+          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          replace m' with m in *.
+          2: { eapply external_call_smove_mem; eauto. }
+          replace m'0 with m1 in *.
+          2: { eapply external_call_smove_mem; eauto. }
+
+          assert (Hlessdef: Val.lessdef vres0 vres).
+          { pose proof H12 as Hext.
+            apply external_call_Three_Two' in H12.
+            destruct H12 as (v' & Hext' & Hv').
+            eapply Events.external_call_mem_extends
+              with (vargs' := [rs # arg]) in Hext'; eauto.
+            2: { repeat constructor; apply RS.
+                 intro HC; rewrite H7 in HC; inv HC; inv Hc. }
+            destruct Hext' as (vres' & m2' & Hext' & Hvres' & Hmem & Hmem').
+            eapply external_call_deterministic in Hext'.
+            2: { eapply H1. }
+            destruct Hext'; subst.
+            eapply Val.lessdef_trans; eauto. }
+
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto.
+            repeat constructor. }
+          simpl in *.
+          econstructor; eauto.
+          { intro r.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss.
+              apply val_lessdef_compat; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          exists c; split; auto.
+          intros r Hr.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss; auto. }
+          rewrite 2!Regmap.gso; auto.
+          destruct (peq r arg); subst.
+          { apply RS; intro HC.
+            rewrite H7 in HC; inv HC; inv Hc. }
+          apply RS; intro HC; apply Hr, H10; auto.
+
+        * (* vote *)
+          repeat match goal with
+                 | [ H : eval_builtin_args _  _ _ _ _ _ |- _ ] => inv H
+                 | [ H : list_forall2 _ _ _ |- _ ]  => inv H
+                 | [ H : eval_builtin_arg _ _ _ _ (BA _) _ |- _ ] => inv H
+                 end.
 
           replace t with E0 in *.
           2: { symmetry; eapply external_call_vote_E0; eauto. }
@@ -1178,16 +1403,31 @@ Section TOLERANCE.
           2: { symmetry; eapply external_call_vote_E0; eauto. }
 
           eexists; split.
-          { apply plus_one.
-            eapply exec_Ibuiltin; eauto.
+          { eapply exec_Ibuiltin; eauto.
             repeat constructor. }
           assert (Val.lessdef vres0 vres).
           { eapply external_call_vote_lessdef
-              with (vs2 := rs ## (arg1 :: arg2 :: arg3 :: nil)) in H12; eauto.
+              with (vs2 := rs ## [arg1; arg2; arg3]) in H12; eauto.
             - destruct H12 as (v' & Hext & Hv').
               eapply external_call_deterministic in H1; eauto.
               destruct H1; subst; auto.
-            - admit. }
+            - destruct c.
+              + apply list_lessdef_mod_1_cons.
+                repeat constructor.
+                * apply RS; intro HC; rewrite H8 in HC; inv HC.
+                * apply RS; intro HC; rewrite H9 in HC; inv HC.
+              + apply list_lessdef_mod_1_cons_lessdef.
+                * apply RS; intro HC; rewrite H7 in HC; inv HC.
+                * apply list_lessdef_mod_1_cons.
+                  {  repeat constructor.
+                     apply RS; intro HC; rewrite H9 in HC; inv HC. }
+              + apply list_lessdef_mod_1_cons_lessdef.
+                * apply RS; intro HC; rewrite H7 in HC; inv HC.
+                * apply list_lessdef_mod_1_cons_lessdef.
+                  { apply RS; intro HC; rewrite H8 in HC; inv HC. }
+                  { apply list_lessdef_mod_1_cons; constructor. }
+              + inv Hc.
+              + inv Hc. }
             
           econstructor; eauto.
           3: { apply external_call_vote_mem in H1; auto.
@@ -1202,7 +1442,7 @@ Section TOLERANCE.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
-          admit. (* destruct c *)
+          apply RS; intro HC; apply Hr; apply H13; auto.
 
         * (* other builtin *)
           admit.
@@ -1236,35 +1476,24 @@ Section TOLERANCE.
   Proof.
     intros Hstep i s1 Hmatch Hsafe.
     inv Hstep.
-
-    eapply step_simulation in STEP; eauto.
-    destruct STEP as (i' & s1' & Hstep & Hmatch').
-    replace i with b in *.
-    2: { apply match_states_fault_inv in Hmatch; auto. }
-    replace i' with b in *.
-    2: { apply match_states_fault_inv in Hmatch'; auto. }
-    exists b', s1'; split.
-    - left; auto.
-    - eapply maybe_zap_preserves_match_states; eauto.
+    - eapply step_simulation in STEP; eauto.
+      destruct STEP as (i' & s1' & Hstep & Hmatch').
+      replace i with b in *.
+      2: { apply match_states_fault_inv in Hmatch; auto. }
+      replace i' with b in *.
+      2: { apply match_states_fault_inv in Hmatch'; auto. }
+      exists b', s1'; split.
+      + left; apply plus_one; auto.
+      + eapply maybe_zap_preserves_match_states; eauto.
+    - eapply step_simulation in STEP; eauto.
+      destruct STEP as (i' & s1' & Hstep & Hmatch').
+      replace i with b in *.
+      2: { apply match_states_fault_inv in Hmatch; auto. }
+      replace i' with b in *.
+      2: { apply match_states_fault_inv in Hmatch'; auto. }
+      exists b, s1'; split; auto.
+      left; apply plus_one; auto.
   Qed.
-      (* replace i' with false in *. *)
-      (* 2: { apply match_states_fault_inv in Hmatch'; auto. } *)
-      (* assumption. *)
-    
-  (*   - (* Fault hasn't occurred yet, may happen here after this step *) *)
-  (*     eapply (@step_simulation Three VoteSemantics_Three) in STEP; eauto. *)
-  (*     destruct STEP as (i' & s1' & Hstep & Hmatch'). *)
-  (*     exists b, s1'; split. *)
-  (*     + left; auto. *)
-  (*     + eapply maybe_zap_preserves_match_states; eauto. *)
-  (*       replace i' with false in *. *)
-  (*       2: { apply match_states_fault_inv in Hmatch'; auto. } *)
-  (*       assumption. *)
-  (*   - (* Fault has occurred already *) *)
-  (*     eapply step_simulation in STEP; eauto. *)
-  (*     destruct STEP as (i' & s1' & Hplus & Hmatch'). *)
-  (*     exists i', s1'; split; auto. *)
-  (* Qed. *)
 
   Theorem faulty_backward_simulation :
     backward_simulation
