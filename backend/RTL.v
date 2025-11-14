@@ -745,6 +745,37 @@ Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
     in_builtin_arg a a2 ->
     in_builtin_arg a (BA_addptr a1 a2).
 
+Fixpoint in_builtin_argb (r : reg) (barg : builtin_arg reg) : bool :=
+  match barg with
+  | BA r' => Pos.eqb r r'
+  | BA_splitlong hi lo => in_builtin_argb r hi || in_builtin_argb r lo
+  | BA_addptr a b => in_builtin_argb r a || in_builtin_argb r b
+  | _ => false
+  end.
+
+Lemma in_builtin_argb_spec (r : reg) (barg : builtin_arg reg) :
+  reflect (in_builtin_arg r barg) (in_builtin_argb r barg).
+Proof.
+  induction barg; simpl; try solve [right; intro HC; inv HC].
+  - destruct (Pos.eqb_spec r x); subst.
+    + left; constructor.
+    + right; intro HC; inv HC; congruence.
+  - destruct IHbarg1; simpl.
+    + left; constructor; auto.
+    + destruct IHbarg2; simpl.
+      * left; solve [constructor; auto].
+      * right; intro HC; inv HC; contradiction.
+  - destruct IHbarg1; simpl.
+    + left; constructor; auto.
+    + destruct IHbarg2; simpl.
+      * left; solve [constructor; auto].
+      * right; intro HC; inv HC; contradiction.
+Qed.
+
+Lemma in_builtin_argb_sound (r : reg) (barg : builtin_arg reg) :
+  in_builtin_argb r barg = true -> in_builtin_arg r barg.
+Proof. destruct (in_builtin_argb_spec r barg); congruence. Qed.
+
 Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
   In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.
 Proof.
@@ -822,6 +853,38 @@ Fixpoint builtin_res_forall {A : Type} (P : A -> Prop) (bres : builtin_res A) : 
   | BR_splitlong hi lo => builtin_res_forall P hi /\ builtin_res_forall P lo
   end.
 
+Lemma builtin_res_forall_impl {A : Type} (P Q : A -> Prop ) bres :
+  (forall a, P a -> Q a) ->
+  builtin_res_forall P bres ->
+  builtin_res_forall Q bres.
+Proof.
+  induction bres; simpl; intros Hpq Hforall; auto;
+    destruct Hforall; auto.
+Qed.
+
+Fixpoint builtin_res_forallb {A : Type} (f : A -> bool) (bres : builtin_res A) : bool :=
+  match bres with
+  | BR x => f x
+  | BR_none => true
+  | BR_splitlong hi lo => builtin_res_forallb f hi && builtin_res_forallb f lo
+  end.
+
+Lemma builtin_res_forallb_spec {A : Type} (f : A -> bool) (bres : builtin_res A) :
+  reflect (builtin_res_forall (fun a => f a = true) bres) (builtin_res_forallb f bres).
+Proof.
+  induction bres; simpl; try left; auto.
+  - destruct (f x); solve [constructor; auto].
+  - destruct IHbres1; simpl.
+    + destruct IHbres2; simpl.
+      * left; split; auto.
+      * right; intros [H0 H1]; congruence.
+    + right; intros [H0 H1]; congruence.
+Qed.
+
+Lemma builtin_res_forallb_sound {A : Type} (f : A -> bool) (bres : builtin_res A) :
+  builtin_res_forallb f bres = true -> builtin_res_forall (fun a => f a = true) bres.
+Proof. destruct (builtin_res_forallb_spec f bres); congruence. Qed.
+
 Lemma in_builtin_arg_forall {A : Type} (P : A -> Prop) barg x :
   builtin_arg_forall P barg ->
   in_builtin_arg x barg ->
@@ -830,19 +893,6 @@ Proof.
   revert x; induction barg; simpl; intros y Hforall Hin; inv Hin; auto;
     try solve [apply IHbarg1; intuition]; apply IHbarg2; intuition.
 Qed.
-
-Lemma builtin_arg_forall_impl {A : Type} (P Q : A -> Prop ) barg :
-  (forall a, P a -> Q a) ->
-  builtin_arg_forall P barg ->
-  builtin_arg_forall Q barg.
-Proof.
-  induction barg; simpl; intros Hpq Hforall; auto;
-    destruct Hforall; auto.
-Qed.
-
-Lemma builtin_arg_forall_true {A : Type} barg :
-   builtin_arg_forall (fun _ : A => True) barg.
-Proof. induction barg; simpl; auto. Qed.
 
 Inductive is_smove_builtin : external_function -> Prop :=
 | is_smove_int :
@@ -853,6 +903,60 @@ Inductive is_smove_builtin : external_function -> Prop :=
   is_smove_builtin (EF_builtin "__builtin_smove_single" [Xsingle ---> Xsingle]%asttyp)
 | is_smove_float :
   is_smove_builtin (EF_builtin "__builtin_smove_float" [Xfloat ---> Xfloat]%asttyp).
+
+Definition is_smove_builtinb (ef : external_function) : bool :=
+  match ef with
+  | EF_builtin name sg =>
+      (String.eqb name "__builtin_smove_int" &&
+         proj_sumbool (signature_eq sg
+                         [Xint ---> Xint]%asttyp)) ||
+        (String.eqb name "__builtin_smove_long" &&
+           proj_sumbool (signature_eq sg
+                           [Xlong ---> Xlong]%asttyp)) ||
+        (String.eqb name "__builtin_smove_single" &&
+           proj_sumbool (signature_eq sg
+                           [Xsingle ---> Xsingle]%asttyp)) ||
+        (String.eqb name "__builtin_smove_float" &&
+           proj_sumbool (signature_eq sg
+                           [Xfloat ---> Xfloat]%asttyp))
+  | _ => false
+  end.
+
+Lemma is_smove_builtinb_spec (ef : external_function) :
+  reflect (is_smove_builtin ef) (is_smove_builtinb ef).
+Proof.
+  destruct ef; try solve [right; intro HC; inv HC].
+  simpl.
+  destruct (String.eqb name "__builtin_smove_single") eqn:H0.
+  { rewrite String.eqb_eq in H0; subst.
+    destruct (signature_eq sg
+                [Xsingle ---> Xsingle]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H0.
+  destruct (String.eqb name "__builtin_smove_int") eqn:H1.
+  { rewrite String.eqb_eq in H1; subst.
+    destruct (signature_eq sg
+                [Xint ---> Xint]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H1.
+  destruct (String.eqb name "__builtin_smove_float") eqn:H2.
+  { rewrite String.eqb_eq in H2; subst.
+    destruct (signature_eq sg
+                [Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H2.
+  destruct (String.eqb name "__builtin_smove_long") eqn:H3.
+  { rewrite String.eqb_eq in H3; subst.
+    destruct (signature_eq sg
+                [Xlong ---> Xlong]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H3.
+  right; intro HC; inv HC; congruence.
+Qed.
 
 Inductive is_vote_builtin : external_function -> Prop :=
 | is_vote_int :

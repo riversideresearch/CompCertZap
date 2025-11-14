@@ -1824,10 +1824,6 @@ Qed.
 
 End EVAL_BUILTIN_ARG_LESSDEF.
 
-(** Stronger version of the above, that only assumes lessdef on
-    registers that appear in the arguments (rather than *all*
-    registers in the environment). *)
-
 Fixpoint builtin_arg_forall {A : Type} (P : A -> Prop) (barg : builtin_arg A) : Prop :=
   match barg with
   | BA x => P x
@@ -1835,6 +1831,52 @@ Fixpoint builtin_arg_forall {A : Type} (P : A -> Prop) (barg : builtin_arg A) : 
   | BA_addptr a1 a2 => builtin_arg_forall P a1 /\ builtin_arg_forall P a2
   | _ => True
   end.
+
+Lemma builtin_arg_forall_impl {A : Type} (P Q : A -> Prop ) barg :
+  (forall a, P a -> Q a) ->
+  builtin_arg_forall P barg ->
+  builtin_arg_forall Q barg.
+Proof.
+  induction barg; simpl; intros Hpq Hforall; auto;
+    destruct Hforall; auto.
+Qed.
+
+Lemma builtin_arg_forall_true {A : Type} barg :
+   builtin_arg_forall (fun _ : A => True) barg.
+Proof. induction barg; simpl; auto. Qed.
+
+Fixpoint builtin_arg_forallb {A : Type} (f : A -> bool) (barg : builtin_arg A) : bool :=
+  match barg with
+  | BA x => f x
+  | BA_splitlong hi lo => builtin_arg_forallb f hi && builtin_arg_forallb f lo
+  | BA_addptr a1 a2 => builtin_arg_forallb f a1 && builtin_arg_forallb f a2
+  | _ => true
+  end.
+
+Lemma builtin_arg_forallb_spec {A : Type} (f : A -> bool) (barg : builtin_arg A) :
+  reflect (builtin_arg_forall (fun a => f a = true) barg) (builtin_arg_forallb f barg).
+Proof.
+  induction barg; simpl; try left; auto.
+  - destruct (f x); solve [constructor; auto].
+  - destruct IHbarg1; simpl.
+    + destruct IHbarg2; simpl.
+      * left; split; auto.
+      * right; intros [H0 H1]; congruence.
+    + right; intros [H0 H1]; congruence.
+  - destruct IHbarg1; simpl.
+    + destruct IHbarg2; simpl.
+      * left; split; auto.
+      * right; intros [H0 H1]; congruence.
+    + right; intros [H0 H1]; congruence.
+Qed.
+
+Lemma builtin_arg_forallb_sound {A : Type} (f : A -> bool) (barg : builtin_arg A) :
+  builtin_arg_forallb f barg = true -> builtin_arg_forall (fun a => f a = true) barg.
+Proof. destruct (builtin_arg_forallb_spec f barg); congruence. Qed.
+
+(** Stronger version of the above, that only assumes lessdef on
+    registers that appear in the arguments (rather than *all*
+    registers in the environment). *)
 
 Section EVAL_BUILTIN_ARG_LESSDEF.
 

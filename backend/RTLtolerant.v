@@ -867,8 +867,7 @@ Section TOLERANCE.
              inv_rs; inv_wc.
              apply RS.
              rewrite Forall_forall in H6; apply H6 in Hin.
-             destruct Hin as [Hwhite _].
-             intro HC; rewrite Hwhite in HC; inv HC; inv Hc. }
+             intro HC; rewrite Hin in HC; inv HC; inv Hc. }
         destruct H0 as (v2 & Hop & Hv2).
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
@@ -892,8 +891,7 @@ Section TOLERANCE.
            inv_rs; inv_wc.
            apply RS.
            rewrite Forall_forall in H5; apply H5 in Hin.
-           destruct Hin as [Hwhite _].
-           intro HC; rewrite Hwhite in HC; inv HC; inv Hc. }
+           intro HC; rewrite Hin in HC; inv HC; inv Hc. }
       destruct H0 as (v2 & Hop & Hv2).
       eapply Memory.Mem.loadv_extends in H1; eauto.
       destruct H1 as (v3 & Hmem & Hv3).
@@ -1000,7 +998,6 @@ Section TOLERANCE.
                + inv H.
              - rewrite Forall_forall in H8.
                apply H8 in Hin.
-               destruct Hin as [Hwhite _].
                destruct fault.
                + inv_rs.
                  eapply builtin_arg_forall_impl; eauto.
@@ -1133,15 +1130,13 @@ Section TOLERANCE.
                  intros r Hin.
                  apply RS; intro HC.
                  rewrite Forall_forall in H6; apply H6 in Hin.
-                 destruct Hin as [Hwhite _].
-                 rewrite Hwhite in HC; inv HC; inv Hc. }
+                 rewrite Hin in HC; inv HC; inv Hc. }
             destruct H10 as (v2 & Hop & Hv2).
             rewrite H0 in Hop; inv Hop; auto. }
           rewrite 2!Regmap.gso; auto; apply RS; intro HC.
           destruct (in_dec peq r args0).
           { rewrite Forall_forall in H6; apply H6 in i.
-            destruct i as [Hwhite _].
-            rewrite Hwhite in HC; inv HC; inv Hc. }
+            rewrite i in HC; inv HC; inv Hc. }
           apply H8 in HC; auto.
         * intro r; destruct (peq r res0); subst.
           { rewrite 2!Regmap.gss.
