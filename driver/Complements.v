@@ -18,7 +18,7 @@ Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
 Require Import Compopts.
-Require Import RTLagreement RTLcolor RTLfault RTLtolerant.
+Require Import RTLagreement RTLcolorcheck RTLfault RTLtolerant.
 Require Import Novotes Novotesproof.
 Require Import Asmagreement.
 Require Import Builtins2.
@@ -232,7 +232,7 @@ Admitted.
 Theorem transf_c_program_to_rtl_preservation_faulty:
   forall p tp beh,
     transf_c_program_to_rtl p = OK tp ->
-    RTLcolor.check_program tp = true ->
+    RTLcolorcheck.check_program tp = true ->
     program_behaves (faulty_semantics tp) beh ->
     exists beh', program_behaves (@Csem.semantics Builtins2.Two Builtins2.VoteSemantics_Two p) beh'
           /\ behavior_improves beh' beh.
@@ -242,7 +242,7 @@ Proof.
   pose proof Hbeh as H.
   eapply backward_simulation_behavior_improves in H.
   2: { apply faulty_backward_simulation.
-       apply RTLcolor.check_program_sound; auto. }
+       apply RTLcolorcheck.check_program_sound; auto. }
   destruct H as (beh1 & Hbeh1 & Himp).
   eapply compiled_rtl_weak_agreement in Hbeh1; eauto.
   destruct Hbeh1 as (beh2 & Hbeh2 & Himp').
