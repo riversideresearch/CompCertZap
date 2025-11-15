@@ -121,7 +121,7 @@ Section wc.
       wc_instruction pc (Iload chunk addr args res succ)
   | wc_Istore : forall chunk addr args src succ,
       is_white (col pc src) ->
-      is_red (col succ src) ->
+      (* is_red (col succ src) -> *)
       Forall (fun arg => is_white (col pc arg)) args ->
       (forall r c, ~ In r args -> r <> src ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
@@ -159,7 +159,8 @@ Section wc.
       is_green (col pc arg2) ->
       is_blue (col pc arg3) ->
       is_white (col succ res) ->
-      (forall r c, r <> res -> is_color (col pc r) c -> is_color (col succ r) c) ->
+      (forall r c, r <> res ->
+              is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Ibuiltin ef (BA arg1 :: BA arg2 :: BA arg3 :: nil) (BR res) succ)
   | wc_Ibuiltin : forall ef args res succ,
       ~ is_smove_builtin ef ->
@@ -188,7 +189,8 @@ Section wc.
 
   Record wc_function (f : function) : Prop :=
     mk_wc_function {
-        wc_fn_params : Forall (fun param => col f.(fn_entrypoint) param = Some Red) f.(fn_params);
+        wc_fn_params : Forall (fun param => col f.(fn_entrypoint) param = Some White)
+                         f.(fn_params);
         wc_fn_code : wc_code f.(fn_code)
       }.
 

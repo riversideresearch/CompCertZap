@@ -146,7 +146,7 @@ Section color_checker.
                          is_colorb ((col succ) ! r) c)
     | Istore chunk addr args src succ =>
         is_whiteb ((col pc) ! src) &&
-          is_redb ((col succ) ! src) &&
+          (* is_redb ((col succ) ! src) && *)
           forallb (fun arg => is_whiteb ((col pc) ! arg)) args &&
           PTree_Properties.for_all (col pc)
             (fun r c => inb r args ||
@@ -224,7 +224,7 @@ Section color_checker.
     end.
   
   Definition check_col_function (f : function) : bool :=
-    forallb (fun param => is_colorb ((col f.(fn_entrypoint)) ! param) Red) f.(fn_params) &&
+    forallb (fun param => is_colorb ((col f.(fn_entrypoint)) ! param) White) f.(fn_params) &&
       PTree_Properties.for_all f.(fn_code) (fun pc instr => check_col_instr pc instr).
 
   Lemma not_in_inb x l :
@@ -308,13 +308,13 @@ Section color_checker.
           - apply Peqb_true_eq in Hx; congruence. }
         apply is_colorb_sound; auto.
     - destruct_andb Hcheck Hpres.
-      destruct_andb Hcheck Hargs.
-      destruct_andb Hwhite Hred.
+      destruct_andb Hwhite Hargs.
+      (* destruct_andb Hwhite Hred. *)
       rewrite forallb_forall in Hargs.
       rewrite PTree_Properties.for_all_correct in Hpres.
       constructor.
       + apply is_colorb_sound; auto.
-      + apply is_colorb_sound; auto.
+      (* + apply is_colorb_sound; auto. *)
       + apply Forall_forall; intros x Hin; apply is_colorb_sound; auto.
       + intros x c Hnotin Hneq Hx.
         apply Hpres in Hx.
@@ -390,6 +390,20 @@ Section color_checker.
           destruct_orb H H.
           { apply Pos.eqb_eq in H; congruence. }
           apply is_colorb_sound; auto.
+          (* intros r c Hnotin Hneq Hrc; apply Hpres in Hrc. *)
+          (* destruct_orb H H. *)
+          (* { destruct_orb H H. *)
+          (*   - destruct_orb H H. *)
+          (*     + apply Pos.eqb_eq in H; subst. *)
+          (*       exfalso; apply Hnotin; left; reflexivity. *)
+          (*     + destruct_orb H H. *)
+          (*       * apply Pos.eqb_eq in H; subst. *)
+          (*         exfalso; apply Hnotin; right; left; reflexivity. *)
+          (*       * destruct_orb H H; try congruence. *)
+          (*         { apply Pos.eqb_eq in H; subst. *)
+          (*           exfalso; apply Hnotin; right; right; left; reflexivity. } *)
+          (*   - apply Pos.eqb_eq in H; congruence. } *)
+          (* apply is_colorb_sound; auto. *)
         * (* other builtin *)
           destruct_andb Hcheck Hpres.
           destruct_andb Hargs Hres.
