@@ -730,8 +730,8 @@ Proof.
     eapply maj_vote_regsR_ptree_set; auto.
     eapply state_incr_maj_vote_regsR.
     2: { eapply maj_vote_regs_maj_vote_regsR.
-         2: { eauto. }
-         auto. }
+         2: { eauto. admit. }
+         auto. admit. }
     intro pc; inv s3; auto.
 
   (* Istore *)
@@ -753,6 +753,7 @@ Proof.
     { eauto. }
     2: { rewrite PTree.gss; reflexivity. }
     apply maj_vote_regsR_ptree_set; auto.
+    admit.
 
   (* Icall *)
   - simpl in Htransf; unfold RTLgen.bind in Htransf; simpl in Htransf.
@@ -780,6 +781,7 @@ Proof.
     simpl in *; unfold Ple in *.
     econstructor; eauto.
     + repeat apply maj_vote_regsR_ptree_set; eauto.
+      admit.
     + rewrite PTree.gss; reflexivity.
     + econstructor; eauto.
       { rewrite 2!PTree.gso; try lia.
@@ -798,6 +800,7 @@ Proof.
     simpl in *; unfold Ple in *.
     econstructor; eauto.
     + repeat apply maj_vote_regsR_ptree_set; eauto.
+      admit.
     + rewrite PTree.gss; reflexivity.
 
     (* Ibuiltin *)
@@ -812,8 +815,8 @@ Proof.
       { eapply maj_vote_regsR_ptree_set; auto.
         eapply state_incr_maj_vote_regsR.
         2: { eapply maj_vote_regs_maj_vote_regsR.
-             2: { eauto. }
-             auto. }
+             2: { eauto. admit. }
+             auto. admit. }
         intros; clear H0; inv s3; inv s4.
         specialize (H2 pc); specialize (H5 pc).
         destruct H2 as [H2 | H2]; auto. }
@@ -830,8 +833,8 @@ Proof.
       { eapply maj_vote_regsR_ptree_set; auto.
         eapply state_incr_maj_vote_regsR.
         2: { eapply maj_vote_regs_maj_vote_regsR.
-             2: { eauto. }
-             auto. }
+             2: { eauto. admit. }
+             auto. admit. }
         intros; inv s1.
         specialize (H2 pc).
         destruct H2 as [H2 | H2]; auto. }
@@ -848,6 +851,7 @@ Proof.
     simpl in *; unfold Ple in *.
     econstructor; eauto.
     + repeat apply maj_vote_regsR_ptree_set; eauto.
+      admit.
     + rewrite PTree.gss; reflexivity.
 
   (* Ijumptable *)

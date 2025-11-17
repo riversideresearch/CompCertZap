@@ -688,6 +688,17 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   | Ireturn None => nil
   end.
 
+Definition inb (p : positive) (l : list positive) : bool :=
+  existsb (fun x => Pos.eqb x p) l.
+
+Fixpoint dedup (l : list positive) : list positive :=
+  match l with
+  | nil => nil
+  | x :: xs =>
+      let l' := dedup xs in
+      if inb x l' then l' else x :: l'
+  end.
+
 Definition succ_of_instruction (instr : instruction) : option node :=
   match instr with
   | Inop succ => Some succ
@@ -810,6 +821,31 @@ Inductive in_builtin_res {A : Type} (a : A) : builtin_res A -> Prop :=
 | in_builtin_res_splitlong_lo : forall hi lo,
     in_builtin_res a lo ->
     in_builtin_res a (BR_splitlong hi lo).
+
+Fixpoint in_builtin_resb (r : reg) (bres : builtin_res reg) : bool :=
+  match bres with
+  | BR r' => Pos.eqb r r'
+  | BR_none => false
+  | BR_splitlong hi lo => in_builtin_resb r hi || in_builtin_resb r lo
+  end.
+
+Lemma in_builtin_resb_spec (r : reg) (bres : builtin_res reg) :
+  reflect (in_builtin_res r bres) (in_builtin_resb r bres).
+Proof.
+  induction bres; simpl; try solve [right; intro HC; inv HC].
+  - destruct (Pos.eqb_spec r x); subst.
+    + left; constructor.
+    + right; intro HC; inv HC; congruence.
+  - destruct IHbres1; simpl.
+    + left; constructor; auto.
+    + destruct IHbres2; simpl.
+      * left; solve [constructor; auto].
+      * right; intro HC; inv HC; contradiction.
+Qed.
+
+Lemma in_builtin_resb_sound (r : reg) (bres : builtin_res reg) :
+  in_builtin_resb r bres = true -> in_builtin_res r bres.
+Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
 
 (* TODO: some of these (e.g., Oshrximm) can be checked statically for
    safety, even here if we want (check that n is small enough). For

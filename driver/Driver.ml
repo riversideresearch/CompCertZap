@@ -60,8 +60,12 @@ let compile_c_file sourcename ifile ofile =
     | Errors.OK rtl -> rtl
     | Errors.Error msg -> let loc = file_loc sourcename in
                           fatal_error loc "%a"  print_error msg in
-  if not (RTLcolorcheck.check_program rtl) then
-    print_endline "RTL program not well-colored!";
+  if RTLcolorcheck.check_program rtl then
+    print_endline "RTL program is well-colored :)"
+  else begin
+      print_endline "RTL program not well-colored!";
+      exit 1
+    end;
   
   (* Convert to Asm *)
   let asm =

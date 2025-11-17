@@ -3,7 +3,6 @@ Require Import
   Errors
   Coqlib
   Events
-  (* Globalenvs *)
   Integers
   List
   Maps
@@ -121,7 +120,6 @@ Section wc.
       wc_instruction pc (Iload chunk addr args res succ)
   | wc_Istore : forall chunk addr args src succ,
       is_white (col pc src) ->
-      (* is_red (col succ src) -> *)
       Forall (fun arg => is_white (col pc arg)) args ->
       (forall r c, ~ In r args -> r <> src ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
@@ -130,7 +128,7 @@ Section wc.
       (forall r, fn = inl r -> is_white (col pc r)) ->
       Forall (fun arg => is_white (col pc arg)) args ->
       is_white (col succ res) ->
-      (forall r c, ~ In r args -> (forall r', fn = inl r' -> r <> r') ->
+      (forall r c, ~ In r args -> r <> res -> (forall r', fn = inl r' -> r <> r') ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Icall sig fn args res succ)
   | wc_Itailcall : forall sig fn args,
@@ -162,14 +160,15 @@ Section wc.
       (forall r c, r <> res ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Ibuiltin ef (BA arg1 :: BA arg2 :: BA arg3 :: nil) (BR res) succ)
-  | wc_Ibuiltin : forall ef args res succ,
+  | wc_Ibuiltin : forall ef bargs bres succ,
       ~ is_smove_builtin ef ->
       ~ is_vote_builtin ef ->
-      Forall (builtin_arg_forall (fun r => is_white (col pc r))) args ->
-      builtin_res_forall (fun r => is_white (col succ r)) res ->
-      (forall r c, ~ Exists (in_builtin_arg r) args ->
+      Forall (builtin_arg_forall (fun r => is_white (col pc r))) bargs ->
+      builtin_res_forall (fun r => is_white (col succ r)) bres ->
+      (forall r c, ~ Exists (in_builtin_arg r) bargs ->
+              ~ in_builtin_res r bres ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
-      wc_instruction pc (Ibuiltin ef args res succ)
+      wc_instruction pc (Ibuiltin ef bargs bres succ)
   | wc_Icond : forall cond args ifso ifnot,
       Forall (fun arg => is_white (col pc arg)) args ->
       (forall r c, ~ In r args -> is_color (col pc r) c ->

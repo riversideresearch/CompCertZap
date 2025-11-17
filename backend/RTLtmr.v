@@ -167,7 +167,7 @@ Definition transf_instr
       update_instr pc (Inop n)
   | Iop op args dst _succ =>
       if is_unsafeb op then
-        do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
+        do n <- maj_vote_regs re rm (dedup (args_of_instruction instr)) pc;
         match res_of_instruction instr, succ_of_instruction instr with
         | Some res, Some succ =>
             do m <- reserve_instr;
@@ -194,7 +194,7 @@ Definition transf_instr
      instructions with result registers (Icall and Ibuiltin), copy the
      result into its shadow registers. *)
   | _ =>
-      do n <- maj_vote_regs re rm (args_of_instruction instr) pc;
+      do n <- maj_vote_regs re rm (dedup (args_of_instruction instr)) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | Some res, Some succ =>
           do m <- reserve_instr;
@@ -339,7 +339,7 @@ Definition replication_map (f : function) : mon (PMap.t (reg * reg)) :=
 Definition live_regs (f : function) : mon Regset.t :=
   match Liveness.analyze f with
   | Some m => let pc := fn_entrypoint f in
-             ret (transfer f pc (m !! pc))
+              ret (transfer f pc (m !! pc))
   | None => error (MSG "Replicate.v:live_regs: liveness analysis failed" :: nil)
   end.
 

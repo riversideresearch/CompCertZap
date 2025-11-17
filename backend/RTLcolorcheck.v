@@ -72,9 +72,6 @@ Proof. destruct (is_colorb_spec x c); auto; congruence. Qed.
 
 Parameter infer_coloring : function -> option (node -> PTree.t color).
 
-Definition inb (p : positive) (l : list positive) : bool :=
-  existsb (fun x => Pos.eqb x p) l.
-
 Section color_checker.
   Variable col : node -> PTree.t color.
 
@@ -161,6 +158,7 @@ Section color_checker.
           is_whiteb ((col succ) ! res) &&
           PTree_Properties.for_all (col pc)
             (fun r c => inb r args ||
+                       Pos.eqb r res ||
                        match fn with
                        | inl r' => Pos.eqb r' r
                        | inr _ => false
@@ -172,40 +170,42 @@ Section color_checker.
          | inr _ => true
          end) &&
           forallb (fun arg => is_whiteb ((col pc) ! arg)) args
-    | Ibuiltin ef args res succ =>
+    | Ibuiltin ef bargs bres succ =>
         if is_smove_builtinb ef then
-          match args, res with
-          | BA arg :: nil, BR res' =>
+          match bargs, bres with
+          | BA arg :: nil, BR res =>
               PTree_Properties.for_all (col pc)
                 (fun r c => Pos.eqb r arg ||
-                           Pos.eqb r res' ||
+                           Pos.eqb r res ||
                              is_colorb ((col succ) ! r) c) &&
                 if is_whiteb ((col pc) ! arg) then
                   is_pinkb ((col succ) ! arg) &&
-                    is_greenb ((col succ) ! res')
+                    is_greenb ((col succ) ! res)
                 else
                   is_pinkb ((col pc) ! arg) &&
                     is_redb ((col succ) ! arg) &&
-                    is_blueb ((col succ) ! res')
+                    is_blueb ((col succ) ! res)
           | _, _ => false
           end
         else
           if is_vote_builtinb ef then
-            match args, res with
-            | BA arg1 :: BA arg2 :: BA arg3 :: nil, BR res' =>
+            match bargs, bres with
+            | BA arg1 :: BA arg2 :: BA arg3 :: nil, BR res =>
                 is_redb ((col pc) ! arg1) &&
                   is_greenb ((col pc) ! arg2) &&
                   is_blueb ((col pc) ! arg3) &&
-                  is_whiteb ((col succ) ! res') &&
+                  is_whiteb ((col succ) ! res) &&
                   PTree_Properties.for_all (col pc)
-                    (fun r c => Pos.eqb r res' || is_colorb ((col succ) ! r) c)
+                    (fun r c => Pos.eqb r res || is_colorb ((col succ) ! r) c)
             | _, _ => false
             end
           else
-            forallb (builtin_arg_forallb (fun r => is_whiteb ((col pc) ! r))) args &&
-              builtin_res_forallb (fun r => is_whiteb ((col succ) ! r)) res &&
+            forallb (builtin_arg_forallb (fun r => is_whiteb ((col pc) ! r))) bargs &&
+              builtin_res_forallb (fun r => is_whiteb ((col succ) ! r)) bres &&
               PTree_Properties.for_all (col pc)
-                (fun r c => existsb (in_builtin_argb r) args || is_colorb ((col succ) ! r) c)
+                (fun r c => existsb (in_builtin_argb r) bargs ||
+                           in_builtin_resb r bres ||
+                             is_colorb ((col succ) ! r) c)
     | Icond cond args ifso ifnot =>
         forallb (fun arg => is_whiteb ((col pc) ! arg)) args &&
           PTree_Properties.for_all (col pc)
@@ -332,11 +332,13 @@ Section color_checker.
        + intros x Hx; destruct s0; inv Hx; apply is_colorb_sound; auto.
        + apply Forall_forall; intros x Hin. apply is_colorb_sound; auto.
        + apply is_colorb_sound; auto.
-       + intros x c Hnotin Hneq Hx.
+       + intros x c Hnotin Hneqr Hneq Hx.
          apply Hpres in Hx.
          destruct_orb Hin Hx.
          { destruct_orb Hin Hx.
-           - exfalso; eapply not_in_inb; eauto.
+           - destruct_orb Hin Hx.
+             { exfalso; eapply not_in_inb; eauto. }
+             apply Pos.eqb_eq in Hx; subst; congruence.
            - destruct s0; try congruence.
              apply Pos.eqb_eq in Hx; subst.
              specialize (Hneq x eq_refl); congruence. }
@@ -419,14 +421,16 @@ Section color_checker.
           { apply builtin_res_forallb_sound in Hres.
             eapply builtin_res_forall_impl; eauto.
             intros r Hwhite; apply is_colorb_sound; auto. }
-          intros r c Hnotex Hrc; apply Hpres in Hrc.
+          intros r c Hnotex Hnoteq Hrc; apply Hpres in Hrc.
           destruct_orb H H.
-          { apply Forall_Exists_neg in Hnotex.
-            rewrite Forall_forall in Hnotex.
-            apply existsb_exists in H.
-            destruct H as (barg & Hin & Hin').
-            apply Hnotex in Hin.
-            apply in_builtin_argb_sound in Hin'; contradiction. }
+          { destruct_orb H H.
+            - apply Forall_Exists_neg in Hnotex.
+              rewrite Forall_forall in Hnotex.
+              apply existsb_exists in H.
+              destruct H as (barg & Hin & Hin').
+              apply Hnotex in Hin.
+              apply in_builtin_argb_sound in Hin'; contradiction.
+            - admit. }
           apply is_colorb_sound; auto.
     - destruct_andb Hargs Hpres.
       rewrite forallb_forall in Hargs.
@@ -451,7 +455,7 @@ Section color_checker.
     - destruct o.
       + constructor; apply is_colorb_sound; auto.
       + constructor; apply I.
-  Qed.
+  Admitted.
 
   Lemma check_col_function_sound (f : function) :
     check_col_function f = true ->

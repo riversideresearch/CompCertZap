@@ -139,7 +139,7 @@ Section TOLERANCE.
     inv_wc; simpl in *; try congruence; inv Hr; inv Hsucc;
       try solve [exists White; auto]; try solve [eexists; eauto].
     - inv H0; eexists; eauto.
-    - destruct res; simpl in *; try congruence.
+    - destruct bres; simpl in *; try congruence.
       inv H5; exists White; auto.
   Qed.
 
