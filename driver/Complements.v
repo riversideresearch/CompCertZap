@@ -50,6 +50,7 @@ Proof.
   destruct (partial_if dmr RTLdmr.transf_program p) as [pdmr|e] eqn:Pdmr; simpl in T; try discriminate.
   destruct (partial_if tmr RTLtmr.transf_program pdmr) as [p15'|e] eqn:P15; simpl in T; try discriminate.
   set (p15 := Renumber.transf_program p15') in *.
+    unfold transf_rtl_program'', time in T. rewrite ! compose_print_identity in T. simpl in T.
   destruct (Allocation.transf_program p15) as [p16|e] eqn:P16; simpl in T; try discriminate.
   set (p17 := Tunneling.tunnel_program p16) in *.
   destruct (Linearize.transf_program p17) as [p18|e] eqn:P18; simpl in T; try discriminate.

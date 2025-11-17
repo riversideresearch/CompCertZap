@@ -581,10 +581,10 @@ let ptree_of_intmap (m : 'a Intmap.t) : 'a PTree.t =
 
 let infer_coloring (f : coq_function) : (node -> color PTree.t) option =
   (* if (List.length @@ PTree.elements f.fn_code) > 1000 then None else begin *)
-  print_endline @@ "function size = " ^
-                     string_of_int @@ List.length @@ PTree.elements f.fn_code;
+  (* print_endline @@ "function size = " ^ *)
+  (*                    string_of_int @@ List.length @@ PTree.elements f.fn_code; *)
   (* print_endline @@ "entrypoint = " ^ string_of_positive @@ f.fn_entrypoint; *)
-  print_endline @@ "# params = " ^ string_of_int @@ List.length f.fn_params;
+  (* print_endline @@ "# params = " ^ string_of_int @@ List.length f.fn_params; *)
   (* List.iter (fun param -> print_endline @@ string_of_positive param) f.fn_params; *)
   (* (match Intmap.find_opt (positive_of_int 36) f.fn_code with *)
   (* | Some instr -> print_endline @@ string_of_instruction instr *)
@@ -613,7 +613,7 @@ let infer_coloring (f : coq_function) : (node -> color PTree.t) option =
   in
   match go (init_cols f) with
   | Some m -> (* check_code f.fn_code m; *)
-     print_endline "color inference succeeded!";
+     (* print_endline "color inference succeeded!"; *)
      let final_cols = Intmap.map ptree_of_intmap m in
      Some (fun n -> Option.value ~default:PTree.Empty @@
                       Intmap.find_opt (int_of_positive n) final_cols)

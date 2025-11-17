@@ -123,14 +123,8 @@ Definition partial_if {A: Type}
   RTL program.  The three translations produce Asm programs ready for
   pretty-printing and assembling. *)
 
-Definition transf_rtl_program' (f: RTL.program) : res Asm.program :=
+Definition transf_rtl_program'' (f: RTL.program) : res Asm.program :=
   OK f
-  @@ print (print_RTL 9)
-  @@@ partial_if Compopts.dmr (time "DMR" RTLdmr.transf_program)
-  @@ print (print_RTL 10)
-  @@@ partial_if Compopts.tmr (time "TMR" RTLtmr.transf_program)
-  @@ print (print_RTL 11)
-  @@ time "Renumbering" Renumber.transf_program
   @@ print (print_RTL 12)
   @@@ time "Register allocation" Allocation.transf_program
    @@ print print_LTL
@@ -141,6 +135,26 @@ Definition transf_rtl_program' (f: RTL.program) : res Asm.program :=
   @@@ time "Mach generation" Stacking.transf_program
    @@ print print_Mach
   @@@ time "Asm generation" Asmgen.transf_program.
+
+Definition transf_rtl_program' (f: RTL.program) : res Asm.program :=
+  OK f
+  @@ print (print_RTL 9)
+  @@@ partial_if Compopts.dmr (time "DMR" RTLdmr.transf_program)
+  @@ print (print_RTL 10)
+  @@@ partial_if Compopts.tmr (time "TMR" RTLtmr.transf_program)
+  @@ print (print_RTL 11)
+  @@ time "Renumbering" Renumber.transf_program
+  @@@ transf_rtl_program''.
+  (* @@ print (print_RTL 12) *)
+  (* @@@ time "Register allocation" Allocation.transf_program *)
+  (*  @@ print print_LTL *)
+  (*  @@ time "Branch tunneling" Tunneling.tunnel_program *)
+  (* @@@ time "CFG linearization" Linearize.transf_program *)
+  (*  @@ time "Label cleanup" CleanupLabels.transf_program *)
+  (* @@@ partial_if Compopts.debug (time "Debugging info for local variables" Debugvar.transf_program) *)
+  (* @@@ time "Mach generation" Stacking.transf_program *)
+  (*  @@ print print_Mach *)
+  (* @@@ time "Asm generation" Asmgen.transf_program. *)
 
 Definition transf_rtl_program (f: RTL.program) : res RTL.program :=
    OK f
@@ -386,10 +400,13 @@ Proof.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
   destruct (Novotes.check_program p14) as [pnovotes|e] eqn:Pnovotes; simpl in T; try discriminate.
-  unfold transf_rtl_program', time in T. rewrite ! compose_print_identity in T. simpl in T.
+  unfold transf_rtl_program', time in T.
+  rewrite ! compose_print_identity in T. simpl in T.
   destruct (partial_if dmr RTLdmr.transf_program pnovotes) as [pdmr|e] eqn:Pdmr; simpl in T; try discriminate.
   destruct (partial_if tmr RTLtmr.transf_program pdmr) as [p15'|e] eqn:P15; simpl in T; try discriminate.
   set (p15 := Renumber.transf_program p15') in *.
+  unfold transf_rtl_program'', time in T.
+  rewrite ! compose_print_identity in T. simpl in T.
   destruct (Allocation.transf_program p15) as [p16|e] eqn:P16; simpl in T; try discriminate.
   set (p17 := Tunneling.tunnel_program p16) in *.
   destruct (Linearize.transf_program p17) as [p18|e] eqn:P18; simpl in T; try discriminate.

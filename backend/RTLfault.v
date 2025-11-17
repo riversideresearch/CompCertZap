@@ -8,13 +8,11 @@ Require Import
   Maps
   Memory
   Op
-  (* List *)
   Registers
   RTL
   Smallstep
   Values
 .
-(* Import ListNotations. *)
 
 Record fstate : Type :=
   mkfstate { fs_state : RTL.state
