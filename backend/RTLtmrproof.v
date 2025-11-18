@@ -334,6 +334,20 @@ Section PRESERVATION.
     inv Hwf; inv H2; inv H4; apply H2; right; right; left; reflexivity.
   Qed.
 
+  Lemma match_regsets_rs_args params c rm args rs rs' :
+    match_regsets params c rm rs rs' ->
+    Forall (reg_used_in_code c) args ->
+    rs ## args = rs' ## args.
+  Proof.
+    induction args; intros Hall Hmatch; inv Hmatch; auto.
+    simpl; f_equal; eauto.
+    unfold match_regsets in Hall.
+    destruct (rm # a) eqn:Ha.
+    apply Hall in Ha; destruct Ha; auto.
+    unfold reg_used.
+    right; auto.
+  Qed.
+
   Lemma rs_args1_rs'_args2 params c rm args1 args2 args3 rs rs' :
     match_regsets params c rm rs rs' ->
     Forall (reg_used_in_code c) args1 ->
@@ -1865,7 +1879,58 @@ Section PRESERVATION.
                      apply reg_used_in_all_regs_list; auto.
                    right; auto. }
               specialize (REGS _ _ _ Hr1 Hused); intuition. }
-      + admit.
+      +
+        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+        2: { apply Forall_forall; intros r1 Hin.
+             assert (Hused: reg_used_in_code c r1).
+             { eexists; eexists; split; eauto.
+               constructor; auto.
+               apply in_dedup in Hin; auto. }
+             assert (Heq: rs' # r1 = rs # r1).
+             { destruct (rm # r1) eqn:Hr1.
+               specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
+             rewrite Heq; clear Heq.
+             split.
+             { apply WT_RS. }
+             split.
+             { eapply match_regsets_get_2; eauto; right; auto. }
+             { eapply match_regsets_get_3'; eauto. } }
+
+        assert (Hty: Val.has_type v (re res)).
+        { inv WT_FN.
+          simpl in *.
+          specialize (wt_instrs _ _ H).
+          inv wt_instrs.
+          { inv UNSAFE. }
+          simpl in *.
+          rewrite H7.
+          eapply type_of_operation_sound; eauto. }
+        destruct VOTE_ARGS as (rs'' & Hvote & Hrs'').
+        eexists; split.
+        * eapply star_plus_trans.
+          { apply Hvote. }
+          2: { reflexivity. }
+          econstructor.
+          3: { rewrite Events.E0_right; reflexivity. }
+          { eapply exec_Iop; eauto.
+            erewrite <- rs_map_ext; eauto.
+            erewrite <- match_regsets_rs_args; eauto.
+            - erewrite eval_operation_preserved; eauto.
+              apply symbols_preserved.
+            - apply Forall_forall; intros arg Hin.
+              unfold reg_used_in_code.
+              eexists; eexists; split; eauto; constructor; auto. }
+        eapply smoveR_step in MOVE; eauto.
+        rewrite PMap.gss; auto.
+        * simpl.
+          econstructor; eauto.
+          { intro r.
+            destruct (peq res r); subst.
+            { rewrite PMap.gss; auto. }
+            rewrite PMap.gso; auto. }
+          { econstructor; eauto. }
+          { eapply match_regsets_update; eauto.
+            eexists; eexists; split; eauto; solve [constructor; auto]. }
 
     - (* exec_Iload *)
       inv Hmatch.
@@ -1881,7 +1946,6 @@ Section PRESERVATION.
       assert (Hargs: Forall (reg_used_in_code c) args).
       { apply Forall_forall; intros x Hx;
           eexists; eexists; split; eauto; constructor; auto. }
-      (* smoveR_inv. *)
       eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
@@ -2449,7 +2513,7 @@ Section PRESERVATION.
           rewrite PMap.gso; auto.
         * eapply match_regsets_update; eauto.
           inv FUN; auto.
-  Admitted.
+  Qed.
 
   Lemma transf_initial_states st1 :
     initial_state prog st1 ->
