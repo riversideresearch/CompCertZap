@@ -691,6 +691,26 @@ Definition args_of_instruction (instr : instruction) : list reg :=
 Definition inb (p : positive) (l : list positive) : bool :=
   existsb (fun x => Pos.eqb x p) l.
 
+Lemma inb_spec (p : positive) (l : list positive) :
+  reflect (In p l) (inb p l).
+Proof.
+  revert p; induction l; intros; simpl.
+  { right; auto. }
+  destruct (peq a p); subst.
+  - rewrite Pos.eqb_refl; left; left; reflexivity.
+  - destruct (IHl p).
+    + rewrite orb_true_r; left; right; assumption.
+    + apply Pos.eqb_neq in n; rewrite n; right; intros [H|H]; subst.
+      * rewrite Pos.eqb_refl in n; discriminate.
+      * contradiction.
+Qed.
+
+Lemma not_in_inb x l :
+  ~ In x l ->
+  inb x l = true ->
+  False.
+Proof. intros Hnotin Hinb; destruct (inb_spec x l); congruence. Qed.
+
 Fixpoint dedup (l : list positive) : list positive :=
   match l with
   | nil => nil
@@ -698,6 +718,17 @@ Fixpoint dedup (l : list positive) : list positive :=
       let l' := dedup xs in
       if inb x l' then l' else x :: l'
   end.
+
+Lemma in_dedup (p : positive) (l : list positive) :
+  In p (dedup l) -> In p l.
+Proof.
+  revert p; induction l; simpl; intros p Hin; auto.
+  destruct (inb_spec a (dedup l)).
+  - right; apply IHl; assumption.
+  - inv Hin.
+    + left; reflexivity.
+    + right; apply IHl; assumption.
+Qed.
 
 Definition succ_of_instruction (instr : instruction) : option node :=
   match instr with
@@ -1065,3 +1096,63 @@ Qed.
 Lemma vote_not_smove (ef : external_function) :
   is_vote_builtin ef -> ~ is_smove_builtin ef.
 Proof. intro H; inv H; intro HC; inv HC. Qed.
+
+Definition Regset_of_list (l : list positive) : Regset.t  :=
+  fold_right (fun acc p => Regset.add acc p) Regset.empty l.
+
+Definition Regset_of_option (x : option positive) : Regset.t :=
+  match x with
+  | Some p => Regset.singleton p
+  | None => Regset.empty
+  end.
+
+(** All registers that appear in an instruction (arguments or
+    destination). *)
+Definition instr_regs (i : instruction) : Regset.t :=
+  match i with
+  | Inop _ => Regset.empty
+  | Iop _ args res _ =>
+      Regset.union (Regset_of_list args) (Regset.singleton res)
+  | Iload _ _ args dst _ =>
+      Regset.union (Regset_of_list args) (Regset.singleton dst)
+  | Istore _ _ args src _ =>
+      Regset.union (Regset_of_list args) (Regset.singleton src)
+  | Icall _ (inl r) args res _ =>
+      Regset.union (Regset_of_list (r :: args)) (Regset.singleton res)
+  | Icall _ _ args res _ =>
+      Regset.union (Regset_of_list args) (Regset.singleton res)
+  | Itailcall _ (inl r) args => Regset_of_list (r :: args)
+  | Itailcall _ _ args => Regset_of_list args
+  | Ibuiltin _ args res _ =>
+      Regset.union (Regset_of_list (regs_of_builtin_args args))
+        (Regset_of_option (reg_of_builtin_res res))
+  | Icond _ args _ _ => Regset_of_list args
+  | Ijumptable arg _ => Regset.singleton arg
+  | Ireturn (Some arg) => Regset.singleton arg
+  | Ireturn None => Regset.empty
+  end.
+
+(** All registers that appear in the given code (used in
+    instructions). *)
+Definition code_regs (c : code) : Regset.t :=
+  PTree.fold (fun rs _ instr => Regset.union rs (instr_regs instr)) c Regset.empty.
+
+Definition all_regs (params : list reg) (c : code) : Regset.t :=
+  Regset.union (Regset_of_list params) (code_regs c).
+
+Definition all_regs_list (params : list reg) (c : code) : list reg :=
+  Regset.elements (all_regs params c).
+
+(** All registers that appear in the given function (params + regs
+    used in instructions). *)
+Definition fun_regs (f : function) : Regset.t :=
+  all_regs f.(fn_params) f.(fn_code).
+
+Definition fun_regs_list (f : function) : list positive :=
+  all_regs_list f.(fn_params) f.(fn_code).
+
+Definition max_reg (regs : Regset.t) :=
+  match Regset.max_elt regs with
+  | Some p => p
+  | None => 1%positive
+  end.

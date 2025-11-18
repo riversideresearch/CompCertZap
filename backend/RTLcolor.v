@@ -17,11 +17,13 @@ Definition optionP {A : Type} (pred : A -> Prop) (o : option A) : Prop :=
   | Some a => pred a
   end.
 
-(** Color is position dependent. White is a temporary color that gets
-    reset to red after a use (or pink then red in the case of
-    smoves). So, red registers are variously red or white/pink
-    throughout the function, but green and blue registers stay green
-    and blue respectively. *)
+(** The color of a register isn't necessarily the same at all points
+    in a function. White is a temporary color that gets reset to red
+    after a use (or pink then red in the case of smoves). So, red
+    registers are variously red or white/pink throughout the function,
+    but green and blue registers stay green and blue respectively
+    (unless they are reused with a different color by assigning to
+    them the result of a differently-colored computation). *)
 
 Inductive color : Type :=
 | Red
@@ -94,7 +96,15 @@ Notation is_blue x := (is_color x Blue).
 Section wc.
   Variable col : node -> reg -> option color.
 
-  (** An instruction is well-colored wrt. coloring [col]. *)
+  (** An instruction is well-colored wrt. coloring [col].
+
+      We include in these rules consistency constraints asserting that
+      colors are preserved from the instruction to its successor,
+      except certain things like the argument and result registers of
+      the current instruction. This is necessary for maintaining the
+      simulation environment in RTLtolerant.v, though they could be
+      factored out of this definition into a separate judgement. *)
+
   Inductive wc_instruction (pc : node) : instruction -> Prop :=
   | wc_Inop : forall succ,
       (forall r c, col pc r = Some c -> col succ r = Some c) ->

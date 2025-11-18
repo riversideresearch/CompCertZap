@@ -211,41 +211,41 @@ Inductive match_instr
     match_instr re rm c pc (Iop op args1 res1 succ)
 | match_iload :
   forall chunk addr args res n1 n2 succ
-    (CHK_ARGS : check_regsR c re rm args pc n1)
+    (CHK_ARGS : check_regsR c re rm (dedup args) pc n1)
     (N1 : c ! n1 = Some (Iload chunk addr args res n2))
     (MOVE : smoveR c (re res) res (rm # res) n2 succ),
   match_instr re rm c pc (Iload chunk addr args res succ)
 | match_Istore :
   forall chunk addr args src n succ
-    (CHK_REGS : check_regsR c re rm (src :: args) pc n)
+    (CHK_REGS : check_regsR c re rm (dedup (src :: args)) pc n)
     (N : c ! n = Some (Istore chunk addr args src succ)),
     match_instr re rm c pc (Istore chunk addr args src succ)
 | match_Icall :
   forall sig fn args res succ n1 n2
-    (CHK_ARGS : check_regsR c re rm (regs_of_fn fn ++ args) pc n1)
+    (CHK_ARGS : check_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n1)
     (N1 : c ! n1 = Some (Icall sig fn args res n2))
     (MOVE : smoveR c (re res) res (rm # res) n2 succ),
     match_instr re rm c pc (Icall sig fn args res succ)
 | match_Itailcall :
   forall sig fn args n
-    (CHK_ARGS : check_regsR c re rm (regs_of_fn fn ++ args) pc n)
+    (CHK_ARGS : check_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n)
     (N : c ! n = Some (Itailcall sig fn args)),
     match_instr re rm c pc (Itailcall sig fn args)
 | match_Ibuiltin_1 :
   forall ef bargs bres n succ
     (NORES : ~ is_BR bres) (* no result register *)
-    (CHK_ARGS : check_regsR c re rm (regs_of_builtin_args bargs) pc n)
+    (CHK_ARGS : check_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n)
     (N : c ! n = Some (Ibuiltin ef bargs bres succ)),
     match_instr re rm c pc (Ibuiltin ef bargs bres succ)
 | match_Ibuiltin_2 :
   forall ef bargs res n1 n2 succ
-    (CHK_ARGS : check_regsR c re rm (regs_of_builtin_args bargs) pc n1)
+    (CHK_ARGS : check_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n1)
     (N1 : c ! n1 = Some (Ibuiltin ef bargs (BR res) n2))
     (MOVE : smoveR c (re res) res (rm # res) n2 succ),
     match_instr re rm c pc (Ibuiltin ef bargs (BR res) succ)
 | match_Icond :
   forall cond args ifso ifnot n
-    (CHK_ARGS : check_regsR c re rm args pc n)
+    (CHK_ARGS : check_regsR c re rm (dedup args) pc n)
     (N : c ! n = Some (Icond cond args ifso ifnot)),
     match_instr re rm c pc (Icond cond args ifso ifnot)
 | match_Ijumptable :

@@ -160,7 +160,7 @@ Definition transf_instr
      instructions with result registers (Icall and Ibuiltin), copy the
      result to its shadow register. *)
   | _ =>
-      do n <- check_regs re rm (args_of_instruction instr) pc;
+      do n <- check_regs re rm (dedup (args_of_instruction instr)) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | Some res, Some succ =>
           do m <- reserve_instr;
@@ -174,67 +174,6 @@ Definition transf_instr
 Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code)
   : mon unit :=
   iterM (transf_instr re rm) (PTree.elements c).
-
-Definition Regset_of_list (l : list positive) : Regset.t  :=
-  fold_right (fun acc p => Regset.add acc p) Regset.empty l.
-
-Definition Regset_of_option (x : option positive) : Regset.t :=
-  match x with
-  | Some p => Regset.singleton p
-  | None => Regset.empty
-  end.
-
-(** All registers that appear in an instruction (arguments or
-    destination). *)
-(* TODO: relate to instr_uses and instr_defined? *)
-Definition instr_regs (i : instruction) : Regset.t :=
-  match i with
-  | Inop _ => Regset.empty
-  | Iop _ args res _ =>
-      Regset.union (Regset_of_list args) (Regset.singleton res)
-  | Iload _ _ args dst _ =>
-      Regset.union (Regset_of_list args) (Regset.singleton dst)
-  | Istore _ _ args src _ =>
-      Regset.union (Regset_of_list args) (Regset.singleton src)
-  | Icall _ (inl r) args res _ =>
-      Regset.union (Regset_of_list (r :: args)) (Regset.singleton res)
-  | Icall _ _ args res _ =>
-      Regset.union (Regset_of_list args) (Regset.singleton res)
-  | Itailcall _ (inl r) args => Regset_of_list (r :: args)
-  | Itailcall _ _ args => Regset_of_list args
-  | Ibuiltin _ args res _ =>
-      Regset.union (Regset_of_list (regs_of_builtin_args args))
-        (Regset_of_option (reg_of_builtin_res res))
-  | Icond _ args _ _ => Regset_of_list args
-  | Ijumptable arg _ => Regset.singleton arg
-  | Ireturn (Some arg) => Regset.singleton arg
-  | Ireturn None => Regset.empty
-  end.
-
-(** All registers that appear in the given code (used in
-    instructions). *)
-Definition code_regs (c : code) : Regset.t :=
-  PTree.fold (fun rs _ instr => Regset.union rs (instr_regs instr)) c Regset.empty.
-
-Definition all_regs (params : list reg) (c : code) : Regset.t :=
-  Regset.union (Regset_of_list params) (code_regs c).
-
-Definition all_regs_list (params : list reg) (c : code) : list reg :=
-  Regset.elements (all_regs params c).
-
-(** All registers that appear in the given function (params + regs
-    used in instructions). *)
-Definition fun_regs (f : function) : Regset.t :=
-  all_regs f.(fn_params) f.(fn_code).
-
-Definition fun_regs_list (f : function) : list positive :=
-  all_regs_list f.(fn_params) f.(fn_code).
-
-Definition max_reg (regs : Regset.t) :=
-  match Regset.max_elt regs with
-  | Some p => p
-  | None => 1%positive
-  end.
 
 (** Build replication map (mapping each register to a pair of
     corresponding shadow registers) for function [f]. *)

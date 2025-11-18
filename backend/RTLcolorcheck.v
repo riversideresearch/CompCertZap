@@ -227,17 +227,6 @@ Section color_checker.
     forallb (fun param => is_colorb ((col f.(fn_entrypoint)) ! param) White) f.(fn_params) &&
       PTree_Properties.for_all f.(fn_code) (fun pc instr => check_col_instr pc instr).
 
-  Lemma not_in_inb x l :
-    ~ In x l ->
-    inb x l = true ->
-    False.
-  Proof.
-    intros Hnotin Hinb.
-    apply existsb_exists in Hinb.
-    destruct Hinb as (y & Hin & Heq).
-    apply Peqb_true_eq in Heq; subst; congruence.
-  Qed.
-
   Ltac destruct_andb H1 H2 :=
     match goal with
     | [ H: _ && _ = true |- _] => apply andb_prop in H; destruct H as [H1 H2]

@@ -223,7 +223,7 @@ Inductive match_instr
     match_instr re rm c pc (Inop n)
 | match_Iop_safe :
   forall op args1 args2 args3 res1 res2 res3 n1 n2 succ
-    (DIV: ~ is_unsafe op)
+    (UNSAFE: ~ is_unsafe op)
     (ARGS : rm_l rm args1 args2 args3)
     (RM_RES : rm !! res1 = (res2, res3))
     (PC : c ! pc = Some (Iop op args2 res2 n1))
@@ -232,7 +232,7 @@ Inductive match_instr
     match_instr re rm c pc (Iop op args1 res1 succ)
 | match_Iop_unsafe :
   forall op args res1 res2 res3 n1 n2 succ
-    (DIV: is_unsafe op)
+    (UNSAFE: is_unsafe op)
     (VOTE_ARGS : maj_vote_regsR c re rm args pc n1)
     (N1 : c ! n1 = Some (Iop op args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
@@ -240,7 +240,7 @@ Inductive match_instr
     match_instr re rm c pc (Iop op args res1 succ)
 | match_iload :
   forall chunk addr args res1 res2 res3 n1 n2 succ
-    (VOTE_ARGS : maj_vote_regsR c re rm args pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup args) pc n1)
     (N1 : c ! n1 = Some (Iload chunk addr args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
@@ -248,37 +248,37 @@ Inductive match_instr
 | match_Istore :
   forall chunk addr args src1 src2 src3 n succ
     (RM_SRC : rm !! src1 = (src2, src3))
-    (VOTE_REGS : maj_vote_regsR c re rm (src1 :: args) pc n)
+    (VOTE_REGS : maj_vote_regsR c re rm (dedup (src1 :: args)) pc n)
     (N : c ! n = Some (Istore chunk addr args src1 succ)),
     match_instr re rm c pc (Istore chunk addr args src1 succ)
 | match_Icall :
   forall sig fn args res1 res2 res3 succ n1 n2
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n1)
     (N1 : c ! n1 = Some (Icall sig fn args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm c pc (Icall sig fn args res1 succ)
 | match_Itailcall :
   forall sig fn args n
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n)
     (N : c ! n = Some (Itailcall sig fn args)),
     match_instr re rm c pc (Itailcall sig fn args)
 | match_Ibuiltin_1 :
   forall ef bargs bres n succ
     (NORES : ~ is_BR bres) (* no result register *)
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n)
     (N : c ! n = Some (Ibuiltin ef bargs bres succ)),
     match_instr re rm c pc (Ibuiltin ef bargs bres succ)
 | match_Ibuiltin_2 :
   forall ef bargs res1 res2 res3 n1 n2 succ
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n1)
     (N1 : c ! n1 = Some (Ibuiltin ef bargs (BR res1) n2))
     (RM_RES : rm # res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm c pc (Ibuiltin ef bargs (BR res1) succ)
 | match_Icond :
   forall cond args ifso ifnot n
-    (VOTE_ARGS : maj_vote_regsR c re rm args pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup args) pc n)
     (N : c ! n = Some (Icond cond args ifso ifnot)),
     match_instr re rm c pc (Icond cond args ifso ifnot)
 | match_Ijumptable :
@@ -730,8 +730,8 @@ Proof.
     eapply maj_vote_regsR_ptree_set; auto.
     eapply state_incr_maj_vote_regsR.
     2: { eapply maj_vote_regs_maj_vote_regsR.
-         2: { eauto. admit. }
-         auto. admit. }
+         2: { eauto. }
+         auto. }
     intro pc; inv s3; auto.
 
   (* Istore *)
@@ -753,7 +753,6 @@ Proof.
     { eauto. }
     2: { rewrite PTree.gss; reflexivity. }
     apply maj_vote_regsR_ptree_set; auto.
-    admit.
 
   (* Icall *)
   - simpl in Htransf; unfold RTLgen.bind in Htransf; simpl in Htransf.
@@ -781,7 +780,6 @@ Proof.
     simpl in *; unfold Ple in *.
     econstructor; eauto.
     + repeat apply maj_vote_regsR_ptree_set; eauto.
-      admit.
     + rewrite PTree.gss; reflexivity.
     + econstructor; eauto.
       { rewrite 2!PTree.gso; try lia.
@@ -800,7 +798,6 @@ Proof.
     simpl in *; unfold Ple in *.
     econstructor; eauto.
     + repeat apply maj_vote_regsR_ptree_set; eauto.
-      admit.
     + rewrite PTree.gss; reflexivity.
 
     (* Ibuiltin *)
@@ -815,8 +812,8 @@ Proof.
       { eapply maj_vote_regsR_ptree_set; auto.
         eapply state_incr_maj_vote_regsR.
         2: { eapply maj_vote_regs_maj_vote_regsR.
-             2: { eauto. admit. }
-             auto. admit. }
+             2: { eauto. }
+             auto. }
         intros; clear H0; inv s3; inv s4.
         specialize (H2 pc); specialize (H5 pc).
         destruct H2 as [H2 | H2]; auto. }
@@ -833,8 +830,8 @@ Proof.
       { eapply maj_vote_regsR_ptree_set; auto.
         eapply state_incr_maj_vote_regsR.
         2: { eapply maj_vote_regs_maj_vote_regsR.
-             2: { eauto. admit. }
-             auto. admit. }
+             2: { eauto. }
+             auto. }
         intros; inv s1.
         specialize (H2 pc).
         destruct H2 as [H2 | H2]; auto. }
@@ -851,7 +848,6 @@ Proof.
     simpl in *; unfold Ple in *.
     econstructor; eauto.
     + repeat apply maj_vote_regsR_ptree_set; eauto.
-      admit.
     + rewrite PTree.gss; reflexivity.
 
   (* Ijumptable *)

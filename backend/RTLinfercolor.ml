@@ -3,6 +3,7 @@ open BinNums
 open Datatypes
 open Maps
 open Op
+open Registers
 open RTL
 open RTLcolor
 
@@ -38,6 +39,8 @@ let string_of_color = function
   | White -> "W"
   | Pink -> "P"
 
+(* Same as RTL.instruction but with machine integers instead of
+   positives. *)
 type instruction' =
 | Inop' of int
 | Iop' of operation * int list * int * int
@@ -254,31 +257,36 @@ let update
       (pred_map : (int * instruction') list Intmap.t)
       (cols : color Intmap.t Intmap.t)
     : (color Intmap.t Intmap.t) option =
+  (* let start_time = Unix.gettimeofday () in *)
   (* For each instruction  *)
-  List.fold_left (fun acc (n, instr) ->
-      match acc with
-      | Some m1 -> begin
-          let preds = Option.value ~default:[] @@ Intmap.find_opt n pred_map in
-          let preds_col =
-            List.fold_left (fun acc2 (pred_node, pred_instr) ->
-                match acc2 with
-                | Some m ->
-                   union n m (transfer pred_instr @@
-                                Option.value ~default:Intmap.empty @@
-                                  Intmap.find_opt pred_node m1)
+  let res =
+    List.fold_left (fun acc (n, instr) ->
+        match acc with
+        | Some m1 -> begin
+            let preds = Option.value ~default:[] @@ Intmap.find_opt n pred_map in
+            let preds_col =
+              List.fold_left (fun acc2 (pred_node, pred_instr) ->
+                  match acc2 with
+                  | Some m ->
+                     union n m (transfer pred_instr @@
+                                  Option.value ~default:Intmap.empty @@
+                                    Intmap.find_opt pred_node m1)
+                  | None -> None
+                ) (Some Intmap.empty) preds in
+            match preds_col with
+            | Some m2 -> begin
+                match union n (Option.value ~default:Intmap.empty @@
+                                 Intmap.find_opt n m1) m2 with
+                | Some col' -> Some (Intmap.add n col' m1)
                 | None -> None
-              ) (Some Intmap.empty) preds in
-          match preds_col with
-          | Some m2 -> begin
-              match union n (Option.value ~default:Intmap.empty @@
-                               Intmap.find_opt n m1) m2 with
-              | Some col' -> Some (Intmap.add n col' m1)
-              | None -> None
-            end
-          | _ -> None
-        end
-      | None -> None
-    ) (Some cols) nodes_instrs
+              end
+            | _ -> None
+          end
+        | None -> None
+      ) (Some cols) nodes_instrs in
+  (* let end_time = Unix.gettimeofday () in *)
+  (* print_endline @@ "update: " ^ string_of_float (end_time -. start_time) ^ "s"; *)
+  res
 
 (** Old version of update that is probably equivalent to the above but
     more confusing. *)  
@@ -381,43 +389,48 @@ let update2
       (nodes_instrs : (int * instruction') list)
       (cols : color Intmap.t Intmap.t)
     : (color Intmap.t Intmap.t) option =
-  List.fold_left (fun acc (n, instr) ->
-      let ignored_regs = ignored_registers instr in
-      let succs_col =
-        List.fold_left (fun acc2 succ ->
-            match acc2 with
-            | Some m -> union n m (minus (Option.value ~default:Intmap.empty @@
-                                            Intmap.find_opt succ cols) ignored_regs)
+  (* let start_time = Unix.gettimeofday () in *)
+  let res =
+    List.fold_left (fun acc (n, instr) ->
+        let ignored_regs = ignored_registers instr in
+        let succs_col =
+          List.fold_left (fun acc2 succ ->
+              match acc2 with
+              | Some m -> union n m (minus (Option.value ~default:Intmap.empty @@
+                                              Intmap.find_opt succ cols) ignored_regs)
+              | None -> None
+            ) (Some Intmap.empty) @@ succs_of_instruction instr in
+        match acc, succs_col with
+        | Some m, Some col -> begin
+            match union n (Option.value ~default:Intmap.empty @@
+                             Intmap.find_opt n m) col with
+            | Some col' -> begin
+                match instr with
+                (* For safe Iops, if successor assigns a color to the
+                   result then propagate that to the arguments. *)
+                | Iop' (op, args, res, _) when not (is_unsafeb op) -> begin
+                    match Intmap.find_opt res col with
+                    | Some c -> begin
+                        let arg_cols =
+                          List.fold_left (fun acc3 arg ->
+                              Intmap.add arg c acc3
+                            ) Intmap.empty args in
+                        match union n col' arg_cols with
+                        | Some final_col ->
+                           Some (Intmap.add n final_col m)
+                        | None -> None
+                      end
+                    | None -> Some (Intmap.add n col' m)
+                  end
+                | _ -> Some (Intmap.add n col' m)
+              end
             | None -> None
-          ) (Some Intmap.empty) @@ succs_of_instruction instr in
-      match acc, succs_col with
-      | Some m, Some col -> begin
-          match union n (Option.value ~default:Intmap.empty @@
-                           Intmap.find_opt n m) col with
-          | Some col' -> begin
-              match instr with
-              (* For safe Iops, if successor assigns a color to the
-                 result then propagate that to the arguments. *)
-              | Iop' (op, args, res, _) when not (is_unsafeb op) -> begin
-                  match Intmap.find_opt res col with
-                  | Some c -> begin
-                      let arg_cols =
-                        List.fold_left (fun acc3 arg ->
-                            Intmap.add arg c acc3
-                          ) Intmap.empty args in
-                      match union n col' arg_cols with
-                      | Some final_col ->
-                         Some (Intmap.add n final_col m)
-                      | None -> None
-                    end
-                  | None -> Some (Intmap.add n col' m)
-                end
-              | _ -> Some (Intmap.add n col' m)
-            end
-          | None -> None
-        end
-      | _, _ -> None
-    ) (Some cols) nodes_instrs
+          end
+        | _, _ -> None
+      ) (Some cols) nodes_instrs in
+  (* let end_time = Unix.gettimeofday () in *)
+  (* print_endline @@ "update2: " ^ string_of_float (end_time -. start_time) ^ "s"; *)
+  res
 
 (* let update3 *)
 (*       (nodes_instrs : (int * instruction') list) *)
@@ -447,25 +460,30 @@ let update3
       (nodes_instrs : (int * instruction') list)
       (cols : color Intmap.t Intmap.t)
     : color Intmap.t Intmap.t =
-  List.fold_left (fun acc (n, instr) ->
-      match instr with
-      (* For smoves, if the successor assigns a color to the argument
-         then infer the corresponding color for it here (if red at
-         successor then pink here, or if pink at successor then white
-         here). *)
-      | Ibuiltin' (ef, [BA arg], BR res, succ) when is_smove_builtinb ef ->
-         begin
-           match Intmap.find_opt arg (Option.value ~default:Intmap.empty @@
-                                        Intmap.find_opt succ cols) with
-           | Some c ->
-              let arg_c = if c = Red then Pink else White in
-              Intmap.add n (Intmap.add arg arg_c @@
-                              Option.value ~default:Intmap.empty @@
-                                Intmap.find_opt n acc) acc
-           | None -> acc
-         end
-      | _ -> acc
-    ) cols nodes_instrs
+  (* let start_time = Unix.gettimeofday () in *)
+  let res =
+    List.fold_left (fun acc (n, instr) ->
+        match instr with
+        (* For smoves, if the successor assigns a color to the argument
+           then infer the corresponding color for it here (if red at
+           successor then pink here, or if pink at successor then white
+           here). *)
+        | Ibuiltin' (ef, [BA arg], BR res, succ) when is_smove_builtinb ef ->
+           begin
+             match Intmap.find_opt arg (Option.value ~default:Intmap.empty @@
+                                          Intmap.find_opt succ cols) with
+             | Some c ->
+                let arg_c = if c = Red then Pink else White in
+                Intmap.add n (Intmap.add arg arg_c @@
+                                Option.value ~default:Intmap.empty @@
+                                  Intmap.find_opt n acc) acc
+             | None -> acc
+           end
+        | _ -> acc
+      ) cols nodes_instrs in
+  (* let end_time = Unix.gettimeofday () in *)
+  (* print_endline @@ "update3: " ^ string_of_float (end_time -. start_time) ^ "s"; *)
+  res
 
 (** Initialize nodes' colorings. The entry point assigns White to the
     function's parameters. Unsafe instructions assign White to their
@@ -579,6 +597,19 @@ let ptree_of_intmap (m : 'a Intmap.t) : 'a PTree.t =
 (* let pmap_of_intmap (def : 'a) (m : 'a Intmap.t) : 'a PMap.t = *)
 (*   Intmap.fold (fun n c acc -> PMap.set (positive_of_int n) c acc) m (PMap.init def) *)
 
+(* module OrdPos = struct *)
+(*   type t = positive *)
+(*   let compare a b = *)
+(*     if a = b then 0 else *)
+(*     if BinPos.Pos.leb a b then -1 else 1 *)
+(* end *)
+(* module Intset = Set.Make(OrdPos) *)
+
+let regs_of_function (f : coq_function) : Regset.t =
+  List.fold_left (fun acc param -> Regset.add param acc)
+    (PTree.fold (fun acc _ instr -> Regset.union acc @@ instr_regs instr)
+       f.fn_code Regset.empty) f.fn_params
+
 let infer_coloring (f : coq_function) : (node -> color PTree.t) option =
   (* if (List.length @@ PTree.elements f.fn_code) > 1000 then None else begin *)
   (* print_endline @@ "function size = " ^ *)
@@ -611,9 +642,19 @@ let infer_coloring (f : coq_function) : (node -> color PTree.t) option =
       end
     | None -> None
   in
+  let start_time = Unix.gettimeofday () in
   match go (init_cols f) with
-  | Some m -> (* check_code f.fn_code m; *)
+  | Some m ->
+     (* check_code f.fn_code m; *)
      (* print_endline "color inference succeeded!"; *)
+     let end_time = Unix.gettimeofday () in
+     print_string @@ "# instructions = " ^
+                       string_of_int @@ List.length @@
+                         PTree.elements f.fn_code;
+     print_string @@ ", # registers = " ^
+                       string_of_int @@ List.length @@
+                         Regset.elements @@ regs_of_function f;
+     print_endline @@ ", time = " ^ string_of_float (end_time -. start_time) ^ " s";
      let final_cols = Intmap.map ptree_of_intmap m in
      Some (fun n -> Option.value ~default:PTree.Empty @@
                       Intmap.find_opt (int_of_positive n) final_cols)

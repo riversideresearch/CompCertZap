@@ -12,7 +12,7 @@
 - New files
   + `backend/RTLfault.v`: faulty RTL semantics
   + `backend/RTLcolor.v`: declarative specification of RTL color system
-  + `backend/RTLcolorcheck.v`: Boolean checker for RTL color system. Assumes oracle for inferring function coloring (map from CFG node to partial map from register to color). Sound but not necessarily complete because nothing is not assumed of the inference oracle
+  + `backend/RTLcolorcheck.v`: Boolean checker for RTL color system. Assumes oracle for inferring function coloring (map from CFG node to partial map from register to color). Sound but not necessarily complete because nothing is not assumed of the inference oracle (except that it is a pure deterministic function, which is implicitly assumed but we don't actually exploit anyway)
   + `backend/RTLtolerant.v`: proof of backward simulation from 3-voting non-faulty semantics (source) to 2-voting faulty semantics (target). See `Theorem faulty_backward_simulation`
   + `backend/RTLinfercolor.ml`: unverified OCaml code for inferring function colorings. Hodgepodge dataflow analysis with three update functions, one forward and two backward. Probably could be redesigned to use a single unification pass followed by a single forward propagation pass.
   + `backend/RTLagreement.v`: definition of 'weak agreement' for RTL

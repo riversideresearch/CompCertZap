@@ -1886,7 +1886,8 @@ Section PRESERVATION.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
-             constructor; auto. }
+             constructor; auto.
+             apply in_dedup in Hin; auto. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -1939,6 +1940,7 @@ Section PRESERVATION.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
+             apply in_dedup in Hin.
              destruct Hin; subst; constructor; assumption. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
@@ -1984,7 +1986,8 @@ Section PRESERVATION.
       eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto.
+           { apply in_dedup in Hin.
+             eexists; eexists; split; eauto.
              apply in_app_or in Hin; destruct Hin as [Hin|Hin].
              - destruct ros; simpl in *; inv Hin; try contradiction.
                constructor.
@@ -2067,7 +2070,8 @@ Section PRESERVATION.
       eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto.
+           { apply in_dedup in Hin.
+             eexists; eexists; split; eauto.
              apply in_app_or in Hin; destruct Hin as [Hin|Hin].
              - destruct ros; simpl in *; inv Hin; try contradiction.
                constructor.
@@ -2150,7 +2154,8 @@ Section PRESERVATION.
         eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
-             { eexists; eexists; split; eauto; constructor; auto. }
+             { eexists; eexists; split; eauto; constructor; auto.
+               apply in_dedup; auto. }
              assert (Heq: rs' # r1 = rs # r1).
              { destruct (rm # r1) eqn:Hr1.
                specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -2192,7 +2197,8 @@ Section PRESERVATION.
         eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
-             { eexists; eexists; split; eauto; constructor; auto. }
+             { eexists; eexists; split; eauto; constructor; auto.
+               apply in_dedup; auto. }
              assert (Heq: rs' # r1 = rs # r1).
              { destruct (rm # r1) eqn:Hr1.
                specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
@@ -2259,7 +2265,8 @@ Section PRESERVATION.
       eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
-           { eexists; eexists; split; eauto; constructor; auto. }
+           { eexists; eexists; split; eauto; constructor; auto.
+             apply in_dedup; auto. }
            assert (Heq: rs' # r1 = rs # r1).
            { destruct (rm # r1) eqn:Hr1.
              specialize (REGS _ _ _ Hr1 (or_intror Hused)); intuition. }
