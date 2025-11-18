@@ -381,20 +381,6 @@ Section color_checker.
           destruct_orb H H.
           { apply Pos.eqb_eq in H; congruence. }
           apply is_colorb_sound; auto.
-          (* intros r c Hnotin Hneq Hrc; apply Hpres in Hrc. *)
-          (* destruct_orb H H. *)
-          (* { destruct_orb H H. *)
-          (*   - destruct_orb H H. *)
-          (*     + apply Pos.eqb_eq in H; subst. *)
-          (*       exfalso; apply Hnotin; left; reflexivity. *)
-          (*     + destruct_orb H H. *)
-          (*       * apply Pos.eqb_eq in H; subst. *)
-          (*         exfalso; apply Hnotin; right; left; reflexivity. *)
-          (*       * destruct_orb H H; try congruence. *)
-          (*         { apply Pos.eqb_eq in H; subst. *)
-          (*           exfalso; apply Hnotin; right; right; left; reflexivity. } *)
-          (*   - apply Pos.eqb_eq in H; congruence. } *)
-          (* apply is_colorb_sound; auto. *)
         * (* other builtin *)
           destruct_andb Hcheck Hpres.
           destruct_andb Hargs Hres.
@@ -419,7 +405,7 @@ Section color_checker.
               destruct H as (barg & Hin & Hin').
               apply Hnotex in Hin.
               apply in_builtin_argb_sound in Hin'; contradiction.
-            - admit. }
+            - apply in_builtin_resb_sound in H; contradiction. }
           apply is_colorb_sound; auto.
     - destruct_andb Hargs Hpres.
       rewrite forallb_forall in Hargs.
@@ -444,7 +430,7 @@ Section color_checker.
     - destruct o.
       + constructor; apply is_colorb_sound; auto.
       + constructor; apply I.
-  Admitted.
+  Qed.
 
   Lemma check_col_function_sound (f : function) :
     check_col_function f = true ->
@@ -466,18 +452,18 @@ Section color_checker.
       apply check_col_instr_sound; auto.
   Qed.
 
-  (* Maybe not necessary but should be true anyway. *)
-  Lemma check_col_function_complete (f : function) :
-    wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true.
-  Admitted.
+  (* (* Maybe not necessary but should be true anyway. *) *)
+  (* Lemma check_col_function_complete (f : function) : *)
+  (*   wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true. *)
+  (* Admitted. *)
 
-  Theorem check_col_function_iff (f : function) :
-    check_col_function f = true <-> wc_function (fun pc r => (col pc) ! r) f.
-  Proof.
-    split.
-    - apply check_col_function_sound.
-    - apply check_col_function_complete.
-  Qed.
+  (* Theorem check_col_function_iff (f : function) : *)
+  (*   check_col_function f = true <-> wc_function (fun pc r => (col pc) ! r) f. *)
+  (* Proof. *)
+  (*   split. *)
+  (*   - apply check_col_function_sound. *)
+  (*   - apply check_col_function_complete. *)
+  (* Qed. *)
 
 End color_checker.
 
