@@ -117,7 +117,7 @@ Section color_checker.
   (*       assert false "TODO" *)
   (*   end. *)
 
-  Definition check_col_instr (pc : node) (instr : instruction) :=
+  Definition check_col_instr (pc : node) (instr : instruction) : bool :=
     match instr with
     | Inop succ =>
         PTree_Properties.for_all (col pc) (fun r c => is_colorb ((col succ) ! r) c)
@@ -143,7 +143,6 @@ Section color_checker.
                          is_colorb ((col succ) ! r) c)
     | Istore chunk addr args src succ =>
         is_whiteb ((col pc) ! src) &&
-          (* is_redb ((col succ) ! src) && *)
           forallb (fun arg => is_whiteb ((col pc) ! arg)) args &&
           PTree_Properties.for_all (col pc)
             (fun r c => inb r args ||
@@ -452,18 +451,19 @@ Section color_checker.
       apply check_col_instr_sound; auto.
   Qed.
 
-  (* (* Maybe not necessary but should be true anyway. *) *)
-  (* Lemma check_col_function_complete (f : function) : *)
-  (*   wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true. *)
-  (* Admitted. *)
+  (* Maybe not necessary but should be true anyway. *)
+  Lemma check_col_function_complete (f : function) :
+    wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true.
+  Admitted.
 
-  (* Theorem check_col_function_iff (f : function) : *)
-  (*   check_col_function f = true <-> wc_function (fun pc r => (col pc) ! r) f. *)
-  (* Proof. *)
-  (*   split. *)
-  (*   - apply check_col_function_sound. *)
-  (*   - apply check_col_function_complete. *)
-  (* Qed. *)
+  Theorem check_col_function_spec (f : function) :
+    reflect (wc_function (fun pc r => (col pc) ! r) f) (check_col_function f).
+  Proof.
+    destruct (check_col_function f) eqn:check.
+    - left; apply check_col_function_sound; auto.
+    - right; intro Hwc.
+      apply check_col_function_complete in Hwc; congruence.
+  Qed.
 
 End color_checker.
 

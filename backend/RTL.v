@@ -741,6 +741,20 @@ Definition succ_of_instruction (instr : instruction) : option node :=
   | _ => None
   end.
 
+(* Includes Icond and Ijumptable *)
+Definition succs_of_instruction (instr : instruction) : list node :=
+  match instr with
+  | Inop succ => succ :: nil
+  | Iop _ _ _ succ => succ :: nil
+  | Iload _ _ _ _ succ => succ :: nil
+  | Istore _ _ _ _ succ => succ :: nil
+  | Icall _ _ _ _ succ => succ :: nil
+  | Ibuiltin _ _ _ succ => succ :: nil
+  | Icond _ _ ifso ifnot => ifso :: ifnot :: nil
+  | Ijumptable _ succs => succs
+  | _ => nil
+  end.
+
 (** Modify [instr] to jump to [new_succ]. *)
 Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
   match instr with

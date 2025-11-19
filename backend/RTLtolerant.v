@@ -151,49 +151,18 @@ Section TOLERANCE.
       try congruence; eexists; eauto.
   Qed.
 
-  (* match_states b s1 {| fs_state := State stk f sp pc rs m; fault := b |} *)
-  (* ZAP : maybe_zap f pc s' b s'' b' *)
-  (* Hmatch' : match_states b s1' {| fs_state := s'; fault := b |} *)
-  (* match_states b' s1' {| fs_state := s''; fault := b' |} *)
-      
-  (* Lemma maybe_zap_preserves_match_states s s1 s2 b1 b2 : *)
-  (*   match_states b1 s {| fs_state := s1; fault := b1 |} -> *)
-  (*   maybe_zap s1 b1 s2 b2 -> *)
-  (*   match_states b2 s {| fs_state := s2; fault := b2 |}. *)
-  (* Proof. *)
-  (*   intros Hmatch Hzap. *)
-  (*   inv Hzap; auto. *)
-  (*   inv Hmatch. *)
-  (*   econstructor; eauto. *)
-  (*   - apply forall2_match_stackframes_fault; auto. *)
-  (*   - unfold rs_compat. *)
-  (*     intro x. *)
-  (*     unfold rs_compat in RS_COMPAT. *)
-  (*     specialize (RS_COMPAT x). *)
-  (*     destruct (peq x r); subst. *)
-  (*     + rewrite Regmap.gss; auto. *)
-  (*       eapply val_compat_trans; eauto. *)
-  (*     + rewrite Regmap.gso; auto. *)
-  (*   - unfold match_rs in *. *)
-  (*     pose proof H2 as Hres. *)
-  (*     apply res_exists_succ in Hres. *)
-  (*     destruct Hres as [succ Hsucc]. *)
-  (*     eapply wc_col_succ_exists in H0; eauto. *)
-  (*     destruct H0 as [c Hc]. *)
-  (*     exists c; split. *)
-  (*     + admit. *)
-  (*     + intros x Hx. *)
-  (*       destruct (peq x r); subst. *)
-  (*       * rewrite Regmap.gss.           *)
-  (* Admitted. *)
-
   Lemma step_succ {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
     stk f sp pc rs m t stk' sp' pc' rs' m' i :
-    RTL.step (Genv.globalenv prog) (State stk f sp pc rs m) t (State stk' f sp' pc' rs' m') ->
+    RTL.step (Genv.globalenv prog) (State stk f sp pc rs m)
+      t (State stk' f sp' pc' rs' m') ->
     f.(fn_code) ! pc = Some i ->
-    succ_of_instruction i = Some pc'.
+    In pc' (succs_of_instruction i).
   Proof.
-  Admitted.
+    intros Hstep Hpc.
+    inv Hstep; rewrite H6 in Hpc; inv Hpc; simpl; auto.
+    - destruct b; auto.
+    - eapply list_nth_z_in; eauto.
+  Qed.
 
   Lemma maybe_zap_preserves_match_states b s1 stk f sp pc rs m s' s'' b' s1' t :
     match_states b s1 {| fs_state := State stk f sp pc rs m; fault := b |} ->
@@ -266,33 +235,6 @@ Section TOLERANCE.
     intros Hmatch Hfin; inv Hfin.
     inv Hmatch; inv STK; inv LESSDEF; constructor.
   Qed.
-
-  (* Lemma kdsfgd v1 v1' v2 v2' v : *)
-  (*   val_compat v1 v1' -> *)
-  (*   val_compat v2 v2' -> *)
-  (*   Val.divs v1 v2 = Some v -> *)
-  (*   exists v', Val.divs v1' v2' = Some v'. *)
-  (* Proof. *)
-  (*   intros H0 H1 Hdivs. *)
-  (*   inv H0; simpl in *; try congruence. *)
-  (*   inv H1; simpl in *; try congruence. *)
-  (*   eexists. *)
-  (*   destruct (Integers.Int.eq _ _). *)
-
-  (* TODO: vote on division and mod operations so we have guaranteed
-     equality of register contents for them, so we don't need the
-     rs_compat invariant. Probably admit soundness proof for them at
-     first since we know it won't be a problem. *)
-
-  (* Lemma kdfgfd v1 v2 n v : *)
-  (*   val_compat v1 v2 -> *)
-  (*   Val.shrx v1 (Vint n) = Some v -> *)
-  (*   exists v', Val.shrx v2 (Vint n) = Some v'. *)
-  (* Proof. *)
-  (*   intro Hcompat; inv Hcompat; simpl; intro H; try congruence. *)
-    
-  (*   unfold Val.shrx. *)
-  (*   destruct v2. simpl. *)
 
   Ltac inv_Forall2 :=
     repeat match goal with
