@@ -1043,6 +1043,21 @@ Section TOLERANCE.
     - apply IHargs1; auto.
   Qed.
 
+  Lemma find_function_lessdef ros rs1 rs2 fd :
+    (forall r, ros = inl r -> Val.lessdef (rs1 # r) (rs2 # r)) ->
+    find_function (Genv.globalenv prog) ros rs1 = Some fd ->
+    find_function (Genv.globalenv prog) ros rs2 = Some fd.
+  Proof.
+    unfold find_function.
+    intros Hlessdef Hfind.
+    destruct ros.
+    - unfold Genv.find_funct in *.
+      specialize (Hlessdef _ eq_refl); inv Hlessdef; try congruence.
+      rewrite <- H0 in Hfind; congruence.
+    - unfold Genv.find_symbol in *.
+      destruct ((Genv.genv_symb _)) ! _; congruence.
+  Qed.
+
   Lemma faulty_progress i s1 s2 :
     match_states i s1 s2 ->
     safe (@RTL.semantics Three VoteSemantics_Three prog) s1 ->
@@ -1061,8 +1076,8 @@ Section TOLERANCE.
     clear n.
     exists t.
     destruct s2.
-
     inv Hstep; inv Hmatch; try (inv_stk; destruct y).
+
     - (* exec_Inop *)
       eexists; econstructor.
       2: { apply maybe_zap_refl. }
@@ -1111,31 +1126,69 @@ Section TOLERANCE.
       2: { apply maybe_zap_refl. }
       eapply exec_Iload; eauto.
 
-      (* + eexists; constructor. *)
-      (*   eapply exec_Istore with (a:=a); eauto. *)
-      (*   * inv_match_rs. *)
-      (*   * inv_match_rs'. *)
-      (* + eexists; constructor. *)
-      (*   eapply exec_Icall; eauto. *)
-      (*   destruct ros; auto; simpl. *)
-      (*   inv_wc. *)
-      (*   destruct (H5 _ eq_refl) as [Hwhite _]. *)
-      (*   inv_rs. *)
-      (*   rewrite <- RS; auto. *)
-      (*   intro HC; rewrite Hwhite in HC; inv HC; inv Hc. *)
-      (* + eexists; constructor. *)
-      (*   eapply exec_Itailcall; eauto. *)
-      (*   destruct ros; auto; simpl. *)
-      (*   inv_wc. *)
-      (*   inv_rs. *)
-      (*   rewrite <- RS; auto. *)
-      (*   intro HC; rewrite H4 in HC; auto; inv HC; inv Hc. *)
+    - (* exec_Istore *)
+      eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args) in H0.
+      2: { apply forall_lessdef_list.
+           apply Forall_forall; intros r Hin.
+           unfold match_rs in RS.
+           destruct fault; auto.
+           inv_rs; inv_wc.
+           apply RS.
+           rewrite Forall_forall in H8; apply H8 in Hin.
+           intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+      destruct H0 as (v2 & Hop & Hv2).
+      eapply Memory.Mem.storev_extends in H1.
+      2: { eauto. }
+      2: { eauto. }
+      2: { unfold match_rs in RS.
+           destruct fault.
+           - inv_rs; inv_wc.
+             apply RS.
+             intro HC; rewrite H4 in HC; inv HC; inv Hc.
+             - auto. }
+      destruct H1 as (v3 & Hmem & Hv3).
+      eexists; econstructor.
+      2: { apply maybe_zap_refl. }
+      eapply exec_Istore; eauto.
 
-    - admit.
-    - admit.
-    - admit.
+    - (* exec_Icall *)
+      simpl in *.
+      destruct ros.
+      + eapply find_function_lessdef in H0.
+        2: { intros x Hx; subst; inv Hx.
+             destruct fault.
+             - inv_rs; inv_wc.
+               apply RS.
+               intro HC; rewrite H5 in HC; auto; inv HC; inv Hc.
+             - auto. }
+        eexists; econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Icall; eauto.
+      + eexists; econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Icall; eauto.
 
-    - destruct (is_vote_builtinb_spec ef) as [Hbuiltin|Hbuiltin].
+    - (* exec_Itailcall *)
+      simpl in *.
+      eapply Memory.Mem.free_parallel_extends in H2; eauto.
+      destruct H2 as (m2' & Hfree & Hm2').
+      destruct ros.
+      + eapply find_function_lessdef in H0.
+        2: { intros x Hx; subst; inv Hx.
+             destruct fault.
+             - inv_rs; inv_wc.
+               apply RS.
+               intro HC; rewrite H3 in HC; auto; inv HC; inv Hc.
+             - auto. }
+        eexists; econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Itailcall; eauto.
+      + eexists; econstructor.
+        2: { apply maybe_zap_refl. }
+        eapply exec_Itailcall; eauto.
+
+    - (* exec_Ibuiltin *)
+      destruct (is_vote_builtinb_spec ef) as [Hbuiltin|Hbuiltin].
       + pose proof H as Hpc.
         inv_wc; try solve [apply vote_not_smove in Hbuiltin; congruence].
         simpl in *.
@@ -1150,7 +1203,6 @@ Section TOLERANCE.
         inv H0.
         inv H13; inv H14; inv H15.
         inv H5; inv H4; inv H12.
-
         unfold match_rs in RS.
         destruct fault.
         2: { eapply external_call_mem_extends with
@@ -1163,7 +1215,6 @@ Section TOLERANCE.
              2: { apply maybe_zap_refl. }
              eapply exec_Ibuiltin; eauto.
              repeat constructor. }
-
         eapply external_call_vote_lessdef
           with (vs2 := rs2 ## (arg1 :: arg2 :: arg3 :: nil)) in H1; eauto.
         destruct H1 as (v' & Hext & Hv').
@@ -1186,7 +1237,6 @@ Section TOLERANCE.
                repeat constructor.
              - inv Hc.
              - inv Hc. }
-
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
         eapply exec_Ibuiltin; eauto.
@@ -1217,43 +1267,71 @@ Section TOLERANCE.
                  apply RS; intro HC; rewrite Ha in HC; inv HC; inv Hc.
                + eapply builtin_arg_forall_impl with (P := fun _ => True); auto.
                  apply builtin_arg_forall_true. }
-
         destruct H0 as (vl2 & Heval & Hvl2).
-
         eapply external_call_mem_extends in H1; eauto.
         destruct H1 as (vres' & m2' & Hext & Hvres' & Hmem & Hmem').
         apply external_call_Three_Two in Hext.
         destruct Hext as [v' Hext].
-
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
         eapply exec_Ibuiltin; eauto.
 
-    - admit.
-    - admit.
-    - eapply Memory.Mem.free_parallel_extends in H0; eauto.
+    - (* exec_Icond *)
+      simpl in *.
+      eapply Op.eval_condition_lessdef in H0.
+      2: { apply forall_lessdef_list.
+           apply Forall_forall; intros r Hin.
+           destruct fault.
+           - inv_rs; inv_wc.
+             rewrite Forall_forall in H3; apply H3 in Hin.
+             apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc.
+           - auto. }
+      2: { eauto. }
+      eexists; econstructor.
+      2: { apply maybe_zap_refl. }
+      eapply exec_Icond; eauto.
+
+    - (* exec_Ijumptable *)
+      eexists; econstructor.
+      2: { apply maybe_zap_refl. }
+      eapply exec_Ijumptable; eauto.
+      assert (Hlessdef: Val.lessdef (rs # arg) (rs2 # arg)).
+      { destruct fault.
+        - inv_rs; inv_wc.
+          apply RS; intro HC; rewrite H4 in HC; inv HC; inv Hc.
+        - auto. }
+      rewrite H0 in Hlessdef; inv Hlessdef; reflexivity.
+
+    - (* exec_Ireturn *)
+      eapply Memory.Mem.free_parallel_extends in H0; eauto.
       destruct H0 as (m2' & Hmem2 & Hm2').
       eexists.
       eapply fstep_step_State.
       2: { apply maybe_zap_refl. }
-      apply exec_Ireturn; eauto.      
-    - eapply Memory.Mem.alloc_extends
+      apply exec_Ireturn; eauto.
+
+    - (* exec_function_internal *)
+      eapply Memory.Mem.alloc_extends
         with (lo2 := 0) (hi2 := fn_stacksize f) in H0;
         eauto; try reflexivity.
       destruct H0 as (m2' & Halloc & Hm2').
       eexists.
       repeat constructor; eauto.
       eapply has_argtype_list_lessdef; eauto.
-    - eapply external_call_mem_extends in H; eauto.
+
+    - (* exec_function_external *)
+      eapply external_call_mem_extends in H; eauto.
       2: { apply forall2_lessdef_list; eauto. }
       destruct H as (vres' & m2' & Hcall & Hvres' & Hext & Hmem).
       apply external_call_Three_Two' in Hcall.
       destruct Hcall as (v' & Hcall & Hv').
       eexists.
       repeat constructor; simpl; eauto.
-    - inv STK; inv H1.
+
+    - (* exec_return *)
+      inv STK; inv H1.
       eexists; repeat constructor.
-  Admitted.
+  Qed.
 
   (* Lemma external_call_mem_extends *)
   (*   {VT1: Builtins2.vote_type} {vsem1: Builtins2.VoteSemantics VT1} *)
