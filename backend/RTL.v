@@ -892,16 +892,13 @@ Lemma in_builtin_resb_sound (r : reg) (bres : builtin_res reg) :
   in_builtin_resb r bres = true -> in_builtin_res r bres.
 Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
 
-(* TODO: some of these (e.g., Oshrximm) can be checked statically for
-   safety, even here if we want (check that n is small enough). For
-   now we just consider them unsafe.
+(* TODO: maybe we can just assume faulted floats aren't NaN, and then
+   the conversions from single/float to int/long will always succeed
+   and we can consider them safe?
 
-   Actually, we shouldn't need to worry about the shift instructions
-   anyway, because in the simulation if they get stuck in one
-   semantics they will get stuck in the other, regardless of argument
-   values. We do need to do this for the other operations because
-   whether they get stuck or not depends on the values of the
-   arguments, which may not be the same between the two executions. *)
+   It seems that considering NaN conversions to int/long to be
+   immediate UB is a CompCert choice that isn't necessarily dictated
+   by the C standard. *)
 Inductive is_unsafe : operation -> Prop :=
 | is_unsafe_Odiv : is_unsafe Odiv
 | is_unsafe_Odivu : is_unsafe Odivu
@@ -911,14 +908,17 @@ Inductive is_unsafe : operation -> Prop :=
 | is_unsafe_Odivlu : is_unsafe Odivlu
 | is_unsafe_Omodl : is_unsafe Omodl
 | is_unsafe_Omodlu : is_unsafe Omodlu
-| is_unsafe_Oshrximm : forall n, is_unsafe (Oshrximm n)
-| is_unsafe_Oshrxlimm : forall n, is_unsafe (Oshrxlimm n).
+| in_unsafe_Ointofsingle : is_unsafe Ointofsingle
+| in_unsafe_Ointoffloat : is_unsafe Ointoffloat
+| in_unsafe_Olongofsingle : is_unsafe Olongofsingle
+| in_unsafe_Olongoffloat : is_unsafe Olongoffloat.
 
 Definition is_unsafeb (op : operation) : bool :=
   match op with
   | Odiv | Odivu | Omod | Omodu
   | Odivl | Odivlu | Omodl | Omodlu
-  | Oshrximm _ | Oshrxlimm _ => true
+  | Ointofsingle | Ointoffloat => true
+  | Olongofsingle | Olongoffloat => true
   | _ => false
   end.
 

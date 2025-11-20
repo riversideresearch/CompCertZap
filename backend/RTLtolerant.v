@@ -275,6 +275,68 @@ Section TOLERANCE.
                  destruct Archi.ptr64; inv_Forall2; eexists; eauto].
   Qed.
 
+  Lemma val_compat_shrx v1 v2 vres n :
+    val_compat v1 v2 ->
+    Val.shrx v1 (Vint n) = Some vres ->
+    exists vres' : val, Val.shrx v2 (Vint n) = Some vres'.
+  Proof.
+    intros Hcompat Hshrx.
+    inv Hcompat; simpl in *; try congruence.
+    destruct (Integers.Int.ltu _ _); inv Hshrx.
+    eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_shrxl v1 v2 vres n :
+    val_compat v1 v2 ->
+    Val.shrxl v1 (Vint n) = Some vres ->
+    exists vres' : val, Val.shrxl v2 (Vint n) = Some vres'.
+  Proof.
+    intros Hcompat Hshrxl.
+    inv Hcompat; simpl in *; try congruence.
+    destruct (Integers.Int.ltu _ _); inv Hshrxl.
+    eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_floatofint v1 v2 vres :
+    val_compat v1 v2 ->
+    Val.floatofint v1 = Some vres ->
+    exists vres' : val, Val.floatofint v2 = Some vres'.
+  Proof.
+    intros Hcompat Hfoi.
+    inv Hcompat; simpl in *; try congruence.
+    eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_singleofint v1 v2 vres :
+    val_compat v1 v2 ->
+    Val.singleofint v1 = Some vres ->
+    exists vres' : val, Val.singleofint v2 = Some vres'.
+  Proof.
+    intros Hcompat Hsoi.
+    inv Hcompat; simpl in *; try congruence.
+    eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_floatoflong v1 v2 vres :
+    val_compat v1 v2 ->
+    Val.floatoflong v1 = Some vres ->
+    exists vres' : val, Val.floatoflong v2 = Some vres'.
+  Proof.
+    intros Hcompat Hfol.
+    inv Hcompat; simpl in *; try congruence.
+    eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_singleoflong v1 v2 vres :
+    val_compat v1 v2 ->
+    Val.singleoflong v1 = Some vres ->
+    exists vres' : val, Val.singleoflong v2 = Some vres'.
+  Proof.
+    intros Hcompat Hsol.
+    inv Hcompat; simpl in *; try congruence.
+    eexists; reflexivity.
+  Qed.
+
   Lemma rs_compat_eval_operation rs1 rs2 sp op args m v :
     ~ is_unsafe op ->
     rs_compat rs1 rs2 ->
@@ -288,11 +350,95 @@ Section TOLERANCE.
       try (destruct args; simpl in *; try congruence);
       inv Hop; try solve [eexists; eauto];
       try solve [exfalso; apply Hnodiv; constructor].
+    - eapply val_compat_shrx; eauto.
     - eapply val_compat_eval_addressing32; eauto.
     - eapply val_compat_eval_addressing32; eauto.
+    - eapply val_compat_shrxl; eauto.
     - eapply val_compat_eval_addressing64; eauto.
     - eapply val_compat_eval_addressing64; eauto.
-  Admitted.
+    - eapply val_compat_floatofint; eauto.
+    - eapply val_compat_singleofint; eauto.
+    - eapply val_compat_floatoflong; eauto.
+    - eapply val_compat_singleoflong; eauto.
+  Qed.
+
+  Lemma val_compat_divs n1 n2 d1 d2 v1 v2 :
+    val_compat n1 n2 ->
+    val_compat d1 d2 ->
+    Val.divs n1 d1 = Some v1 ->
+    Val.divs n2 d2 = Some v2 ->
+    val_compat v1 v2.
+  Proof.
+    intros Hn Hd Hdiv1 Hdiv2.
+    inv Hn; inv Hd; simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    - destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hdiv1.
+      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+        inv Hdiv2; constructor.
+      + inv Hdiv2; constructor.
+    - inv Hdiv1.
+      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+        inv Hdiv2; constructor.
+      + inv Hdiv2; constructor.
+  Qed.
+
+  Lemma val_compat_divu n1 n2 d1 d2 v1 v2 :
+    val_compat n1 n2 ->
+    val_compat d1 d2 ->
+    Val.divu n1 d1 = Some v1 ->
+    Val.divu n2 d2 = Some v2 ->
+    val_compat v1 v2.
+  Proof.
+    intros Hn Hd Hdiv1 Hdiv2.
+    inv Hn; inv Hd; simpl in *; try congruence.
+    repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    inv Hdiv1; inv Hdiv2; constructor.
+  Qed.
+
+  Lemma val_compat_mods n1 n2 d1 d2 v1 v2 :
+    val_compat n1 n2 ->
+    val_compat d1 d2 ->
+    Val.mods n1 d1 = Some v1 ->
+    Val.mods n2 d2 = Some v2 ->
+    val_compat v1 v2.
+  Proof.
+    intros Hn Hd Hmod1 Hmod2.
+    inv Hn; inv Hd; simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    - destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hmod1.
+      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+        inv Hmod2; constructor.
+      + inv Hmod2; constructor.
+    - inv Hmod1.
+      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+        inv Hmod2; constructor.
+      + inv Hmod2; constructor.
+  Qed.
+
+  Lemma val_compat_modu n1 n2 d1 d2 v1 v2 :
+    val_compat n1 n2 ->
+    val_compat d1 d2 ->
+    Val.modu n1 d1 = Some v1 ->
+    Val.modu n2 d2 = Some v2 ->
+    val_compat v1 v2.
+  Proof.
+    intros Hn Hd Hmod1 Hmod2.
+    inv Hn; inv Hd; simpl in *; try congruence.
+    repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    inv Hmod1; inv Hmod2; constructor.
+  Qed.
 
   Lemma eval_operation_val_compat rs1 rs2 sp op args m1 m2 v v' :
     rs_compat rs1 rs2 ->
@@ -300,18 +446,31 @@ Section TOLERANCE.
     Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m2 = Some v' ->
     val_compat v v'.
   Proof.
-    (* intros Hcompat H0 H1. *)
-    (* destruct op; simpl in *; *)
-    (*   try solve [destruct args; simpl in *; try congruence; *)
-    (*              try solve [inv H0; inv H1; constructor]; *)
-    (*              try solve [inv H0; inv H1; apply val_compat_refl]; *)
-    (*              destruct args; simpl in *; try congruence; *)
-    (*              inv H0; inv H1; auto]. *)
-    (* - destruct args; simpl in *; try congruence. *)
-    (*   destruct args; simpl in *; try congruence. *)
-    (*   inv H0; inv H1. *)
-    (*   apply val_compat_refl. *)
-    (*   destruct args; simpl in *; try congruence. *)
+    intros Hcompat H0 H1.
+    destruct op; simpl in *;
+      try solve [destruct args; simpl in *; try congruence;
+                 try solve [inv H0; inv H1; constructor];
+                 try solve [inv H0; inv H1; apply val_compat_refl];
+                 destruct args; simpl in *; try congruence;
+                 inv H0; inv H1; auto];
+      try solve [do 2 (destruct args; simpl in *; try congruence);
+                 inv H0; inv H1;
+                 specialize (Hcompat p); inv Hcompat; simpl;
+                 try apply val_compat_refl; constructor];
+      try solve [do 3 (destruct args; simpl in *; try congruence);
+                 inv H0; inv H1;
+                 pose proof (Hcompat p0) as Hp0; specialize (Hcompat p);
+                 inv Hp0; inv Hcompat; constructor].
+    - do 3 (destruct args; simpl in *; try congruence).
+      eapply val_compat_divs; eauto.
+    - do 3 (destruct args; simpl in *; try congruence).
+      eapply val_compat_divu; eauto.
+    - do 3 (destruct args; simpl in *; try congruence).
+      eapply val_compat_mods; eauto.
+    - do 3 (destruct args; simpl in *; try congruence).
+      eapply val_compat_modu; eauto.
+    - do 3 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1.
   Admitted.
 
   (* Lemma eval_addressing_val_compat rs1 rs2 sp addr args a a' : *)
@@ -605,10 +764,10 @@ Section TOLERANCE.
   (*     destruct (Val.eq _ _); subst; simpl; constructor. *)
   (* Qed. *)
   
-  Lemma lessdef_vote3_vote x x0 x1 y y0 y1 :
+  Lemma lessdef_vote3_vote ty x x0 x1 y y0 y1 :
     Val.lessdef x y ->
     Val.lessdef x0 y0 ->
-    Val.lessdef (vote3 Tint x x0 x1) (vote Tint y y0 y1).
+    Val.lessdef (vote3 ty x x0 x1) (vote ty y y0 y1).
   Proof.
     intros H0 H1.
     unfold vote3, vote.
@@ -618,10 +777,10 @@ Section TOLERANCE.
       destruct (Val.eq _ _); subst; simpl; constructor.
   Qed.
   
-  Lemma lessdef_vote3_vote' x x0 x1 y y0 y1 :
+  Lemma lessdef_vote3_vote' ty x x0 x1 y y0 y1 :
     Val.lessdef x y ->
     Val.lessdef x1 y1 ->
-    Val.lessdef (vote3 Tint x x0 x1) (vote Tint y y0 y1).
+    Val.lessdef (vote3 ty x x0 x1) (vote ty y y0 y1).
   Proof.
     intros H0 H1.
     unfold vote3, vote.
@@ -632,10 +791,10 @@ Section TOLERANCE.
       destruct (Val.eq _ _); subst; simpl; constructor.
   Qed.
   
-  Lemma lessdef_vote3_vote'' x x0 x1 y y0 y1 :
+  Lemma lessdef_vote3_vote'' ty x x0 x1 y y0 y1 :
     Val.lessdef x0 y0 ->
     Val.lessdef x1 y1 ->
-    Val.lessdef (vote3 Tint x x0 x1) (vote Tint y y0 y1).
+    Val.lessdef (vote3 ty x x0 x1) (vote ty y y0 y1).
   Proof.
     intros H0 H1.
     unfold vote3, vote.
@@ -720,7 +879,9 @@ Section TOLERANCE.
     inv Hef; simpl in *; destruct (signature_eq _ _);
       try congruence; inv Hcall; auto.
   Qed.
-  
+
+  (* TODO: the four cases in this proof are literally the same except
+     the type argument to [vote]. *)
   Lemma external_call_vote_lessdef ef vs1 vs2 m1 m2 t v m' :
     is_vote_builtin ef ->
     list_lessdef_mod_1 vs1 vs2 ->
@@ -763,15 +924,124 @@ Section TOLERANCE.
         exists (vote Tint y y0 y1); split.
         { constructor; auto. }
         apply lessdef_vote3_vote''; auto.
-    - admit.
-    - admit.
-    - admit.
-  Admitted.
+    - unfold builtin_or_external_sem in *.
+      unfold Builtins.lookup_builtin_function in *; simpl in *.
+      destruct (signature_eq _ _); simpl in *; try congruence.
+      clear e.
+      inv Hext.
+      simpl in *.
+      inv Heq; try congruence.
+      + inv H1; try congruence.
+        * inv H3; try congruence.
+          { inv H4; try congruence.
+            inv H.
+            exists (vote Tlong y y0 y1); split.
+            - constructor; auto.
+            - apply lessdef_vote3_vote; auto. }
+          inv H1; try congruence.
+          inv H.
+          exists (vote Tlong y y0 y1); split.
+          { constructor; auto. }
+          apply lessdef_vote3_vote; auto.
+        * inv H2; try congruence.
+          inv H3; try congruence.
+          inv H.
+          exists (vote Tlong y y0 y1); split.
+          { constructor; auto. }
+          apply lessdef_vote3_vote'; auto.
+      + inv H0; try congruence.
+        inv H2; try congruence.
+        inv H3; try congruence.
+        inv H.
+        exists (vote Tlong y y0 y1); split.
+        { constructor; auto. }
+        apply lessdef_vote3_vote''; auto.
+    - unfold builtin_or_external_sem in *.
+      unfold Builtins.lookup_builtin_function in *; simpl in *.
+      destruct (signature_eq _ _); simpl in *; try congruence.
+      clear e.
+      inv Hext.
+      simpl in *.
+      inv Heq; try congruence.
+      + inv H1; try congruence.
+        * inv H3; try congruence.
+          { inv H4; try congruence.
+            inv H.
+            exists (vote Tsingle y y0 y1); split.
+            - constructor; auto.
+            - apply lessdef_vote3_vote; auto. }
+          inv H1; try congruence.
+          inv H.
+          exists (vote Tsingle y y0 y1); split.
+          { constructor; auto. }
+          apply lessdef_vote3_vote; auto.
+        * inv H2; try congruence.
+          inv H3; try congruence.
+          inv H.
+          exists (vote Tsingle y y0 y1); split.
+          { constructor; auto. }
+          apply lessdef_vote3_vote'; auto.
+      + inv H0; try congruence.
+        inv H2; try congruence.
+        inv H3; try congruence.
+        inv H.
+        exists (vote Tsingle y y0 y1); split.
+        { constructor; auto. }
+        apply lessdef_vote3_vote''; auto.
+    - unfold builtin_or_external_sem in *.
+      unfold Builtins.lookup_builtin_function in *; simpl in *.
+      destruct (signature_eq _ _); simpl in *; try congruence.
+      clear e.
+      inv Hext.
+      simpl in *.
+      inv Heq; try congruence.
+      + inv H1; try congruence.
+        * inv H3; try congruence.
+          { inv H4; try congruence.
+            inv H.
+            exists (vote Tfloat y y0 y1); split.
+            - constructor; auto.
+            - apply lessdef_vote3_vote; auto. }
+          inv H1; try congruence.
+          inv H.
+          exists (vote Tfloat y y0 y1); split.
+          { constructor; auto. }
+          apply lessdef_vote3_vote; auto.
+        * inv H2; try congruence.
+          inv H3; try congruence.
+          inv H.
+          exists (vote Tfloat y y0 y1); split.
+          { constructor; auto. }
+          apply lessdef_vote3_vote'; auto.
+      + inv H0; try congruence.
+        inv H2; try congruence.
+        inv H3; try congruence.
+        inv H.
+        exists (vote Tfloat y y0 y1); split.
+        { constructor; auto. }
+        apply lessdef_vote3_vote''; auto.
+  Qed.
 
   Lemma forall_lessdef_list rs1 rs2 args :
     Forall (fun arg => Val.lessdef (rs1 # arg) (rs2 # arg)) args ->
     Val.lessdef_list rs1 ## args rs2 ## args.
   Proof. induction 1; constructor; auto. Qed.
+
+  Lemma forall2_lessdef_list args1 args2 :
+    Forall2 Val.lessdef args1 args2 ->
+    Val.lessdef_list args1 args2.
+  Proof. induction 1; constructor; auto. Qed.
+
+  Lemma has_argtype_list_lessdef args1 args2 l :
+    Val.has_argtype_list args1 l ->
+    Forall2 Val.lessdef args1 args2 ->
+    Val.has_argtype_list args2 l.
+  Proof.
+    revert args2 l; induction args1;
+      intros args2 l Htype Hlessdef; inv Htype; inv Hlessdef; constructor.
+    - eapply Val.has_argtype_lessdef; eauto.
+    - apply IHargs1; auto.
+  Qed.
 
   Lemma faulty_progress i s1 s2 :
     match_states i s1 s2 ->
@@ -961,10 +1231,28 @@ Section TOLERANCE.
 
     - admit.
     - admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
+    - eapply Memory.Mem.free_parallel_extends in H0; eauto.
+      destruct H0 as (m2' & Hmem2 & Hm2').
+      eexists.
+      eapply fstep_step_State.
+      2: { apply maybe_zap_refl. }
+      apply exec_Ireturn; eauto.      
+    - eapply Memory.Mem.alloc_extends
+        with (lo2 := 0) (hi2 := fn_stacksize f) in H0;
+        eauto; try reflexivity.
+      destruct H0 as (m2' & Halloc & Hm2').
+      eexists.
+      repeat constructor; eauto.
+      eapply has_argtype_list_lessdef; eauto.
+    - eapply external_call_mem_extends in H; eauto.
+      2: { apply forall2_lessdef_list; eauto. }
+      destruct H as (vres' & m2' & Hcall & Hvres' & Hext & Hmem).
+      apply external_call_Three_Two' in Hcall.
+      destruct Hcall as (v' & Hcall & Hv').
+      eexists.
+      repeat constructor; simpl; eauto.
+    - inv STK; inv H1.
+      eexists; repeat constructor.
   Admitted.
 
   (* Lemma external_call_mem_extends *)
