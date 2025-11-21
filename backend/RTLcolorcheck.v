@@ -203,7 +203,10 @@ Section color_checker.
               builtin_res_forallb (fun r => is_whiteb ((col succ) ! r)) bres &&
               PTree_Properties.for_all (col pc)
                 (fun r c => existsb (in_builtin_argb r) bargs ||
-                           in_builtin_resb r bres ||
+                           (match bres with
+                            | BR res => Pos.eqb r res
+                            | _ => false
+                            end) ||
                              is_colorb ((col succ) ! r) c)
     | Icond cond args ifso ifnot =>
         forallb (fun arg => is_whiteb ((col pc) ! arg)) args &&
@@ -398,7 +401,9 @@ Section color_checker.
               destruct H as (barg & Hin & Hin').
               apply Hnotex in Hin.
               apply in_builtin_argb_sound in Hin'; contradiction.
-            - apply in_builtin_resb_sound in H; contradiction. }
+            - destruct b; try congruence.
+              apply Pos.eqb_eq in H; subst.
+              exfalso; eapply Hnoteq; eauto. }
           apply is_colorb_sound; auto.
     - destruct_andb Hargs Hpres.
       rewrite forallb_forall in Hargs.
@@ -492,5 +497,7 @@ Proof.
   unfold check_program in Hp.
   rewrite forallb_forall in Hp.
   apply Hp in Hin.
-  apply check_function_sound; auto.
+  destruct f; simpl in *.
+  - apply check_function_sound; auto.
+  - exists (fun _ _ => None); apply I.
 Qed.

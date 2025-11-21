@@ -176,7 +176,7 @@ Section wc.
       Forall (builtin_arg_forall (fun r => is_white (col pc r))) bargs ->
       builtin_res_forall (fun r => is_white (col succ r)) bres ->
       (forall r c, ~ Exists (in_builtin_arg r) bargs ->
-              ~ in_builtin_res r bres ->
+              (forall x, bres = BR x -> r <> x) ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Ibuiltin ef bargs bres succ)
   | wc_Icond : forall cond args ifso ifnot,
@@ -203,7 +203,16 @@ Section wc.
         wc_fn_code : wc_code f.(fn_code)
       }.
 
+  Definition wc_fundef (fd : fundef) : Prop :=
+    match fd with
+    | Internal f => wc_function f
+    | External _ => True
+    end.
+
 End wc.
 
+(* Definition wc_program (p : program) : Prop := *)
+(*   forall i f, In (i, Gfun (Internal f)) (prog_defs p) -> exists col, wc_function col f. *)
+
 Definition wc_program (p : program) : Prop :=
-  forall i f, In (i, Gfun (Internal f)) (prog_defs p) -> exists col, wc_function col f.
+  forall i fd, In (i, Gfun fd) (prog_defs p) -> exists col, wc_fundef col fd.

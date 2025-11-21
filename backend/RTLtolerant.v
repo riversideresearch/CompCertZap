@@ -94,7 +94,6 @@ Section match_states.
   | match_states_State :
     forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool)
       (STK: Forall2 (match_stackframes b) stk1 stk2)
-      (* (VOTE: match_votes_function f1 f2) *)
       (WC_FUN: wc_function col f)
       (RS_COMPAT: rs_compat rs1 rs2)
       (RS: match_rs (col pc) b rs1 rs2)
@@ -102,9 +101,9 @@ Section match_states.
       match_states b (State stk1 f sp pc rs1 m1)
                    {| fs_state := State stk2 f sp pc rs2 m2; fault := b |}
   | match_states_Callstate :
-    forall stk1 stk2 fd args1 args2 m1 m2 b
+    forall col stk1 stk2 fd args1 args2 m1 m2 b
       (STK: Forall2 (match_stackframes b) stk1 stk2)
-      (* (VOTE: match_votes_fundef fd1 fd2) *)
+      (WC_FD: wc_fundef col fd)
       (LESSDEF: Forall2 Val.lessdef args1 args2)
       (MEM: Memory.Mem.extends m1 m2),
       match_states b (Callstate stk1 fd args1 m1)
@@ -120,13 +119,15 @@ Section match_states.
 End match_states.
 
 Lemma init_match_states_refl p s :
+  wc_program p ->
   RTL.initial_state p s ->
   match_states false s {| fs_state := s; fault := false |}.
 Proof.
-  intro Hinit; inv Hinit.
-  constructor; auto.
-  apply Memory.Mem.extends_refl.
-Qed.
+  intros Hwc Hinit; inv Hinit.
+  econstructor; auto.
+  - admit.
+  - apply Memory.Mem.extends_refl.
+Admitted.
 
 Section TOLERANCE.
   Variable prog : program.
@@ -1534,7 +1535,7 @@ Section TOLERANCE.
           rewrite 2!Regmap.gso; auto.
 
     (* exec_Istore *)
-    - inv Hmatch.      
+    - inv Hmatch.
       specialize (Hsafe _ (star_refl _ _ _)).
       destruct Hsafe as [[r Hfin] | (t & s'' & Hstep)].
       { inv Hfin. }
@@ -1599,6 +1600,7 @@ Section TOLERANCE.
         rewrite Forall_forall in H8; apply H8 in Hin.
         apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
       econstructor; auto.
+      2: { admit. }
       constructor; auto.
       econstructor; eauto.
       destruct b.
@@ -1618,7 +1620,36 @@ Section TOLERANCE.
       intros x Hx; inv Hx; assumption.
 
     (* exec_Itailcall *)
-    - admit.
+    - inv Hmatch.
+      specialize (Hsafe _ (star_refl _ _ _)).
+      destruct Hsafe as [[r Hfin] | (t & s'' & Hstep)].
+      { inv Hfin. }
+      inv Hstep; try congruence.
+      pose proof H13 as Hfree.
+      eapply Memory.Mem.free_parallel_extends in Hfree; eauto.
+      destruct Hfree as (m2' & Hfree & Hm2').
+      rewrite H2 in Hfree; inv Hfree.
+      eexists; split.
+      { eapply exec_Itailcall; eauto. }
+      rewrite H in H10; inv H10.
+      simpl in *.
+      eapply find_function_lessdef with (rs2 := rs) in H11.
+      2: { intros r Hr.
+           destruct b; auto.
+           inv_rs; inv_wc.
+           apply RS; intro HC.
+           rewrite (H5 _ (eq_refl _)) in HC; inv HC; inv Hc. }
+      rewrite H0 in H11; inv H11.
+      assert (Hlessdef: Forall2 Val.lessdef rs1 ## args0 rs ## args0).
+      { apply forall2_lessdef.
+        apply Forall_forall.
+        intros r Hin.
+        destruct b; auto.
+        inv_rs; inv_wc.
+        rewrite Forall_forall in H7; apply H7 in Hin.
+        apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+      econstructor; auto.
+      admit.
 
     (* exec_Ibuiltin *)
     - inv Hmatch.
@@ -1763,7 +1794,7 @@ Section TOLERANCE.
                   { apply RS; intro HC; rewrite H8 in HC; inv HC. }
                   { apply list_lessdef_mod_1_cons; constructor. }
               + inv Hc.
-              + inv Hc. }            
+              + inv Hc. }
           econstructor; eauto.
           3: { apply external_call_vote_mem in H1; auto.
                apply external_call_vote_mem in H12; subst; auto. }
@@ -1780,22 +1811,367 @@ Section TOLERANCE.
           apply RS; intro HC; apply Hr; apply H13; auto.
 
         * (* other builtin *)
-          admit.
+          simpl in *.
+          assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
+          { eapply eval_builtin_args_lessdef'
+              with (e2 := fun r => rs # r) in H11; eauto.
+            - destruct H11 as (vl2 & Heval & Hvl2).
+              eapply eval_builtin_args_determ in H0; eauto; subst; auto.
+            - apply Forall_forall.
+              intros barg Hin.
+              rewrite Forall_forall in H8.
+              eapply builtin_arg_forall_impl; eauto.
+              simpl; intros r Hr.
+              apply RS; intro HC; rewrite Hr in HC; inv HC; inv Hc. }
+          assert (exists vres' m'', @external_call _ VoteSemantics_Three
+                                 ef0 (Genv.globalenv prog) vargs0 m1 t vres' m'' /\
+                 Val.lessdef vres' vres /\ Memory.Mem.extends m'' m').
+          { assert (match_traces (Genv.globalenv prog) t' t).
+            { pose proof H12 as Hcall.
+              eapply Events.external_call_mem_extends in Hcall; eauto.
+              destruct Hcall as (vres' & m2' &Hcall' & Hvres' & Hm2' & Hunchanged).
+              apply external_call_Three_Two' in Hcall'.
+              destruct Hcall' as (v' & Hcall' & Hv').
+              pose proof H1 as Hcall.
+              eapply external_call_match_traces in Hcall; eauto. }
+            eapply external_call_receptive in H12; eauto.
+            destruct H12 as (vres' & m2 & H12).
+            pose proof H12 as Hcall'.
+            eapply Events.external_call_mem_extends in Hcall'; eauto.
+            destruct Hcall' as (vres'' & m2' &Hcall' & Hvres' & Hm2' & Hunchanged).
+            apply external_call_Three_Two' in Hcall'.
+            destruct Hcall' as (v' & Hcall' & Hv').
+            eapply external_call_deterministic in H1; eauto.
+            destruct H1; subst.
+            exists vres', m2; split; auto; split; auto.
+            eapply Val.lessdef_trans; eauto. }
+          destruct H2 as (vres' & m'' & Hcall & Hvres' & Hm'').
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto. }
+          econstructor; eauto.
+          { destruct res0; simpl; auto.
+            intro r; destruct (peq x r); subst.
+            - rewrite 2!Regmap.gss; apply val_lessdef_compat; assumption.
+            - rewrite 2!Regmap.gso; auto. }
+          unfold match_rs in RS.
+          exists c; split; auto; intros r Hr.
+          assert (Hlessdef: existsb (in_builtin_argb r) args0 = true ->
+                            Val.lessdef rs1 # r rs # r).
+          { intro Hex.
+            apply existsb_exists in Hex.
+            destruct Hex as (y & Hy & Hin).
+            apply in_builtin_argb_sound in Hin.
+            rewrite Forall_forall in H8.
+            apply H8 in Hy.
+            eapply in_builtin_arg_forall in Hy; eauto.
+            apply RS; intro HC; rewrite Hy in HC; inv HC; inv Hc. }
+          destruct res0; simpl.
+          { destruct (peq r x); subst.
+            { rewrite 2!Regmap.gss; auto. }
+            rewrite 2!Regmap.gso; auto.
+            destruct (existsb (in_builtin_argb r) args0) eqn:Hex; auto.
+            apply RS; intro HC; apply Hr.
+            apply H10; auto.
+            - intro Hexists.
+              rewrite Exists_exists in Hexists.
+              destruct Hexists as (y & Hy & Hin).
+              assert (existsb (in_builtin_argb r) args0 = true).
+              + apply existsb_exists.
+                exists y; split; auto.
+                destruct (in_builtin_argb_spec r y); auto.
+              + congruence.
+            - intros y Hy; inv Hy; assumption. }
+          { destruct (existsb (in_builtin_argb r) args0) eqn:Hex; auto.
+            apply RS; intro HC; apply Hr.
+            apply H10; auto.
+            - intro Hexists.
+              rewrite Exists_exists in Hexists.
+              destruct Hexists as (y & Hy & Hin).
+              assert (existsb (in_builtin_argb r) args0 = true).
+              + apply existsb_exists.
+                exists y; split; auto.
+                destruct (in_builtin_argb_spec r y); auto.
+                + congruence.
+            - intros ? ?; discriminate. }
+          { destruct (existsb (in_builtin_argb r) args0) eqn:Hex; auto.
+            apply RS; intro HC; apply Hr.
+            apply H10; auto.
+            - intro Hexists.
+              rewrite Exists_exists in Hexists.
+              destruct Hexists as (y & Hy & Hin).
+              assert (existsb (in_builtin_argb r) args0 = true).
+              + apply existsb_exists.
+                exists y; split; auto.
+                destruct (in_builtin_argb_spec r y); auto.
+                + congruence.
+            - intros ? ?; discriminate. }
 
       + (* Fault has not occurred *)
-        admit.
+        pose proof WC_FUN as Hwc.
+        inv_wc.
+        * (* white smove *)
+          repeat match goal with
+                 | [ H : eval_builtin_args _  _ _ _ _ _ |- _ ] => inv H
+                 | [ H : list_forall2 _ _ _ |- _ ]  => inv H
+                 | [ H : eval_builtin_arg _ _ _ _ (BA _) _ |- _ ] => inv H
+                 end.
+          replace t with E0 in *.
+          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          replace t' with E0 in *.
+          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          replace m' with m in *.
+          2: { eapply external_call_smove_mem; eauto. }
+          replace m'0 with m1 in *.
+          2: { eapply external_call_smove_mem; eauto. }
+          assert (Hlessdef: Val.lessdef vres0 vres).
+          { pose proof H12 as Hext.
+            apply external_call_Three_Two' in H12.
+            destruct H12 as (v' & Hext' & Hv').
+            eapply Events.external_call_mem_extends
+              with (vargs' := [rs # arg]) in Hext'; eauto.
+            destruct Hext' as (vres' & m2' & Hext' & Hvres' & Hmem & Hmem').
+            eapply external_call_deterministic in Hext'.
+            2: { eapply H1. }
+            destruct Hext'; subst.
+            eapply Val.lessdef_trans; eauto. }
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto.
+            repeat constructor. }
+          simpl in *.
+          econstructor; eauto.
+          { intro r.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss.
+              apply val_lessdef_compat; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          intros r.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss; auto. }
+          rewrite 2!Regmap.gso; auto.
+
+        * (* pink smove *)
+          repeat match goal with
+                 | [ H : eval_builtin_args _  _ _ _ _ _ |- _ ] => inv H
+                 | [ H : list_forall2 _ _ _ |- _ ]  => inv H
+                 | [ H : eval_builtin_arg _ _ _ _ (BA _) _ |- _ ] => inv H
+                 end.
+          replace t with E0 in *.
+          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          replace t' with E0 in *.
+          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          replace m' with m in *.
+          2: { eapply external_call_smove_mem; eauto. }
+          replace m'0 with m1 in *.
+          2: { eapply external_call_smove_mem; eauto. }
+          assert (Hlessdef: Val.lessdef vres0 vres).
+          { pose proof H12 as Hext.
+            apply external_call_Three_Two' in H12.
+            destruct H12 as (v' & Hext' & Hv').
+            eapply Events.external_call_mem_extends
+              with (vargs' := [rs # arg]) in Hext'; eauto.
+            destruct Hext' as (vres' & m2' & Hext' & Hvres' & Hmem & Hmem').
+            eapply external_call_deterministic in Hext'.
+            2: { eapply H1. }
+            destruct Hext'; subst.
+            eapply Val.lessdef_trans; eauto. }
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto.
+            repeat constructor. }
+          simpl in *.
+          econstructor; eauto.
+          { intro r.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss.
+              apply val_lessdef_compat; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          intros r.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss; auto. }
+          rewrite 2!Regmap.gso; auto.
+
+        * (* vote *)
+          repeat match goal with
+                 | [ H : eval_builtin_args _  _ _ _ _ _ |- _ ] => inv H
+                 | [ H : list_forall2 _ _ _ |- _ ]  => inv H
+                 | [ H : eval_builtin_arg _ _ _ _ (BA _) _ |- _ ] => inv H
+                 end.
+          replace t with E0 in *.
+          2: { symmetry; eapply external_call_vote_E0; eauto. }
+          replace t' with E0 in *.
+          2: { symmetry; eapply external_call_vote_E0; eauto. }
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto.
+            repeat constructor. }
+          assert (Val.lessdef vres0 vres).
+          { eapply external_call_vote_lessdef
+              with (vs2 := rs ## [arg1; arg2; arg3]) in H12; eauto.
+            - destruct H12 as (v' & Hext & Hv').
+              eapply external_call_deterministic in H1; eauto.
+              destruct H1; subst; auto.
+            - apply list_lessdef_mod_1_cons.
+              constructor; auto. }
+          econstructor; eauto.
+          3: { apply external_call_vote_mem in H1; auto.
+               apply external_call_vote_mem in H12; subst; auto. }
+          { intro r; simpl in *.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss.
+              apply val_lessdef_compat; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          intros r; simpl in *.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss; auto. }
+          rewrite 2!Regmap.gso; auto.
+
+        * (* other builtin *)
+          simpl in *.
+          assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
+          { eapply eval_builtin_args_lessdef'
+              with (e2 := fun r => rs # r) in H11; eauto.
+            - destruct H11 as (vl2 & Heval & Hvl2).
+              eapply eval_builtin_args_determ in H0; eauto; subst; auto.
+            - apply Forall_forall.
+              intros barg Hin.
+              rewrite Forall_forall in H8.
+              eapply builtin_arg_forall_impl; eauto. }
+          assert (exists vres' m'', @external_call _ VoteSemantics_Three
+                                 ef0 (Genv.globalenv prog) vargs0 m1 t vres' m'' /\
+                 Val.lessdef vres' vres /\ Memory.Mem.extends m'' m').
+          { assert (match_traces (Genv.globalenv prog) t' t).
+            { pose proof H12 as Hcall.
+              eapply Events.external_call_mem_extends in Hcall; eauto.
+              destruct Hcall as (vres' & m2' &Hcall' & Hvres' & Hm2' & Hunchanged).
+              apply external_call_Three_Two' in Hcall'.
+              destruct Hcall' as (v' & Hcall' & Hv').
+              pose proof H1 as Hcall.
+              eapply external_call_match_traces in Hcall; eauto. }
+            eapply external_call_receptive in H12; eauto.
+            destruct H12 as (vres' & m2 & H12).
+            pose proof H12 as Hcall'.
+            eapply Events.external_call_mem_extends in Hcall'; eauto.
+            destruct Hcall' as (vres'' & m2' &Hcall' & Hvres' & Hm2' & Hunchanged).
+            apply external_call_Three_Two' in Hcall'.
+            destruct Hcall' as (v' & Hcall' & Hv').
+            eapply external_call_deterministic in H1; eauto.
+            destruct H1; subst.
+            exists vres', m2; split; auto; split; auto.
+            eapply Val.lessdef_trans; eauto. }
+          destruct H2 as (vres' & m'' & Hcall & Hvres' & Hm'').
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto. }
+          econstructor; eauto.
+          { destruct res0; simpl; auto.
+            intro r; destruct (peq x r); subst.
+            - rewrite 2!Regmap.gss; apply val_lessdef_compat; assumption.
+            - rewrite 2!Regmap.gso; auto. }
+          unfold match_rs in RS.
+          intro r.
+          assert (Hlessdef: existsb (in_builtin_argb r) args0 = true ->
+                            Val.lessdef rs1 # r rs # r).
+          { intro Hex.
+            apply existsb_exists in Hex.
+            destruct Hex as (y & Hy & Hin).
+            apply in_builtin_argb_sound in Hin.
+            rewrite Forall_forall in H8.
+            apply H8 in Hy.
+            eapply in_builtin_arg_forall in Hy; eauto. }
+          destruct res0; simpl.
+          { destruct (peq r x); subst.
+            { rewrite 2!Regmap.gss; auto. }
+            rewrite 2!Regmap.gso; auto. }
+          { destruct (existsb (in_builtin_argb r) args0) eqn:Hex; auto. }
+          { destruct (existsb (in_builtin_argb r) args0) eqn:Hex; auto. }
 
     (* exec_Icond *)
-    - admit.
+    - inv Hmatch.
+      specialize (Hsafe _ (star_refl _ _ _)).
+      destruct Hsafe as [[r Hfin] | (t & s'' & Hstep)].
+      { inv Hfin. }
+      inv Hstep; try congruence.
+      eexists; split.
+      { eapply exec_Icond; eauto. }
+      rewrite H in H9; inv H9.
+      assert (Hlessdef_list: Val.lessdef_list (rs1 ## args0 ) (rs ## args0)).
+      { apply forall_lessdef_list.
+        apply Forall_forall; intros r Hin.
+        destruct b; auto.
+        inv_rs; inv_wc.
+        rewrite Forall_forall in H3; apply H3 in Hin.
+        apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+      eapply Op.eval_condition_lessdef in H10; eauto.
+      rewrite H0 in H10; inv H10.
+      econstructor; eauto.
+      destruct b; auto.
+      inv_rs; inv_wc; exists c; split; auto.
+      intros r Hr.
+      apply RS; intro HC.
+      destruct (in_dec peq r args0).
+      { rewrite Forall_forall in H3; apply H3 in i.
+        rewrite i in HC; inv HC; inv Hc. }
+      apply Hr.
+      eapply H6 in n; eauto; destruct n.
+      destruct b1; auto.
       
     (* exec_Ijumptable *)
-    - admit.
+    - inv Hmatch.
+      specialize (Hsafe _ (star_refl _ _ _)).
+      destruct Hsafe as [[r Hfin] | (t & s'' & Hstep)].
+      { inv Hfin. }
+      inv Hstep; try congruence.
+      eexists; split.
+      { eapply exec_Ijumptable; eauto. }
+      rewrite H in H10; inv H10.
+      assert (Hlessdef: Val.lessdef (rs1 # arg0) (rs # arg0)).
+      { destruct b; auto; inv_rs; inv_wc.
+        apply RS; intro HC; rewrite H4 in HC; inv HC; inv Hc. }
+      rewrite H0, H11 in Hlessdef; inv Hlessdef.
+      rewrite H1 in H12; inv H12.
+      econstructor; eauto.
+      destruct b; auto.
+      inv_rs; inv_wc.
+      exists c; split; auto.
+      intros r Hr.
+      destruct (peq r arg0); subst.
+      + apply RS; intro HC; rewrite H4 in HC; inv HC; inv Hc.
+      + apply RS; intro HC; apply Hr.
+        apply list_nth_z_in in H1.
+        apply H5 in HC; auto.
+        rewrite Forall_forall in HC.
+        apply HC in H1; assumption.
 
     (* exec_Ireturn *)
-    - admit.
+    - inv Hmatch.
+      specialize (Hsafe _ (star_refl _ _ _)).
+      destruct Hsafe as [[r Hfin] | (t & s'' & Hstep)].
+      { inv Hfin. }
+      inv Hstep; try congruence.
+      eexists; split.
+      { eapply exec_Ireturn; eauto. }
+      rewrite H in H9; inv H9.
+      eapply Memory.Mem.free_parallel_extends in H10; eauto.
+      destruct H10 as (m2' & Hfree & Hm2').
+      rewrite H0 in Hfree; inv Hfree.
+      econstructor; eauto.
+      destruct or0; simpl; auto.
+      destruct b; auto.
+      inv_rs; inv_wc.
+      apply RS; intro HC; rewrite H2 in HC; inv HC; inv Hc.
 
     (* exec_function_internal *)
-    - admit.
+    - inv Hmatch.
+      specialize (Hsafe _ (star_refl _ _ _)).
+      destruct Hsafe as [[r Hfin] | (t & s'' & Hstep)].
+      { inv Hfin. }
+      inv Hstep; try congruence.
+      eexists; split.
+      { eapply exec_function_internal; eauto. }
+      eapply Memory.Mem.alloc_extends
+        with (lo2 := 0) (hi2 := fn_stacksize f) in H8; eauto; try reflexivity.
+      destruct H8 as (m2' & Halloc & Hm2').
+      rewrite H0 in Halloc; inv Halloc.
+      econstructor; eauto.
+      + admit.
+      + admit.
 
     (* exec_function_external *)
     - admit.

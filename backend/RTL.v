@@ -979,6 +979,15 @@ Proof.
     try solve [apply IHbarg1; intuition]; apply IHbarg2; intuition.
 Qed.
 
+Lemma in_builtin_res_forall {A : Type} (P : A -> Prop) bres x :
+  builtin_res_forall P bres ->
+  in_builtin_res x bres ->
+  P x.
+Proof.
+  revert x; induction bres; simpl; intros y Hforall Hin; inv Hin; auto;
+    destruct Hforall as [H1 H2]; auto.
+Qed.
+
 Inductive is_smove_builtin : external_function -> Prop :=
 | is_smove_int :
   is_smove_builtin (EF_builtin "__builtin_smove_int" [Xint ---> Xint]%asttyp)
