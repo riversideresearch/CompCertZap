@@ -212,7 +212,8 @@ let build_pred_map (c : code) : (int * instruction') list Intmap.t =
       let instr' = convert_instr instr in
       List.fold_left (fun acc2 succ ->
           Intmap.add succ ((n', instr') ::
-                             (Option.value ~default:[] @@ Intmap.find_opt succ acc2)) acc2
+                             (Option.value ~default:[] @@
+                                Intmap.find_opt succ acc2)) acc2
         ) acc @@ succs_of_instruction instr'
     ) c Intmap.empty
 
@@ -248,7 +249,7 @@ let update
     ) (Some cols) nodes_instrs
 
 (** Old version of update that is probably equivalent to the above but
-    more confusing. *)  
+    is more confusing. *)  
 (* let update (c : code) (cols : color PTree.t PMap.t) *)
 (*     : (color PTree.t PMap.t) option = *)
 (*   (\* For each instruction  *\) *)
@@ -444,8 +445,6 @@ let print_col (col : color Intmap.t) : unit =
   print_newline ()
 
 let nodes_in_order (f : coq_function) : int list =
-  (* List.sort (fun x y -> if BinPos.Pos.leb y x then 0 else 1) @@ *)
-  (*   nodes_in_code f.fn_code *)
   List.sort (fun x y -> if x < y then 1 else 0) @@
     List.map int_of_positive @@ nodes_in_code f.fn_code
 

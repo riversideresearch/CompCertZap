@@ -898,7 +898,11 @@ Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
 
    It seems that considering NaN conversions to int/long to be
    immediate UB is a CompCert choice that isn't necessarily dictated
-   by the C standard. *)
+   by the C standard.
+
+   Also TODO: this might need to go into backend specific Op.v
+   file.
+*)
 Inductive is_unsafe : operation -> Prop :=
 | is_unsafe_Odiv : is_unsafe Odiv
 | is_unsafe_Odivu : is_unsafe Odivu

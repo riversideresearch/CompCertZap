@@ -236,12 +236,6 @@ Section color_checker.
     | [ H: _ || _ = true |- _] => apply orb_prop in H; destruct H as [H1 | H2]
     end.
 
-  Ltac exploit_in_andb :=
-    match goal with
-    | [ H: forall _, In _ _ -> _ && _ = true, Hin: In _ _ |- _ ] =>
-        apply H in Hin; destruct (andb_prop _ _ Hin)
-    end.
-
   Lemma check_col_instr_sound (pc : node) (instr : instruction) :
     check_col_instr pc instr = true ->
     wc_instruction (fun n r => (col n) ! r) pc instr.
@@ -451,19 +445,19 @@ Section color_checker.
       apply check_col_instr_sound; auto.
   Qed.
 
-  (* Maybe not necessary but should be true anyway. *)
-  Lemma check_col_function_complete (f : function) :
-    wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true.
-  Admitted.
+  (* (* Maybe not necessary but should be true anyway. *) *)
+  (* Lemma check_col_function_complete (f : function) : *)
+  (*   wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true. *)
+  (* Admitted. *)
 
-  Theorem check_col_function_spec (f : function) :
-    reflect (wc_function (fun pc r => (col pc) ! r) f) (check_col_function f).
-  Proof.
-    destruct (check_col_function f) eqn:check.
-    - left; apply check_col_function_sound; auto.
-    - right; intro Hwc.
-      apply check_col_function_complete in Hwc; congruence.
-  Qed.
+  (* Theorem check_col_function_spec (f : function) : *)
+  (*   reflect (wc_function (fun pc r => (col pc) ! r) f) (check_col_function f). *)
+  (* Proof. *)
+  (*   destruct (check_col_function f) eqn:check. *)
+  (*   - left; apply check_col_function_sound; auto. *)
+  (*   - right; intro Hwc. *)
+  (*     apply check_col_function_complete in Hwc; congruence. *)
+  (* Qed. *)
 
 End color_checker.
 
