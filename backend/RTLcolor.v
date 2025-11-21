@@ -203,16 +203,16 @@ Section wc.
         wc_fn_code : wc_code f.(fn_code)
       }.
 
-  Definition wc_fundef (fd : fundef) : Prop :=
-    match fd with
-    | Internal f => wc_function f
-    | External _ => True
-    end.
-
 End wc.
 
 (* Definition wc_program (p : program) : Prop := *)
 (*   forall i f, In (i, Gfun (Internal f)) (prog_defs p) -> exists col, wc_function col f. *)
 
+Definition wc_fundef (fd : fundef) : Prop :=
+  match fd with
+  | Internal f => exists col, wc_function col f
+  | External _ => True
+  end.
+
 Definition wc_program (p : program) : Prop :=
-  forall i fd, In (i, Gfun fd) (prog_defs p) -> exists col, wc_fundef col fd.
+  forall i fd, In (i, Gfun fd) (prog_defs p) -> wc_fundef fd.

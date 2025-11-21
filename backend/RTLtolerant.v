@@ -101,9 +101,9 @@ Section match_states.
       match_states b (State stk1 f sp pc rs1 m1)
                    {| fs_state := State stk2 f sp pc rs2 m2; fault := b |}
   | match_states_Callstate :
-    forall col stk1 stk2 fd args1 args2 m1 m2 b
+    forall stk1 stk2 fd args1 args2 m1 m2 b
       (STK: Forall2 (match_stackframes b) stk1 stk2)
-      (WC_FD: wc_fundef col fd)
+      (WC_FD: wc_fundef fd)
       (LESSDEF: Forall2 Val.lessdef args1 args2)
       (MEM: Memory.Mem.extends m1 m2),
       match_states b (Callstate stk1 fd args1 m1)
@@ -118,6 +118,18 @@ Section match_states.
 
 End match_states.
 
+Lemma find_funct_ptr_wc_fundef (p : RTL.program) b fd :
+  wc_program p ->
+  Genv.find_funct_ptr (Genv.globalenv p) b = Some fd ->
+  wc_fundef fd.
+Proof.
+  intros Hwc Hfind.
+  destruct fd; try constructor.
+  apply Genv.find_funct_ptr_inversion in Hfind.
+  destruct Hfind as [id Hin].
+  apply Hwc in Hin; auto.
+Qed.
+
 Lemma init_match_states_refl p s :
   wc_program p ->
   RTL.initial_state p s ->
@@ -125,9 +137,9 @@ Lemma init_match_states_refl p s :
 Proof.
   intros Hwc Hinit; inv Hinit.
   econstructor; auto.
-  - admit.
+  - eapply find_funct_ptr_wc_fundef; eauto.
   - apply Memory.Mem.extends_refl.
-Admitted.
+Qed.
 
 Section TOLERANCE.
   Variable prog : program.
@@ -1400,6 +1412,68 @@ Section TOLERANCE.
     destruct Hext2; subst.
     auto.
   Qed.
+  
+  Lemma find_function_wc_fundef p ros rs fd :
+    wc_program p ->
+    find_function (Genv.globalenv p) ros rs = Some fd ->
+    wc_fundef fd.
+  Proof.
+    intros Hwc Hfind.
+    destruct ros; simpl in Hfind.
+    - apply Genv.find_funct_inversion in Hfind.
+      destruct Hfind as [i Hin].
+      eapply Hwc; eauto.
+    - destruct (Genv.find_symbol _ _); try congruence.
+      apply Genv.find_funct_ptr_inversion in Hfind.
+      destruct Hfind as [id Hin].
+      eapply Hwc; eauto.
+  Qed.
+
+  Lemma forall2_lessdef_rs_compat_init_regs args1 args2 params :
+    Forall2 Val.lessdef args1 args2 ->
+    rs_compat (init_regs args1 params) (init_regs args2 params).
+  Proof.
+    revert args1 args2.
+    induction params; simpl; intros args1 args2 Hforall.
+    { intro r; apply val_compat_refl. }
+    intro r.
+    destruct args1; inv Hforall.
+    { apply val_compat_refl. }
+    destruct (peq r a); subst.
+    - rewrite 2!Regmap.gss.
+      apply val_lessdef_compat; assumption.
+    - rewrite 2!Regmap.gso; auto.
+      apply IHparams; assumption.
+  Qed.
+
+  
+  Lemma forall2_lessdef_match_rs_init_regs args1 args2 col b params :
+    Forall2 Val.lessdef args1 args2 ->
+    match_rs col b (init_regs args1 params) (init_regs args2 params).
+  Proof.
+    revert b args1 args2.
+    induction params; simpl; intros b args1 args2 Hforall.
+    { destruct b.
+      exists Red; split; try constructor.
+      intro r; apply Val.lessdef_refl. }
+    destruct b.
+    - destruct args1; inv Hforall.
+      { exists Red; split; try constructor; apply Val.lessdef_refl. }
+      eapply IHparams with (b := true) in H3; eauto.
+      destruct H3 as (c & Hc & RS).
+      exists c; split; auto.
+      intros r Hr.
+      destruct (peq r a); subst.
+      + rewrite 2!Regmap.gss; assumption.
+      + rewrite 2!Regmap.gso; auto.
+    - destruct args1; inv Hforall.
+      { intro r; apply Val.lessdef_refl. }
+      intro r.
+      destruct (peq r a); subst.
+      + rewrite 2!Regmap.gss; assumption.
+      + rewrite 2!Regmap.gso; auto.
+        eapply IHparams with (b := false) in H3; eauto.
+  Qed.
 
   Lemma step_simulation
     s2 t s2' b :
@@ -1600,7 +1674,7 @@ Section TOLERANCE.
         rewrite Forall_forall in H8; apply H8 in Hin.
         apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
       econstructor; auto.
-      2: { admit. }
+      2: { eapply find_function_wc_fundef; eauto. }
       constructor; auto.
       econstructor; eauto.
       destruct b.
@@ -1649,7 +1723,7 @@ Section TOLERANCE.
         rewrite Forall_forall in H7; apply H7 in Hin.
         apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
       econstructor; auto.
-      admit.
+      eapply find_function_wc_fundef; eauto.
 
     (* exec_Ibuiltin *)
     - inv Hmatch.
@@ -2169,12 +2243,46 @@ Section TOLERANCE.
         with (lo2 := 0) (hi2 := fn_stacksize f) in H8; eauto; try reflexivity.
       destruct H8 as (m2' & Halloc & Hm2').
       rewrite H0 in Halloc; inv Halloc.
+      inv WC_FD.
       econstructor; eauto.
-      + admit.
-      + admit.
+      + apply forall2_lessdef_rs_compat_init_regs; assumption.
+      + apply forall2_lessdef_match_rs_init_regs; assumption.
 
     (* exec_function_external *)
-    - admit.
+    - inv Hmatch.
+      specialize (Hsafe _ (star_refl _ _ _)).
+      destruct Hsafe as [[r Hfin] | (t' & s'' & Hstep)].
+      { inv Hfin. }
+      inv Hstep; try congruence.
+      simpl in *.
+      assert (Hext: exists res' m'', @external_call _ VoteSemantics_Three
+                                  ef (Genv.globalenv prog) args1 m1 t res' m'' /\
+                                  Val.lessdef res' res /\ Memory.Mem.extends m'' m').
+      { assert (match_traces (Genv.globalenv prog) t' t).
+        { pose proof H6 as Hcall.
+          eapply Events.external_call_mem_extends in Hcall; eauto.
+          destruct Hcall as (res' & m2' &Hcall' & Hres' & Hm2' & Hunchanged).
+          apply external_call_Three_Two' in Hcall'.
+          destruct Hcall' as (v' & Hcall' & Hv').
+          pose proof H as Hcall.
+          eapply external_call_match_traces in Hcall; eauto.
+          apply forall2_lessdef_list; assumption. }
+        eapply external_call_receptive in H6; eauto.
+        destruct H6 as (res' & m2 & H6).
+        pose proof H6 as Hcall'.
+        eapply Events.external_call_mem_extends in Hcall'; eauto.
+        2: { apply forall2_lessdef_list; eassumption. }
+        destruct Hcall' as (res'' & m2' &Hcall' & Hres' & Hm2' & Hunchanged).
+        apply external_call_Three_Two' in Hcall'.
+        destruct Hcall' as (v' & Hcall' & Hv').
+        eapply external_call_deterministic in H; eauto.
+        destruct H; subst.
+        exists res', m2; split; auto; split; auto.
+        eapply Val.lessdef_trans; eauto. }
+      destruct Hext as (res' & m'' & Hcall & Hres' & Hm'').
+      eexists; split.
+      { eapply exec_function_external; eauto. }
+      econstructor; eauto.
 
     (* exec_return *)
     - inv Hmatch.
@@ -2205,7 +2313,7 @@ Section TOLERANCE.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
-  Admitted.
+  Qed.
 
   Lemma faulty_simulation s2 t s2' :
     Step (faulty_semantics prog) s2 t s2' ->

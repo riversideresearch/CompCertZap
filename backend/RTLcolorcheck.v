@@ -497,7 +497,6 @@ Proof.
   unfold check_program in Hp.
   rewrite forallb_forall in Hp.
   apply Hp in Hin.
-  destruct f; simpl in *.
-  - apply check_function_sound; auto.
-  - exists (fun _ _ => None); apply I.
+  destruct f; simpl in *; auto.
+  apply check_function_sound; auto.
 Qed.
