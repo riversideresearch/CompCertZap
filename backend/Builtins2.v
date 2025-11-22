@@ -302,46 +302,59 @@ Class VoteSemantics (vty : vote_type) : Prop :=
 
 Section VOTE_SEMANTICS.
 
-(* #[export] *)
+#[export]
 Program Instance VoteSemantics_Two : VoteSemantics Two.
 Next Obligation.
-  intros a Ha; simpl; f_equal.
-  unfold vote.
+  intros a Ha; simpl; f_equal; unfold vote.
   destruct a; auto; try contradiction.
   - destruct (Val.eq _ _); simpl; congruence.
-  (* - destruct (Int.eq_dec _ _); simpl; congruence. *)
   - simpl in *; rewrite Ha; simpl.
     destruct (Val.eq _ _); simpl; congruence.
-    (* destruct (eq_block _ _); simpl; try congruence. *)
-    (* destruct (Ptrofs.eq_dec _ _); simpl; congruence. *)
 Qed.
 Next Obligation.
-Admitted.
+  intros a Ha; simpl; f_equal; unfold vote.
+  destruct a; auto; try contradiction.
+  - destruct (Val.eq _ _); simpl; congruence.
+  - simpl in *; rewrite Ha; simpl.
+    destruct (Val.eq _ _); simpl; congruence.
+Qed.
 Next Obligation.
-Admitted.
+  intros a Ha; simpl; f_equal; unfold vote.
+  destruct a; auto; try contradiction.
+  destruct (Val.eq _ _); simpl; congruence.
+Qed.
 Next Obligation.
-Admitted.
+  intros a Ha; simpl; f_equal; unfold vote.
+  destruct a; auto; try contradiction.
+  destruct (Val.eq _ _); simpl; congruence.
+Qed.
 
 (* #[export] *)
 Program Instance VoteSemantics_Three : VoteSemantics Three.
 Next Obligation.
-    intros a Ha; simpl; f_equal.
-    unfold vote3.
-    destruct a; auto; try contradiction.
-      - destruct (Val.eq _ _); simpl; congruence.
-      - simpl in *; rewrite Ha; simpl.
-        destruct (Val.eq _ _); simpl; congruence.
-    (* - destruct (Int.eq_dec _ _); simpl; congruence. *)
-    (* - simpl in Ha; rewrite Ha; simpl. *)
-    (*   destruct (eq_block _ _); simpl; try congruence. *)
-    (*   destruct (Ptrofs.eq_dec _ _); simpl; congruence. *)
+  intros a Ha; simpl; f_equal; unfold vote3.
+  destruct a; auto; try contradiction.
+  - destruct (Val.eq _ _); simpl; congruence.
+  - simpl in *; rewrite Ha; simpl.
+    destruct (Val.eq _ _); simpl; congruence.
 Qed.
 Next Obligation.
-Admitted.
+  intros a Ha; simpl; f_equal; unfold vote3.
+  destruct a; auto; try contradiction.
+  - destruct (Val.eq _ _); simpl; congruence.
+  - simpl in *; rewrite Ha; simpl.
+    destruct (Val.eq _ _); simpl; congruence.
+Qed.
 Next Obligation.
-Admitted.
+  intros a Ha; simpl; f_equal; unfold vote3.
+  destruct a; auto; try contradiction.
+  destruct (Val.eq _ _); simpl; congruence.
+Qed.
 Next Obligation.
-Admitted.
+  intros a Ha; simpl; f_equal; unfold vote3.
+  destruct a; auto; try contradiction.
+  destruct (Val.eq _ _); simpl; congruence.
+Qed.
 
 End VOTE_SEMANTICS.
 

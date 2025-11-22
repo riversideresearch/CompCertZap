@@ -1,8 +1,10 @@
 Require Import
   AST
+  Behaviors
   Builtins2
   Coqlib
   Errors
+  Events
   Linking
   Maps
   Novotes
@@ -46,36 +48,96 @@ Inductive no_votes : RTL.program -> Prop :=
 Section IMPLIES_AGREEMENT.
 
 Variable p : program.
+Hypothesis (Hnovote : no_votes p).
   
 (* Lemma no_votes_weak_agreement : *)
 (*   no_votes p -> *)
 (*   rtl_weak_agreement p. *)
 (* Admitted. *)
 
-Lemma no_votes_weak_agreement' :
-  no_votes p ->
-  rtl_weak_agreement' p.
+(* TODO: in State case (maybe Callstate too?) include fact that [f]
+   came from a globdef in [p]. *)
+Definition match_states (s1 : state (rtl_sem2 p)) (s2 : state (rtl_sem3 p)) : Prop :=
+  s1 = s2.
+
+(* Lemma no_votes_external_call ef vargs t vres m m' : *)
+(*   Events.external_call ef (Globalenvs.Genv.to_senv (Globalenvs.Genv.globalenv p)) *)
+(*     vargs m t vres m' -> *)
+(*   @Events.external_call _ VoteSemantics_Three *)
+(*     ef (Globalenvs.Genv.to_senv (Globalenvs.Genv.globalenv p)) *)
+(*     vargs m t vres m'. *)
+(* Proof. *)
+(*   intro Hcall. *)
+(*   destruct ef; simpl; auto. *)
+(*   -  *)
+(* Admitted. *)
+
+Lemma no_votes_step_simulation :
+  forall (s1 : RTL.state) (t : Events.trace) (s1' : RTL.state),
+  RTL.step (Globalenvs.Genv.globalenv p) s1 t s1' ->
+  forall s2 : RTL.state,
+  match_states s1 s2 ->
+  exists s2' : RTL.state, @RTL.step _ VoteSemantics_Three
+                       (Globalenvs.Genv.globalenv p) s2 t s2' /\ match_states s1' s2'.
+Proof.
+(*   intros s1 t s1' Hstep s2 Hmatch. *)
+(*   inv Hmatch. *)
+(*   exists s1'; split; try reflexivity. *)
+(*   inv Hstep; try solve [econstructor; eauto]. *)
+(*   - eapply exec_Ibuiltin; eauto. *)
+(*     eapply no_votes_external_call; assumption. *)
+(*   - eapply exec_function_external. *)
+(*     eapply no_votes_external_call; assumption. *)
+  (* Qed. *)
 Admitted.
+
+Lemma no_votes_forward_simulation :
+  forward_simulation (rtl_sem2 p) (rtl_sem3 p).
+Proof.
+  apply forward_simulation_step with (match_states := match_states);
+    simpl in *; auto.
+  - intros s1 Hinit.
+    eexists; split; eauto.
+    reflexivity.
+  - intros s1 s2 r Hmatch Hfin.
+    inv Hmatch; assumption.
+  - eapply no_votes_step_simulation.
+Qed.
+
+Lemma no_votes_weak_agreement' :
+  rtl_weak_agreement' p.
+Proof.
+  unfold rtl_weak_agreement'.
+  intros beh Hbeh.
+  eapply backward_simulation_behavior_improves; eauto.
+  apply forward_to_backward_simulation.
+  - apply no_votes_forward_simulation.
+  - apply RTL.semantics_receptive.
+  - apply RTL.semantics_determinate.
+Qed.
 
 End IMPLIES_AGREEMENT.
 
-Lemma check_program_sound p tp :
-  check_program p = OK tp ->
-  no_votes tp.
-Admitted.
-
-Definition match_prog (prog tprog: program) :=
-  match_program (fun cu f tf => check_fundef f = OK tf) eq prog tprog.
-
-Lemma check_program_match:
-  forall prog tprog, check_program prog = OK tprog -> match_prog prog tprog.
+Lemma check_program_sound p :
+  check_program p = true ->
+  no_votes p.
 Proof.
-  intros. eapply match_transform_partial_program_contextual; eauto.
+  unfold check_program.
+  intro Hforall.
+  rewrite forallb_forall in Hforall.
+  destruct p.
+  simpl in *.
+  constructor.
+  apply Forall_forall.
+  intros id_gd Hin.
+  apply Hforall in Hin; clear Hforall.
+  destruct id_gd as [id []]; simpl in *; constructor.
+  destruct f; constructor.
+  intros pc i Hpci.
+  unfold check_function in Hin.
+  eapply PTree_Properties.for_all_correct in Hin; eauto.
+  unfold check_instr in Hin.
+  destruct i; try constructor.
+  intro HC; inv HC; simpl in *;
+    destruct (signature_eq _ _); simpl in *; congruence.
 Qed.
-
-Theorem check_program_correct
-  {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT} :
-  forall p tp, match_prog p tp ->
-          forward_simulation (RTL.semantics p) (RTL.semantics tp).
-Proof.
-Admitted.

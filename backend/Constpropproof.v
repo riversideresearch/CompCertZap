@@ -19,9 +19,7 @@ Require Compopts Machregs.
 Require Import Op Registers RTL.
 Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
 Require Import ConstpropOp ConstpropOpproof Constprop.
-
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+Require Import Novotesproof.
 
 Definition match_prog (prog tprog: program) :=
   match_program (fun cu f tf => tf = transf_fundef (romem_for cu) f) eq prog tprog.
@@ -30,6 +28,29 @@ Lemma transf_program_match:
   forall prog, match_prog prog (transf_program prog).
 Proof.
   intros. eapply match_transform_program_contextual. auto.
+Qed.
+
+Lemma no_votes_fundef_preserved cu f :
+  no_votes_fundef f ->
+  no_votes_fundef (transf_fundef cu f).
+Proof.
+  unfold transf_fundef.
+  unfold AST.transf_fundef.
+  intro Hnovotes; inv Hnovotes.
+  2: { constructor. }
+  constructor.
+  unfold transf_function.
+  simpl.
+  intros pc i Hpci.
+  rewrite PTree.gmap in Hpci.
+  destruct ((fn_code f0) ! pc) eqn:Hpc.
+  2: { inv Hpci. }
+  inv Hpci.
+  apply H in Hpc.
+  destruct i0; simpl in Hpc; unfold transf_instr;
+  repeat match goal with
+  | [ |- not_vote (match ?x with | _ => _ end) ] => destruct x
+    end; try constructor; simpl; auto.
 Qed.
 
 Section PRESERVATION.
@@ -502,16 +523,16 @@ Opaque builtin_strength_reduction.
   destruct ef; auto.
   destruct res; auto.
   destruct (lookup_builtin_function name sg) as [bf|] eqn:LK; auto.
-  (* destruct (eval_static_builtin_function ae am rm bf args) as [a|] eqn:ES; auto. *)
-  (* destruct (const_for_result a) as [cop|] eqn:CR; auto. *)
-  (* clear DFL. simpl in H1; red in H1; rewrite LK in H1; inv H1. *)
-  (* exploit const_for_result_correct; eauto.  *)
-  (* eapply eval_static_builtin_function_sound; eauto. *)
-  (* intros (v' & A & B). *)
-  (* left; econstructor; econstructor; split. *)
-  (* eapply exec_Iop; eauto. *)
-  (* eapply match_states_succ; eauto. *)
-  (* apply set_reg_lessdef; auto. *)
+  destruct (eval_static_builtin_function ae am rm bf args) as [a|] eqn:ES; auto.
+  destruct (const_for_result a) as [cop|] eqn:CR; auto.
+  clear DFL. simpl in H1; red in H1; rewrite LK in H1; inv H1.
+  exploit const_for_result_correct; eauto.
+  eapply eval_static_builtin_function_sound; eauto.
+  intros (v' & A & B).
+  left; econstructor; econstructor; split.
+  eapply exec_Iop; eauto.
+  eapply match_states_succ; eauto.
+  apply set_reg_lessdef; auto.
 - (* Icond, preserved *)
   rename pc'0 into pc. TransfInstr.
   set (ac := eval_static_condition cond (aregs ae args)).
@@ -625,6 +646,40 @@ Proof.
 - apply senv_preserved.
 Qed.
 
-End PRESERVATION.
+Lemma list_forall2_impl_Forall {A B : Type} (P : A -> Prop) (Q : B -> Prop) l1 l2 :
+  list_forall2 (fun x y => P x -> Q y) l1 l2 ->
+  Forall P l1 ->
+  Forall Q l2.
+Proof.
+  revert l2; induction l1; simpl; intros l2 Hforall2 Hforall;
+    inv Hforall2; inv Hforall; constructor; auto.
+Qed.
 
-End VOTE.
+Lemma no_votes_preserved :
+  no_votes prog ->
+  no_votes tprog.
+Proof.
+  inv TRANSL.
+  intro Hnovotes; inv Hnovotes.
+  simpl in *.
+  destruct tprog.
+  simpl in *.
+  destruct H0; subst.
+  constructor.
+  apply list_forall2_imply with
+    (P2 := fun id_f id_tf => no_votes_globdef (snd id_f) ->
+                          no_votes_globdef (snd id_tf)) in H.
+  { eapply list_forall2_impl_Forall; eauto; auto. }
+  intros [id f] [id' tf] Hin1 Hin2 Hmatch.
+  inv Hmatch.
+  simpl in H0; subst.
+  simpl in *.
+  intro Hnovotes.
+  inv H2.
+  { inv Hnovotes.
+    constructor.
+    apply no_votes_fundef_preserved; assumption. }
+  constructor.
+Qed.
+
+End PRESERVATION.

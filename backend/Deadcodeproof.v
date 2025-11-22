@@ -19,9 +19,6 @@ Require Import Values Memory Builtins Globalenvs Events Smallstep.
 Require Import Registers Op RTL.
 Require Import ValueDomain ValueAnalysis NeedDomain NeedOp Deadcode.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
-
 Definition match_prog (prog tprog: RTL.program) :=
   match_program (fun cu f tf => transf_fundef (prog_defmap cu) (romem_for cu) f = OK tf) eq prog tprog.
 
@@ -361,8 +358,6 @@ Proof.
   intros. destruct ros; simpl in *. eapply add_need_all_eagree; eauto. auto.
 Qed.
 
-End VOTE.
-
 Global Hint Resolve add_need_all_eagree add_need_all_lessdef
              add_need_eagree add_need_vagree
              add_needs_all_eagree add_needs_all_lessdef
@@ -380,9 +375,6 @@ Proof.
   + red; auto with na.
   + apply eagree_update; auto with na.
 Qed.
-
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** * Basic properties of the translation *)
 
@@ -1264,5 +1256,3 @@ Proof.
 Qed.
 
 End PRESERVATION.
-
-End VOTE.

@@ -71,45 +71,47 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma transf_rtl_program'_forward_simulation
-  {VT: vote_type} {vsem: VoteSemantics VT} p tp :
-  match_prog_rtl_asm p tp ->
-  forward_simulation (RTL.semantics p) (Asm.semantics tp).
-Proof.
-  intro Hmatch.
-  unfold match_prog_rtl_asm, pass_match in Hmatch; simpl in Hmatch.
-  Ltac DestructM :=
-    match goal with
-      [ H: exists p, _ /\ _ |- _ ] =>
-        let p := fresh "p" in let M := fresh "M" in let MM := fresh "MM" in
-                                                    destruct H as (p & M & MM); clear H
-    end.
-  repeat DestructM. subst p10.
-  eapply compose_forward_simulations.
-  eapply match_if_simulation. eassumption.
-  apply RTLdmrproof.transf_program_correct; eassumption.
-  eapply compose_forward_simulations.
-  eapply match_if_simulation. eassumption.
-  apply RTLtmrproof.transf_program_correct; eassumption.
-  eapply compose_forward_simulations.
-  eapply Renumberproof.transf_program_correct; eassumption.
-  eapply compose_forward_simulations.
-  eapply Allocproof.transf_program_correct; eassumption.
-  eapply compose_forward_simulations.
-  eapply Tunnelingproof.transf_program_correct; eassumption.
-  eapply compose_forward_simulations.
-  eapply Linearizeproof.transf_program_correct; eassumption.
-  eapply compose_forward_simulations.
-  eapply CleanupLabelsproof.transf_program_correct; eassumption.
-  eapply compose_forward_simulations.
-  eapply match_if_simulation. eassumption. exact Debugvarproof.transf_program_correct.
-  eapply compose_forward_simulations.
-  eapply Stackingproof.transf_program_correct with
-    (return_address_offset := Asmgenproof0.return_address_offset).
-  exact Asmgenproof.return_address_exists.
-  eassumption.
-  eapply Asmgenproof.transf_program_correct; eassumption.
-Qed.
+(* Section VOTE. *)
+(* Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}. *)
+
+(* Lemma transf_rtl_program'_forward_simulation p tp : *)
+(*   match_prog_rtl_asm p tp -> *)
+(*   forward_simulation (RTL.semantics p) (Asm.semantics tp). *)
+(* Proof. *)
+(*   intro Hmatch. *)
+(*   unfold match_prog_rtl_asm, pass_match in Hmatch; simpl in Hmatch. *)
+(*   Ltac DestructM := *)
+(*     match goal with *)
+(*       [ H: exists p, _ /\ _ |- _ ] => *)
+(*         let p := fresh "p" in let M := fresh "M" in let MM := fresh "MM" in *)
+(*                                                     destruct H as (p & M & MM); clear H *)
+(*     end. *)
+(*   repeat DestructM. subst p10. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply match_if_simulation. eassumption. *)
+(*   apply RTLdmrproof.transf_program_correct; eassumption. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply match_if_simulation. eassumption. *)
+(*   apply RTLtmrproof.transf_program_correct; eassumption. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply Renumberproof.transf_program_correct; eassumption. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply Allocproof.transf_program_correct; eassumption. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply Tunnelingproof.transf_program_correct; eassumption. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply Linearizeproof.transf_program_correct; eassumption. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply CleanupLabelsproof.transf_program_correct; eassumption. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply match_if_simulation. eassumption. exact Debugvarproof.transf_program_correct. *)
+(*   eapply compose_forward_simulations. *)
+(*   eapply Stackingproof.transf_program_correct with *)
+(*     (return_address_offset := Asmgenproof0.return_address_offset). *)
+(*   exact Asmgenproof.return_address_exists. *)
+(*   eassumption. *)
+(*   eapply Asmgenproof.transf_program_correct; eassumption. *)
+(* Qed. *)
 
 Definition c_to_rtl_passes :=
       mkpass SimplExprproof.match_prog
@@ -126,73 +128,124 @@ Definition c_to_rtl_passes :=
   ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog)
   ::: mkpass (match_if Compopts.optim_redundancy Deadcodeproof.match_prog)
   ::: mkpass Unusedglobproof.match_prog
-  ::: mkpass Novotesproof.match_prog
+  (* ::: mkpass Novotesproof.match_prog *)
   ::: pass_nil _.
 
 Definition match_prog_c_rtl: Csyntax.program -> RTL.program -> Prop :=
   pass_match (compose_passes c_to_rtl_passes).
 
-Lemma compiled_rtl_safe p tp :
-  (forall beh, program_behaves (@Csem.semantics Two VoteSemantics_Two p) beh ->
-          not_wrong beh) ->
-  (* SimplExpr.transl_program p @@@ transf_clight_program = OK tp -> *)
-  match_prog_c_rtl p tp ->
-  (forall beh, program_behaves (@RTL.semantics Two VoteSemantics_Two tp) beh ->
-          not_wrong beh).
-Proof.
-  intros Hsafe Hmatch.
-  eapply backward_simulation_preserves_safety; eauto.
-  unfold match_prog_c_rtl, pass_match in Hmatch; simpl in Hmatch.
-  repeat DestructM. subst p15.
+(* Lemma compiled_rtl_safe p tp : *)
+(*   (forall beh, program_behaves (Csem.semantics p) beh -> not_wrong beh) -> *)
+(*   match_prog_c_rtl p tp -> *)
+(*   (forall beh, program_behaves (RTL.semantics tp) beh -> not_wrong beh). *)
+(* Proof. *)
+(*   intros Hsafe Hmatch. *)
+(*   eapply backward_simulation_preserves_safety; eauto. *)
+(*   unfold match_prog_c_rtl, pass_match in Hmatch; simpl in Hmatch. *)
+(*   repeat DestructM. subst p15.   *)
+(*   assert (F: forward_simulation (Cstrategy.semantics p) (RTL.semantics tp)). *)
+(*   { eapply compose_forward_simulations. *)
+(*     eapply SimplExprproof.transl_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply SimplLocalsproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Cshmgenproof.transl_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Cminorgenproof.transl_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Selectionproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply RTLgenproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact Tailcallproof.transf_program_correct. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Inliningproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. eapply Renumberproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact Constpropproof.transf_program_correct. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact Renumberproof.transf_program_correct. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact CSEproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact Deadcodeproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Unusedglobproof.transf_program_correct; eassumption. *)
+(*     apply Novotesproof.check_program_correct; eassumption. } *)
+(*   apply compose_backward_simulation with (atomic (Cstrategy.semantics p)). *)
+(*   { apply sd_traces, RTL.semantics_determinate. } *)
+(*   apply factor_backward_simulation. *)
+(*   apply Cstrategy.strategy_simulation. *)
+(*   apply Csem.semantics_single_events. *)
+(*   eapply ssr_well_behaved; eapply Cstrategy.semantics_strongly_receptive. *)
+(*   apply forward_to_backward_simulation. *)
+(*   - apply factor_forward_simulation. auto. *)
+(*     apply sd_traces, RTL.semantics_determinate. *)
+(*   - apply atomic_receptive. *)
+(*     apply Cstrategy.semantics_strongly_receptive. *)
+(*   - apply RTL.semantics_determinate. *)
+(* Qed. *)
+
+(* Lemma compiled_rtl_safe p tp : *)
+(*   (forall beh, program_behaves (@Csem.semantics Two VoteSemantics_Two p) beh -> *)
+(*           not_wrong beh) -> *)
+(*   (* SimplExpr.transl_program p @@@ transf_clight_program = OK tp -> *) *)
+(*   @match_prog_c_rtl _ VoteSemantics_Two p tp -> *)
+(*   (forall beh, program_behaves (@RTL.semantics Two VoteSemantics_Two tp) beh -> *)
+(*           not_wrong beh). *)
+(* Proof. *)
+(*   intros Hsafe Hmatch. *)
+(*   eapply backward_simulation_preserves_safety; eauto. *)
+(*   unfold match_prog_c_rtl, pass_match in Hmatch; simpl in Hmatch. *)
+(*   repeat DestructM. subst p15. *)
   
-  assert (F: forward_simulation (@Cstrategy.semantics Two VoteSemantics_Two p)
-               (@RTL.semantics Two VoteSemantics_Two tp)).
-  { eapply compose_forward_simulations.
-    eapply SimplExprproof.transl_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply SimplLocalsproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply Cshmgenproof.transl_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply Cminorgenproof.transl_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply Selectionproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply RTLgenproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply match_if_simulation. eassumption. exact Tailcallproof.transf_program_correct.
-    eapply compose_forward_simulations.
-    eapply Inliningproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations. eapply Renumberproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply match_if_simulation. eassumption. exact Constpropproof.transf_program_correct.
-    eapply compose_forward_simulations.
-    eapply match_if_simulation. eassumption. exact Renumberproof.transf_program_correct.
-    eapply compose_forward_simulations.
-    eapply match_if_simulation. eassumption. exact CSEproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply match_if_simulation. eassumption. exact Deadcodeproof.transf_program_correct; eassumption.
-    eapply compose_forward_simulations.
-    eapply Unusedglobproof.transf_program_correct; eassumption.
-    apply Novotesproof.check_program_correct; eassumption. }
+(*   assert (F: forward_simulation (@Cstrategy.semantics Two VoteSemantics_Two p) *)
+(*                (@RTL.semantics Two VoteSemantics_Two tp)). *)
+(*   { eapply compose_forward_simulations. *)
+(*     eapply SimplExprproof.transl_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply SimplLocalsproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Cshmgenproof.transl_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Cminorgenproof.transl_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Selectionproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply RTLgenproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact Tailcallproof.transf_program_correct. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Inliningproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. eapply Renumberproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact Constpropproof.transf_program_correct. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact Renumberproof.transf_program_correct. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact CSEproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply match_if_simulation. eassumption. exact Deadcodeproof.transf_program_correct; eassumption. *)
+(*     eapply compose_forward_simulations. *)
+(*     eapply Unusedglobproof.transf_program_correct; eassumption. *)
+(*     apply Novotesproof.check_program_correct; eassumption. } *)
 
-  apply compose_backward_simulation with
-    (atomic (@Cstrategy.semantics Two VoteSemantics_Two p)).
-  { apply sd_traces, RTL.semantics_determinate. }
-  apply factor_backward_simulation.
-  apply Cstrategy.strategy_simulation.
-  apply Csem.semantics_single_events.
-  eapply ssr_well_behaved; eapply Cstrategy.semantics_strongly_receptive.
-  apply forward_to_backward_simulation.
-  - apply factor_forward_simulation. auto.
-    apply sd_traces, RTL.semantics_determinate.
-  - apply atomic_receptive.
-    apply Cstrategy.semantics_strongly_receptive.
-  - apply RTL.semantics_determinate.
-Qed.
+(*   apply compose_backward_simulation with *)
+(*     (atomic (@Cstrategy.semantics Two VoteSemantics_Two p)). *)
+(*   { apply sd_traces, RTL.semantics_determinate. } *)
+(*   apply factor_backward_simulation. *)
+(*   apply Cstrategy.strategy_simulation. *)
+(*   apply Csem.semantics_single_events. *)
+(*   eapply ssr_well_behaved; eapply Cstrategy.semantics_strongly_receptive. *)
+(*   apply forward_to_backward_simulation. *)
+(*   - apply factor_forward_simulation. auto. *)
+(*     apply sd_traces, RTL.semantics_determinate. *)
+(*   - apply atomic_receptive. *)
+(*     apply Cstrategy.semantics_strongly_receptive. *)
+(*   - apply RTL.semantics_determinate. *)
+(* Qed. *)
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+(* End VOTE. *)
 
 (** * Preservation of whole-program behaviors *)
 
@@ -224,35 +277,11 @@ Proof.
   eapply transf_c_program_to_rtl_correct; eauto.
 Qed.
 
-Lemma compiled_rtl_weak_agreement p tp :
-  transf_c_program_to_rtl p = OK tp ->
-  rtl_weak_agreement' tp.
-Proof.
-Admitted.
-
-Theorem transf_c_program_to_rtl_preservation_faulty:
-  forall p tp beh,
-    transf_c_program_to_rtl p = OK tp ->
-    RTLcolorcheck.check_program tp = true ->
-    program_behaves (faulty_semantics tp) beh ->
-    exists beh', program_behaves (@Csem.semantics Builtins2.Two Builtins2.VoteSemantics_Two p) beh'
-          /\ behavior_improves beh' beh.
-Proof.
-  intros p tp beh Hp Hcheck Hbeh.
-  pose proof Hp as Hp'.
-  pose proof Hbeh as H.
-  eapply backward_simulation_behavior_improves in H.
-  2: { apply faulty_backward_simulation.
-       apply RTLcolorcheck.check_program_sound; auto. }
-  destruct H as (beh1 & Hbeh1 & Himp).
-  eapply compiled_rtl_weak_agreement in Hbeh1; eauto.
-  destruct Hbeh1 as (beh2 & Hbeh2 & Himp').
-  eapply backward_simulation_behavior_improves in Hbeh2.
-  2: { eapply transf_c_program_to_rtl_correct; eauto. }
-  destruct Hbeh2 as (beh3 & Hbeh3 & Himp'').
-  exists beh3; repeat split; auto.
-  repeat (eapply behavior_improves_trans; eauto).
-Qed.
+(* Lemma compiled_rtl_weak_agreement p tp : *)
+(*   transf_c_program_to_rtl p = OK tp -> *)
+(*   rtl_weak_agreement' tp. *)
+(* Proof. *)
+(* Admitted. *)
 
 Lemma apply_partial_factor {A B : Type} (f : res A) (g : A -> res B) x :
   f @@@ (fun y => g y) = OK x -> exists z, f = OK z /\ g z = OK x.
@@ -263,6 +292,21 @@ Proof.
   - exists a; split; auto.
   - inv H.
 Qed.
+
+Definition transf_c_program_to_rtl' (p: Csyntax.program)
+  : res RTL.program :=
+  OK p
+  @@@ time "Clight generation" SimplExpr.transl_program
+  @@@ transf_clight_program_to_rtl.
+
+(* Lemma idfg p tp : *)
+(*   transf_c_program_to_rtl p = OK tp -> *)
+(*   exists p', *)
+(*     transf_c_program_to_rtl' p = OK p' /\ *)
+(*       transf_rtl_program_to_rtl' p' = OK tp. *)
+(* Proof. *)
+(*   intro H; apply apply_partial_factor in H; auto. *)
+(* Qed. *)
 
 Lemma transf_c_to_rtl_match_prog p tp :
   OK p @@@ SimplExpr.transl_program @@@ transf_clight_program = OK tp ->
@@ -287,7 +331,8 @@ Proof.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  destruct (Novotes.check_program p14) as [pnovotes|e] eqn:Pnovotes; simpl in T; try discriminate.
+  unfold transf_program in T.
+  destruct (check_program p14) eqn:Hnovotes; simpl in T; try discriminate.
   inv T.
   unfold match_prog; simpl.
   exists p1; split. apply SimplExprproof.transf_program_match; auto.
@@ -303,68 +348,296 @@ Proof.
   exists p11; split. apply total_if_match. apply Renumberproof.transf_program_match.
   exists p12; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
   exists p13; split. eapply partial_if_match; eauto. apply Deadcodeproof.transf_program_match.
-  exists p14; split. apply Unusedglobproof.transf_program_match; auto.
-  exists tp; split. apply Novotesproof.check_program_match; auto.
+  exists tp; split. apply Unusedglobproof.transf_program_match; auto.
   reflexivity.
 Qed.
 
-Lemma compiled_asm_weak_agreement p tp :
-  (forall beh, program_behaves (@Csem.semantics Two VoteSemantics_Two p) beh ->
-          not_wrong beh) ->
-  transf_c_program p = OK tp ->
-  asm_weak_agreement' tp.
-Proof.
-  intros Hsafe Htransf beh Hbeh.
-  unfold transf_c_program, time in Htransf.
+Ltac DestructM :=
+  match goal with
+    [ H: exists p, _ /\ _ |- _ ] =>
+      let p := fresh "p" in let M := fresh "M" in
+                            let MM := fresh "MM" in
+                            destruct H as (p & M & MM); clear H
+  end.
 
-  apply apply_partial_factor in Htransf.
-  destruct Htransf as (p' & Htransf & Htransf').
-  generalize (compiled_rtl_safe _ _ Hsafe (transf_c_to_rtl_match_prog _ _ Htransf));
-    intro Hsafe'.
-  
-  unfold transf_c_program, time in Htransf; simpl in Htransf.
-  destruct (SimplExpr.transl_program p) as [p1|e] eqn:P1;
-    simpl in Htransf; try discriminate.
-  unfold transf_clight_program, time in Htransf.
-  rewrite ! compose_print_identity in Htransf. simpl in Htransf.
-  destruct (SimplLocals.transf_program p1) as [p2|e] eqn:P2;
-    simpl in Htransf; try discriminate.
-  destruct (Cshmgen.transl_program p2) as [p3|e] eqn:P3;
-    simpl in Htransf; try discriminate.
-  destruct (Cminorgen.transl_program p3) as [p4|e] eqn:P4;
-    simpl in Htransf; try discriminate.
-  unfold transf_cminor_program, time in Htransf.
-  rewrite ! compose_print_identity in Htransf. simpl in Htransf.
-  destruct (Selection.sel_program p4) as [p5|e] eqn:P5;
-    simpl in Htransf; try discriminate.
-  destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6;
-    simpl in Htransf; try discriminate.
-  unfold transf_rtl_program, time in Htransf.
-  rewrite ! compose_print_identity in Htransf. simpl in Htransf.
+Lemma match_prog_c_rtl_forward_simulation p tp :
+  match_prog_c_rtl p tp ->
+  forward_simulation (Cstrategy.semantics p) (RTL.semantics tp).
+Proof.
+  intro Hmatch.
+  unfold match_prog_c_rtl, pass_match in Hmatch; simpl in Hmatch.
+  repeat DestructM. subst p14.
+  eapply compose_forward_simulations.
+  eapply SimplExprproof.transl_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  eapply SimplLocalsproof.transf_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  eapply Cshmgenproof.transl_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  eapply Cminorgenproof.transl_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  eapply Selectionproof.transf_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  eapply RTLgenproof.transf_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  eapply match_if_simulation. eassumption. exact Tailcallproof.transf_program_correct.
+  eapply compose_forward_simulations.
+  eapply Inliningproof.transf_program_correct; eassumption.
+  eapply compose_forward_simulations. eapply Renumberproof.transf_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  eapply match_if_simulation. eassumption. exact Constpropproof.transf_program_correct.
+  eapply compose_forward_simulations.
+  eapply match_if_simulation. eassumption. exact Renumberproof.transf_program_correct.
+  eapply compose_forward_simulations.
+  eapply match_if_simulation. eassumption. exact CSEproof.transf_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  eapply match_if_simulation. eassumption. exact Deadcodeproof.transf_program_correct; eassumption.
+  (* eapply compose_forward_simulations. *)
+  eapply Unusedglobproof.transf_program_correct; eassumption.
+  (* apply Novotesproof.check_program_correct; eassumption. *)
+Qed.
+
+Lemma match_prog_c_rtl_backward_simulation p tp :
+  match_prog_c_rtl p tp ->
+  backward_simulation (Csem.semantics p) (RTL.semantics tp).
+Proof.
+  intros.
+  apply compose_backward_simulation with (atomic (Cstrategy.semantics p)).
+  eapply sd_traces; eapply RTL.semantics_determinate.
+  apply factor_backward_simulation.
+  apply Cstrategy.strategy_simulation.
+  apply Csem.semantics_single_events.
+  eapply ssr_well_behaved; eapply Cstrategy.semantics_strongly_receptive.
+  apply forward_to_backward_simulation.
+  - apply factor_forward_simulation.
+    + apply match_prog_c_rtl_forward_simulation; assumption.
+    + apply sd_traces, RTL.semantics_determinate.
+  - apply atomic_receptive.
+    apply Cstrategy.semantics_strongly_receptive.
+  - apply RTL.semantics_determinate.
+Qed.
+
+Lemma transf_c_program_to_rtl'_preservation p tp beh :
+  transf_c_program_to_rtl' p = OK tp ->
+  program_behaves (RTL.semantics tp) beh ->
+  exists beh', program_behaves (Csem.semantics p) beh' /\
+            behavior_improves beh' beh.
+Proof.
+  unfold transf_c_program_to_rtl'.
+  intros Hmatch Hbeh.
+  apply transf_c_to_rtl_match_prog in Hmatch.
+  eapply backward_simulation_behavior_improves; eauto.
+  apply match_prog_c_rtl_backward_simulation; assumption.
+Qed.
+
+Lemma transf_c_program_to_rtl'_no_votes p tp :
+  transf_c_program_to_rtl' p = OK tp ->
+  no_votes tp.
+Proof.
+  intros T.
+  unfold transf_c_program_to_rtl', time in T. simpl in T.
+  destruct (SimplExpr.transl_program p) as [p1|e] eqn:P1; simpl in T; try discriminate.
+  unfold transf_clight_program_to_rtl, time in T.
+  rewrite ! compose_print_identity in T. simpl in T.
+  destruct (SimplLocals.transf_program p1) as [p2|e] eqn:P2; simpl in T; try discriminate.
+  destruct (Cshmgen.transl_program p2) as [p3|e] eqn:P3; simpl in T; try discriminate.
+  destruct (Cminorgen.transl_program p3) as [p4|e] eqn:P4; simpl in T; try discriminate.
+  unfold transf_cminor_program_to_rtl, time in T.
+  rewrite ! compose_print_identity in T. simpl in T.
+  destruct (Selection.sel_program p4) as [p5|e] eqn:P5; simpl in T; try discriminate.
+  destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6; simpl in T; try discriminate.
+  unfold transf_rtl_program_to_rtl, time in T.
+  rewrite ! compose_print_identity in T. simpl in T.
   set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *.
-  destruct (Inlining.transf_program p7) as [p8|e] eqn:P8;
-    simpl in Htransf; try discriminate.
+  destruct (Inlining.transf_program p7) as [p8|e] eqn:P8; simpl in T; try discriminate.
   set (p9 := Renumber.transf_program p8) in *.
   set (p10 := total_if optim_constprop Constprop.transf_program p9) in *.
   set (p11 := total_if optim_constprop Renumber.transf_program p10) in *.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12;
-    simpl in Htransf; try discriminate.
-  destruct (partial_if optim_redundancy Deadcode.transf_program p12)
-    as [p13|e] eqn:P13;
-    simpl in Htransf; try discriminate.
+    simpl in T; try discriminate.
+  destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13;
+    simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14;
-    simpl in Htransf; try discriminate.
-  destruct (Novotes.check_program p14) as [pnovotes|e] eqn:Pnovotes;
-    simpl in Htransf; try discriminate.
-  apply Novotesproof.check_program_sound in Pnovotes.
-  apply no_votes_weak_agreement' in Pnovotes.
-  eapply forward_simulation_preserves_weak_agreement'; eauto.
-  - apply transf_rtl_program'_forward_simulation; auto.
-    apply transf_rtl_to_asm_match_prog; auto.
-  - apply transf_rtl_program'_forward_simulation; auto.
-    apply transf_rtl_to_asm_match_prog; auto.
-  - inv Htransf; auto.
+    simpl in T; try discriminate.
+  unfold transf_program in T.
+  destruct (Novotes.check_program p14) eqn:Hnovotes; simpl in T; try discriminate.
+  inv T.
+  eapply Novotesproof.check_program_sound; eauto.
 Qed.
+
+Lemma transf_c_program_to_rtl'_preservation' p tp beh :
+  transf_c_program_to_rtl' p = OK tp ->
+  program_behaves (@RTL.semantics _ VoteSemantics_Three tp) beh ->
+  exists beh', program_behaves (Csem.semantics p) beh' /\
+            behavior_improves beh' beh.
+Proof.
+  intros Hp Hbeh.
+  pose proof Hbeh as Hbeh'.
+  eapply no_votes_weak_agreement' in Hbeh'.
+  2: { eapply transf_c_program_to_rtl'_no_votes; eassumption. }
+  destruct Hbeh' as (beh2 & Hbeh2 & Himp).
+  eapply transf_c_program_to_rtl'_preservation with (beh := beh2) in Hp; auto.
+  destruct Hp as (beh' & Hbeh' & Himp').
+  eexists; split; eauto.
+  eapply behavior_improves_trans; eauto.
+Qed.
+
+Definition rtl_to_rtl_passes :=
+      mkpass (match_if Compopts.dmr RTLdmrproof.match_prog)
+  ::: mkpass (match_if Compopts.tmr RTLtmrproof.match_prog)
+  ::: mkpass Renumberproof.match_prog
+  ::: pass_nil _.
+
+Definition match_prog_rtl_rtl: RTL.program -> RTL.program -> Prop :=
+  pass_match (compose_passes rtl_to_rtl_passes).
+
+Lemma transf_rtl_program_to_rtl_match_prog p tp :
+  transf_rtl_program_to_rtl' p = OK tp ->
+  match_prog_rtl_rtl p tp.
+Proof.
+  intro T.
+  unfold transf_rtl_program_to_rtl', time in T.
+  rewrite ! compose_print_identity in T. simpl in T.
+  destruct (partial_if dmr RTLdmr.transf_program p) as [pdmr|e] eqn:Pdmr;
+    simpl in T; try discriminate.
+  destruct (partial_if tmr RTLtmr.transf_program pdmr) as [p15'|e] eqn:P15;
+    simpl in T; try discriminate.
+  set (p15 := Renumber.transf_program p15') in *.
+  inv T.
+  unfold match_prog_rtl_rtl; simpl.
+  exists pdmr; split. eapply partial_if_match; eauto.
+  apply RTLdmrproof.transf_program_match; auto.
+  exists p15'; split. eapply partial_if_match; eauto.
+  apply RTLtmrproof.transf_program_match; auto.
+  exists p15; split. apply Renumberproof.transf_program_match; auto.
+  reflexivity.
+Qed.
+
+Lemma transf_rtl_program_to_rtl'_forward_simulation VT VSEM p tp :
+  transf_rtl_program_to_rtl' p = OK tp ->
+  forward_simulation (@RTL.semantics VT VSEM p) (RTL.semantics tp).
+Proof.
+  intro Hmatch.
+  apply transf_rtl_program_to_rtl_match_prog in Hmatch.
+  unfold match_prog_rtl_rtl, pass_match in Hmatch; simpl in Hmatch.
+  repeat DestructM. subst p3.
+  eapply compose_forward_simulations.
+  eapply match_if_simulation. eassumption.
+  apply RTLdmrproof.transf_program_correct; assumption.
+  eapply compose_forward_simulations.
+  eapply match_if_simulation. eassumption.
+  apply RTLtmrproof.transf_program_correct; assumption.
+  apply Renumberproof.transf_program_correct; assumption.
+Qed.
+
+Lemma transf_rtl_program_to_rtl'_preservation p tp beh :
+  transf_rtl_program_to_rtl' p = OK tp ->
+  program_behaves (@RTL.semantics _ VoteSemantics_Three tp) beh ->
+  exists beh', program_behaves (@RTL.semantics _ VoteSemantics_Three p) beh' /\
+            behavior_improves beh' beh.
+Proof.
+  intros Hp Hbeh.
+  eapply backward_simulation_behavior_improves; eauto.
+  apply forward_to_backward_simulation.
+  - apply transf_rtl_program_to_rtl'_forward_simulation; assumption.
+  - apply RTL.semantics_receptive.
+  - apply RTL.semantics_determinate.
+Qed.
+
+Theorem transf_c_program_to_rtl_preservation_faulty:
+  forall p tp beh,
+    transf_c_program_to_rtl p = OK tp ->
+    RTLcolorcheck.check_program tp = true ->
+    program_behaves (faulty_semantics tp) beh ->
+    exists beh', program_behaves (Csem.semantics p) beh' /\
+              behavior_improves beh' beh.
+Proof.
+  intros p tp beh Hp Hcheck Hbeh.
+  pose proof Hp as Hp'.
+  pose proof Hbeh as H.
+  eapply backward_simulation_behavior_improves in H.
+  2: { apply faulty_backward_simulation.
+       apply RTLcolorcheck.check_program_sound; auto. }
+  destruct H as (beh1 & Hbeh1 & Himp).
+  apply apply_partial_factor in Hp'.
+  destruct Hp' as (p' & Hpp' & Hp'tp).
+  eapply transf_rtl_program_to_rtl'_preservation in Hbeh1; eauto.
+  destruct Hbeh1 as (beh' & Hbeh' & Himp').
+  eapply transf_c_program_to_rtl'_preservation' in Hbeh'; eauto.
+  destruct Hbeh' as (beh'' & Hbeh'' & Himp'').
+  exists beh''; split; auto.
+  eapply behavior_improves_trans; eauto.
+  eapply behavior_improves_trans; eauto.
+Qed.
+  
+(*   eapply compiled_rtl_weak_agreement in Hbeh1; eauto. *)
+(*   destruct Hbeh1 as (beh2 & Hbeh2 & Himp'). *)
+(*   eapply backward_simulation_behavior_improves in Hbeh2. *)
+(*   2: { eapply transf_c_program_to_rtl_correct; eauto. } *)
+(*   destruct Hbeh2 as (beh3 & Hbeh3 & Himp''). *)
+(*   exists beh3; repeat split; auto. *)
+(*   repeat (eapply behavior_improves_trans; eauto). *)
+(* Qed. *)
+
+(* Section VOTE. *)
+(* Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}. *)
+
+(* End VOTE. *)
+
+(* Lemma compiled_asm_weak_agreement p tp : *)
+(*   (forall beh, program_behaves (@Csem.semantics _ VoteSemantics_Two p) beh -> not_wrong beh) -> *)
+(*   transf_c_program p = OK tp -> *)
+(*   asm_weak_agreement' tp. *)
+(* Proof. *)
+(*   intros Hsafe Htransf beh Hbeh. *)
+(*   unfold transf_c_program, time in Htransf.   *)
+(*   apply apply_partial_factor in Htransf. *)
+(*   destruct Htransf as (p' & Htransf & Htransf'). *)
+(*   generalize (compiled_rtl_safe p p' Hsafe (transf_c_to_rtl_match_prog p p' Htransf)); *)
+(*     intro Hsafe'.   *)
+(*   unfold transf_c_program, time in Htransf; simpl in Htransf. *)
+(*   destruct (SimplExpr.transl_program p) as [p1|e] eqn:P1; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   unfold transf_clight_program, time in Htransf. *)
+(*   rewrite ! compose_print_identity in Htransf. simpl in Htransf. *)
+(*   destruct (SimplLocals.transf_program p1) as [p2|e] eqn:P2; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   destruct (Cshmgen.transl_program p2) as [p3|e] eqn:P3; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   destruct (Cminorgen.transl_program p3) as [p4|e] eqn:P4; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   unfold transf_cminor_program, time in Htransf. *)
+(*   rewrite ! compose_print_identity in Htransf. simpl in Htransf. *)
+(*   destruct (Selection.sel_program p4) as [p5|e] eqn:P5; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   unfold transf_rtl_program, time in Htransf. *)
+(*   rewrite ! compose_print_identity in Htransf. simpl in Htransf. *)
+(*   set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *. *)
+(*   destruct (Inlining.transf_program p7) as [p8|e] eqn:P8; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   set (p9 := Renumber.transf_program p8) in *. *)
+(*   set (p10 := total_if optim_constprop Constprop.transf_program p9) in *. *)
+(*   set (p11 := total_if optim_constprop Renumber.transf_program p10) in *. *)
+(*   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   destruct (partial_if optim_redundancy Deadcode.transf_program p12) *)
+(*     as [p13|e] eqn:P13; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   destruct (Novotes.check_program p14) as [pnovotes|e] eqn:Pnovotes; *)
+(*     simpl in Htransf; try discriminate. *)
+(*   apply Novotesproof.check_program_sound in Pnovotes. *)
+(*   apply no_votes_weak_agreement' in Pnovotes. *)
+(*   eapply forward_simulation_preserves_weak_agreement'; eauto. *)
+(*   - apply transf_rtl_program'_forward_simulation; auto. *)
+(*     apply transf_rtl_to_asm_match_prog; auto. *)
+(*   - apply transf_rtl_program'_forward_simulation; auto. *)
+(*     apply transf_rtl_to_asm_match_prog; auto. *)
+(*   - inv Htransf; auto. *)
+(* Qed. *)
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
   undefined behaviors, the behavior of the generated assembly code is
@@ -630,5 +903,3 @@ Proof.
 Qed.
 
 End SEPARATE_COMPILATION.
-
-End VOTE.

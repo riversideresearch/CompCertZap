@@ -1748,11 +1748,11 @@ Section TOLERANCE.
           replace t with E0 in *.
           2: { symmetry; eapply external_call_smove_E0; eauto. }
           replace t' with E0 in *.
-          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          2: { symmetry; eapply (@external_call_smove_E0 _ VoteSemantics_Three); eauto. }
           replace m' with m in *.
           2: { eapply external_call_smove_mem; eauto. }
           replace m'0 with m1 in *.
-          2: { eapply external_call_smove_mem; eauto. }
+          2: { eapply (@external_call_smove_mem _ VoteSemantics_Three); eauto. }
           assert (Hlessdef: Val.lessdef vres0 vres).
           { pose proof H12 as Hext.
             apply external_call_Three_Two' in H12.
@@ -1795,11 +1795,11 @@ Section TOLERANCE.
           replace t with E0 in *.
           2: { symmetry; eapply external_call_smove_E0; eauto. }
           replace t' with E0 in *.
-          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          2: { symmetry; eapply (@external_call_smove_E0 _ VoteSemantics_Three); eauto. }
           replace m' with m in *.
           2: { eapply external_call_smove_mem; eauto. }
           replace m'0 with m1 in *.
-          2: { eapply external_call_smove_mem; eauto. }
+          2: { eapply (@external_call_smove_mem _ VoteSemantics_Three); eauto. }
           assert (Hlessdef: Val.lessdef vres0 vres).
           { pose proof H12 as Hext.
             apply external_call_Three_Two' in H12.
@@ -1842,7 +1842,7 @@ Section TOLERANCE.
           replace t with E0 in *.
           2: { symmetry; eapply external_call_vote_E0; eauto. }
           replace t' with E0 in *.
-          2: { symmetry; eapply external_call_vote_E0; eauto. }
+          2: { symmetry; eapply (@external_call_vote_E0 _ VoteSemantics_Three); eauto. }
           eexists; split.
           { eapply exec_Ibuiltin; eauto.
             repeat constructor. }
@@ -1992,11 +1992,11 @@ Section TOLERANCE.
           replace t with E0 in *.
           2: { symmetry; eapply external_call_smove_E0; eauto. }
           replace t' with E0 in *.
-          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          2: { symmetry; eapply (@external_call_smove_E0 _ VoteSemantics_Three); eauto. }
           replace m' with m in *.
           2: { eapply external_call_smove_mem; eauto. }
           replace m'0 with m1 in *.
-          2: { eapply external_call_smove_mem; eauto. }
+          2: { eapply (@external_call_smove_mem _ VoteSemantics_Three); eauto. }
           assert (Hlessdef: Val.lessdef vres0 vres).
           { pose proof H12 as Hext.
             apply external_call_Three_Two' in H12.
@@ -2032,11 +2032,11 @@ Section TOLERANCE.
           replace t with E0 in *.
           2: { symmetry; eapply external_call_smove_E0; eauto. }
           replace t' with E0 in *.
-          2: { symmetry; eapply external_call_smove_E0; eauto. }
+          2: { symmetry; eapply (@external_call_smove_E0 _ VoteSemantics_Three); eauto. }
           replace m' with m in *.
           2: { eapply external_call_smove_mem; eauto. }
           replace m'0 with m1 in *.
-          2: { eapply external_call_smove_mem; eauto. }
+          2: { eapply (@external_call_smove_mem _ VoteSemantics_Three); eauto. }
           assert (Hlessdef: Val.lessdef vres0 vres).
           { pose proof H12 as Hext.
             apply external_call_Three_Two' in H12.
@@ -2072,7 +2072,7 @@ Section TOLERANCE.
           replace t with E0 in *.
           2: { symmetry; eapply external_call_vote_E0; eauto. }
           replace t' with E0 in *.
-          2: { symmetry; eapply external_call_vote_E0; eauto. }
+          2: { symmetry; eapply (@external_call_vote_E0 _ VoteSemantics_Three); eauto. }
           eexists; split.
           { eapply exec_Ibuiltin; eauto.
             repeat constructor. }
