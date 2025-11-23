@@ -30,29 +30,6 @@ Proof.
   intros. eapply match_transform_program_contextual. auto.
 Qed.
 
-Lemma no_votes_fundef_preserved cu f :
-  no_votes_fundef f ->
-  no_votes_fundef (transf_fundef cu f).
-Proof.
-  unfold transf_fundef.
-  unfold AST.transf_fundef.
-  intro Hnovotes; inv Hnovotes.
-  2: { constructor. }
-  constructor.
-  unfold transf_function.
-  simpl.
-  intros pc i Hpci.
-  rewrite PTree.gmap in Hpci.
-  destruct ((fn_code f0) ! pc) eqn:Hpc.
-  2: { inv Hpci. }
-  inv Hpci.
-  apply H in Hpc.
-  destruct i0; simpl in Hpc; unfold transf_instr;
-  repeat match goal with
-  | [ |- not_vote (match ?x with | _ => _ end) ] => destruct x
-    end; try constructor; simpl; auto.
-Qed.
-
 Section PRESERVATION.
 
 Variable prog: program.
@@ -653,33 +630,6 @@ Lemma list_forall2_impl_Forall {A B : Type} (P : A -> Prop) (Q : B -> Prop) l1 l
 Proof.
   revert l2; induction l1; simpl; intros l2 Hforall2 Hforall;
     inv Hforall2; inv Hforall; constructor; auto.
-Qed.
-
-Lemma no_votes_preserved :
-  no_votes prog ->
-  no_votes tprog.
-Proof.
-  inv TRANSL.
-  intro Hnovotes; inv Hnovotes.
-  simpl in *.
-  destruct tprog.
-  simpl in *.
-  destruct H0; subst.
-  constructor.
-  apply list_forall2_imply with
-    (P2 := fun id_f id_tf => no_votes_globdef (snd id_f) ->
-                          no_votes_globdef (snd id_tf)) in H.
-  { eapply list_forall2_impl_Forall; eauto; auto. }
-  intros [id f] [id' tf] Hin1 Hin2 Hmatch.
-  inv Hmatch.
-  simpl in H0; subst.
-  simpl in *.
-  intro Hnovotes.
-  inv H2.
-  { inv Hnovotes.
-    constructor.
-    apply no_votes_fundef_preserved; assumption. }
-  constructor.
 Qed.
 
 End PRESERVATION.

@@ -1124,6 +1124,74 @@ Lemma vote_not_smove (ef : external_function) :
   is_vote_builtin ef -> ~ is_smove_builtin ef.
 Proof. intro H; inv H; intro HC; inv HC. Qed.
 
+Inductive is_vote_runtime : external_function -> Prop :=
+| is_vote_runtime_int :
+  is_vote_runtime (EF_runtime "__builtin_vote_int"
+                     [Xint; Xint; Xint ---> Xint]%asttyp)
+| is_vote_runtime_long :
+  is_vote_runtime (EF_runtime "__builtin_vote_long"
+                     [Xlong; Xlong; Xlong ---> Xlong]%asttyp)
+| is_vote_runtime_single :
+  is_vote_runtime (EF_runtime "__builtin_vote_single"
+                     [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp)
+| is_vote_runtime_float :
+  is_vote_runtime (EF_runtime "__builtin_vote_float"
+                     [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp).
+
+Definition is_vote_runtimeb (ef : external_function) : bool :=
+  match ef with
+  | EF_runtime name sg =>
+      (String.eqb name "__builtin_vote_int" &&
+         proj_sumbool (signature_eq sg
+                         [Xint; Xint; Xint ---> Xint]%asttyp)) ||
+        (String.eqb name "__builtin_vote_long" &&
+           proj_sumbool (signature_eq sg
+                           [Xlong; Xlong; Xlong ---> Xlong]%asttyp)) ||
+        (String.eqb name "__builtin_vote_single" &&
+           proj_sumbool (signature_eq sg
+                           [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp)) ||
+        (String.eqb name "__builtin_vote_float" &&
+           proj_sumbool (signature_eq sg
+                           [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp))
+  | _ => false
+  end.
+
+Lemma is_vote_runtimeb_spec (ef : external_function) :
+  reflect (is_vote_runtime ef) (is_vote_runtimeb ef).
+Proof.
+  destruct ef; try solve [right; intro HC; inv HC].
+  simpl.
+  destruct (String.eqb name "__builtin_vote_single") eqn:H0.
+  { rewrite String.eqb_eq in H0; subst.
+    destruct (signature_eq sg
+                [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H0.
+  destruct (String.eqb name "__builtin_vote_int") eqn:H1.
+  { rewrite String.eqb_eq in H1; subst.
+    destruct (signature_eq sg
+                [Xint; Xint; Xint ---> Xint]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H1.
+  destruct (String.eqb name "__builtin_vote_float") eqn:H2.
+  { rewrite String.eqb_eq in H2; subst.
+    destruct (signature_eq sg
+                [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H2.
+  destruct (String.eqb name "__builtin_vote_long") eqn:H3.
+  { rewrite String.eqb_eq in H3; subst.
+    destruct (signature_eq sg
+                [Xlong; Xlong; Xlong ---> Xlong]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H3.
+  right; intro HC; inv HC; congruence.
+Qed.
+
 Definition Regset_of_list (l : list positive) : Regset.t  :=
   fold_right (fun acc p => Regset.add acc p) Regset.empty l.
 

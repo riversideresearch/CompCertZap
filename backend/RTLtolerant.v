@@ -336,7 +336,7 @@ Section TOLERANCE.
     eexists; reflexivity.
   Qed.
 
-  Lemma val_compat_floatofint v1 v2 vres :
+  Lemma val_compat_floatofint_exists v1 v2 vres :
     val_compat v1 v2 ->
     Val.floatofint v1 = Some vres ->
     exists vres' : val, Val.floatofint v2 = Some vres'.
@@ -346,7 +346,7 @@ Section TOLERANCE.
     eexists; reflexivity.
   Qed.
 
-  Lemma val_compat_singleofint v1 v2 vres :
+  Lemma val_compat_singleofint_exists v1 v2 vres :
     val_compat v1 v2 ->
     Val.singleofint v1 = Some vres ->
     exists vres' : val, Val.singleofint v2 = Some vres'.
@@ -356,7 +356,7 @@ Section TOLERANCE.
     eexists; reflexivity.
   Qed.
 
-  Lemma val_compat_floatoflong v1 v2 vres :
+  Lemma val_compat_floatoflong_exists v1 v2 vres :
     val_compat v1 v2 ->
     Val.floatoflong v1 = Some vres ->
     exists vres' : val, Val.floatoflong v2 = Some vres'.
@@ -366,7 +366,7 @@ Section TOLERANCE.
     eexists; reflexivity.
   Qed.
 
-  Lemma val_compat_singleoflong v1 v2 vres :
+  Lemma val_compat_singleoflong_exists v1 v2 vres :
     val_compat v1 v2 ->
     Val.singleoflong v1 = Some vres ->
     exists vres' : val, Val.singleoflong v2 = Some vres'.
@@ -395,10 +395,10 @@ Section TOLERANCE.
     - eapply val_compat_shrxl; eauto.
     - eapply val_compat_eval_addressing64; eauto.
     - eapply val_compat_eval_addressing64; eauto.
-    - eapply val_compat_floatofint; eauto.
-    - eapply val_compat_singleofint; eauto.
-    - eapply val_compat_floatoflong; eauto.
-    - eapply val_compat_singleoflong; eauto.
+    - eapply val_compat_floatofint_exists; eauto.
+    - eapply val_compat_singleofint_exists; eauto.
+    - eapply val_compat_floatoflong_exists; eauto.
+    - eapply val_compat_singleoflong_exists; eauto.
   Qed.
 
   Lemma val_compat_divs n1 n2 d1 d2 v1 v2 :
@@ -479,14 +479,251 @@ Section TOLERANCE.
     inv Hmod1; inv Hmod2; constructor.
   Qed.
 
+  (* Lemma dfgd v1 v1' v2 v2': *)
+  (*   val_compat v1 v1' -> *)
+  (*   val_compat v2 v2' -> *)
+  (*   val_compat (Val.shl v1 v2) (Val.shl v1' v2'). *)
+  (* Proof. *)
+  (*   intros H0 H1; inv H0; inv H1; try constructor; simpl. *)
+  (*   do 2 destruct (Integers.Int.ltu _ _); try constructor. *)
+
+  Lemma val_compat_shl_imm v v' n :
+    val_compat v v' ->
+    val_compat (Val.shl v (Vint n)) (Val.shl v' (Vint n)).
+  Proof.
+    intros Hcompat; inv Hcompat; simpl; try constructor.
+    destruct (Integers.Int.ltu _ _); constructor.
+  Qed.
+
+  Lemma val_compat_shr_imm v v' n :
+    val_compat v v' ->
+    val_compat (Val.shr v (Vint n)) (Val.shr v' (Vint n)).
+  Proof.
+    intros Hcompat; inv Hcompat; simpl; try constructor.
+    destruct (Integers.Int.ltu _ _); constructor.
+  Qed.
+
+  Lemma val_compat_shll_imm v v' n :
+    val_compat v v' ->
+    val_compat (Val.shll v (Vint n)) (Val.shll v' (Vint n)).
+  Proof.
+    intros Hcompat; inv Hcompat; simpl; try constructor.
+    destruct (Integers.Int.ltu _ _); constructor.
+  Qed.
+
+  Lemma val_compat_shrl_imm v v' n :
+    val_compat v v' ->
+    val_compat (Val.shrl v (Vint n)) (Val.shrl v' (Vint n)).
+  Proof.
+    intros Hcompat; inv Hcompat; simpl; try constructor.
+    destruct (Integers.Int.ltu _ _); constructor.
+  Qed.
+
+  Lemma val_compat_shrlu_imm v v' n :
+    val_compat v v' ->
+    val_compat (Val.shrlu v (Vint n)) (Val.shrlu v' (Vint n)).
+  Proof.
+    intros Hcompat; inv Hcompat; simpl; try constructor.
+    destruct (Integers.Int.ltu _ _); constructor.
+  Qed.
+
+  Lemma val_compat_shrx_imm v v' vres vres' n :
+    val_compat v v' ->
+    Val.shrx v (Vint n) = Some vres ->
+    Val.shrx v' (Vint n) = Some vres' ->
+    val_compat vres vres'.
+  Proof.
+    intros Hcompat H0 H1; inv Hcompat; simpl in *; try congruence.
+    destruct (Integers.Int.ltu _ _); inv H0; inv H1; constructor.
+  Qed.
+
+  Lemma val_compat_shrxl_imm v v' vres vres' n :
+    val_compat v v' ->
+    Val.shrxl v (Vint n) = Some vres ->
+    Val.shrxl v' (Vint n) = Some vres' ->
+    val_compat vres vres'.
+  Proof.
+    intros Hcompat H0 H1; inv Hcompat; simpl in *; try congruence.
+    destruct (Integers.Int.ltu _ _); inv H0; inv H1; constructor.
+  Qed.
+
+  Lemma val_compat_shru_imm v v' n :
+    val_compat v v' ->
+    val_compat (Val.shru v (Vint n)) (Val.shru v' (Vint n)).
+  Proof.
+    intros Hcompat; inv Hcompat; simpl; try constructor.
+    destruct (Integers.Int.ltu _ _); constructor.
+  Qed.
+
+  Lemma val_compat_shru_dimm v1 v1' v2 v2' n :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    val_compat
+      (Val.or (Val.shl v1 (Vint n))
+         (Val.shru v2 (Vint (Integers.Int.sub Integers.Int.iwordsize n))))
+      (Val.or (Val.shl v1' (Vint n))
+         (Val.shru v2' (Vint (Integers.Int.sub Integers.Int.iwordsize n)))).
+  Proof.
+    intros H0 H1; inv H0; inv H1; simpl; try constructor;
+      repeat destruct (Integers.Int.ltu _ _); constructor.
+  Qed.
+
+  Lemma val_compat_add v1 v1' v2 v2' :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    val_compat (Val.add v1 v2) (Val.add v1' v2').
+  Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+  Lemma val_compat_addl v1 v1' v2 v2' :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    val_compat (Val.addl v1 v2) (Val.addl v1' v2').
+  Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+  Lemma val_compat_mul v1 v1' v2 v2' :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    val_compat (Val.mul v1 v2) (Val.mul v1' v2').
+  Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+  Lemma val_compat_mull v1 v1' v2 v2' :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    val_compat (Val.mull v1 v2) (Val.mull v1' v2').
+  Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+  Lemma rs_compat_eval_addressing32 rs1 rs2 args sp a v v' :
+    rs_compat rs1 rs2 ->
+    Op.eval_addressing32 (Genv.globalenv prog) sp a rs1 ## args = Some v ->
+    Op.eval_addressing32 (Genv.globalenv prog) sp a rs2 ## args = Some v' ->
+    val_compat v v'.
+  Proof.
+    intros Hcompat H0 H1.
+    unfold Op.eval_addressing32 in *.
+    destruct a; simpl in *.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_add; auto; constructor.
+    - do 3 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_add; try constructor.
+      apply val_compat_add; auto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_add; try constructor.
+      apply val_compat_mul; auto; constructor.
+    - do 3 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_add; auto.
+      apply val_compat_add; try constructor.
+      apply val_compat_mul; auto; constructor.
+    - do 1 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64; try congruence.
+      inv H0; inv H1; apply val_compat_refl.
+    - do 2 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64; try congruence.
+      inv H0; inv H1; apply val_compat_add; auto; apply val_compat_refl.
+    - do 2 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64; try congruence.
+      inv H0; inv H1.
+      apply val_compat_add; try apply val_compat_refl.
+      apply val_compat_mul; auto; constructor.
+    - do 1 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64; try congruence.
+      inv H0; inv H1; apply val_compat_refl.
+  Qed.
+
+  Lemma rs_compat_eval_addressing64 rs1 rs2 args sp a v v' :
+    rs_compat rs1 rs2 ->
+    Op.eval_addressing64 (Genv.globalenv prog) sp a rs1 ## args = Some v ->
+    Op.eval_addressing64 (Genv.globalenv prog) sp a rs2 ## args = Some v' ->
+    val_compat v v'.
+  Proof.
+    intros Hcompat H0 H1.
+    unfold Op.eval_addressing32 in *.
+    destruct a; simpl in *; try congruence.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_addl; auto; constructor.
+    - do 3 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_addl; try constructor.
+      apply val_compat_addl; auto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_addl; try constructor.
+      apply val_compat_mull; auto; constructor.
+    - do 3 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_addl; auto.
+      apply val_compat_addl; try constructor.
+      apply val_compat_mull; auto; constructor.
+    - do 1 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64; try congruence.
+      inv H0; inv H1; apply val_compat_refl.
+    - do 1 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64; try congruence.
+      inv H0; inv H1; apply val_compat_refl.
+  Qed.
+
+  Lemma val_compat_floatofint v v' vres vres' :
+    val_compat v v' ->
+    Val.floatofint v = Some vres ->
+    Val.floatofint v' = Some vres' ->
+    val_compat vres vres'.
+  Proof.
+    intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+  Qed.
+
+  Lemma val_compat_singleofint v v' vres vres' :
+    val_compat v v' ->
+    Val.singleofint v = Some vres ->
+    Val.singleofint v' = Some vres' ->
+    val_compat vres vres'.
+  Proof.
+    intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+  Qed.
+
+  Lemma val_compat_floatoflong v v' vres vres' :
+    val_compat v v' ->
+    Val.floatoflong v = Some vres ->
+    Val.floatoflong v' = Some vres' ->
+    val_compat vres vres'.
+  Proof.
+    intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+  Qed.
+    
+  Lemma val_compat_singleoflong v v' vres vres' :
+    val_compat v v' ->
+    Val.singleoflong v = Some vres ->
+    Val.singleoflong v' = Some vres' ->
+    val_compat vres vres'.
+  Proof.
+    intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+  Qed.
+
+  Lemma rs_compat_eval_condition cond rs1 rs2 args m1 m2 v :
+    rs_compat rs1 rs2 ->
+    Op.eval_condition cond rs1 ## args m1 = Some v ->
+    exists v', Op.eval_condition cond rs2 ## args m2 = Some v'.
+  Proof.
+    intros Hcompat Hcond.
+    destruct cond; simpl in *.
+    - do 3 (destruct args; simpl in *; try congruence).
+      admit.
+    - do 3 (destruct args; simpl in *; try congruence).
+      admit.
+  Admitted.
+
+  Lemma val_compat_normalize v v' t :
+    val_compat v v' ->
+    val_compat (Val.normalize v t) (Val.normalize v' t).
+  Proof.
+    intro H; inv H; simpl; try constructor; destruct t; constructor.
+  Qed.
+  
   Lemma eval_operation_val_compat rs1 rs2 sp op args m1 m2 v v' :
+    ~ is_unsafe op ->
     rs_compat rs1 rs2 ->
     Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m1 = Some v ->
     Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m2 = Some v' ->
     val_compat v v'.
   Proof.
-    intros Hcompat H0 H1.
+    intros Hop Hcompat H0 H1.
     destruct op; simpl in *;
+      try solve [exfalso; apply Hop; constructor];
       try solve [destruct args; simpl in *; try congruence;
                  try solve [inv H0; inv H1; constructor];
                  try solve [inv H0; inv H1; apply val_compat_refl];
@@ -500,17 +737,73 @@ Section TOLERANCE.
                  inv H0; inv H1;
                  pose proof (Hcompat p0) as Hp0; specialize (Hcompat p);
                  inv Hp0; inv Hcompat; constructor].
+    (* - do 3 (destruct args; simpl in *; try congruence). *)
+    (*   eapply val_compat_divs; eauto. *)
+    (* - do 3 (destruct args; simpl in *; try congruence). *)
+    (*   eapply val_compat_divu; eauto. *)
+    (* - do 3 (destruct args; simpl in *; try congruence). *)
+    (*   eapply val_compat_mods; eauto. *)
+    (* - do 3 (destruct args; simpl in *; try congruence). *)
+    (*   eapply val_compat_modu; eauto. *)
+    - admit.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_shl_imm; auto.
+    - admit.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_shr_imm; auto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_shrx_imm; eauto.
+    - admit.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_shru_imm; auto.
     - do 3 (destruct args; simpl in *; try congruence).
-      eapply val_compat_divs; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      eapply val_compat_divu; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      eapply val_compat_mods; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      eapply val_compat_modu; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1.
+      inv H0; inv H1; apply val_compat_shru_dimm; auto.
+    - eapply rs_compat_eval_addressing32; eauto.
+    - admit.
+    - admit.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_shll_imm; auto.
+    - admit.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_shrl_imm; auto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_shrxl_imm; eauto.
+    - admit.
+    - do 2 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1; apply val_compat_shrlu_imm; auto.
+    - eapply rs_compat_eval_addressing64; eauto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_floatofint; eauto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_singleofint; eauto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_floatoflong; eauto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_singleoflong; eauto.
+    - inv H0; inv H1.
+      destruct (Op.eval_condition cond rs1 ## args m1) eqn:Hcond.
+      + eapply rs_compat_eval_condition in Hcond; eauto.
+        destruct Hcond as [b' Hcond].
+        rewrite Hcond; simpl.
+        destruct b, b'; constructor.
+      + constructor.
+    - (* do 2 (destruct args; simpl in *; try congruence). *)
+      (* inv H0; inv H1. *)
+      (* destruct (Op.eval_condition c rs1 ## args m1) eqn:Hcond. *)
+      (* + eapply rs_compat_eval_condition in Hcond; eauto. *)
+      (*   destruct Hcond as [b' Hcond]. *)
+      (*   rewrite Hcond; simpl. *)
+      (*   destruct b, b'; apply val_compat_normalize; auto. *)
+        
+      (*   Val.normalize *)
+      (*     Val.select *)
+      
+      (* Val.of_optbool *)
+      admit.
   Admitted.
+
+  (* New unsafe ops: Oshl Oshr Oshru Osubl Oshll Oshrl Oshrlu *)
+
 
   (* Lemma eval_addressing_val_compat rs1 rs2 sp addr args a a' : *)
   (*   rs_compat rs1 rs2 -> *)
@@ -709,10 +1002,10 @@ Section TOLERANCE.
     unfold builtin_or_external_sem.
     intro Hsem.
     destruct (Builtins.lookup_builtin_function _ _) eqn:Hlookup.
-    -  unfold Builtins.lookup_builtin_function in *.
-       simpl in *.
-       destruct (string_dec name _ && signature_eq sg _%asttyp);
-         eapply known_builtin_sem_Three_Two; eauto.
+    - unfold Builtins.lookup_builtin_function in *.
+      simpl in *.
+      destruct (string_dec name _ && signature_eq sg _%asttyp);
+        eapply known_builtin_sem_Three_Two; eauto.
     - eexists; eauto.
   Qed.
 
@@ -725,10 +1018,10 @@ Section TOLERANCE.
     unfold builtin_or_external_sem.
     intro Hsem.
     destruct (Builtins.lookup_builtin_function _ _) eqn:Hlookup.
-    -  unfold Builtins.lookup_builtin_function in *.
-       simpl in *.
-       destruct (string_dec name _ && signature_eq sg _%asttyp);
-         eapply known_builtin_sem_Three_Two'; eauto.
+    - unfold Builtins.lookup_builtin_function in *.
+      simpl in *.
+      destruct (string_dec name _ && signature_eq sg _%asttyp);
+        eapply known_builtin_sem_Three_Two'; eauto.
     - eexists; eauto.
   Qed.
 
@@ -1513,6 +1806,21 @@ Section TOLERANCE.
       + intro r.
         destruct (peq r res0); subst.
         * rewrite 2!Regmap.gss.
+          destruct (is_unsafeb_spec op0).
+          { apply val_lessdef_compat.
+            eapply Op.eval_operation_lessdef
+              with (vl2 := rs ## args0) in H10; eauto.
+            2: { apply forall_lessdef_list.
+                 apply Forall_forall.
+                 intros r Hin.
+                 destruct b; auto.
+                 inv_rs; inv_wc.
+                 apply RS; intro HC.
+                 rewrite Forall_forall in H6; apply H6 in Hin.
+                 rewrite Hin in HC; inv HC; inv Hc. }
+            destruct H10 as (v2 & Hop & Hv2).
+            simpl in *.
+            rewrite H0 in Hop; inv Hop; assumption. }
           eapply eval_operation_val_compat; eauto.
         * rewrite 2!Regmap.gso; auto.
       + unfold match_rs in *.
@@ -1523,7 +1831,8 @@ Section TOLERANCE.
           { (* Safe op (replicated *)
             destruct (peq r res0); subst.
             - rewrite 2!Regmap.gss.
-              eapply Op.eval_operation_lessdef with (vl2 := rs ## args0) in H10; eauto.
+              eapply Op.eval_operation_lessdef
+                with (vl2 := rs ## args0) in H10; eauto.
               2: { apply forall_lessdef_list.
                    apply Forall_forall.
                    intros r Hin.
@@ -1536,7 +1845,8 @@ Section TOLERANCE.
           (* Unsafe op (voted) *)
           destruct (peq r res0); subst.
           { rewrite 2!Regmap.gss.
-            eapply Op.eval_operation_lessdef with (vl2 := rs ## args0) in H10; eauto.
+            eapply Op.eval_operation_lessdef
+              with (vl2 := rs ## args0) in H10; eauto.
             2: { apply forall_lessdef_list.
                  apply Forall_forall.
                  intros r Hin.
@@ -1552,7 +1862,8 @@ Section TOLERANCE.
           apply H8 in HC; auto.
         * intro r; destruct (peq r res0); subst.
           { rewrite 2!Regmap.gss.
-            eapply Op.eval_operation_lessdef with (vl2 := rs ## args0) in H10; eauto.
+            eapply Op.eval_operation_lessdef
+              with (vl2 := rs ## args0) in H10; eauto.
             2: { apply forall_lessdef_list.
                  apply Forall_forall.
                  intros r Hin; auto. }

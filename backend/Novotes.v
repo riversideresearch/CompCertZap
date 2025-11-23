@@ -16,7 +16,8 @@ Section CHECKER.
 
 Definition check_instr (instr : instruction) : bool :=
   match instr with
-  | Ibuiltin ef bargs bres succ => negb (is_vote_builtinb ef)
+  | Ibuiltin ef bargs bres succ =>
+      negb (is_vote_builtinb ef) && negb (is_vote_runtimeb ef)
   | _ => true
   end.
 
@@ -32,6 +33,8 @@ Definition check_function (f : function) : bool :=
 Definition check_program (p : program) : bool :=
   forallb (fun def => match snd def with
                    | Gfun (Internal f) => check_function f
+                   | Gfun (External ef) =>
+                       negb (is_vote_builtinb ef) && negb (is_vote_runtimeb ef)
                    | _ => true
                    end) p.(prog_defs).
 
