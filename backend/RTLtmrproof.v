@@ -1901,7 +1901,7 @@ Section PRESERVATION.
           simpl in *.
           specialize (wt_instrs _ _ H).
           inv wt_instrs.
-          { inv UNSAFE. }
+          { inv PROT. }
           simpl in *.
           rewrite H7.
           eapply type_of_operation_sound; eauto. }

@@ -377,7 +377,7 @@ Section TOLERANCE.
   Qed.
 
   Lemma rs_compat_eval_operation rs1 rs2 sp op args m v :
-    ~ is_unsafe op ->
+    ~ is_protected op ->
     rs_compat rs1 rs2 ->
     Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v ->
     exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'.
@@ -864,7 +864,7 @@ Section TOLERANCE.
   Qed.
   
   Lemma eval_operation_val_compat rs1 rs2 sp op args m1 m2 v v' :
-    ~ is_unsafe op ->
+    ~ is_protected op ->
     rs_compat rs1 rs2 ->
     Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m1 = Some v ->
     Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m2 = Some v' ->
@@ -900,7 +900,7 @@ Section TOLERANCE.
     - do 3 (destruct args; simpl in *; try congruence).
       inv H0; inv H1.
       apply val_compat_subl; auto.
-      apply is_unsafe_subl_archi_ptr64_false; assumption.
+      apply is_protected_subl_archi_ptr64_false; assumption.
     - do 2 (destruct args; simpl in *; try congruence).
       inv H0; inv H1; apply val_compat_shll_imm; auto.
     - do 2 (destruct args; simpl in *; try congruence).
@@ -1545,8 +1545,8 @@ Section TOLERANCE.
       eapply exec_Inop; eauto.
 
     (* exec_Iop *)
-    - destruct (is_unsafeb_spec op).
-      + (* op is unsafe *)
+    - destruct (is_protectedb_spec op).
+      + (* op is protected *)
         eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args) in H0; eauto.
         2: { apply forall_lessdef_list.
              apply Forall_forall; intros r Hin.
@@ -1930,7 +1930,7 @@ Section TOLERANCE.
       + intro r.
         destruct (peq r res0); subst.
         * rewrite 2!Regmap.gss.
-          destruct (is_unsafeb_spec op0).
+          destruct (is_protectedb_spec op0).
           { apply val_lessdef_compat.
             eapply Op.eval_operation_lessdef
               with (vl2 := rs ## args0) in H10; eauto.
@@ -1966,7 +1966,7 @@ Section TOLERANCE.
               destruct H10 as (v2 & Hop & Hv2).
               rewrite H0 in Hop; inv Hop; assumption.
             - rewrite 2!Regmap.gso; auto. }
-          (* Unsafe op (voted) *)
+          (* Protected op (voted) *)
           destruct (peq r res0); subst.
           { rewrite 2!Regmap.gss.
             eapply Op.eval_operation_lessdef

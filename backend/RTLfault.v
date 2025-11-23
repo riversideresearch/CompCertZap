@@ -61,7 +61,7 @@ Qed.
    builtins, just not external function calls or votes themselves. *)
 Definition zap_allowed (i : instruction) : Prop :=
   match i with
-  | Iop op _ _ _ => ~ is_unsafe op
+  | Iop op _ _ _ => ~ is_protected op
   | Iload _ _ _ _ _ => False
   | Istore _ _ _ _ _ => False
   | Icall _ _ _ _ _ => False

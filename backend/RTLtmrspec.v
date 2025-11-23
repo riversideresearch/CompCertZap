@@ -223,16 +223,16 @@ Inductive match_instr
     match_instr re rm c pc (Inop n)
 | match_Iop_safe :
   forall op args1 args2 args3 res1 res2 res3 n1 n2 succ
-    (UNSAFE: ~ is_unsafe op)
+    (NPROT: ~ is_protected op)
     (ARGS : rm_l rm args1 args2 args3)
     (RM_RES : rm !! res1 = (res2, res3))
     (PC : c ! pc = Some (Iop op args2 res2 n1))
     (N1 : c ! n1 = Some (Iop op args3 res3 n2))
     (N2 : c ! n2 = Some (Iop op args1 res1 succ)),
     match_instr re rm c pc (Iop op args1 res1 succ)
-| match_Iop_unsafe :
+| match_Iop_protected :
   forall op args res1 res2 res3 n1 n2 succ
-    (UNSAFE: is_unsafe op)
+    (PROT: is_protected op)
     (VOTE_ARGS : maj_vote_regsR c re rm (dedup args) pc n1)
     (N1 : c ! n1 = Some (Iop op args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
@@ -497,7 +497,7 @@ Proof.
     destruct (H1 n) as [?|Hn]; try congruence.
     destruct (H1 n1) as [?|Hn1]; try congruence.
     destruct (H1 n2) as [?|Hn2]; try congruence.
-    eapply match_Iop_unsafe; eauto.
+    eapply match_Iop_protected; eauto.
     + eapply state_incr_maj_vote_regsR; eauto.
     + rewrite Hn1; eauto.
     + econstructor; eauto.
@@ -695,7 +695,7 @@ Proof.
     simpl; constructor; rewrite PTree.gss; reflexivity.
 
   (* Iop *)
-  - destruct (is_unsafeb o) eqn:Hunsafe.
+  - destruct (is_protectedb o) eqn:Hprotected.
     { unfold RTLgen.bind in Htransf; simpl in Htransf.
       repeat egen_case.
       unfold update_instr in H2.
@@ -703,8 +703,8 @@ Proof.
       destruct (rm # r) eqn:Hr.
       eapply copy_to_shadows_smoveR in H0; eauto.
       2: { simpl; lia. }
-      eapply match_Iop_unsafe with (n1:=n0); eauto.
-      destruct (is_unsafeb_spec o); congruence.
+      eapply match_Iop_protected with (n1:=n0); eauto.
+      destruct (is_protectedb_spec o); congruence.
       3: { apply smoveR_ptree_set; eauto. }
       2: { rewrite PTree.gss; auto. }
       eapply maj_vote_regsR_ptree_set; auto.
@@ -724,7 +724,7 @@ Proof.
     eapply match_Iop_safe with (pc := p)
                                (n1 := s.(st_nextnode))
                                (n2 := Pos.succ (s.(st_nextnode))); eauto.
-    { intro HC; destruct (is_unsafeb_spec o); auto; congruence. }
+    { intro HC; destruct (is_protectedb_spec o); auto; congruence. }
     { apply rm_l_map_rm. }
     + rewrite 2!PTree.gso; try lia.
       rewrite PTree.gss; reflexivity.

@@ -84,7 +84,7 @@ Section color_checker.
   (*       assert (PTree_Properties.for_all (col pc) (fun r c => is_colorb ((col succ) ! r) c)) *)
   (*         "" *)
   (*   | Iop op args res succ => *)
-  (*       if is_unsafeb op then *)
+  (*       if is_protectedb op then *)
   (*         bind (assert (forallb (fun arg => is_whiteb ((col pc) ! arg) && *)
   (*                                          is_redb ((col succ) ! arg)) args) *)
   (*                 "") *)
@@ -122,7 +122,7 @@ Section color_checker.
     | Inop succ =>
         PTree_Properties.for_all (col pc) (fun r c => is_colorb ((col succ) ! r) c)
     | Iop op args res succ =>
-        if is_unsafeb op then
+        if is_protectedb op then
           forallb (fun arg => is_whiteb ((col pc) ! arg)) args &&
             PTree_Properties.for_all (col pc)
               (fun r c => inb r args ||
@@ -249,12 +249,12 @@ Section color_checker.
       rewrite PTree_Properties.for_all_correct in Hcheck.
       apply Hcheck in Hrc.
       apply is_colorb_sound; auto.
-    - destruct (is_unsafeb_spec o).
+    - destruct (is_protectedb_spec o).
       + destruct_andb Hargs Hn.
         destruct_andb Hargs Hpres.
         rewrite forallb_forall in Hargs.
         rewrite PTree_Properties.for_all_correct in Hpres.
-        apply wc_Iop_unsafe; auto.
+        apply wc_Iop_protected; auto.
         * apply Forall_forall; intros x Hin; apply is_colorb_sound; auto.
         * apply is_colorb_sound; auto.
         * intros x c Hnotin Hnoteq Hx.

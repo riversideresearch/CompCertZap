@@ -110,13 +110,13 @@ Section wc.
       (forall r c, col pc r = Some c -> col succ r = Some c) ->
       wc_instruction pc (Inop succ)
   | wc_Iop_safe : forall op args res succ,
-      ~ is_unsafe op ->
+      ~ is_protected op ->
       is_basic' (col succ res) ->
       Forall (fun arg => col pc arg = col succ res) args ->
       (forall r c, r <> res -> col pc r = Some c -> col succ r = Some c) ->
       wc_instruction pc (Iop op args res succ)
-  | wc_Iop_unsafe : forall op args res succ,
-      is_unsafe op ->
+  | wc_Iop_protected : forall op args res succ,
+      is_protected op ->
       Forall (fun arg => is_white (col pc arg)) args ->
       is_white (col succ res) ->
       (forall r c, ~ In r args -> r <> res ->

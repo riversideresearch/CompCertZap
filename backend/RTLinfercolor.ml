@@ -109,8 +109,8 @@ let rec regs_of_builtin_res = function
      regs_of_builtin_res hi @ regs_of_builtin_res lo
 
 (* Can/should we fuse replication followed immediately by voting?
-   E.g., when you have two unsafe ops in a row, the white result from
-   the first could be fed directly into the argument of the
+   E.g., when you have two protected ops in a row, the white result
+   from the first could be fed directly into the argument of the
    second. This would be equivalent wrt. fault tolerance to
    replicating the result and then voting on it, but more
    efficient. The only difference I guess is if that result is then
@@ -128,7 +128,7 @@ let transfer (instr : instruction') (col : color Intmap.t) : color Intmap.t =
   match instr with
   | Inop' _ -> col
   | Iop' (op, args, res, _) ->
-     if is_unsafeb op then
+     if is_protectedb op then
        Intmap.add res White
          (List.fold_left (fun acc arg -> Intmap.remove arg acc) col args)
      else
@@ -281,7 +281,7 @@ let minus (t : 'a Intmap.t) (l : int list) : 'a Intmap.t =
   List.fold_left (fun acc n -> Intmap.remove n acc) t l
 
 let ignored_registers : instruction' -> int list = function
-  | Iop' (op, args, res, _) when is_unsafeb op -> res :: args
+  | Iop' (op, args, res, _) when is_protectedb op -> res :: args
   | Iload' (_, _, args, res, _) -> res :: args
   | Istore' (_, _, args, src, _) -> src :: args
   | Icall' (_, fn, args, res, _) -> begin
@@ -324,7 +324,7 @@ let update2
               match instr with
               (* For safe Iops, if successor assigns a color to the
                  result then propagate that to the arguments. *)
-              | Iop' (op, args, res, _) when not (is_unsafeb op) -> begin
+              | Iop' (op, args, res, _) when not (is_protectedb op) -> begin
                   match Intmap.find_opt res col with
                   | Some c -> begin
                       let arg_cols =
@@ -378,7 +378,7 @@ let init_cols (f : coq_function) : color Intmap.t Intmap.t =
   let init_col = function
     | Inop' _ -> Intmap.empty
     | Iop' (op, args, _, _) ->
-       if is_unsafeb op then
+       if is_protectedb op then
          List.fold_left (fun acc arg -> Intmap.add arg White acc) Intmap.empty args
        else
          Intmap.empty

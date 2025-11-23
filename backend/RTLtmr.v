@@ -166,7 +166,7 @@ Definition transf_instr
   | Inop n =>
       update_instr pc (Inop n)
   | Iop op args dst _succ =>
-      if is_unsafeb op then
+      if is_protectedb op then
         do n <- maj_vote_regs re rm (dedup (args_of_instruction instr)) pc;
         match res_of_instruction instr, succ_of_instruction instr with
         | Some res, Some succ =>
