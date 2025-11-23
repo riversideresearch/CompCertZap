@@ -901,9 +901,11 @@ Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
    by the C standard.
 
    Also TODO: this might need to go into backend specific Op.v
-   file.
-*)
+   file. And should it be called something else? 'is_protected'?
+ *)
 Inductive is_unsafe : operation -> Prop :=
+(* Because division by zero causes immediate UB (see [Val.divs] in
+   common/Values.v) *)
 | is_unsafe_Odiv : is_unsafe Odiv
 | is_unsafe_Odivu : is_unsafe Odivu
 | is_unsafe_Omod : is_unsafe Omod
@@ -912,10 +914,44 @@ Inductive is_unsafe : operation -> Prop :=
 | is_unsafe_Odivlu : is_unsafe Odivlu
 | is_unsafe_Omodl : is_unsafe Omodl
 | is_unsafe_Omodlu : is_unsafe Omodlu
-| in_unsafe_Ointofsingle : is_unsafe Ointofsingle
-| in_unsafe_Ointoffloat : is_unsafe Ointoffloat
-| in_unsafe_Olongofsingle : is_unsafe Olongofsingle
-| in_unsafe_Olongoffloat : is_unsafe Olongoffloat.
+
+(* Trying to convert NaN (and maybe something else) causes immediate
+   UB (see Val.intoffloat in common/Values.v) *)
+| is_unsafe_Ointofsingle : is_unsafe Ointofsingle
+| is_unsafe_Ointoffloat : is_unsafe Ointoffloat
+| is_unsafe_Olongofsingle : is_unsafe Olongofsingle
+| is_unsafe_Olongoffloat : is_unsafe Olongoffloat
+
+(* Shifting more than the archi word size is immediate UB (see Val.shl
+   in common/Values.v) *)
+| is_unsafe_Oshl : is_unsafe Oshl
+| is_unsafe_Oshr : is_unsafe Oshr
+| is_unsafe_Oshru : is_unsafe Oshru
+| is_unsafe_Oshll : is_unsafe Oshll
+| is_unsafe_Oshrl : is_unsafe Oshrl
+| is_unsafe_Oshrlu : is_unsafe Oshrlu
+
+(* Subtracting pointers in different blocks causes immediate UB (see
+   [Val.subl] in common/Values.v) *)
+| is_unsafe_Osubl : Archi.ptr64 = true -> is_unsafe Osubl
+
+(* A faulty selection can cause the faulty execution to take Vundef
+   into a register that the normal execution has a defined value for,
+   and subsequently encounter UB that the normal execution avoids. See
+   [Val.select] in common/Values.v. *)
+| is_unsafe_Osel : forall cond ty, is_unsafe (Osel cond ty)
+
+(* Comparing pointers in different blocks or comparing a pointer with
+   a nonzero integer causes immediate UB. *)
+| is_unsafe_Ocmp_Ccompu : forall c, Archi.ptr64 = false ->
+                               is_unsafe (Ocmp (Ccompu c))
+| is_unsafe_Ocmp_Ccompuimm : forall c n, Archi.ptr64 = false ->
+                                    is_unsafe (Ocmp (Ccompuimm c n))
+| is_unsafe_Ocmp_Ccomplu : forall c, Archi.ptr64 = true ->
+                                is_unsafe (Ocmp (Ccomplu c))
+| is_unsafe_Ocmp_Ccompluimm : forall c n, Archi.ptr64 = true ->
+                                     is_unsafe (Ocmp (Ccompluimm c n))
+.
 
 Definition is_unsafeb (op : operation) : bool :=
   match op with
@@ -923,13 +959,49 @@ Definition is_unsafeb (op : operation) : bool :=
   | Odivl | Odivlu | Omodl | Omodlu
   | Ointofsingle | Ointoffloat => true
   | Olongofsingle | Olongoffloat => true
+  | Oshl | Oshr | Oshru | Oshll | Oshrl | Oshrlu => true
+  | Osubl => Archi.ptr64
+  | Osel _ _ => true
+  | Ocmp (Ccompu _) | Ocmp (Ccompuimm _ _) => negb Archi.ptr64
+  | Ocmp (Ccomplu _) | Ocmp (Ccompluimm _ _) => Archi.ptr64
   | _ => false
   end.
 
 Lemma is_unsafeb_spec (op : operation) : reflect (is_unsafe op) (is_unsafeb op).
 Proof.
-  destruct op; try solve [right; intro HC; inv HC]; left; constructor.
+  destruct op; try solve [right; intro HC; inv HC];
+    try left; try constructor; auto.
+  destruct cond; simpl; try solve [right; intro HC; inv HC].
+  - destruct Archi.ptr64 eqn:Harchi; simpl.
+    + right; intro HC; inv HC; congruence.
+    + left; constructor; assumption.
+  - destruct Archi.ptr64 eqn:Harchi; simpl.
+    + right; intro HC; inv HC; congruence.
+    + left; constructor; assumption.
+  - destruct Archi.ptr64 eqn:Harchi; simpl.
+    + left; constructor; assumption.
+    + right; intro HC; inv HC; congruence.
+  - destruct Archi.ptr64 eqn:Harchi; simpl.
+    + left; constructor; assumption.
+    + right; intro HC; inv HC; congruence.
 Qed.
+
+Lemma is_unsafe_subl_archi_ptr64_false :
+  ~ is_unsafe Op.Osubl ->
+  Archi.ptr64 = false.
+Proof.
+  intro H.
+  destruct Archi.ptr64 eqn:Harchi; auto.
+  exfalso; apply H; constructor; assumption.
+Qed.
+
+Inductive is_compu : condition -> Prop :=
+| is_compu_CCompu : forall c, is_compu (Ccompu c)
+| is_compu_CCompuimm : forall c n, is_compu (Ccompuimm c n).
+
+Inductive is_complu : condition -> Prop :=
+| is_compu_CComplu : forall c, is_complu (Ccomplu c)
+| is_compu_CCompluimm : forall c n, is_complu (Ccompluimm c n).
 
 Fixpoint builtin_res_forall {A : Type} (P : A -> Prop) (bres : builtin_res A) : Prop :=
   match bres with

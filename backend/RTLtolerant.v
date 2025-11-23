@@ -694,24 +694,173 @@ Section TOLERANCE.
     intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
   Qed.
 
+  Lemma val_compat_cmp_bool c v1 v1' v2 v2' b :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    Val.cmp_bool c v1 v2 = Some b ->
+    exists b' : bool, Val.cmp_bool c v1' v2' = Some b'.
+  Proof.
+    intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+    inv Hcmp; eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_cmpl_bool c v1 v1' v2 v2' b :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    Val.cmpl_bool c v1 v2 = Some b ->
+    exists b' : bool, Val.cmpl_bool c v1' v2' = Some b'.
+  Proof.
+    intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+    inv Hcmp; eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_cmpf_bool c v1 v1' v2 v2' b :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    Val.cmpf_bool c v1 v2 = Some b ->
+    exists b' : bool, Val.cmpf_bool c v1' v2' = Some b'.
+  Proof.
+    intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+    inv Hcmp; eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_cmpfs_bool c v1 v1' v2 v2' b :
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    Val.cmpfs_bool c v1 v2 = Some b ->
+    exists b' : bool, Val.cmpfs_bool c v1' v2' = Some b'.
+  Proof.
+    intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+    inv Hcmp; eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_cmpu_bool c v1 v1' v2 v2' b m1 m2 :
+    Archi.ptr64 = true ->
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    Val.cmpu_bool (Memory.Mem.valid_pointer m1) c v1 v2 = Some b ->
+    exists b' : bool, Val.cmpu_bool (Memory.Mem.valid_pointer m2) c v1' v2' = Some b'.
+  Proof.
+    intros Harchi H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence;
+      try (rewrite Harchi in *; discriminate).
+    inv Hcmp; eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_cmplu_bool c v1 v1' v2 v2' b m1 m2 :
+    Archi.ptr64 = false ->
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    Val.cmplu_bool (Memory.Mem.valid_pointer m1) c v1 v2 = Some b ->
+    exists b' : bool, Val.cmplu_bool (Memory.Mem.valid_pointer m2) c v1' v2' = Some b'.
+  Proof.
+    intros Harchi H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence;
+      try (rewrite Harchi in *; discriminate).
+    inv Hcmp; eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_cmpu_bool_imm c v v' b m1 m2 n :
+    Archi.ptr64 = true ->
+    val_compat v v' ->
+    Val.cmpu_bool (Memory.Mem.valid_pointer m1) c v (Vint n) = Some b ->
+    exists b' : bool, Val.cmpu_bool (Memory.Mem.valid_pointer m2) c v' (Vint n) = Some b'.
+  Proof.
+    intros Harchi H Hcmp; inv H; simpl in *; try congruence;
+      try (rewrite Harchi in *; discriminate).
+    inv Hcmp; eexists; reflexivity.
+  Qed.
+
+  Lemma val_compat_maskzero_bool v v' n b :
+    val_compat v v' ->
+    Val.maskzero_bool v n = Some b ->
+    exists b', Val.maskzero_bool v' n = Some b'.
+  Proof.
+    intros H Hmask; inv H; simpl in *; try congruence.
+    inv Hmask; eexists; reflexivity.
+  Qed.
+
+  Lemma option_map_some {A B : Type} (f : A -> B) o y :
+    option_map f o = Some y ->
+    exists x, o = Some x /\ y = f x.
+  Proof.
+    intro Hf.
+    destruct o; simpl in *; inv Hf.
+    eexists; split; reflexivity.
+  Qed.
+
   Lemma rs_compat_eval_condition cond rs1 rs2 args m1 m2 v :
+    (Archi.ptr64 = false -> ~ is_compu cond) ->
+    (Archi.ptr64 = true -> ~ is_complu cond) ->
     rs_compat rs1 rs2 ->
     Op.eval_condition cond rs1 ## args m1 = Some v ->
     exists v', Op.eval_condition cond rs2 ## args m2 = Some v'.
   Proof.
-    intros Hcompat Hcond.
-    destruct cond; simpl in *.
+    intros Hnotcompu Hnotcomplu Hcompat Hcond.
+    destruct cond eqn:Hc; simpl in *.
     - do 3 (destruct args; simpl in *; try congruence).
-      admit.
+      eapply val_compat_cmp_bool; eauto.
     - do 3 (destruct args; simpl in *; try congruence).
-      admit.
-  Admitted.
+      destruct Archi.ptr64 eqn:Harchi.
+      + eapply val_compat_cmpu_bool; eauto.
+      + exfalso; eapply Hnotcompu; constructor.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_cmp_bool; eauto; constructor.
+    - do 2 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64 eqn:Harchi.
+      + eapply val_compat_cmpu_bool; eauto; constructor.
+      + exfalso; eapply Hnotcompu; constructor.
+    - do 3 (destruct args; simpl in *; try congruence).
+      eapply val_compat_cmpl_bool; eauto.
+    - do 3 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64 eqn:Harchi.
+      + exfalso; apply Hnotcomplu; auto; constructor.
+      + eapply val_compat_cmplu_bool; eauto; constructor.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_cmpl_bool; eauto; constructor.
+    - do 2 (destruct args; simpl in *; try congruence).
+      destruct Archi.ptr64 eqn:Harchi.
+      + exfalso; apply Hnotcomplu; auto; constructor.
+      + eapply val_compat_cmplu_bool; eauto; constructor.
+    - do 3 (destruct args; simpl in *; try congruence).
+      eapply val_compat_cmpf_bool; eauto.
+    - do 3 (destruct args; simpl in *; try congruence).
+      apply option_map_some in Hcond.
+      destruct Hcond as (b & Hcmp & Hb); subst.
+      eapply val_compat_cmpf_bool in Hcmp; eauto.
+      destruct Hcmp as [b' Hcmp].
+      exists (negb b'); rewrite Hcmp; reflexivity.
+    - do 3 (destruct args; simpl in *; try congruence).
+      eapply val_compat_cmpfs_bool; eauto.
+    - do 3 (destruct args; simpl in *; try congruence).
+      apply option_map_some in Hcond.
+      destruct Hcond as (b & Hcmp & Hb); subst.
+      eapply val_compat_cmpfs_bool in Hcmp; eauto.
+      destruct Hcmp as [b' Hcmp].
+      exists (negb b'); rewrite Hcmp; reflexivity.
+    - do 2 (destruct args; simpl in *; try congruence).
+      eapply val_compat_maskzero_bool; eauto.
+    - do 2 (destruct args; simpl in *; try congruence).
+      apply option_map_some in Hcond.
+      destruct Hcond as (b & Hcmp & Hb); subst.
+      eapply val_compat_maskzero_bool in Hcmp; eauto.
+      destruct Hcmp as [b' Hcmp].
+      exists (negb b'); rewrite Hcmp; reflexivity.
+  Qed.
 
   Lemma val_compat_normalize v v' t :
     val_compat v v' ->
     val_compat (Val.normalize v t) (Val.normalize v' t).
   Proof.
     intro H; inv H; simpl; try constructor; destruct t; constructor.
+  Qed.
+
+  Lemma val_compat_subl v1 v1' v2 v2' :
+    Archi.ptr64 = false ->
+    val_compat v1 v1' ->
+    val_compat v2 v2' ->
+    val_compat (Val.subl v1 v2) (Val.subl v1' v2').
+  Proof.
+    intros Harchi H0 H1; inv H0; inv H1; simpl; try constructor.
+    rewrite Harchi; constructor.
   Qed.
   
   Lemma eval_operation_val_compat rs1 rs2 sp op args m1 m2 v v' :
@@ -737,38 +886,27 @@ Section TOLERANCE.
                  inv H0; inv H1;
                  pose proof (Hcompat p0) as Hp0; specialize (Hcompat p);
                  inv Hp0; inv Hcompat; constructor].
-    (* - do 3 (destruct args; simpl in *; try congruence). *)
-    (*   eapply val_compat_divs; eauto. *)
-    (* - do 3 (destruct args; simpl in *; try congruence). *)
-    (*   eapply val_compat_divu; eauto. *)
-    (* - do 3 (destruct args; simpl in *; try congruence). *)
-    (*   eapply val_compat_mods; eauto. *)
-    (* - do 3 (destruct args; simpl in *; try congruence). *)
-    (*   eapply val_compat_modu; eauto. *)
-    - admit.
     - do 2 (destruct args; simpl in *; try congruence).
       inv H0; inv H1; apply val_compat_shl_imm; auto.
-    - admit.
     - do 2 (destruct args; simpl in *; try congruence).
       inv H0; inv H1; apply val_compat_shr_imm; auto.
     - do 2 (destruct args; simpl in *; try congruence).
       eapply val_compat_shrx_imm; eauto.
-    - admit.
     - do 2 (destruct args; simpl in *; try congruence).
       inv H0; inv H1; apply val_compat_shru_imm; auto.
     - do 3 (destruct args; simpl in *; try congruence).
       inv H0; inv H1; apply val_compat_shru_dimm; auto.
     - eapply rs_compat_eval_addressing32; eauto.
-    - admit.
-    - admit.
+    - do 3 (destruct args; simpl in *; try congruence).
+      inv H0; inv H1.
+      apply val_compat_subl; auto.
+      apply is_unsafe_subl_archi_ptr64_false; assumption.
     - do 2 (destruct args; simpl in *; try congruence).
       inv H0; inv H1; apply val_compat_shll_imm; auto.
-    - admit.
     - do 2 (destruct args; simpl in *; try congruence).
       inv H0; inv H1; apply val_compat_shrl_imm; auto.
     - do 2 (destruct args; simpl in *; try congruence).
       eapply val_compat_shrxl_imm; eauto.
-    - admit.
     - do 2 (destruct args; simpl in *; try congruence).
       inv H0; inv H1; apply val_compat_shrlu_imm; auto.
     - eapply rs_compat_eval_addressing64; eauto.
@@ -783,27 +921,13 @@ Section TOLERANCE.
     - inv H0; inv H1.
       destruct (Op.eval_condition cond rs1 ## args m1) eqn:Hcond.
       + eapply rs_compat_eval_condition in Hcond; eauto.
-        destruct Hcond as [b' Hcond].
-        rewrite Hcond; simpl.
-        destruct b, b'; constructor.
+        * destruct Hcond as [b' Hcond].
+          rewrite Hcond; simpl.
+          destruct b, b'; constructor.
+        * intros Harchi HC; inv HC; apply Hop; constructor; assumption.
+        * intros Harchi HC; inv HC; apply Hop; constructor; assumption.
       + constructor.
-    - (* do 2 (destruct args; simpl in *; try congruence). *)
-      (* inv H0; inv H1. *)
-      (* destruct (Op.eval_condition c rs1 ## args m1) eqn:Hcond. *)
-      (* + eapply rs_compat_eval_condition in Hcond; eauto. *)
-      (*   destruct Hcond as [b' Hcond]. *)
-      (*   rewrite Hcond; simpl. *)
-      (*   destruct b, b'; apply val_compat_normalize; auto. *)
-        
-      (*   Val.normalize *)
-      (*     Val.select *)
-      
-      (* Val.of_optbool *)
-      admit.
-  Admitted.
-
-  (* New unsafe ops: Oshl Oshr Oshru Osubl Oshll Oshrl Oshrlu *)
-
+  Qed.
 
   (* Lemma eval_addressing_val_compat rs1 rs2 sp addr args a a' : *)
   (*   rs_compat rs1 rs2 -> *)

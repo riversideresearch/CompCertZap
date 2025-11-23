@@ -724,7 +724,7 @@ Proof.
     eapply match_Iop_safe with (pc := p)
                                (n1 := s.(st_nextnode))
                                (n2 := Pos.succ (s.(st_nextnode))); eauto.
-    { intro HC; inv HC; discriminate Hunsafe. }
+    { intro HC; destruct (is_unsafeb_spec o); auto; congruence. }
     { apply rm_l_map_rm. }
     + rewrite 2!PTree.gso; try lia.
       rewrite PTree.gss; reflexivity.

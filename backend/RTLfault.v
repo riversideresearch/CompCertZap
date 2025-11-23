@@ -47,6 +47,16 @@ Proof.
   apply val_compat_refl.
 Qed.
 
+(* Lemma idfg v1 v2 t : *)
+(*   Val.has_type v1 t -> *)
+(*   Val.has_type v2 t -> *)
+(*   val_compat v1 v2. *)
+(* Proof. *)
+(*   intros H0 H1. *)
+(*   destruct v1; destruct v2; destruct t; simpl in *; try constructor. *)
+(*   admit.  *)
+(*   unfold Val.has_type in H0. *)
+
 (* Technically we could/should allow faults (and not vote on) on most
    builtins, just not external function calls or votes themselves. *)
 Definition zap_allowed (i : instruction) : Prop :=
