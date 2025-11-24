@@ -42,10 +42,10 @@ Local Open Scope string_scope.
 
 Definition smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
-  | Tint => Some ("__builtin_smove_int", BI_smove_int)
-  | Tlong => Some ("__builtin_smove_long", BI_smove_long)
-  | Tsingle => Some ("__builtin_smove_single", BI_smove_single)
-  | Tfloat => Some ("__builtin_smove_float", BI_smove_float)
+  | Tint => Some ("__builtin_smove_int_green", BI_smove_int_green)
+  | Tlong => Some ("__builtin_smove_long_green", BI_smove_long_green)
+  | Tsingle => Some ("__builtin_smove_single_green", BI_smove_single_green)
+  | Tfloat => Some ("__builtin_smove_float_green", BI_smove_float_green)
   | _ => None
   end.
 

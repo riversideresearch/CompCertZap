@@ -1060,61 +1060,133 @@ Proof.
     destruct Hforall as [H1 H2]; auto.
 Qed.
 
-Inductive is_smove_builtin : external_function -> Prop :=
-| is_smove_int :
-  is_smove_builtin (EF_builtin "__builtin_smove_int" [Xint ---> Xint]%asttyp)
-| is_smove_long :
-  is_smove_builtin (EF_builtin "__builtin_smove_long" [Xlong ---> Xlong]%asttyp)
-| is_smove_single :
-  is_smove_builtin (EF_builtin "__builtin_smove_single" [Xsingle ---> Xsingle]%asttyp)
-| is_smove_float :
-  is_smove_builtin (EF_builtin "__builtin_smove_float" [Xfloat ---> Xfloat]%asttyp).
+Inductive is_green_smove_builtin : external_function -> Prop :=
+| is_green_smove_int :
+  is_green_smove_builtin (EF_builtin "__builtin_smove_int_green"
+                            [Xint ---> Xint]%asttyp)
+| is_green_smove_long :
+  is_green_smove_builtin (EF_builtin "__builtin_smove_long_green"
+                            [Xlong ---> Xlong]%asttyp)
+| is_green_smove_single :
+  is_green_smove_builtin (EF_builtin "__builtin_smove_single_green"
+                            [Xsingle ---> Xsingle]%asttyp)
+| is_green_smove_float :
+  is_green_smove_builtin (EF_builtin "__builtin_smove_float_green"
+                            [Xfloat ---> Xfloat]%asttyp).
 
-Definition is_smove_builtinb (ef : external_function) : bool :=
+Definition is_green_smove_builtinb (ef : external_function) : bool :=
   match ef with
   | EF_builtin name sg =>
-      (String.eqb name "__builtin_smove_int" &&
+      (String.eqb name "__builtin_smove_int_green" &&
          proj_sumbool (signature_eq sg
                          [Xint ---> Xint]%asttyp)) ||
-        (String.eqb name "__builtin_smove_long" &&
+        (String.eqb name "__builtin_smove_long_green" &&
            proj_sumbool (signature_eq sg
                            [Xlong ---> Xlong]%asttyp)) ||
-        (String.eqb name "__builtin_smove_single" &&
+        (String.eqb name "__builtin_smove_single_green" &&
            proj_sumbool (signature_eq sg
                            [Xsingle ---> Xsingle]%asttyp)) ||
-        (String.eqb name "__builtin_smove_float" &&
+        (String.eqb name "__builtin_smove_float_green" &&
            proj_sumbool (signature_eq sg
                            [Xfloat ---> Xfloat]%asttyp))
   | _ => false
   end.
 
-Lemma is_smove_builtinb_spec (ef : external_function) :
-  reflect (is_smove_builtin ef) (is_smove_builtinb ef).
+Lemma is_green_smove_builtinb_spec (ef : external_function) :
+  reflect (is_green_smove_builtin ef) (is_green_smove_builtinb ef).
 Proof.
   destruct ef; try solve [right; intro HC; inv HC].
   simpl.
-  destruct (String.eqb name "__builtin_smove_single") eqn:H0.
+  destruct (String.eqb name "__builtin_smove_single_green") eqn:H0.
   { rewrite String.eqb_eq in H0; subst.
     destruct (signature_eq sg
                 [Xsingle ---> Xsingle]%asttyp); subst.
     - left; constructor.
     - right; intro HC; inv HC; congruence. }
   rewrite eqb_neq in H0.
-  destruct (String.eqb name "__builtin_smove_int") eqn:H1.
+  destruct (String.eqb name "__builtin_smove_int_green") eqn:H1.
   { rewrite String.eqb_eq in H1; subst.
     destruct (signature_eq sg
                 [Xint ---> Xint]%asttyp); subst.
     - left; constructor.
     - right; intro HC; inv HC; congruence. }
   rewrite eqb_neq in H1.
-  destruct (String.eqb name "__builtin_smove_float") eqn:H2.
+  destruct (String.eqb name "__builtin_smove_float_green") eqn:H2.
   { rewrite String.eqb_eq in H2; subst.
     destruct (signature_eq sg
                 [Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
     - left; constructor.
     - right; intro HC; inv HC; congruence. }
   rewrite eqb_neq in H2.
-  destruct (String.eqb name "__builtin_smove_long") eqn:H3.
+  destruct (String.eqb name "__builtin_smove_long_green") eqn:H3.
+  { rewrite String.eqb_eq in H3; subst.
+    destruct (signature_eq sg
+                [Xlong ---> Xlong]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H3.
+  right; intro HC; inv HC; congruence.
+Qed.
+
+Inductive is_blue_smove_builtin : external_function -> Prop :=
+| is_blue_smove_int :
+  is_blue_smove_builtin (EF_builtin "__builtin_smove_int_blue"
+                            [Xint ---> Xint]%asttyp)
+| is_blue_smove_long :
+  is_blue_smove_builtin (EF_builtin "__builtin_smove_long_blue"
+                            [Xlong ---> Xlong]%asttyp)
+| is_blue_smove_single :
+  is_blue_smove_builtin (EF_builtin "__builtin_smove_single_blue"
+                            [Xsingle ---> Xsingle]%asttyp)
+| is_blue_smove_float :
+  is_blue_smove_builtin (EF_builtin "__builtin_smove_float_blue"
+                            [Xfloat ---> Xfloat]%asttyp).
+
+Definition is_blue_smove_builtinb (ef : external_function) : bool :=
+  match ef with
+  | EF_builtin name sg =>
+      (String.eqb name "__builtin_smove_int_blue" &&
+         proj_sumbool (signature_eq sg
+                         [Xint ---> Xint]%asttyp)) ||
+        (String.eqb name "__builtin_smove_long_blue" &&
+           proj_sumbool (signature_eq sg
+                           [Xlong ---> Xlong]%asttyp)) ||
+        (String.eqb name "__builtin_smove_single_blue" &&
+           proj_sumbool (signature_eq sg
+                           [Xsingle ---> Xsingle]%asttyp)) ||
+        (String.eqb name "__builtin_smove_float_blue" &&
+           proj_sumbool (signature_eq sg
+                           [Xfloat ---> Xfloat]%asttyp))
+  | _ => false
+  end.
+
+Lemma is_blue_smove_builtinb_spec (ef : external_function) :
+  reflect (is_blue_smove_builtin ef) (is_blue_smove_builtinb ef).
+Proof.
+  destruct ef; try solve [right; intro HC; inv HC].
+  simpl.
+  destruct (String.eqb name "__builtin_smove_single_blue") eqn:H0.
+  { rewrite String.eqb_eq in H0; subst.
+    destruct (signature_eq sg
+                [Xsingle ---> Xsingle]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H0.
+  destruct (String.eqb name "__builtin_smove_int_blue") eqn:H1.
+  { rewrite String.eqb_eq in H1; subst.
+    destruct (signature_eq sg
+                [Xint ---> Xint]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H1.
+  destruct (String.eqb name "__builtin_smove_float_blue") eqn:H2.
+  { rewrite String.eqb_eq in H2; subst.
+    destruct (signature_eq sg
+                [Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H2.
+  destruct (String.eqb name "__builtin_smove_long_blue") eqn:H3.
   { rewrite String.eqb_eq in H3; subst.
     destruct (signature_eq sg
                 [Xlong ---> Xlong]%asttyp); subst.
@@ -1192,8 +1264,12 @@ Proof.
   right; intro HC; inv HC; congruence.
 Qed.
   
-Lemma vote_not_smove (ef : external_function) :
-  is_vote_builtin ef -> ~ is_smove_builtin ef.
+Lemma vote_not_green_smove (ef : external_function) :
+  is_vote_builtin ef -> ~ is_green_smove_builtin ef.
+Proof. intro H; inv H; intro HC; inv HC. Qed.
+
+Lemma vote_not_blue_smove (ef : external_function) :
+  is_vote_builtin ef -> ~ is_blue_smove_builtin ef.
 Proof. intro H; inv H; intro HC; inv HC. Qed.
 
 Inductive is_vote_runtime : external_function -> Prop :=

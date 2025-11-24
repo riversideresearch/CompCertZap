@@ -145,16 +145,16 @@ Section wc.
       (forall r, fn = inl r -> is_white (col pc r)) ->
       Forall (fun arg => is_white (col pc arg)) args ->
       wc_instruction pc (Itailcall sig fn args)
-  | wc_Ibuiltin_smove_white : forall ef arg res succ,
-      is_smove_builtin ef ->
+  | wc_Ibuiltin_smove_green : forall ef arg res succ,
+      is_green_smove_builtin ef ->
       is_white (col pc arg) ->
       is_pink (col succ arg) ->
       is_green (col succ res) ->
       (forall r c, r <> arg -> r <> res ->
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Ibuiltin ef (BA arg :: nil) (BR res) succ)
-  | wc_Ibuiltin_smove_pink : forall ef arg res succ,
-      is_smove_builtin ef ->
+  | wc_Ibuiltin_smove_blue : forall ef arg res succ,
+      is_blue_smove_builtin ef ->
       is_pink (col pc arg) ->
       is_red (col succ arg) ->
       is_blue (col succ res) ->
@@ -171,7 +171,8 @@ Section wc.
               is_color (col pc r) c -> is_color (col succ r) c) ->
       wc_instruction pc (Ibuiltin ef (BA arg1 :: BA arg2 :: BA arg3 :: nil) (BR res) succ)
   | wc_Ibuiltin : forall ef bargs bres succ,
-      ~ is_smove_builtin ef ->
+      ~ is_green_smove_builtin ef ->
+      ~ is_blue_smove_builtin ef ->
       ~ is_vote_builtin ef ->
       Forall (builtin_arg_forall (fun r => is_white (col pc r))) bargs ->
       builtin_res_forall (fun r => is_white (col succ r)) bres ->

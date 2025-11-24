@@ -901,10 +901,10 @@ Section PRESERVATION.
     intro r; rewrite Hrs'; apply Hr''.
   Qed.
 
-  Lemma smove_step
+  Lemma green_smove_step
     ty src dst mov tstk sig params stacksize c entrypoint sp rs m pc succ :
     Val.has_type (rs # src) ty ->
-    smove ty src dst = Some mov ->
+    green_smove ty src dst = Some mov ->
     c ! pc = Some (mov succ) ->
     step tge
       (State tstk
@@ -923,7 +923,57 @@ Section PRESERVATION.
            sp succ (rs # dst <- (rs # src)) m).
   Proof.
     intros Hty Hmove Hpc.
-    unfold smove in Hmove.
+    unfold green_smove in Hmove.
+    assert (Heq: rs # dst <- (rs # src) = regmap_setres (BR dst) (rs # src) rs).
+    { reflexivity. }
+    rewrite Heq; clear Heq.
+    destruct ty; inv Hmove.
+    - eapply exec_Ibuiltin; eauto.
+      + repeat constructor.
+      + constructor; simpl.
+        unfold Val.has_type in Hty.
+        destruct (rs # src); try contradiction; auto;
+        rewrite Hty; reflexivity.
+    - eapply exec_Ibuiltin; eauto.
+      + repeat constructor.
+      + constructor.
+        unfold Val.has_type in Hty.
+        destruct (rs # src); try contradiction; auto.
+    - eapply exec_Ibuiltin; eauto.
+      + repeat constructor.
+      + constructor; simpl.
+        destruct (rs # src); auto; simpl in Hty; try contradiction;
+          try rewrite Hty; reflexivity.
+    - eapply exec_Ibuiltin; eauto.
+      + repeat constructor.
+      + constructor.
+        unfold Val.has_type in Hty.
+        destruct (rs # src); try contradiction; auto.
+  Qed.
+
+  Lemma blue_smove_step
+    ty src dst mov tstk sig params stacksize c entrypoint sp rs m pc succ :
+    Val.has_type (rs # src) ty ->
+    blue_smove ty src dst = Some mov ->
+    c ! pc = Some (mov succ) ->
+    step tge
+      (State tstk
+             {| fn_sig := sig
+             ; fn_params := params
+             ; fn_stacksize := stacksize
+             ; fn_code := c
+             ; fn_entrypoint := entrypoint |}
+             sp pc rs m) E0
+    (State tstk
+           {| fn_sig := sig
+           ; fn_params := params
+           ; fn_stacksize := stacksize
+           ; fn_code := c
+           ; fn_entrypoint := entrypoint |}
+           sp succ (rs # dst <- (rs # src)) m).
+  Proof.
+    intros Hty Hmove Hpc.
+    unfold blue_smove in Hmove.
     assert (Heq: rs # dst <- (rs # src) = regmap_setres (BR dst) (rs # src) rs).
     { reflexivity. }
     rewrite Heq; clear Heq.
@@ -972,13 +1022,13 @@ Section PRESERVATION.
   Proof.
     intros Hty Hmove; inv Hmove.
     eapply star_step.
-    { eapply smove_step.
+    { eapply green_smove_step.
       - apply Hty.
       - apply H.
       - eauto. }
     2: { reflexivity. }
     eapply star_step.
-    { eapply smove_step; eauto.
+    { eapply blue_smove_step; eauto.
       destruct (peq r1 r2); subst.
       - rewrite PMap.gss; auto.
       - rewrite PMap.gso; auto. }
@@ -1671,7 +1721,6 @@ Section PRESERVATION.
     { constructor. }
     constructor; auto.
     inv H1.
-    unfold smove in *.
     destruct (re r1) eqn:Hr1; inv H2; inv H3;
       eexists; eexists; split; eauto; constructor; simpl; auto.
   Qed.

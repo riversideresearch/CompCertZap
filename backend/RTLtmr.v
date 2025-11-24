@@ -41,18 +41,36 @@ Import ListNotations.
 
 Local Open Scope string_scope.
 
-Definition smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
+Definition green_smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
-  | Tint => Some ("__builtin_smove_int", BI_smove_int)
-  | Tlong => Some ("__builtin_smove_long", BI_smove_long)
-  | Tsingle => Some ("__builtin_smove_single", BI_smove_single)
-  | Tfloat => Some ("__builtin_smove_float", BI_smove_float)
+  | Tint => Some ("__builtin_smove_int_green", BI_smove_int_green)
+  | Tlong => Some ("__builtin_smove_long_green", BI_smove_long_green)
+  | Tsingle => Some ("__builtin_smove_single_green", BI_smove_single_green)
+  | Tfloat => Some ("__builtin_smove_float_green", BI_smove_float_green)
   | _ => None
   end.
 
-Definition smove (ty : typ) (src dst : reg)
+Definition blue_smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
+  match ty with
+  | Tint => Some ("__builtin_smove_int_blue", BI_smove_int_blue)
+  | Tlong => Some ("__builtin_smove_long_blue", BI_smove_long_blue)
+  | Tsingle => Some ("__builtin_smove_single_blue", BI_smove_single_blue)
+  | Tfloat => Some ("__builtin_smove_float_blue", BI_smove_float_blue)
+  | _ => None
+  end.
+
+Definition green_smove (ty : typ) (src dst : reg)
   : option (node -> instruction) :=
-  match smove_sig_of_typ ty with
+  match green_smove_sig_of_typ ty with
+  | None => None
+  | Some (nm, kind) =>
+      Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
+              [BA src] (BR dst))
+  end.
+
+Definition blue_smove (ty : typ) (src dst : reg)
+  : option (node -> instruction) :=
+  match blue_smove_sig_of_typ ty with
   | None => None
   | Some (nm, kind) =>
       Some (Ibuiltin (EF_builtin nm (replicate_builtin_sig kind))
@@ -120,7 +138,7 @@ Definition copy_to_shadows
   (rm : PMap.t (reg * reg)) (ty : typ) (r1 : reg) (pc : node) (succ : node)
   : mon unit :=
   let (r2, r3) := rm # r1 in
-  match (smove ty r1 r2, smove ty r1 r3) with
+  match (green_smove ty r1 r2, blue_smove ty r1 r3) with
   | (Some mov1, Some mov2) =>
       do n <- reserve_instr;
       do _ <- update_instr pc (mov1 n);

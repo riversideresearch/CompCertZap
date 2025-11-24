@@ -123,8 +123,8 @@ Inductive smoveR
   (c : code) (ty : typ) (src dst1 dst2 : reg) (pc succ : node): Prop :=
 | smove_1 :
   forall n mov1 mov2,
-    smove ty src dst1 = Some mov1 ->
-    smove ty src dst2 = Some mov2 ->
+    green_smove ty src dst1 = Some mov1 ->
+    blue_smove ty src dst2 = Some mov2 ->
     c ! pc = Some (mov1 n) ->
     c ! n = Some (mov2 succ) ->
     smoveR c ty src dst1 dst2 pc succ.
@@ -160,8 +160,8 @@ Proof.
   unfold RTLgen.bind in Hcopy.
   unfold error in Hcopy.
   simpl in *.
-  destruct (smove ty r1 r2) eqn:Hmov1; gen_contra.
-  destruct (smove ty r1 r3) eqn:Hmov2; gen_contra.
+  destruct (green_smove ty r1 r2) eqn:Hmov1; gen_contra.
+  destruct (blue_smove ty r1 r3) eqn:Hmov2; gen_contra.
   unfold update_instr in Hcopy.
   repeat egen_case.
   repeat lr_case.
@@ -777,8 +777,8 @@ Proof.
     destruct (rm # r) eqn:Hrmr.
     unfold RTLgen.bind in H0.
     unfold error in *.
-    destruct (smove (re r) r r0) eqn:Hmov1; gen_contra.
-    destruct (smove (re r) r r1) eqn:Hmov2; gen_contra.
+    destruct (green_smove (re r) r r0) eqn:Hmov1; gen_contra.
+    destruct (blue_smove (re r) r r1) eqn:Hmov2; gen_contra.
     repeat egen_case.
     unfold update_instr in *.
     repeat lr_case.

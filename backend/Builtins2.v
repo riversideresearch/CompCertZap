@@ -9,10 +9,14 @@ Local Open Scope asttyp_scope.
 (* Global Opaque ptr64. *)
 
 Inductive replicate_builtin : Type :=
-| BI_smove_int
-| BI_smove_long
-| BI_smove_single
-| BI_smove_float
+| BI_smove_int_green
+| BI_smove_long_green
+| BI_smove_single_green
+| BI_smove_float_green
+| BI_smove_int_blue
+| BI_smove_long_blue
+| BI_smove_single_blue
+| BI_smove_float_blue
 | BI_vote_int
 | BI_vote_long
 | BI_vote_single
@@ -30,10 +34,14 @@ Defined.
 Local Open Scope string_scope.
 
 Definition replicate_builtin_table : list (string * replicate_builtin) :=
-  [("__builtin_smove_int", BI_smove_int);
-   ("__builtin_smove_long", BI_smove_long);
-   ("__builtin_smove_single", BI_smove_single);
-   ("__builtin_smove_float", BI_smove_float);
+  [("__builtin_smove_int_green", BI_smove_int_green);
+   ("__builtin_smove_long_green", BI_smove_long_green);
+   ("__builtin_smove_single_green", BI_smove_single_green);
+   ("__builtin_smove_float_green", BI_smove_float_green);
+   ("__builtin_smove_int_blue", BI_smove_int_blue);
+   ("__builtin_smove_long_blue", BI_smove_long_blue);
+   ("__builtin_smove_single_blue", BI_smove_single_blue);
+   ("__builtin_smove_float_blue", BI_smove_float_blue);
    ("__builtin_vote_int", BI_vote_int);
    ("__builtin_vote_long", BI_vote_long);
    ("__builtin_vote_single", BI_vote_single);
@@ -45,13 +53,13 @@ Definition replicate_builtin_table : list (string * replicate_builtin) :=
 
 Definition replicate_builtin_sig (b: replicate_builtin) : signature :=
   match b with
-  | BI_smove_int =>
+  | BI_smove_int_green | BI_smove_int_blue =>
       [Xint ---> Xint]
-  | BI_smove_long =>
+  | BI_smove_long_green | BI_smove_long_blue =>
       [Xlong ---> Xlong]
-  | BI_smove_single =>
+  | BI_smove_single_green | BI_smove_single_blue =>
       [Xsingle ---> Xsingle]
-  | BI_smove_float =>
+  | BI_smove_float_green | BI_smove_float_blue =>
       [Xfloat ---> Xfloat]
   | BI_vote_int =>
       [Xint; Xint; Xint ---> Xint]
@@ -389,10 +397,14 @@ Definition replicate_builtin_sem {VT: vote_type} `{VoteSemantics VT}
   (b: replicate_builtin)
   : builtin_sem (sig_res (replicate_builtin_sig b)) :=
   match b with
-  | BI_smove_int => smove_int_sem
-  | BI_smove_long => smove_long_sem
-  | BI_smove_single => smove_single_sem
-  | BI_smove_float => smove_float_sem
+  | BI_smove_int_green => smove_int_sem
+  | BI_smove_long_green => smove_long_sem
+  | BI_smove_single_green => smove_single_sem
+  | BI_smove_float_green => smove_float_sem
+  | BI_smove_int_blue => smove_int_sem
+  | BI_smove_long_blue => smove_long_sem
+  | BI_smove_single_blue => smove_single_sem
+  | BI_smove_float_blue => smove_float_sem
   | BI_vote_int => (vote_type_sem VT).(vote_sem_int)
   | BI_vote_long => (vote_type_sem VT).(vote_sem_long)
   | BI_vote_single => (vote_type_sem VT).(vote_sem_single)

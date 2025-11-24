@@ -74,7 +74,7 @@ Proof.
       destruct (Builtins0.lookup_builtin _ _ _ _).
       { inv Hlookup. }
       simpl in *.
-      do 4 (destruct (string_dec name _ && signature_eq sg _);
+      do 8 (destruct (string_dec name _ && signature_eq sg _);
             simpl in *; try solve [inv Hlookup]).
       destruct (string_dec name _ && signature_eq sg _) eqn:Heq;
         simpl in *; try solve [inv Hlookup].
@@ -92,7 +92,7 @@ Proof.
       destruct (Builtins0.lookup_builtin _ _ _ _).
       { inv Hlookup. }
       simpl in *.
-      do 5 (destruct (string_dec name _ && signature_eq sg _);
+      do 9 (destruct (string_dec name _ && signature_eq sg _);
             simpl in *; try solve [inv Hlookup]).
       destruct (string_dec name _ && signature_eq sg _) eqn:Heq;
         simpl in *; try solve [inv Hlookup].
@@ -110,7 +110,7 @@ Proof.
       destruct (Builtins0.lookup_builtin _ _ _ _).
       { inv Hlookup. }
       simpl in *.
-      do 6 (destruct (string_dec name _ && signature_eq sg _);
+      do 10 (destruct (string_dec name _ && signature_eq sg _);
             simpl in *; try solve [inv Hlookup]).
       destruct (string_dec name _ && signature_eq sg _) eqn:Heq;
         simpl in *; try solve [inv Hlookup].
@@ -128,7 +128,7 @@ Proof.
       destruct (Builtins0.lookup_builtin _ _ _ _).
       { inv Hlookup. }
       simpl in *.
-      do 7 (destruct (string_dec name _ && signature_eq sg _);
+      do 11 (destruct (string_dec name _ && signature_eq sg _);
             simpl in *; try solve [inv Hlookup]).
       destruct (string_dec name _ && signature_eq sg _) eqn:Heq;
         simpl in *; try solve [inv Hlookup].
@@ -153,7 +153,7 @@ Proof.
       destruct (Builtins0.lookup_builtin _ _ _ _).
       { inv Hlookup. }
       simpl in *.
-      do 4 (destruct (string_dec name _ && signature_eq sg _);
+      do 8 (destruct (string_dec name _ && signature_eq sg _);
             simpl in *; try solve [inv Hlookup]).
       destruct (string_dec name _ && signature_eq sg _) eqn:Heq;
         simpl in *; try solve [inv Hlookup].
@@ -171,7 +171,7 @@ Proof.
       destruct (Builtins0.lookup_builtin _ _ _ _).
       { inv Hlookup. }
       simpl in *.
-      do 5 (destruct (string_dec name _ && signature_eq sg _);
+      do 9 (destruct (string_dec name _ && signature_eq sg _);
             simpl in *; try solve [inv Hlookup]).
       destruct (string_dec name _ && signature_eq sg _) eqn:Heq;
         simpl in *; try solve [inv Hlookup].
@@ -189,7 +189,7 @@ Proof.
       destruct (Builtins0.lookup_builtin _ _ _ _).
       { inv Hlookup. }
       simpl in *.
-      do 6 (destruct (string_dec name _ && signature_eq sg _);
+      do 10 (destruct (string_dec name _ && signature_eq sg _);
             simpl in *; try solve [inv Hlookup]).
       destruct (string_dec name _ && signature_eq sg _) eqn:Heq;
         simpl in *; try solve [inv Hlookup].
@@ -207,7 +207,7 @@ Proof.
       destruct (Builtins0.lookup_builtin _ _ _ _).
       { inv Hlookup. }
       simpl in *.
-      do 7 (destruct (string_dec name _ && signature_eq sg _);
+      do 11 (destruct (string_dec name _ && signature_eq sg _);
             simpl in *; try solve [inv Hlookup]).
       destruct (string_dec name _ && signature_eq sg _) eqn:Heq;
         simpl in *; try solve [inv Hlookup].
