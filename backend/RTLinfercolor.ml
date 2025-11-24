@@ -17,6 +17,18 @@ exception ColorError of string
 
 module Intmap = Map.Make(Int)
 
+(* Tail-recursive list append *)
+let[@tail_mod_cons] rec app (l1 : 'a list) (l2 : 'a list) : 'a list =
+  match l1 with
+  | [] -> l2
+  | x :: xs -> x :: (app [@tailcall]) xs l2
+
+(* Tail-recursive list map *)
+let[@tail_mod_cons] rec map (f : 'a -> 'b) (l : 'a list) : 'b list =
+  match l with
+  | [] -> []
+  | x :: xs -> f x :: (map [@tailcall]) f xs
+
 let rec int_of_positive = function
   | Coq_xI p -> 2 * int_of_positive p + 1
   | Coq_xO p -> 2 * int_of_positive p
@@ -57,31 +69,31 @@ type instruction' =
 let convert_instr : instruction -> instruction' = function
   | Inop succ -> Inop' (int_of_positive succ)
   | Iop (op, args, res, succ) ->
-     Iop' (op, List.map int_of_positive args, int_of_positive res,
+     Iop' (op, map int_of_positive args, int_of_positive res,
            int_of_positive succ)
   | Iload (chunk, addr, args, res, succ) ->
-     Iload' (chunk, addr, List.map int_of_positive args,
+     Iload' (chunk, addr, map int_of_positive args,
              int_of_positive res, int_of_positive succ)
   | Istore (chunk, addr, args, src, succ) ->
-     Istore' (chunk, addr, List.map int_of_positive args,
+     Istore' (chunk, addr, map int_of_positive args,
               int_of_positive src, int_of_positive succ)
   | Icall (sg, fn, args, res, succ) ->
      Icall' (sg, (match fn with
                   | Coq_inl r -> Coq_inl (int_of_positive r)
-                  | Coq_inr nm -> Coq_inr nm), List.map int_of_positive args,
+                  | Coq_inr nm -> Coq_inr nm), map int_of_positive args,
              int_of_positive res, int_of_positive succ)
   | Itailcall (sg, fn, args) ->
      Itailcall' (sg, (match fn with
                       | Coq_inl r -> Coq_inl (int_of_positive r)
-                      | Coq_inr nm -> Coq_inr nm), List.map int_of_positive args)
+                      | Coq_inr nm -> Coq_inr nm), map int_of_positive args)
   | Ibuiltin (ef, bargs, bres, succ) ->
-     Ibuiltin' (ef, List.map (map_builtin_arg int_of_positive) bargs,
+     Ibuiltin' (ef, map (map_builtin_arg int_of_positive) bargs,
                 map_builtin_res int_of_positive bres, int_of_positive succ)
   | Icond (cond, args, ifso, ifnot) ->
-     Icond' (cond, List.map int_of_positive args,
+     Icond' (cond, map int_of_positive args,
              int_of_positive ifso, int_of_positive ifnot)
   | Ijumptable (arg, succs) ->
-     Ijumptable' (int_of_positive arg, List.map int_of_positive succs)
+     Ijumptable' (int_of_positive arg, map int_of_positive succs)
   | Ireturn ro -> Ireturn' (match ro with
                             | Some r -> Some (int_of_positive r)
                             | None -> None)
@@ -122,15 +134,16 @@ let regs_of_function (f : coq_function) : Regset.t =
 let counter = ref 0
 let fresh () = let n = !counter in counter := !counter + 1; n
 let init_cols (f : coq_function) : color' Intmap.t Intmap.t =
+  let all_regs = regs_of_function f in
   List.fold_left (fun acc (n, instr) ->
       Intmap.add (int_of_positive n) (
           Regset.fold (fun r acc ->
               Intmap.add (int_of_positive r) (Cvar (fresh ())) acc)
-            (regs_of_function f) Intmap.empty
+            all_regs Intmap.empty
         ) acc
     ) Intmap.empty (PTree.elements f.fn_code)
 
-let nodes_in_code (c : code) : node list = List.map fst (PTree.elements c)
+let nodes_in_code (c : code) : node list = map fst (PTree.elements c)
 
 let print_col (col : color' Intmap.t) : unit =
   List.iter (fun (r, c) ->
@@ -141,7 +154,7 @@ let print_col (col : color' Intmap.t) : unit =
 
 let nodes_in_order (f : coq_function) : int list =
   List.sort (fun x y -> if x < y then 1 else 0) @@
-    List.map int_of_positive @@ nodes_in_code f.fn_code
+    map int_of_positive @@ nodes_in_code f.fn_code
 
 let print_cols (f : coq_function) (cols : color' Intmap.t Intmap.t) : unit =
   List.iter (fun n -> print_string @@ string_of_int n ^ ": ";
@@ -174,12 +187,6 @@ let ptree_of_intmap (m : 'a Intmap.t) : 'a PTree.t =
 type constraints = (color' * color') list
 type tysubst = (color' * int) list
 
-(* Tail-recursive list append *)
-let[@tail_mod_cons] rec app (l1 : 'a list) (l2 : 'a list) : 'a list =
-  match l1 with
-  | [] -> l2
-  | x :: xs -> x :: (app [@tailcall]) xs l2
-
 let instr_constraints
       (cols : color' Intmap.t Intmap.t)
       (all_regs : int list)
@@ -196,7 +203,7 @@ let instr_constraints
   | Iop' (op, args, res, succ) ->
      let succ_col = Intmap.find succ cols in
      if is_protectedb op then
-       let args_white = List.map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
+       let args_white = map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
        let res_white = (Intmap.find res succ_col, Ccolor White) in
        let rest_preserved = List.fold_left (fun acc r ->
                                 if r = res || List.mem r args then
@@ -208,7 +215,7 @@ let instr_constraints
      else
        let res_color = Intmap.find res succ_col in
        let args_res =
-         List.map (fun arg -> (Intmap.find arg col, res_color)) args in
+         map (fun arg -> (Intmap.find arg col, res_color)) args in
        let rest_preserved =
          List.fold_left (fun acc r ->
              if r = res then
@@ -219,7 +226,7 @@ let instr_constraints
        app args_res rest_preserved
   | Iload' (_, _, args, res, succ) ->
      let succ_col = Intmap.find succ cols in
-     let args_white = List.map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
+     let args_white = map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
      let res_white = (Intmap.find res succ_col, Ccolor White) in
      let rest_preserved = List.fold_left (fun acc r ->
                               if r = res || List.mem r args then
@@ -231,7 +238,7 @@ let instr_constraints
   | Istore' (_, _, args, src, succ) ->
      let succ_col = Intmap.find succ cols in
      let src_white = (Intmap.find src col, Ccolor White) in
-     let args_white = List.map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
+     let args_white = map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
      let rest_preserved = List.fold_left (fun acc r ->
                               if r = src || List.mem r args then
                                 acc
@@ -241,7 +248,7 @@ let instr_constraints
      src_white :: app args_white rest_preserved
   | Icall' (_, fn, args, res, succ) ->
      let succ_col = Intmap.find succ cols in
-     let args_white = List.map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
+     let args_white = map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
      let res_white = (Intmap.find res succ_col, Ccolor White) in
      let fn_white = match fn with
        | Coq_inl r -> [(Intmap.find r col, Ccolor White)]
@@ -257,7 +264,7 @@ let instr_constraints
                             ) [] all_regs in
      res_white :: app fn_white (app args_white rest_preserved)
   | Itailcall' (_, fn, args) ->
-     let args_white = List.map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
+     let args_white = map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
      let fn_white = match fn with
        | Coq_inl r -> [(Intmap.find r col, Ccolor White)]
        | Coq_inr _ -> [] in
@@ -313,10 +320,10 @@ let instr_constraints
      else
        let arg_regs = List.concat_map regs_of_builtin_arg bargs in
        let res_regs = regs_of_builtin_res bres in
-       let args_white = List.map (fun arg ->
+       let args_white = map (fun arg ->
                             (Intmap.find arg col, Ccolor White)
                           ) arg_regs in
-       let res_white = List.map (fun res ->
+       let res_white = map (fun res ->
                            (Intmap.find res succ_col, Ccolor White)
                          ) res_regs in
        let rest_preserved =
@@ -330,7 +337,7 @@ let instr_constraints
   | Icond' (_, args, ifso, ifnot) ->
      let ifso_col = Intmap.find ifso cols in
      let ifnot_col = Intmap.find ifnot cols in
-     let args_white = List.map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
+     let args_white = map (fun arg -> (Intmap.find arg col, Ccolor White)) args in
      let rest_preserved = List.fold_left (fun acc r ->
                               if List.mem r args then
                                 acc
@@ -347,7 +354,7 @@ let instr_constraints
            if r = arg then
              acc
            else
-             app (List.map (fun succ ->
+             app (map (fun succ ->
                       let succ_col = Intmap.find succ cols in
                       (Intmap.find r col, Intmap.find r succ_col)
                     ) succs) acc
@@ -361,12 +368,12 @@ let instr_constraints
 let gather_constraints
       (f : coq_function) (cols : color' Intmap.t Intmap.t)
     : constraints =
-  let param_constrs = List.map (fun param ->
+  let param_constrs = map (fun param ->
                           (Intmap.find (int_of_positive param)
                              (Intmap.find (int_of_positive f.fn_entrypoint) cols),
                            Ccolor White)
                         ) f.fn_params in
-  let all_regs = List.map int_of_positive @@ Regset.elements @@ regs_of_function f in
+  let all_regs = map int_of_positive @@ Regset.elements @@ regs_of_function f in
   let code_constrs =
     PTree.fold (fun acc n instr ->
         let constrs = instr_constraints cols all_regs (int_of_positive n) @@
@@ -387,9 +394,8 @@ let subst_color' (s : color') (t : int) : color' -> color' = function
 let subst_constr (s : color') (t : int) ((c1, c2) : color' * color') : color' * color' =
   (subst_color' s t c1, subst_color' s t c2)
 
-(* TODO: List.map apparently is not tail recursive. We need it to be. *)
 let subst_constraints (s : color') (t : int) (constrs : constraints) : constraints =
-  List.map (subst_constr s t) constrs
+  map (subst_constr s t) constrs
 
 let rec unify : constraints -> tysubst option = function
   | [] -> Some []
