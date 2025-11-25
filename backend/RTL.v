@@ -901,7 +901,7 @@ Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
    by the C standard.
 
    Also TODO: this might need to go into backend specific Op.v
-   file. And should it be called something else? 'is_protected'?
+   file.
  *)
 Inductive is_protected : operation -> Prop :=
 (* Because division by zero causes immediate UB (see [Val.divs] in
