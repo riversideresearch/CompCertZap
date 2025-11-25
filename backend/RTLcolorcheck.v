@@ -268,7 +268,7 @@ Section color_checker.
         destruct_andb Hr Hargs.
         rewrite forallb_forall in Hargs.
         rewrite PTree_Properties.for_all_correct in Hpres.
-        apply wc_Iop_safe; auto.
+        apply wc_Iop_unprotected; auto.
         * apply is_basicb'_sound; auto.
         * apply Forall_forall; intros x Hin.
           apply Hargs in Hin.

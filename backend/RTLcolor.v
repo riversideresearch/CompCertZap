@@ -109,7 +109,7 @@ Section wc.
   | wc_Inop : forall succ,
       (forall r c, col pc r = Some c -> col succ r = Some c) ->
       wc_instruction pc (Inop succ)
-  | wc_Iop_safe : forall op args res succ,
+  | wc_Iop_unprotected : forall op args res succ,
       ~ is_protected op ->
       is_basic' (col succ res) ->
       Forall (fun arg => col pc arg = col succ res) args ->

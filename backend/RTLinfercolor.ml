@@ -175,11 +175,11 @@ let transfer (instr : instruction')
   | Iop' (op, args, res, _) ->
      if is_protectedb op then
        Array.iteri (fun i co ->
-           if_some co @@ fun c ->
-              if i = res then
-                Array.set dst i (Some White)
-              else if not @@ List.mem i args then
-                Array.set dst i (Some c)
+           if i = res then
+             Array.set dst i (Some White)
+           else if not @@ List.mem i args then
+             if_some co @@ fun c ->
+               Array.set dst i (Some c)
          ) src
      else begin
          (* Don't worry about the 'is_basic' constraint here. The color
@@ -191,20 +191,32 @@ let transfer (instr : instruction')
             match Array.get src arg with
             | Some args_c ->
                Array.iteri (fun i co ->
-                   if_some co @@ fun c ->
-                     Array.set dst i (if i = res then Some args_c else Some c)
+                   if i = res then
+                     Array.set dst i (Some args_c)
+                   else
+                     if_some co @@ fun c ->
+                       Array.set dst i (Some c)
                  ) src
-            | None -> ()
+            | None ->
+               Array.iteri (fun i co ->
+                   if i <> res then
+                     if_some co @@ fun c ->
+                       Array.set dst i (Some c)
+                 ) src
            end
-         | _ -> ()
+         | _ -> Array.iteri (fun i co ->
+                    if i <> res then
+                      if_some co @@ fun c ->
+                                    Array.set dst i (Some c)
+                  ) src
        end
   | Iload' (_, _, args, res, _) ->
      Array.iteri (fun i co ->
-         if_some co @@ fun c ->
          if i = res then
            Array.set dst i (Some White)
          else if not @@ List.mem i args then
-           Array.set dst i (Some c)
+           if_some co @@ fun c ->
+             Array.set dst i (Some c)
        ) src
   | Istore' (_, _, args, rdst, _) ->
      Array.iteri (fun i co ->
@@ -216,19 +228,19 @@ let transfer (instr : instruction')
       match fn with
       | Coq_inl r ->
          Array.iteri (fun i co ->
-             if_some co @@ fun c ->
              if i = res then
                Array.set dst i (Some White)
              else if i <> r && not @@ List.mem i args then
-               Array.set dst i (Some c)
+               if_some co @@ fun c ->
+                 Array.set dst i (Some c)
            ) src
       | Coq_inr _ ->
          Array.iteri (fun i co ->
-             if_some co @@ fun c ->
              if i = res then
                Array.set dst i (Some White)
              else if not @@ List.mem i args then
-               Array.set dst i (Some c)
+               if_some co @@ fun c ->
+                 Array.set dst i (Some c)
            ) src
     end
   | Itailcall' (_, fn, args) -> begin
@@ -253,27 +265,42 @@ let transfer (instr : instruction')
            match Array.get src arg with
            | Some White ->
               Array.iteri (fun i co ->
-                  if_some co @@ fun c ->
-                  Array.set dst i @@ Some (
-                    if i = arg then Pink else if i = res then Green else c)
+                  if i = arg then
+                    Array.set dst i (Some Pink)
+                  else if i = res then
+                    Array.set dst i (Some Green)
+                  else
+                    if_some co @@ fun c ->
+                      Array.set dst i (Some c)
                 ) src
            | Some Pink ->
               Array.iteri (fun i co ->
-                  if_some co @@ fun c ->
-                  Array.set dst i @@ Some(
-                    if i = arg then Red else if i = res then Blue else c)
+                  if i = arg then
+                    Array.set dst i (Some Red)
+                  else if i = res then
+                    Array.set dst i (Some Blue)
+                  else
+                    if_some co @@ fun c ->
+                      Array.set dst i (Some c)
                 ) src
            | Some _ -> raise (ColorError "smove arg not White or Pink") 
-           | None -> ()
+           | None ->
+              Array.iteri (fun i co ->
+                  if i <> arg && i <> res then
+                    if_some co @@ fun c ->
+                      Array.set dst i (Some c)
+                ) src
          end
        | _, _ -> raise (ColorError "invalid argument(s) or res of smove builtin")
      else if is_vote_builtinb ef then
        match bargs, bres with
        | [BA arg1; BA arg2; BA arg3], BR res ->
           Array.iteri (fun i co ->
-              if_some co @@ fun c ->
-              Array.set dst i @@ Some (
-                if i = res then White else c)
+              if i = res then
+                Array.set dst i (Some White)
+              else
+                if_some co @@ fun c ->
+                  Array.set dst i (Some c)
             ) src
        | _, _ -> raise (ColorError "invalid argument(s) or res of vote builtin")
      else
@@ -501,8 +528,7 @@ let init_cols (f : coq_function) : color option Array.t Array.t =
               raise (ColorError "Invalid arguments to vote builtin")
          else
            let regs = List.concat_map regs_of_builtin_arg bargs in
-           List.iter (fun r -> Array.set col r (Some White)) regs;
-           Array.set col res (Some White)
+           List.iter (fun r -> Array.set col r (Some White)) regs
       | Icond' (_, args, _, _) ->
          List.iter (fun arg -> Array.set col arg (Some White)) args
       | Ijumptable' (arg, _) ->
@@ -553,7 +579,7 @@ let infer_coloring (f : coq_function) : (node -> color PTree.t) option =
   (*                            PTree.get (positive_of_int n) f.fn_code)) @@ *)
   (*     nodes_in_order f in *)
   (* let nodes_instrs_rev = List.rev nodes_instrs in *)
-  List.iter (fun n -> print_endline @@ string_of_int n) @@ nodes_in_order f;
+  (* List.iter (fun n -> print_endline @@ string_of_int n) @@ nodes_in_order f; *)
   let code = List.map (fun n ->
                  (n, convert_instr @@ Option.get @@
                        PTree.get (convert_int n) f.fn_code)
@@ -565,16 +591,16 @@ let infer_coloring (f : coq_function) : (node -> color PTree.t) option =
   (* print_newline (); *)
   let rec go (cols : color option Array.t Array.t) : color option Array.t Array.t =
     let new_cols = copy cols in
-    print_cols new_cols; print_newline ();
-    print_endline "update1";
-    update code new_cols;
-    print_cols new_cols; print_newline ();
-    print_endline "update2";
-    update2 all_regs code_rev new_cols;
-    print_cols new_cols; print_newline ();
-    print_endline "update3";
-    update3 code_rev new_cols;
-    print_cols new_cols; print_newline ();
+    (* print_cols new_cols; print_newline (); *)
+    (* print_endline "update1"; *)
+    update code_rev new_cols;
+    (* print_cols new_cols; print_newline (); *)
+    (* print_endline "update2"; *)
+    update2 all_regs code new_cols;
+    (* print_cols new_cols; print_newline (); *)
+    (* print_endline "update3"; *)
+    update3 code new_cols;
+    (* print_cols new_cols; print_newline (); *)
     if new_cols = cols then new_cols else go new_cols
   in
   let start_time = Unix.gettimeofday () in
