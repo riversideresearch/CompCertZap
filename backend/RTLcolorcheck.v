@@ -75,48 +75,6 @@ Parameter infer_coloring : function -> option (node -> PTree.t color).
 Section color_checker.
   Variable col : node -> PTree.t color.
 
-  (* Definition assert (b : bool) (err_msg : string) : res unit := *)
-  (*   if b then OK tt else Error (msg err_msg). *)
-
-  (* Definition check_col_instr (pc : node) (instr : instruction) : res unit := *)
-  (*   match instr with *)
-  (*   | Inop succ => *)
-  (*       assert (PTree_Properties.for_all (col pc) (fun r c => is_colorb ((col succ) ! r) c)) *)
-  (*         "" *)
-  (*   | Iop op args res succ => *)
-  (*       if is_protectedb op then *)
-  (*         bind (assert (forallb (fun arg => is_whiteb ((col pc) ! arg) && *)
-  (*                                          is_redb ((col succ) ! arg)) args) *)
-  (*                 "") *)
-  (*           (fun _ => bind (assert (PTree_Properties.for_all (col pc) *)
-  (*                                  (fun r c => inb r args || *)
-  (*                                             Pos.eqb r res || *)
-  (*                                               is_colorb ((col succ) ! r) c)) *)
-  (*                          "") *)
-  (*                    (fun _ => assert (is_whiteb ((col succ) ! res)) *)
-  (*                             "")) *)
-  (*       else *)
-  (*         bind (assert (is_basicb' ((col pc) ! res)) "") *)
-  (*           (fun _ => bind (assert (forallb (fun arg => (eqb' (col pc) ! arg) *)
-  (*                                                   ((col succ) ! res)) args) *)
-  (*                          "") *)
-  (*                    (fun _ => assert (PTree_Properties.for_all (col pc) *)
-  (*                                     (fun r c => is_colorb ((col succ) ! r) c)) *)
-  (*                             "")) *)
-  (*   | Iload chunk addr args res succ => *)
-  (*       bind (assert (forallb (fun arg => is_whiteb ((col pc) ! arg) && *)
-  (*                                        is_redb ((col succ) ! arg)) args) *)
-  (*               "") *)
-  (*         (fun _ => bind (assert (is_whiteb ((col succ) ! res)) "") *)
-  (*                  (fun _ => assert (PTree_Properties.for_all (col pc) *)
-  (*                                   (fun r c => inb r args || *)
-  (*                                              Pos.eqb r res || *)
-  (*                                                is_colorb ((col succ) ! r) c)) *)
-  (*                           "")) *)
-  (*   | _ => *)
-  (*       assert false "TODO" *)
-  (*   end. *)
-
   Definition check_col_instr (pc : node) (instr : instruction) : bool :=
     match instr with
     | Inop succ =>
@@ -224,7 +182,7 @@ Section color_checker.
         | None => true
         end
     end.
-  
+
   Definition check_col_function (f : function) : bool :=
     forallb (fun param => is_colorb ((col f.(fn_entrypoint)) ! param) White) f.(fn_params) &&
       PTree_Properties.for_all f.(fn_code) (fun pc instr => check_col_instr pc instr).
@@ -453,7 +411,6 @@ Section color_checker.
   (* (* Maybe not necessary but should be true anyway. *) *)
   (* Lemma check_col_function_complete (f : function) : *)
   (*   wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true. *)
-  (* Admitted. *)
 
   (* Theorem check_col_function_spec (f : function) : *)
   (*   reflect (wc_function (fun pc r => (col pc) ! r) f) (check_col_function f). *)

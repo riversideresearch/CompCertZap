@@ -277,12 +277,6 @@ Proof.
   eapply transf_c_program_to_rtl_correct; eauto.
 Qed.
 
-(* Lemma compiled_rtl_weak_agreement p tp : *)
-(*   transf_c_program_to_rtl p = OK tp -> *)
-(*   rtl_weak_agreement' tp. *)
-(* Proof. *)
-(* Admitted. *)
-
 Lemma apply_partial_factor {A B : Type} (f : res A) (g : A -> res B) x :
   f @@@ (fun y => g y) = OK x -> exists z, f = OK z /\ g z = OK x.
 Proof.
@@ -298,15 +292,6 @@ Definition transf_c_program_to_rtl' (p: Csyntax.program)
   OK p
   @@@ time "Clight generation" SimplExpr.transl_program
   @@@ transf_clight_program_to_rtl.
-
-(* Lemma idfg p tp : *)
-(*   transf_c_program_to_rtl p = OK tp -> *)
-(*   exists p', *)
-(*     transf_c_program_to_rtl' p = OK p' /\ *)
-(*       transf_rtl_program_to_rtl' p' = OK tp. *)
-(* Proof. *)
-(*   intro H; apply apply_partial_factor in H; auto. *)
-(* Qed. *)
 
 Lemma transf_c_to_rtl_match_prog p tp :
   OK p @@@ SimplExpr.transl_program @@@ transf_clight_program = OK tp ->

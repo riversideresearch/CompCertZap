@@ -15,20 +15,6 @@ Require Import
 
 Import ListNotations.
 
-(* Section WEAK_AGREEMENT. *)
-(*   Context {F V : Type}. *)
-(*   Variable sem : forall VT : vote_type, VoteSemantics VT -> AST.program F V -> semantics. *)
-(*   Variable p : AST.program F V. *)
-
-(*   Definition sem2 := sem Two (VoteSemantics_Two) p. *)
-(*   Definition sem3 := sem Three (VoteSemantics_Three) p. *)
-
-(*   Definition weak_agreement := *)
-(*     forall beh, *)
-(*       program_behaves sem2 beh -> *)
-(*       program_behaves sem3 beh. *)
-(* End WEAK_AGREEMENT. *)
-
 Section ASM_WEAK_AGREEMENT.
   Variable p : Asm.program.
 
@@ -39,15 +25,6 @@ Section ASM_WEAK_AGREEMENT.
     forall beh,
       program_behaves asm_sem2 beh ->
       program_behaves asm_sem3 beh.
-
-  (* Definition asm_weak_agreement' := *)
-  (*   forall beh, *)
-  (*     program_behaves asm_sem3 beh -> *)
-  (*     program_behaves asm_sem2 beh. *)
-
-  (* Definition asm_weak_agreement := weak_agreement (@Asm.semantics). *)
-
-  (* Definition asm_weak_agreement' := backward_simulation asm_sem2 asm_sem3. *)
 
   Definition asm_weak_agreement' :=
     forall beh3, program_behaves asm_sem3 beh3 ->
@@ -96,7 +73,7 @@ Section AGREEMENT_PRESERVATION.
     - eapply forward_simulation_same_safe_behavior; eauto.
     - intros beh' Hbeh'; eauto.
   Qed.
-  
+
   Theorem forward_simulation_preserves_weak_agreement' :
     (forall beh, program_behaves (rtl_sem2 p) beh -> not_wrong beh) ->
     forward_simulation (rtl_sem2 p) (asm_sem2 tp) ->
@@ -118,5 +95,5 @@ Section AGREEMENT_PRESERVATION.
     2: { eapply behavior_improves_trans; eauto. }
     eapply forward_simulation_same_safe_behavior; eauto.
   Qed.
-  
+
 End AGREEMENT_PRESERVATION.

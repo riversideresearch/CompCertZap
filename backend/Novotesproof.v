@@ -227,11 +227,6 @@ Section IMPLIES_AGREEMENT.
 Variable p : program.
 
 Hypothesis (Hnovote : no_votes p).
-  
-(* Lemma no_votes_weak_agreement : *)
-(*   no_votes p -> *)
-(*   rtl_weak_agreement p. *)
-(* Admitted. *)
 
 Inductive stackframe_invariant : stackframe -> Prop :=
 | stackframe_invariant_Stackframe : forall res f sp pc rs,
