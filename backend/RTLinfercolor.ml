@@ -324,8 +324,9 @@ let update2
               match instr with
               (* For safe Iops, if successor assigns a color to the
                  result then propagate that to the arguments. *)
-              | Iop' (op, args, res, _) when not (is_protectedb op) -> begin
-                  match Intmap.find_opt res col with
+              | Iop' (op, args, res, succ) when not (is_protectedb op) -> begin
+                  let succ_col = Intmap.find succ cols in
+                  match Intmap.find_opt res succ_col with
                   | Some c -> begin
                       let arg_cols =
                         List.fold_left (fun acc3 arg ->
