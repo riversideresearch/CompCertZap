@@ -195,12 +195,12 @@ Section TOLERANCE.
 
   Lemma maybe_zap_preserves_match_states b s1 stk f sp pc rs m s' s'' b' s1' t :
     match_states b s1 {| fs_state := State stk f sp pc rs m; fault := b |} ->
-    maybe_zap f pc s' b s'' b' ->
     Step (@RTL.semantics Three VoteSemantics_Three prog) s1 t s1' ->
     match_states b s1' {| fs_state := s'; fault := b |} ->
+    maybe_zap f pc s' b s'' b' ->
     match_states b' s1' {| fs_state := s''; fault := b' |}.
   Proof.
-    intros Hmatch Hzap Hstep Hmatch'.
+    intros Hmatch Hstep Hmatch' Hzap.
     inv Hzap; auto.
     inv Hmatch'.
     econstructor; eauto.
@@ -1065,6 +1065,7 @@ Section TOLERANCE.
     - destruct (Val.has_type_dec _ _); simpl; try congruence; constructor.
   Qed.
 
+  (* TODO: slow *)
   Lemma external_call_smove_E0 {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
     ef vs m t v m' :
     is_smove_builtin ef ->
