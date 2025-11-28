@@ -7,7 +7,8 @@ open Registers
 open RTL
 open RTLcolor
 
-(* Union-find version, with arrays *)
+(* Union-find version, with liveness bounded quantification and sparse
+   colorings (hash tables). *)
 
 (* This file provides an implementation of the color inference oracle
    declared in Colorcheck.v with the following type: *)
@@ -181,23 +182,21 @@ let list_max l = List.fold_left max 0 l
 
 let counter = ref 0
 let fresh () = let n = !counter in counter := !counter + 1; n
-let init_cols (f : coq_function) : uf_node Array.t Array.t =
+let init_cols (f : coq_function) : (int, uf_node) Hashtbl.t Array.t =
   let num_instrs = List.length (PTree.elements f.fn_code) in
-  let num_regs = (list_max @@ List.map convert_positive @@
-                    Regset.elements @@ regs_of_function f) + 1 in
+  (* let num_regs = (list_max @@ List.map convert_positive @@ *)
+  (*                   Regset.elements @@ regs_of_function f) + 1 in *)
   (* print_endline @@ "num_instrs = " ^ string_of_int num_instrs; *)
   (* print_endline @@ "num_regs = " ^ string_of_int num_regs; *)
-  Array.init num_instrs
-    (fun _ -> Array.init num_regs
-                (fun _ -> make ()))
+  Array.init num_instrs (fun _ -> Hashtbl.create 100)
 
-let print_col (col : uf_node Array.t) : unit =
-  Array.iteri (fun r c ->
+let print_col (col : (int, uf_node) Hashtbl.t) : unit =
+  Hashtbl.iter (fun r c ->
       print_string @@ "x" ^ string_of_int r ^ "=" ^ string_of_uf_node c ^ ", "
     ) col;
   print_newline ()
 
-let print_cols (f : coq_function) (cols : uf_node Array.t Array.t) : unit =
+let print_cols (f : coq_function) (cols : (int, uf_node) Hashtbl.t Array.t) : unit =
   Array.iteri (fun n col ->
       print_string @@ string_of_int n ^ ": ";
       print_col col
@@ -215,9 +214,20 @@ let ptree_of_intmap (m : 'a Array.t) : 'a PTree.t =
     PTree.Empty
     (Array.mapi (fun i a -> (i, a)) m)
 
+let get (col : (int, uf_node) Hashtbl.t) (r : int) : uf_node =
+  match Hashtbl.find_opt col r with
+  | Some n -> n
+  | None -> let n = make () in Hashtbl.add col r n; n
+
+(* let union_colors *)
+(*       (col1 : (int, uf_node) Hashtbl.t) (r1 : int) *)
+(*       (col2 : (int, uf_node) Hashtbl.t) (r2 : int) *)
+(*     : unit = *)
+(*   union (get col1 r1) (get col2 r2) *)
+
 let instr_constraints
-      (cols : uf_node Array.t Array.t)
-      (all_regs : int list)
+      (cols : (int, uf_node) Hashtbl.t Array.t)
+      (live : int list)
       (pc : int) (instr : instruction')
     : unit =
   let col = Array.get cols pc in
@@ -225,147 +235,150 @@ let instr_constraints
   | Inop' succ ->
      let succ_col = Array.get cols succ in
      List.iter (fun r ->
-         union (Array.get col r) (Array.get succ_col r)
-       ) all_regs
+         union (get col r) (get succ_col r)
+       ) live
   | Iop' (op, args, res, succ) ->
      let succ_col = Array.get cols succ in
      if is_protectedb op then begin
-         List.iter (fun arg -> union (Array.get col arg) white) args;
-         union (Array.get succ_col res) white;
+         List.iter (fun arg -> union (get col arg) white) args;
+         union (get succ_col res) white;
          List.iter (fun r ->
              if not (r = res || List.mem r args) then
-               union (Array.get col r) (Array.get succ_col r)
-           ) all_regs;
+               union (get col r) (get succ_col r)
+           ) live;
        end
      else begin
-         let res_color = Array.get succ_col res in
-         List.iter (fun arg -> union (Array.get col arg) res_color) args;
+         let res_color = get succ_col res in
+         List.iter (fun arg -> union (get col arg) res_color) args;
          List.iter (fun r ->
              if r <> res then
-               union (Array.get col r) (Array.get succ_col r)
-           ) all_regs
+               union (get col r) (get succ_col r)
+           ) live
        end
   | Iload' (_, _, args, res, succ) ->
      let succ_col = Array.get cols succ in
-     List.iter (fun arg -> union (Array.get col arg) white) args;
-     union (Array.get succ_col res) white;
+     List.iter (fun arg -> union (get col arg) white) args;
+     union (get succ_col res) white;
      List.iter (fun r ->
          if not (r = res || List.mem r args) then
-           union (Array.get col r) (Array.get succ_col r)
-       ) all_regs
+           union (get col r) (get succ_col r)
+       ) live
   | Istore' (_, _, args, src, succ) ->
      let succ_col = Array.get cols succ in
-     union (Array.get col src) white;
-     List.iter (fun arg -> union (Array.get col arg) white) args;
+     union (get col src) white;
+     List.iter (fun arg -> union (get col arg) white) args;
      List.iter (fun r ->
          if not (r = src || List.mem r args) then
-           union (Array.get col r) (Array.get succ_col r)
-       ) all_regs
+           union (get col r) (get succ_col r)
+       ) live
   | Icall' (_, fn, args, res, succ) ->
      let succ_col = Array.get cols succ in
-     List.iter (fun arg -> union (Array.get col arg) white) args;
-     union (Array.get succ_col res) white;
+     List.iter (fun arg -> union (get col arg) white) args;
+     union (get succ_col res) white;
      (match fn with
-      | Coq_inl r -> union (Array.get col r) white
+      | Coq_inl r -> union (get col r) white
       | Coq_inr _ -> ());
      List.iter (fun r ->
          if not (r = res || List.mem r args ||
                    match fn with
                    | Coq_inl r' -> r = r'
                    | Coq_inr _ -> false) then
-           union (Array.get col r) (Array.get succ_col r)
-       ) all_regs
+           union (get col r) (get succ_col r)
+       ) live
   | Itailcall' (_, fn, args) ->
-     List.iter (fun arg -> union (Array.get col arg) white) args;
+     List.iter (fun arg -> union (get col arg) white) args;
      (match fn with
-      | Coq_inl r -> union (Array.get col r) white
+      | Coq_inl r -> union (get col r) white
       | Coq_inr _ -> ())
   | Ibuiltin' (ef, bargs, bres, succ) ->
      let succ_col = Array.get cols succ in
      if is_green_smove_builtinb ef then
        match bargs, bres with
        | [BA arg], BR res ->
-          union (Array.get col arg) white;
-          union (Array.get succ_col arg) pink;
-          union (Array.get succ_col res) green;
+          union (get col arg) white;
+          union (get succ_col arg) pink;
+          union (get succ_col res) green;
           List.iter (fun r ->
               if not (r = arg || r = res) then
-                union (Array.get col r) (Array.get succ_col r)
-            ) all_regs
+                union (get col r) (get succ_col r)
+            ) live
        | _ -> ()
      else if is_blue_smove_builtinb ef then
        match bargs, bres with
        | [BA arg], BR res ->
-          union (Array.get col arg) pink;
-          union (Array.get succ_col arg) red;
-          union (Array.get succ_col res) blue;
+          union (get col arg) pink;
+          union (get succ_col arg) red;
+          union (get succ_col res) blue;
           List.iter (fun r ->
               if not (r = arg || r = res) then
-                union (Array.get col r) (Array.get succ_col r)
-            ) all_regs
+                union (get col r) (get succ_col r)
+            ) live
        | _ -> ()
      else if is_vote_builtinb ef then
        match bargs, bres with
        | [BA arg1; BA arg2; BA arg3], BR res ->
-          union (Array.get col arg1) red;
-          union (Array.get col arg2) green;
-          union (Array.get col arg3) blue;
-          union (Array.get succ_col res) white;
+          union (get col arg1) red;
+          union (get col arg2) green;
+          union (get col arg3) blue;
+          union (get succ_col res) white;
           List.iter (fun r ->
               if r <> res then
-                union (Array.get col r) (Array.get succ_col r)
-            ) all_regs
+                union (get col r) (get succ_col r)
+            ) live
        | _ -> ()
      else
        let arg_regs = List.concat_map regs_of_builtin_arg bargs in
        let res_regs = regs_of_builtin_res bres in
        List.iter (fun arg ->
-           union (Array.get col arg) white
+           union (get col arg) white
          ) arg_regs;
        List.iter (fun res ->
-           union (Array.get succ_col res) white
+           union (get succ_col res) white
          ) res_regs;
        List.iter (fun r ->
            if not (List.mem r arg_regs || List.mem r res_regs) then
-             union (Array.get col r) (Array.get succ_col r)
-         ) all_regs
+             union (get col r) (get succ_col r)
+         ) live
   | Icond' (_, args, ifso, ifnot) ->
      let ifso_col = Array.get cols ifso in
      let ifnot_col = Array.get cols ifnot in
-     List.iter (fun arg -> union (Array.get col arg) white) args;
+     List.iter (fun arg -> union (get col arg) white) args;
      List.iter (fun r ->
          if not (List.mem r args) then begin
-             union (Array.get col r) (Array.get ifso_col r);
-             union (Array.get col r) (Array.get ifnot_col r)
+             union (get col r) (get ifso_col r);
+             union (get col r) (get ifnot_col r)
            end
-       ) all_regs
+       ) live
   | Ijumptable' (arg, succs) ->
-     union (Array.get col arg) white;
+     union (get col arg) white;
      List.iter (fun r ->
          if r <> arg then
            List.iter (fun succ ->
                let succ_col = Array.get cols succ in
-               union (Array.get col r) (Array.get succ_col r)
+               union (get col r) (get succ_col r)
              ) succs
-       ) all_regs
+       ) live
   | Ireturn' ro ->
      match ro with
-     | Some r -> union (Array.get col r) white
+     | Some r -> union (get col r) white
      | None -> ()
 
 let function_constraints
-      (f : coq_function) (cols : uf_node Array.t Array.t)
+      (f : coq_function)
+      (live : int list Array.t)
+      (cols : (int, uf_node) Hashtbl.t Array.t)
     : unit =
   (* params *)
   List.iter (fun param ->
-      union (Array.get (Array.get cols (convert_positive f.fn_entrypoint))
+      union (get (Array.get cols (convert_positive f.fn_entrypoint))
                (convert_positive param)) white
     ) f.fn_params;
-  let all_regs = map convert_positive @@ Regset.elements @@ regs_of_function f in
+  (* let all_regs = map convert_positive @@ Regset.elements @@ regs_of_function f in *)
   (* code *)
   PTree.fold (fun acc n instr ->
-      instr_constraints cols all_regs (convert_positive n) @@
-        convert_instr instr
+      let n' = convert_positive n in
+      let live_out = Array.get live n' in
+      instr_constraints cols live_out n' @@ convert_instr instr
     ) f.fn_code ()
 
 let color_of_uf_node n =
@@ -382,10 +395,17 @@ let ptree_of_uf_node_array (m : uf_node Array.t) : color PTree.t =
     PTree.Empty
     (Array.mapi (fun i a -> (i, a)) m)
 
-let infer_coloring (f : coq_function) : (node -> color PTree.t) option =
+let convert_live_sets (f : coq_function) (live : Regset.t PMap.t) : int list Array.t =
+  let num_instrs = List.length (PTree.elements f.fn_code) in
+  Array.init num_instrs (fun n ->
+      List.map convert_positive @@
+        Regset.elements @@ PMap.get (convert_int n) live)
+
+let infer_coloring (f : coq_function) (live : Regset.t PMap.t)
+    : (node -> reg -> color) option =
   let start_time = Unix.gettimeofday () in
   let cols = init_cols f in
-  function_constraints f cols;
+  function_constraints f (convert_live_sets f live) cols;
   let end_time = Unix.gettimeofday () in
   print_string @@ "# instructions = " ^
                     string_of_int @@ List.length @@
@@ -395,9 +415,12 @@ let infer_coloring (f : coq_function) : (node -> color PTree.t) option =
                       Regset.elements @@ regs_of_function f;
   print_endline @@ ", time = " ^ string_of_float (end_time -. start_time) ^ " s";
   (* print_cols f m; *)
-  let final_cols = Array.map ptree_of_uf_node_array cols in
+  (* let final_cols = Array.map ptree_of_uf_node_array cols in *)
   Some (fun n -> let ix = convert_positive n in
-                 if ix < Array.length final_cols then
-                   Array.get final_cols ix
+                 if ix < Array.length cols then
+                   let col = Array.get cols ix in
+                   fun r -> match Hashtbl.find_opt col (convert_positive r) with
+                            | Some n -> color_of_uf_node n
+                            | None -> Red
                  else
-                   PTree.Empty)
+                   fun r -> Red)
