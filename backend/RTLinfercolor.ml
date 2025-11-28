@@ -16,12 +16,6 @@ open RTLcolor
 
 exception ColorError of string
 
-(* Tail-recursive list map *)
-let[@tail_mod_cons] rec map (f : 'a -> 'b) (l : 'a list) : 'b list =
-  match l with
-  | [] -> []
-  | x :: xs -> f x :: (map [@tailcall]) f xs
-
 let rec int_of_positive = function
   | Coq_xI p -> 2 * int_of_positive p + 1
   | Coq_xO p -> 2 * int_of_positive p
@@ -162,26 +156,11 @@ let rec regs_of_builtin_arg = function
   | BA_addptr (a1, a2) -> app (regs_of_builtin_arg a1) (regs_of_builtin_arg a2)
   | _ -> []
 
-let succs_of_instruction = function
-  | Inop' succ -> [succ]
-  | Iop' (_, _, _, succ) -> [succ]
-  | Iload' (_, _, _, _, succ) -> [succ]
-  | Istore' (_, _, _, _, succ) -> [succ]
-  | Icall' (_, _, _, _, succ) -> [succ]
-  | Ibuiltin' (_, _, _, succ) -> [succ]
-  | Icond' (_, _, ifso, ifnot) -> [ifso; ifnot]
-  | Ijumptable' (_, succs) -> succs
-  | _ -> []
-
 let regs_of_function (f : coq_function) : Regset.t =
   List.fold_left (fun acc param -> Regset.add param acc)
     (PTree.fold (fun acc _ instr -> Regset.union acc @@ instr_regs instr)
        f.fn_code Regset.empty) f.fn_params
 
-let list_max l = List.fold_left max 0 l
-
-let counter = ref 0
-let fresh () = let n = !counter in counter := !counter + 1; n
 let init_cols (f : coq_function) : (int, uf_node) Hashtbl.t Array.t =
   let num_instrs = List.length (PTree.elements f.fn_code) in
   Array.init num_instrs (fun _ -> Hashtbl.create 100)
@@ -197,18 +176,6 @@ let print_cols (f : coq_function) (cols : (int, uf_node) Hashtbl.t Array.t) : un
       print_string @@ string_of_int n ^ ": ";
       print_col col
     ) cols
-
-(* let string_of_instruction : instruction' -> string = function *)
-(*   | Inop' succ -> "Inop' " ^ string_of_int succ *)
-(*   | Ibuiltin' (ef, _bargs, _bres, succ) -> *)
-(*      "Ibuiltin' " ^ string_of_int succ *)
-(*   | _ -> "TODO" *)
-
-let ptree_of_intmap (m : 'a Array.t) : 'a PTree.t =
-  Array.fold_left
-    (fun acc (i, a) -> PTree.set (convert_int i) a acc)
-    PTree.Empty
-    (Array.mapi (fun i a -> (i, a)) m)
 
 let get (col : (int, uf_node) Hashtbl.t) (r : int) : uf_node =
   match Hashtbl.find_opt col r with
