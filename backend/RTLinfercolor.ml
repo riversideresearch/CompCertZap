@@ -184,10 +184,6 @@ let counter = ref 0
 let fresh () = let n = !counter in counter := !counter + 1; n
 let init_cols (f : coq_function) : (int, uf_node) Hashtbl.t Array.t =
   let num_instrs = List.length (PTree.elements f.fn_code) in
-  (* let num_regs = (list_max @@ List.map convert_positive @@ *)
-  (*                   Regset.elements @@ regs_of_function f) + 1 in *)
-  (* print_endline @@ "num_instrs = " ^ string_of_int num_instrs; *)
-  (* print_endline @@ "num_regs = " ^ string_of_int num_regs; *)
   Array.init num_instrs (fun _ -> Hashtbl.create 100)
 
 let print_col (col : (int, uf_node) Hashtbl.t) : unit =
@@ -218,12 +214,6 @@ let get (col : (int, uf_node) Hashtbl.t) (r : int) : uf_node =
   match Hashtbl.find_opt col r with
   | Some n -> n
   | None -> let n = make () in Hashtbl.add col r n; n
-
-(* let union_colors *)
-(*       (col1 : (int, uf_node) Hashtbl.t) (r1 : int) *)
-(*       (col2 : (int, uf_node) Hashtbl.t) (r2 : int) *)
-(*     : unit = *)
-(*   union (get col1 r1) (get col2 r2) *)
 
 let instr_constraints
       (cols : (int, uf_node) Hashtbl.t Array.t)
@@ -373,7 +363,6 @@ let function_constraints
       union (get (Array.get cols (convert_positive f.fn_entrypoint))
                (convert_positive param)) white
     ) f.fn_params;
-  (* let all_regs = map convert_positive @@ Regset.elements @@ regs_of_function f in *)
   (* code *)
   PTree.fold (fun acc n instr ->
       let n' = convert_positive n in
@@ -414,8 +403,6 @@ let infer_coloring (f : coq_function) (live : Regset.t PMap.t)
                     string_of_int @@ List.length @@
                       Regset.elements @@ regs_of_function f;
   print_endline @@ ", time = " ^ string_of_float (end_time -. start_time) ^ " s";
-  (* print_cols f m; *)
-  (* let final_cols = Array.map ptree_of_uf_node_array cols in *)
   Some (fun n -> let ix = convert_positive n in
                  if ix < Array.length cols then
                    let col = Array.get cols ix in
