@@ -48,7 +48,7 @@ Definition eqb (c1 c2 : color) : bool :=
 
 Declare Scope color_scope.
 
-Infix "=?" := eqb (at level 70) : color_scope.
+Infix "=?" := eqb (at level 70, no associativity) : color_scope.
 
 Local Open Scope color_scope.
 
