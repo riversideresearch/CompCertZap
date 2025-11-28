@@ -218,10 +218,19 @@ Section color_checker.
         | None => true
         end
     end.
+
   
   Definition check_col_function (f : function) : bool :=
     forallb (fun param => col f.(fn_entrypoint) param =? White) f.(fn_params) &&
       PTree_Properties.for_all f.(fn_code) (fun pc instr => check_col_instr pc instr).
+
+(* Definition check_col_function col (f : function) : bool := *)
+(*   forallb (fun param => col f.(fn_entrypoint) param =? White) f.(fn_params) && *)
+(*     match Liveness.analyze f with *)
+(*     | Some live => *)
+(*         PTree_Properties.for_all f.(fn_code) (fun pc instr => check_col_instr live col pc instr) *)
+(*     | None => false *)
+(*     end. *)
 
   Ltac destruct_andb H1 H2 :=
     match goal with
@@ -235,7 +244,7 @@ Section color_checker.
 
   Lemma check_col_instr_sound (pc : node) (instr : instruction) :
     check_col_instr pc instr = true ->
-    wc_instruction (fun n r => Some (col n r)) pc instr.
+    wc_instruction live col pc instr.
   Proof.
   (*   destruct instr; simpl; intro Hcheck; try congruence. *)
   (*   - constructor. *)
@@ -434,19 +443,21 @@ Section color_checker.
   Admitted.
 
   Lemma check_col_function_sound (f : function) :
+    Liveness.analyze f = Some live ->
     check_col_function f = true ->
-    wc_function (fun pc r => Some (col pc r)) f.
+    wc_function col f.
   Proof.
+    intro Hlive.
     destruct f; unfold check_col_function; simpl.
     intro H.
     apply andb_prop in H.
     destruct H as [Hparams Hcode].
-    constructor; simpl.
+    econstructor; simpl; eauto.
     - rewrite forallb_forall in Hparams.
       apply Forall_forall.
       intros r Hin.
       apply Hparams in Hin.
-      apply is_colorb_sound; auto.
+      apply eqb_sound; auto.
     - rewrite PTree_Properties.for_all_correct in Hcode.
       intros pc instr Hpc.
       apply Hcode in Hpc.
@@ -480,12 +491,13 @@ Definition check_function (f : function) : bool :=
   end.
 
 Lemma check_function_sound (f : function) :
-  check_function f = true -> exists col, wc_function col f.
+  check_function f = true ->
+  exists col, wc_function col f.
 Proof.
   unfold check_function.
-  destruct (analyze f) as [live|]; try congruence.
+  destruct (analyze f) as [live|] eqn:Hlive; try congruence.
   destruct (infer_coloring f) as [col|]; try congruence.
-  intro Hcheck; exists (fun pc r => Some (col pc r)).
+  intro Hcheck; exists col.
   eapply check_col_function_sound; eassumption.
 Qed.
 

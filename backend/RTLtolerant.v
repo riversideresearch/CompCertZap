@@ -20,25 +20,26 @@ Require Import
 Import ListNotations.
 Local Open Scope string_scope.
 
-Definition match_rs
-  (col : reg -> option color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
+Definition match_rs (live : Regset.t)
+  (col : reg -> color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
     exists c, is_basic c /\
-           forall r, col r <> Some c -> Val.lessdef (rs1 # r) (rs2 # r)
+           forall r, Regset.In r live -> col r <> c -> Val.lessdef (rs1 # r) (rs2 # r)
   else
-    forall r, Val.lessdef (rs1 # r) (rs2 # r).
+    forall r, Regset.In r live -> Val.lessdef (rs1 # r) (rs2 # r).
 
-Definition match_rs_upto (res : reg)
-  (col : reg -> option color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
+Definition match_rs_upto (res : reg) (live : Regset.t)
+  (col : reg -> color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
     exists c, is_basic c /\
-           forall r, r <> res -> col r <> Some c -> Val.lessdef (rs1 # r) (rs2 # r)
+           forall r, r <> res ->
+                Regset.In r live -> col r <> c -> Val.lessdef (rs1 # r) (rs2 # r)
   else
-    forall r, r <> res -> Val.lessdef (rs1 # r) (rs2 # r).
+    forall r, r <> res -> Regset.In r live -> Val.lessdef (rs1 # r) (rs2 # r).
 
-Lemma match_rs_match_rs_upto res col faulted rs1 rs2 :
-  match_rs col faulted rs1 rs2 ->
-  match_rs_upto res col faulted rs1 rs2.
+Lemma match_rs_match_rs_upto live res col faulted rs1 rs2 :
+  match_rs live col faulted rs1 rs2 ->
+  match_rs_upto res live col faulted rs1 rs2.
 Proof.
   unfold match_rs, match_rs_upto; intro RS.
   destruct faulted; auto.
@@ -60,18 +61,19 @@ Section match_states.
 
   (** When a fault has occurred elsewhere and regsets [rs1] and [rs2]
       are unchanged, they still match. *)
-  Lemma match_rs_upto_fault res col (pc : node) (rs1 rs2 : regset) :
-    match_rs_upto res (col pc) false rs1 rs2 ->
-    match_rs_upto res (col pc) true rs1 rs2.
+  Lemma match_rs_upto_fault res live col (pc : node) (rs1 rs2 : regset) :
+    match_rs_upto res live (col pc) false rs1 rs2 ->
+    match_rs_upto res live (col pc) true rs1 rs2.
   Proof. intro H; exists Red; split; auto; constructor. Qed.
 
   Inductive match_stackframes (faulted : bool)
     : RTL.stackframe -> RTL.stackframe -> Prop :=
   | match_stackframes_Stackframe :
-    forall col res f sp pc rs1 rs2
+    forall col res f sp pc rs1 rs2 live
       (WC_FUN: wc_function col f)
       (RS_COMPAT: rs_compat rs1 rs2)
-      (RS: match_rs_upto res (col pc) faulted rs1 rs2),
+      (LIVE: Liveness.analyze f = Some live)
+      (RS: match_rs_upto res (live !! pc) (col pc) faulted rs1 rs2),
       match_stackframes faulted
         (Stackframe res f sp pc rs1)
         (Stackframe res f sp pc rs2).
@@ -92,11 +94,12 @@ Section match_states.
       registers except those of the affected color. *)
   Inductive match_states : bool -> RTL.state -> fstate -> Prop :=
   | match_states_State :
-    forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool)
+    forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool) live
+      (LIVE: Liveness.analyze f = Some live)
       (STK: Forall2 (match_stackframes b) stk1 stk2)
       (WC_FUN: wc_function col f)
       (RS_COMPAT: rs_compat rs1 rs2)
-      (RS: match_rs (col pc) b rs1 rs2)
+      (RS: match_rs (live !! pc) (col pc) b rs1 rs2)
       (MEM: Memory.Mem.extends m1 m2),
       match_states b (State stk1 f sp pc rs1 m1)
                    {| fs_state := State stk2 f sp pc rs2 m2; fault := b |}
@@ -163,24 +166,24 @@ Section TOLERANCE.
     | [ H : wc_function _ _ |- _ ] => inv H
     end;
     match goal with
-    | [ Hwc : wc_code _ _, Hpc : (fn_code _) ! _ = Some _ |- _ ] =>
+    | [ Hwc : wc_code _ _ _, Hpc : (fn_code _) ! _ = Some _ |- _ ] =>
         apply Hwc in Hpc; inv Hpc; try congruence
     end.
 
-  Lemma wc_col_succ_exists f col pc i r succ :
-    (fn_code f) ! pc = Some i ->
-    res_of_instruction i = Some r ->
-    succ_of_instruction i = Some succ ->
-    wc_function col f ->
-    exists c, col succ r = Some c.
-  Proof.
-    intros Hpc Hr Hsucc Hwc.
-    inv_wc; simpl in *; try congruence; inv Hr; inv Hsucc;
-      try solve [exists White; auto]; try solve [eexists; eauto].
-    - inv H0; eexists; eauto.
-    - destruct bres; simpl in *; try congruence.
-      inv H6; exists White; auto.
-  Qed.
+  (* Lemma wc_col_succ_exists f col pc i r succ : *)
+  (*   (fn_code f) ! pc = Some i -> *)
+  (*   res_of_instruction i = Some r -> *)
+  (*   succ_of_instruction i = Some succ -> *)
+  (*   wc_function col f -> *)
+  (*   exists c, col succ r = Some c. *)
+  (* Proof. *)
+  (*   intros Hpc Hr Hsucc Hwc. *)
+  (*   inv_wc; simpl in *; try congruence; inv Hr; inv Hsucc; *)
+  (*     try solve [exists White; auto]; try solve [eexists; eauto]. *)
+  (*   - inv H0; eexists; eauto. *)
+  (*   - destruct bres; simpl in *; try congruence. *)
+  (*     inv H6; exists White; auto. *)
+  (* Qed. *)
 
   Lemma res_exists_succ i r :
     res_of_instruction i = Some r ->
@@ -221,15 +224,14 @@ Section TOLERANCE.
         eapply val_compat_trans; eauto.
       + rewrite Regmap.gso; auto.
     - unfold match_rs in *.
-      assert (Hc: exists c, col pc' r = Some c /\ is_basic c).
+      assert (Hc: is_basic (col pc' r)).
       { pose proof H0 as Hop.
         inv Hmatch.
         eapply step_succ in Hstep; eauto.
         clear WC_FUN0.
         inv_wc; simpl in *; try congruence; inv H2; inv Hstep; try contradiction.
-        inv H4; exists c; split; eauto. }
-      destruct Hc as (c & Hr & Hc).
-      exists c; split; auto.
+        inv H4; constructor. }
+      exists (col pc' r); split; auto.
       intros x Hx.
       destruct (peq x r); subst; try congruence.
       rewrite Regmap.gso; auto.
@@ -1584,6 +1586,7 @@ Section TOLERANCE.
              apply Forall_forall; intros r Hin.
              unfold match_rs in RS.
              destruct fault; auto.
+             2: { apply RS. (* TODO: follows from H, Hin, LIVE *)
              inv_rs; inv_wc.
              apply RS.
              rewrite Forall_forall in H6; apply H6 in Hin.
