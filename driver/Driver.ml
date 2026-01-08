@@ -54,10 +54,25 @@ let compile_c_file sourcename ifile ofile =
   set_dest AsmToJSON.destination option_sdump !sdump_suffix;
   (* Parse the ast *)
   let csyntax = parse_c_file sourcename ifile in
+
+  let rtl =
+    match Compiler.transf_c_program_to_rtl csyntax with
+    | Errors.OK rtl -> rtl
+    | Errors.Error msg -> let loc = file_loc sourcename in
+                          fatal_error loc "%a"  print_error msg in
+  if RTLcolorcheck.check_program rtl then
+    (* print_endline "RTL program is well-colored :)" *)
+    ()
+  else begin
+      print_endline "RTL program not well-colored!"
+      (* exit 1 *)
+    end;
+  
   (* Convert to Asm *)
   let asm =
     match Compiler.apply_partial
-               (Compiler.transf_c_program csyntax)
+            (* (Compiler.transf_c_program csyntax) *)
+            (Compiler.transf_rtl_program'' rtl)
                Asmexpand.expand_program with
     | Errors.OK asm ->
         asm

@@ -530,6 +530,9 @@ Proof.
 - inv H; auto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Lemma tunnel_step_correct:
   forall st1 t st2, step ge st1 t st2 ->
   forall st1' (MS: match_states st1 st1'),
@@ -710,5 +713,7 @@ Proof.
   eexact transf_final_states.
   eexact tunnel_step_correct.
 Qed.
+
+End VOTE.
 
 End PRESERVATION.

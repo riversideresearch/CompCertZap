@@ -21,6 +21,9 @@ Require Import Axioms Coqlib Errors Maps.
 Require Import Integers Floats Values AST Memory Events Globalenvs Smallstep.
 Require Import Ctypes Cop Csyntax Csem.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section STRATEGY.
 
 Variable ge: genv.
@@ -3052,3 +3055,5 @@ Proof.
   apply lt_wf.
   eapply evalinf_funcall_steps; eauto.
 Qed.
+
+End VOTE.

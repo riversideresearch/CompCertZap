@@ -205,6 +205,9 @@ End RTLtypes.
 
 Module S := UniSolver(RTLtypes).
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section INFERENCE.
 
 Local Open Scope error_monad_scope.
@@ -1001,4 +1004,4 @@ Qed.
 
 End SUBJECT_REDUCTION.
 
-
+End VOTE.

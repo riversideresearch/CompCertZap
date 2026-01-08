@@ -1256,5 +1256,3 @@ Proof.
 Qed.
 
 End PRESERVATION.
-
-

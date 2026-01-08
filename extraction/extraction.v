@@ -18,7 +18,7 @@ From Coq Require DecidableClass.
 Require Coqlib Wfsimpl Decidableplus Iteration.
 Require AST Floats.
 Require SelectLong Selection RTLgen Inlining ValueDomain.
-Require Tailcall Allocation Bounds.
+Require Tailcall Allocation Bounds RTLcolorcheck.
 Require Ctypes Csyntax Ctyping Clight.
 Require Compiler.
 Require Parser.
@@ -82,6 +82,9 @@ Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 (* SimplExpr *)
 Extract Constant SimplExpr.first_unused_ident => "Camlcoq.first_unused_ident".
 Extraction Inline SimplExpr.ret SimplExpr.error SimplExpr.bind SimplExpr.bind2.
+
+(* RTL coloring *)
+Extract Constant RTLcolorcheck.infer_coloring => "RTLinfercolor.infer_coloring".
 
 (* Compopts *)
 Extract Constant Compopts.optim_for_size =>
@@ -172,4 +175,7 @@ Separate Extraction
    AST.signature_main
    Floats.Float32.from_parsed Floats.Float.from_parsed
    Globalenvs.Senv.invert_symbol
-   Parser.translation_unit_file.
+   Parser.translation_unit_file
+   RTLcolorcheck.check_program
+   Compiler.transf_c_program_to_rtl
+.

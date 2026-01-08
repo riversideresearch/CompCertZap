@@ -123,8 +123,8 @@ Inductive smoveR
   (c : code) (ty : typ) (src dst1 dst2 : reg) (pc succ : node): Prop :=
 | smove_1 :
   forall n mov1 mov2,
-    smove ty src dst1 = Some mov1 ->
-    smove ty src dst2 = Some mov2 ->
+    green_smove ty src dst1 = Some mov1 ->
+    blue_smove ty src dst2 = Some mov2 ->
     c ! pc = Some (mov1 n) ->
     c ! n = Some (mov2 succ) ->
     smoveR c ty src dst1 dst2 pc succ.
@@ -160,8 +160,8 @@ Proof.
   unfold RTLgen.bind in Hcopy.
   unfold error in Hcopy.
   simpl in *.
-  destruct (smove ty r1 r2) eqn:Hmov1; gen_contra.
-  destruct (smove ty r1 r3) eqn:Hmov2; gen_contra.
+  destruct (green_smove ty r1 r2) eqn:Hmov1; gen_contra.
+  destruct (blue_smove ty r1 r3) eqn:Hmov2; gen_contra.
   unfold update_instr in Hcopy.
   repeat egen_case.
   repeat lr_case.
@@ -221,17 +221,26 @@ Inductive match_instr
   forall n,
     c ! pc = Some (Inop n) ->
     match_instr re rm c pc (Inop n)
-| match_Iop :
+| match_Iop_safe :
   forall op args1 args2 args3 res1 res2 res3 n1 n2 succ
+    (NPROT: ~ is_protected op)
     (ARGS : rm_l rm args1 args2 args3)
     (RM_RES : rm !! res1 = (res2, res3))
     (PC : c ! pc = Some (Iop op args2 res2 n1))
     (N1 : c ! n1 = Some (Iop op args3 res3 n2))
     (N2 : c ! n2 = Some (Iop op args1 res1 succ)),
     match_instr re rm c pc (Iop op args1 res1 succ)
-| match_iload :
+| match_Iop_protected :
+  forall op args res1 res2 res3 n1 n2 succ
+    (PROT: is_protected op)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup args) pc n1)
+    (N1 : c ! n1 = Some (Iop op args res1 n2))
+    (RM_RES : rm !! res1 = (res2, res3))
+    (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
+    match_instr re rm c pc (Iop op args res1 succ)
+| match_Iload :
   forall chunk addr args res1 res2 res3 n1 n2 succ
-    (VOTE_ARGS : maj_vote_regsR c re rm args pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup args) pc n1)
     (N1 : c ! n1 = Some (Iload chunk addr args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
@@ -239,37 +248,37 @@ Inductive match_instr
 | match_Istore :
   forall chunk addr args src1 src2 src3 n succ
     (RM_SRC : rm !! src1 = (src2, src3))
-    (VOTE_REGS : maj_vote_regsR c re rm (src1 :: args) pc n)
+    (VOTE_REGS : maj_vote_regsR c re rm (dedup (src1 :: args)) pc n)
     (N : c ! n = Some (Istore chunk addr args src1 succ)),
     match_instr re rm c pc (Istore chunk addr args src1 succ)
 | match_Icall :
   forall sig fn args res1 res2 res3 succ n1 n2
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n1)
     (N1 : c ! n1 = Some (Icall sig fn args res1 n2))
     (RM_RES : rm !! res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm c pc (Icall sig fn args res1 succ)
 | match_Itailcall :
   forall sig fn args n
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_fn fn ++ args) pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n)
     (N : c ! n = Some (Itailcall sig fn args)),
     match_instr re rm c pc (Itailcall sig fn args)
 | match_Ibuiltin_1 :
   forall ef bargs bres n succ
     (NORES : ~ is_BR bres) (* no result register *)
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n)
     (N : c ! n = Some (Ibuiltin ef bargs bres succ)),
     match_instr re rm c pc (Ibuiltin ef bargs bres succ)
 | match_Ibuiltin_2 :
   forall ef bargs res1 res2 res3 n1 n2 succ
-    (VOTE_ARGS : maj_vote_regsR c re rm (regs_of_builtin_args bargs) pc n1)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n1)
     (N1 : c ! n1 = Some (Ibuiltin ef bargs (BR res1) n2))
     (RM_RES : rm # res1 = (res2, res3))
     (MOVE : smoveR c (re res1) res1 res2 res3 n2 succ),
     match_instr re rm c pc (Ibuiltin ef bargs (BR res1) succ)
 | match_Icond :
   forall cond args ifso ifnot n
-    (VOTE_ARGS : maj_vote_regsR c re rm args pc n)
+    (VOTE_ARGS : maj_vote_regsR c re rm (dedup args) pc n)
     (N : c ! n = Some (Icond cond args ifso ifnot)),
     match_instr re rm c pc (Icond cond args ifso ifnot)
 | match_Ijumptable :
@@ -480,10 +489,20 @@ Proof.
   - destruct (H1 p) as [?|Hs']; try congruence.
     destruct (H1 n1) as [?|Hs'1]; try congruence.
     destruct (H1 n2) as [?|Hs'2]; try congruence.
-    econstructor; eauto.
+    eapply match_Iop_safe; eauto.
     + rewrite Hs'; eauto.
     + rewrite Hs'1; eauto.
     + rewrite Hs'2; eauto.
+  - inv MOVE.
+    destruct (H1 n) as [?|Hn]; try congruence.
+    destruct (H1 n1) as [?|Hn1]; try congruence.
+    destruct (H1 n2) as [?|Hn2]; try congruence.
+    eapply match_Iop_protected; eauto.
+    + eapply state_incr_maj_vote_regsR; eauto.
+    + rewrite Hn1; eauto.
+    + econstructor; eauto.
+      * rewrite Hn2; eauto.
+      * rewrite Hn; auto.
   - inv MOVE.
     destruct (H1 n) as [?|Hn]; try congruence.
     destruct (H1 n1) as [?|Hn1]; try congruence.
@@ -619,7 +638,7 @@ Lemma maj_voteR_ptree_set c ty r1 r2 r3 pc succ n i :
 Proof.
   intros Hc Hmaj; inv Hmaj.
   econstructor; eauto.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+  destruct (peq n pc);
     subst; try congruence.
   rewrite PTree.gso; eauto.
 Qed.
@@ -643,9 +662,9 @@ Lemma smoveR_ptree_set c ty r1 r2 r3 pc succ n i :
 Proof.
   intros Hc Hmove; inv Hmove.
   econstructor; eauto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+  - destruct (peq n pc);
       subst; try congruence; rewrite PTree.gso; eauto.
-  - destruct (DecidableTypeEx.Positive_as_DT.eq_dec n n0);
+  - destruct (peq n n0);
       subst; try congruence; rewrite PTree.gso; eauto.
 Qed.
 
@@ -676,7 +695,25 @@ Proof.
     simpl; constructor; rewrite PTree.gss; reflexivity.
 
   (* Iop *)
-  - unfold RTLgen.bind in Htransf.
+  - destruct (is_protectedb o) eqn:Hprotected.
+    { unfold RTLgen.bind in Htransf; simpl in Htransf.
+      repeat egen_case.
+      unfold update_instr in H2.
+      repeat lr_case; simpl.
+      destruct (rm # r) eqn:Hr.
+      eapply copy_to_shadows_smoveR in H0; eauto.
+      2: { simpl; lia. }
+      eapply match_Iop_protected with (n1:=n0); eauto.
+      destruct (is_protectedb_spec o); congruence.
+      3: { apply smoveR_ptree_set; eauto. }
+      2: { rewrite PTree.gss; auto. }
+      eapply maj_vote_regsR_ptree_set; auto.
+      eapply state_incr_maj_vote_regsR.
+      2: { eapply maj_vote_regs_maj_vote_regsR.
+           2: { eauto. }
+           auto. }
+      intro pc; inv s3; auto. }
+    unfold RTLgen.bind in Htransf.
     repeat egen_case.
     unfold update_instr in *.
     repeat lr_case.
@@ -684,10 +721,11 @@ Proof.
     destruct (rm # r) eqn:Hrmr; simpl in *.
     (* assert (p < st_nextnode s). auto. *)
     (* { inv s1; simpl in *; unfold Ple in *; lia. } *)
-    eapply match_Iop with (pc := p)
-                          (n1 := s.(st_nextnode))
-                          (n2 := Pos.succ (s.(st_nextnode))); eauto.
-      { apply rm_l_map_rm. }
+    eapply match_Iop_safe with (pc := p)
+                               (n1 := s.(st_nextnode))
+                               (n2 := Pos.succ (s.(st_nextnode))); eauto.
+    { intro HC; destruct (is_protectedb_spec o); auto; congruence. }
+    { apply rm_l_map_rm. }
     + rewrite 2!PTree.gso; try lia.
       rewrite PTree.gss; reflexivity.
     + rewrite PTree.gso; try lia.
@@ -702,7 +740,7 @@ Proof.
     destruct (rm # r) eqn:Hr.
     eapply copy_to_shadows_smoveR in H0; eauto.
     2: { simpl; lia. }
-    eapply match_iload with (n1:=n0); eauto.
+    eapply match_Iload with (n1:=n0); eauto.
     3: { apply smoveR_ptree_set; eauto. }
     2: { rewrite PTree.gss; auto. }
     eapply maj_vote_regsR_ptree_set; auto.
@@ -739,14 +777,14 @@ Proof.
     destruct (rm # r) eqn:Hrmr.
     unfold RTLgen.bind in H0.
     unfold error in *.
-    destruct (smove (re r) r r0) eqn:Hmov1; gen_contra.
-    destruct (smove (re r) r r1) eqn:Hmov2; gen_contra.
+    destruct (green_smove (re r) r r0) eqn:Hmov1; gen_contra.
+    destruct (blue_smove (re r) r r1) eqn:Hmov2; gen_contra.
     repeat egen_case.
     unfold update_instr in *.
     repeat lr_case.
     simpl in *.
     assert (p < st_nextnode s'0).
-    { clear H; inv s2; simpl in *; unfold Ple in *; lia. }
+    { clear H; inv s2; simpl in *; extlia. }
     assert (Hn0: n0 < s'0.(st_nextnode)).
     { eapply maj_vote_regs_succ_lt_nextnode.
       2: { eauto. }
@@ -887,7 +925,7 @@ Proof.
        { eapply IHl; eauto. }
        eapply state_incr_match_instr; eauto. }
   eapply transf_instr_match_instr; eauto.
-  clear Hiter; inv s0; unfold Ple in *; lia.
+  clear Hiter; inv s0; extlia.
 Qed.
 
 Lemma transf_code_code_matches (c : code) (re : regenv) rm s s' pf u :
@@ -948,7 +986,7 @@ Proof.
   apply PTree_Properties.fold_ind; intros t Ht p i Htp.
   { specialize (Ht p); congruence. }
   intros Hcp HI p' i' Htp'.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec p p'); subst.
+  destruct (peq p p'); subst.
   { lia. }
   assert (H: (PTree.remove p t) ! p' = Some i').
   { rewrite PTree.gro; auto. }
@@ -1045,7 +1083,7 @@ Proof.
   split.
   - intros r1 r2 r3 Hin Hr1.
     inv s0; simpl in *; unfold Ple in *.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
+    destruct (peq a r1); subst.
     + clear Hin.
       rewrite PMap.gss in Hr1; inv Hr1.
       split.
@@ -1088,7 +1126,7 @@ Proof.
       * specialize (H r1 r2 r3 Hin Hr1); intuition.
       * specialize (H r1 r2 r3 Hin Hr1); destruct H as [H H'].
         intros r1' r2' r3' Hin' Hneq Hr1'; try congruence.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1'); subst.
+        destruct (peq a r1'); subst.
         { rewrite PMap.gss in Hr1'; inv Hr1'.
           clear Hin' n.
           constructor.
@@ -1129,7 +1167,7 @@ Proof.
   - simpl.
     apply Forall_forall; intros r1 Hin r2 r3 Hr1.
     inv s0; simpl in *; unfold Ple in *.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
+    destruct (peq a r1); subst.
     { rewrite PMap.gss in Hr1; inv Hr1; lia. }
     inv Hin; try congruence.
     rewrite PMap.gso in Hr1; auto.
@@ -1156,8 +1194,7 @@ Proof.
   intro Hin.
   apply in_elements in Hin.
   destruct (Regset.max_elt s) eqn:Hmax.
-  { eapply Regset.max_elt_2 in Hmax; eauto.
-    unfold Plt in Hmax; lia. }
+  { eapply Regset.max_elt_2 in Hmax; eauto; extlia. }
   apply Regset.max_elt_3 in Hmax.
   apply Regset.is_empty_1 in Hmax.
   destruct s; simpl in *.
@@ -1195,7 +1232,7 @@ Proof.
     + apply Regset.add_2, IHl, Hin.
   - revert p; induction l; simpl; intros p Hin.
     { inv Hin. }
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst; auto.
+    destruct (peq a p); subst; auto.
     right; apply Regset.add_3 in Hin; auto.
 Qed.
 
@@ -1314,7 +1351,7 @@ Proof.
   repeat state_incr_inv.
   unfold Ple in *; simpl in *.
   intros x1 x2 x3 Hx1 Hin.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec a x1); subst.
+  destruct (peq a x1); subst.
   - rewrite PMap.gss in Hx1; inv Hx1; split; lia.
   - destruct Hin as [?|Hin]; try congruence.
     rewrite PMap.gso in Hx1; auto.
@@ -1384,7 +1421,7 @@ Proof.
          apply lt_nextnode_init_state' in Hpi.
          clear H0 H H1.
          repeat state_incr_inv.
-         unfold Ple in *; simpl in *; lia. }
+         extlia. }
     destruct f.
     simpl in *.
     econstructor.
@@ -1410,45 +1447,4 @@ Proof.
     apply in_elements, Regset.diff_1, Regset.inter_2 in Hin.
     apply in_elements, Regset.union_3; auto.
   - inv Htransf; constructor.
-Qed.
-
-Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
-| in_builtin_arg_BA : in_builtin_arg a (BA a)
-| in_builtin_arg_splitlong_hi : forall hi lo,
-    in_builtin_arg a hi ->
-    in_builtin_arg a (BA_splitlong hi lo)
-| in_builtin_arg_splitlong_lo : forall hi lo,
-    in_builtin_arg a lo ->
-    in_builtin_arg a (BA_splitlong hi lo)
-| in_builtin_arg_addptr_a1 : forall a1 a2,
-    in_builtin_arg a a1 ->
-    in_builtin_arg a (BA_addptr a1 a2)
-| in_builtin_arg_addptr_a2 : forall a1 a2,
-    in_builtin_arg a a2 ->
-    in_builtin_arg a (BA_addptr a1 a2).
-
-Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
-  In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.
-Proof.
-  split.
-  - induction barg; simpl; intro Hin; try contradiction;
-      try (destruct Hin; subst; try contradiction; constructor);
-      apply in_app_or in Hin; destruct Hin as [Hin | Hin];
-      solve [constructor; auto].
-  - induction barg; simpl; intro Hin; inv Hin; auto; apply in_or_app; auto.
-Qed.
-
-Lemma in_regs_of_builtin_args_exists_in_builtin_arg r bargs :
-  In r (regs_of_builtin_args bargs) <-> Exists (in_builtin_arg r) bargs.
-Proof.
-  split.
-  - induction bargs; simpl; intro Hin; try contradiction.
-    apply in_app_or in Hin.
-    destruct Hin as [Hin | Hin].
-    + constructor; apply in_regs_of_builtin_arg_in_builtin_arg; auto.
-    + right; auto.
-  - induction bargs; simpl; intro Hin; inv Hin.
-    + apply in_or_app; left.
-      apply in_regs_of_builtin_arg_in_builtin_arg; auto.
-    + apply in_or_app; right; auto.
 Qed.

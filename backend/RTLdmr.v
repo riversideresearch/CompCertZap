@@ -42,10 +42,10 @@ Local Open Scope string_scope.
 
 Definition smove_sig_of_typ (ty : typ) : option (string * replicate_builtin) :=
   match ty with
-  | Tint => Some ("__builtin_smove_int", BI_smove_int)
-  | Tlong => Some ("__builtin_smove_long", BI_smove_long)
-  | Tsingle => Some ("__builtin_smove_single", BI_smove_single)
-  | Tfloat => Some ("__builtin_smove_float", BI_smove_float)
+  | Tint => Some ("__builtin_smove_int_green", BI_smove_int_green)
+  | Tlong => Some ("__builtin_smove_long_green", BI_smove_long_green)
+  | Tsingle => Some ("__builtin_smove_single_green", BI_smove_single_green)
+  | Tfloat => Some ("__builtin_smove_float_green", BI_smove_float_green)
   | _ => None
   end.
 
@@ -111,83 +111,6 @@ Fixpoint check_regs
       check_regs re rm rs succ
   end.
 
-Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
-  match arg with
-  | BA r => [r]
-  | BA_splitlong hi lo => regs_of_builtin_arg hi ++ regs_of_builtin_arg lo
-  | BA_addptr a1 a2 => regs_of_builtin_arg a1 ++ regs_of_builtin_arg a2
-  | _ => []
-  end.
-
-(** Pull out registers from builtin_args. *)
-Fixpoint regs_of_builtin_args (args : list (builtin_arg reg)) : list reg :=
-  match args with
-  | [] => []
-  | ba :: rest => regs_of_builtin_arg ba ++ regs_of_builtin_args rest
-  end.
-
-Definition regs_of_fn (fn : reg + ident) : list reg :=
-  match fn with
-  | inl r => [r]
-  | inr _ => []
-  end.
-
-Definition args_of_instruction (instr : instruction) : list reg :=
-  match instr with
-  | Inop _ => []
-  | Iop _ args _ _ => args
-  | Iload _  _ args _ _ => args
-  | Istore _ _ args src _ => src :: args
-  | Icall _ fn args _ _ => regs_of_fn fn ++ args
-  | Itailcall _ fn args => regs_of_fn fn ++ args
-  | Ibuiltin _ args _ _ => regs_of_builtin_args args
-  | Icond _ args _ _ => args
-  | Ijumptable arg _ => [arg]
-  | Ireturn (Some r) => [r]
-  | Ireturn None => []
-  end.
-
-(** This ignores the recursive cases because according to
-    [exec_Ibuiltin] (specifically [regmap_setres]) the result is used
-    only in the [BR] case.  *)
-Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
-  match res with
-  | BR r => Some r
-  | _ => None
-  end.
-
-Definition res_of_instruction (instr : instruction) : option reg :=
-  match instr with
-  | Iop _ _ res _ => Some res
-  | Iload _ _ _ res _ => Some res
-  | Icall _ _ _ res _ => Some res
-  | Ibuiltin _ _ res _ => reg_of_builtin_res res
-  | _ => None
-  end.
-
-Definition succ_of_instruction (instr : instruction) : option node :=
-  match instr with
-  | Inop succ => Some succ
-  | Iop _ _ _ succ => Some succ
-  | Iload _ _ _ _ succ => Some succ
-  | Istore _ _ _ _ succ => Some succ
-  | Icall _ _ _ _ succ => Some succ
-  | Ibuiltin _ _ _ succ => Some succ
-  | _ => None
-  end.
-
-(** Modify [instr] to jump to [new_succ]. *)
-Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
-  match instr with
-  | Inop _ => Inop new_succ
-  | Iop op args dst _ => Iop op args dst new_succ
-  | Iload chunk addr args dst _ => Iload chunk addr args dst new_succ
-  | Istore chunk addr args src _ => Istore chunk addr args src new_succ
-  | Icall sig fn args dst _ => Icall sig fn args dst new_succ
-  | Ibuiltin ef args dst _ => Ibuiltin ef args dst new_succ
-  | _ => instr
-  end.
-
 (** Insert instructions at [pc] to move contents of [r] to its shadow
     copies and then jump to [succ]. *)
 Definition copy_to_shadows
@@ -237,7 +160,7 @@ Definition transf_instr
      instructions with result registers (Icall and Ibuiltin), copy the
      result to its shadow register. *)
   | _ =>
-      do n <- check_regs re rm (args_of_instruction instr) pc;
+      do n <- check_regs re rm (dedup (args_of_instruction instr)) pc;
       match res_of_instruction instr, succ_of_instruction instr with
       | Some res, Some succ =>
           do m <- reserve_instr;
@@ -251,67 +174,6 @@ Definition transf_instr
 Definition transf_code (re : regenv) (rm : PMap.t reg) (c : code)
   : mon unit :=
   iterM (transf_instr re rm) (PTree.elements c).
-
-Definition Regset_of_list (l : list positive) : Regset.t  :=
-  fold_right (fun acc p => Regset.add acc p) Regset.empty l.
-
-Definition Regset_of_option (x : option positive) : Regset.t :=
-  match x with
-  | Some p => Regset.singleton p
-  | None => Regset.empty
-  end.
-
-(** All registers that appear in an instruction (arguments or
-    destination). *)
-(* TODO: relate to instr_uses and instr_defined? *)
-Definition instr_regs (i : instruction) : Regset.t :=
-  match i with
-  | Inop _ => Regset.empty
-  | Iop _ args res _ =>
-      Regset.union (Regset_of_list args) (Regset.singleton res)
-  | Iload _ _ args dst _ =>
-      Regset.union (Regset_of_list args) (Regset.singleton dst)
-  | Istore _ _ args src _ =>
-      Regset.union (Regset_of_list args) (Regset.singleton src)
-  | Icall _ (inl r) args res _ =>
-      Regset.union (Regset_of_list (r :: args)) (Regset.singleton res)
-  | Icall _ _ args res _ =>
-      Regset.union (Regset_of_list args) (Regset.singleton res)
-  | Itailcall _ (inl r) args => Regset_of_list (r :: args)
-  | Itailcall _ _ args => Regset_of_list args
-  | Ibuiltin _ args res _ =>
-      Regset.union (Regset_of_list (regs_of_builtin_args args))
-        (Regset_of_option (reg_of_builtin_res res))
-  | Icond _ args _ _ => Regset_of_list args
-  | Ijumptable arg _ => Regset.singleton arg
-  | Ireturn (Some arg) => Regset.singleton arg
-  | Ireturn None => Regset.empty
-  end.
-
-(** All registers that appear in the given code (used in
-    instructions). *)
-Definition code_regs (c : code) : Regset.t :=
-  PTree.fold (fun rs _ instr => Regset.union rs (instr_regs instr)) c Regset.empty.
-
-Definition all_regs (params : list reg) (c : code) : Regset.t :=
-  Regset.union (Regset_of_list params) (code_regs c).
-
-Definition all_regs_list (params : list reg) (c : code) : list reg :=
-  Regset.elements (all_regs params c).
-
-(** All registers that appear in the given function (params + regs
-    used in instructions). *)
-Definition fun_regs (f : function) : Regset.t :=
-  all_regs f.(fn_params) f.(fn_code).
-
-Definition fun_regs_list (f : function) : list positive :=
-  all_regs_list f.(fn_params) f.(fn_code).
-
-Definition max_reg (regs : Regset.t) :=
-  match Regset.max_elt regs with
-  | Some p => p
-  | None => 1%positive
-  end.
 
 (** Build replication map (mapping each register to a pair of
     corresponding shadow registers) for function [f]. *)

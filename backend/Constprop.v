@@ -161,7 +161,7 @@ Definition transf_builtin
       end
   | _, _ => dfl
   end.
-*)
+ *)
 
 Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
                         (pc: node) (instr: instruction) :=
@@ -204,7 +204,7 @@ Definition transf_instr (f: function) (an: PMap.t VA.t) (rm: romem)
           match ef, res with
           | EF_builtin name sg, BR rd =>
               match lookup_builtin_function name sg with
-              | Some bf => 
+              | Some bf =>
                   match eval_static_builtin_function ae am rm bf args with
                   | Some a =>
                       match const_for_result a with

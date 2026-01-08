@@ -178,6 +178,9 @@ Proof.
   unfold helper_functions_declared; intros. decompose [Logic.and] H; clear H. auto 20.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section CMCONSTR.
 
 Variable cunit: Cminor.program.
@@ -1490,6 +1493,8 @@ Proof.
   apply plus_one; auto.
   apply eventually_and_invariant; eauto using subject_reduction, wt_prog.
 Qed.
+
+End VOTE.
 
 End PRESERVATION.
 

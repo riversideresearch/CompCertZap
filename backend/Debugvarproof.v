@@ -282,6 +282,9 @@ Proof.
 - apply IHwf_avail0.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 (** * Semantic preservation *)
 
 Section PRESERVATION.
@@ -558,3 +561,5 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+End VOTE.

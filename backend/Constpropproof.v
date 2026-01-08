@@ -19,6 +19,7 @@ Require Compopts Machregs.
 Require Import Op Registers RTL.
 Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
 Require Import ConstpropOp ConstpropOpproof Constprop.
+Require Import Novotesproof.
 
 Definition match_prog (prog tprog: program) :=
   match_program (fun cu f tf => tf = transf_fundef (romem_for cu) f) eq prog tprog.
@@ -502,7 +503,7 @@ Opaque builtin_strength_reduction.
   destruct (eval_static_builtin_function ae am rm bf args) as [a|] eqn:ES; auto.
   destruct (const_for_result a) as [cop|] eqn:CR; auto.
   clear DFL. simpl in H1; red in H1; rewrite LK in H1; inv H1.
-  exploit const_for_result_correct; eauto. 
+  exploit const_for_result_correct; eauto.
   eapply eval_static_builtin_function_sound; eauto.
   intros (v' & A & B).
   left; econstructor; econstructor; split.
@@ -620,6 +621,15 @@ Proof.
   exists n2; exists s2'; split; auto. left; apply plus_one; auto.
   exists n2; exists s2; split; auto. right; split; auto. subst t; apply star_refl.
 - apply senv_preserved.
+Qed.
+
+Lemma list_forall2_impl_Forall {A B : Type} (P : A -> Prop) (Q : B -> Prop) l1 l2 :
+  list_forall2 (fun x y => P x -> Q y) l1 l2 ->
+  Forall P l1 ->
+  Forall Q l2.
+Proof.
+  revert l2; induction l1; simpl; intros l2 Hforall2 Hforall;
+    inv Hforall2; inv Hforall; constructor; auto.
 Qed.
 
 End PRESERVATION.

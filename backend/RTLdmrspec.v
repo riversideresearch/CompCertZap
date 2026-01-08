@@ -211,41 +211,41 @@ Inductive match_instr
     match_instr re rm c pc (Iop op args1 res1 succ)
 | match_iload :
   forall chunk addr args res n1 n2 succ
-    (CHK_ARGS : check_regsR c re rm args pc n1)
+    (CHK_ARGS : check_regsR c re rm (dedup args) pc n1)
     (N1 : c ! n1 = Some (Iload chunk addr args res n2))
     (MOVE : smoveR c (re res) res (rm # res) n2 succ),
   match_instr re rm c pc (Iload chunk addr args res succ)
 | match_Istore :
   forall chunk addr args src n succ
-    (CHK_REGS : check_regsR c re rm (src :: args) pc n)
+    (CHK_REGS : check_regsR c re rm (dedup (src :: args)) pc n)
     (N : c ! n = Some (Istore chunk addr args src succ)),
     match_instr re rm c pc (Istore chunk addr args src succ)
 | match_Icall :
   forall sig fn args res succ n1 n2
-    (CHK_ARGS : check_regsR c re rm (regs_of_fn fn ++ args) pc n1)
+    (CHK_ARGS : check_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n1)
     (N1 : c ! n1 = Some (Icall sig fn args res n2))
     (MOVE : smoveR c (re res) res (rm # res) n2 succ),
     match_instr re rm c pc (Icall sig fn args res succ)
 | match_Itailcall :
   forall sig fn args n
-    (CHK_ARGS : check_regsR c re rm (regs_of_fn fn ++ args) pc n)
+    (CHK_ARGS : check_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n)
     (N : c ! n = Some (Itailcall sig fn args)),
     match_instr re rm c pc (Itailcall sig fn args)
 | match_Ibuiltin_1 :
   forall ef bargs bres n succ
     (NORES : ~ is_BR bres) (* no result register *)
-    (CHK_ARGS : check_regsR c re rm (regs_of_builtin_args bargs) pc n)
+    (CHK_ARGS : check_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n)
     (N : c ! n = Some (Ibuiltin ef bargs bres succ)),
     match_instr re rm c pc (Ibuiltin ef bargs bres succ)
 | match_Ibuiltin_2 :
   forall ef bargs res n1 n2 succ
-    (CHK_ARGS : check_regsR c re rm (regs_of_builtin_args bargs) pc n1)
+    (CHK_ARGS : check_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n1)
     (N1 : c ! n1 = Some (Ibuiltin ef bargs (BR res) n2))
     (MOVE : smoveR c (re res) res (rm # res) n2 succ),
     match_instr re rm c pc (Ibuiltin ef bargs (BR res) succ)
 | match_Icond :
   forall cond args ifso ifnot n
-    (CHK_ARGS : check_regsR c re rm args pc n)
+    (CHK_ARGS : check_regsR c re rm (dedup args) pc n)
     (N : c ! n = Some (Icond cond args ifso ifnot)),
     match_instr re rm c pc (Icond cond args ifso ifnot)
 | match_Ijumptable :
@@ -569,7 +569,7 @@ Lemma checkR_ptree_set c ty r1 r2 pc succ n i :
 Proof.
   intros Hc Hchk; inv Hchk.
   econstructor; eauto.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+  destruct (peq n pc);
     subst; try congruence.
   rewrite PTree.gso; eauto.
 Qed.
@@ -593,7 +593,7 @@ Lemma smoveR_ptree_set c ty r1 r2 pc succ n i :
 Proof.
   intros Hc Hmove; inv Hmove.
   econstructor; eauto.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec n pc);
+  destruct (peq n pc);
     subst; try congruence; rewrite PTree.gso; eauto.
 Qed.
 
@@ -869,7 +869,7 @@ Proof.
   apply PTree_Properties.fold_ind; intros t Ht p i Htp.
   { specialize (Ht p); congruence. }
   intros Hcp HI p' i' Htp'.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec p p'); subst.
+  destruct (peq p p'); subst.
   { lia. }
   assert (H: (PTree.remove p t) ! p' = Some i').
   { rewrite PTree.gro; auto. }
@@ -966,7 +966,7 @@ Proof.
   split.
   - intros r1 Hin.
     inv s0; simpl in *; unfold Ple in *.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
+    destruct (peq a r1); subst.
     + clear Hin.
       rewrite PMap.gss.
       split.
@@ -1001,7 +1001,7 @@ Proof.
       * apply H in Hin; intuition.
       * specialize (H r1 Hin); destruct H as [H H'].
         intros r1' Hin' Hneq; try congruence.
-        destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1'); subst.
+        destruct (peq a r1'); subst.
         { rewrite PMap.gss.
           clear Hin' n.
           constructor.
@@ -1025,7 +1025,7 @@ Proof.
   - simpl.
     apply Forall_forall; intros r1 Hin r2 Hr1.
     inv s0; simpl in *; unfold Ple in *.
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a r1); subst.
+    destruct (peq a r1); subst.
     { rewrite PMap.gss; lia. }
     inv Hin; try congruence.
     rewrite PMap.gso; auto.
@@ -1091,7 +1091,7 @@ Proof.
     + apply Regset.add_2, IHl, Hin.
   - revert p; induction l; simpl; intros p Hin.
     { inv Hin. }
-    destruct (DecidableTypeEx.Positive_as_DT.eq_dec a p); subst; auto.
+    destruct (peq a p); subst; auto.
     right; apply Regset.add_3 in Hin; auto.
 Qed.
 
@@ -1197,7 +1197,7 @@ Proof.
   repeat state_incr_inv.
   unfold Ple in *; simpl in *.
   intros x1 Hin.
-  destruct (DecidableTypeEx.Positive_as_DT.eq_dec a x1); subst.
+  destruct (peq a x1); subst.
   - rewrite PMap.gss; lia.
   - destruct Hin as [?|Hin]; try congruence.
     rewrite PMap.gso; auto.
@@ -1291,45 +1291,4 @@ Proof.
     apply in_elements, Regset.diff_1, Regset.inter_2 in Hin.
     apply in_elements, Regset.union_3; auto.
   - inv Htransf; constructor.
-Qed.
-
-Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
-| in_builtin_arg_BA : in_builtin_arg a (BA a)
-| in_builtin_arg_splitlong_hi : forall hi lo,
-    in_builtin_arg a hi ->
-    in_builtin_arg a (BA_splitlong hi lo)
-| in_builtin_arg_splitlong_lo : forall hi lo,
-    in_builtin_arg a lo ->
-    in_builtin_arg a (BA_splitlong hi lo)
-| in_builtin_arg_addptr_a1 : forall a1 a2,
-    in_builtin_arg a a1 ->
-    in_builtin_arg a (BA_addptr a1 a2)
-| in_builtin_arg_addptr_a2 : forall a1 a2,
-    in_builtin_arg a a2 ->
-    in_builtin_arg a (BA_addptr a1 a2).
-
-Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
-  In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.
-Proof.
-  split.
-  - induction barg; simpl; intro Hin; try contradiction;
-      try (destruct Hin; subst; try contradiction; constructor);
-      apply in_app_or in Hin; destruct Hin as [Hin | Hin];
-      solve [constructor; auto].
-  - induction barg; simpl; intro Hin; inv Hin; auto; apply in_or_app; auto.
-Qed.
-
-Lemma in_regs_of_builtin_args_exists_in_builtin_arg r bargs :
-  In r (regs_of_builtin_args bargs) <-> Exists (in_builtin_arg r) bargs.
-Proof.
-  split.
-  - induction bargs; simpl; intro Hin; try contradiction.
-    apply in_app_or in Hin.
-    destruct Hin as [Hin | Hin].
-    + constructor; apply in_regs_of_builtin_arg_in_builtin_arg; auto.
-    + right; auto.
-  - induction bargs; simpl; intro Hin; inv Hin.
-    + apply in_or_app; left.
-      apply in_regs_of_builtin_arg_in_builtin_arg; auto.
-    + apply in_or_app; right; auto.
 Qed.

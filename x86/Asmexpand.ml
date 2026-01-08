@@ -550,16 +550,28 @@ let expand_builtin_inline name args res =
      ()
 
   (* Shadow move *)
-  | "__builtin_smove_int", [BA(IR a)], BR(IR res) ->
+  | "__builtin_smove_int_green", [BA(IR a)], BR(IR res) ->
      if a <> res then
        emit (Pmov_rr (res, a))
-  | "__builtin_smove_long", [BA(IR a)], BR(IR res) ->
+  | "__builtin_smove_long_green", [BA(IR a)], BR(IR res) ->
      if a <> res then
        emit (Pmov_rr (res, a))
-  | "__builtin_smove_single", [BA(FR a)], BR(FR res) ->
+  | "__builtin_smove_single_green", [BA(FR a)], BR(FR res) ->
      if a <> res then
        emit (Pmovsd_ff (res, a))
-  | "__builtin_smove_float", [BA(FR a)], BR(FR res) ->
+  | "__builtin_smove_float_green", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pmovsd_ff (res, a))
+  | "__builtin_smove_int_blue", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__builtin_smove_long_blue", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__builtin_smove_single_blue", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pmovsd_ff (res, a))
+  | "__builtin_smove_float_blue", [BA(FR a)], BR(FR res) ->
      if a <> res then
        emit (Pmovsd_ff (res, a))
 
