@@ -17,8 +17,8 @@
   + `backend/RTLinfercolor.ml`: unverified OCaml code for inferring function colorings. Hodgepodge dataflow analysis with three update functions, one forward and two backward. Probably could be redesigned to use a single unification pass followed by a single forward propagation pass.
   + `backend/RTLagreement.v`: definition of 'weak agreement' for RTL
   + `x86/Asmagreement.v`: definition of 'weak agreement' for x86 asm, and proof that weak agreement is preserved from RTL to asm by forward simulation for safe programs
-  + `backend/Novotes.v`: checker for establishing no_votes property on RTL programs. Not yet implemented
-  + `backend/Novotesproof.v`: definition of no_votes property, and proofs that the no_votes checker is sound wrt. it and that it trivially satisfies a forward simulation (as it doesn't change the program). Not yet done
+  + `backend/Novotes.v`: checker for establishing no_votes property on RTL programs.
+  + `backend/Novotesproof.v`: definition of no_votes property, and proofs that the no_votes checker is sound wrt. it and that it trivially satisfies a forward simulation (as it doesn't change the program).
 
 # Notes
 - We shouldn't need to actually use preservation of weak agreement directly (thus we shouldn't need to assume safety of the source program) if we just compose behavioral refinement at the right places (from source to right after novotes, where weak agreement can be trivially obtained and thus a behavioral refinement of 2-voting with 3-voting, then compose with behavioral refinement wrt. 3-voting from that point (obtained via forward simulation as usual) to asm.
