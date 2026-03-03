@@ -281,7 +281,6 @@ Qed.
 (*   transf_c_program_to_rtl p = OK tp -> *)
 (*   rtl_weak_agreement' tp. *)
 (* Proof. *)
-(* Admitted. *)
 
 Lemma apply_partial_factor {A B : Type} (f : res A) (g : A -> res B) x :
   f @@@ (fun y => g y) = OK x -> exists z, f = OK z /\ g z = OK x.

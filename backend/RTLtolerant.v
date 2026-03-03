@@ -934,7 +934,6 @@ Section TOLERANCE.
   (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs1 ## args = Some a -> *)
   (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs2 ## args = Some a' -> *)
   (*   val_compat a a'. *)
-  (* Admitted. *)
                                                          
   (* Lemma not_div_eval_operation rs1 rs2 sp op args m v : *)
   (*   ~ is_div op -> *)
@@ -950,7 +949,6 @@ Section TOLERANCE.
   (*     try solve [exfalso; apply Hnodiv; constructor].     *)
   (*   - unfold Val.divs in *. *)
   (*     simpl in *. *)
-  (* Admitted. *)
 
   Ltac inv_Forall :=
     repeat match goal with

@@ -485,7 +485,6 @@ Section color_checker.
   (* (* Maybe not necessary but should be true anyway. *) *)
   (* Lemma check_col_function_complete (f : function) : *)
   (*   wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true. *)
-  (* Admitted. *)
 
   (* Theorem check_col_function_spec (f : function) : *)
   (*   reflect (wc_function (fun pc r => (col pc) ! r) f) (check_col_function f). *)

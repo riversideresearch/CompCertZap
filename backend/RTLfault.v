@@ -54,7 +54,6 @@ Qed.
 (* Proof. *)
 (*   intros H0 H1. *)
 (*   destruct v1; destruct v2; destruct t; simpl in *; try constructor. *)
-(*   admit.  *)
 (*   unfold Val.has_type in H0. *)
 
 (* Technically we could/should allow faults (and not vote on) on most
