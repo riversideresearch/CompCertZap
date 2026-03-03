@@ -76,38 +76,38 @@ Deferred to future cleanup cycle. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILE-01 | Phase 1 | Pending |
-| FILE-02 | Phase 1 | Pending |
-| FILE-03 | Phase 1 | Pending |
-| FILE-04 | Phase 1 | Pending |
-| MOD-01 | Phase 2 | Pending |
-| MOD-02 | Phase 2 | Pending |
-| MOD-03 | Phase 2 | Pending |
-| MOD-04 | Phase 2 | Pending |
-| SPEC-01 | Phase 3 | Pending |
-| SPEC-02 | Phase 3 | Pending |
-| SPEC-03 | Phase 3 | Pending |
-| SPEC-04 | Phase 3 | Pending |
-| DEDUP-01 | Phase 4 | Pending |
-| DEDUP-02 | Phase 4 | Pending |
-| DEDUP-03 | Phase 4 | Pending |
-| DEDUP-04 | Phase 4 | Pending |
-| DEDUP-05 | Phase 4 | Pending |
-| HYG-01 | Phase 5 | Pending |
-| HYG-02 | Phase 5 | Pending |
-| HYG-03 | Phase 5 | Pending |
-| HYG-04 | Phase 5 | Pending |
-| HYG-05 | Phase 5 | Pending |
-| HYG-06 | Phase 5 | Pending |
-| HYG-07 | Phase 5 | Pending |
-| HYG-08 | Phase 5 | Pending |
-| HYG-09 | Phase 5 | Pending |
+| FILE-01 | Phase 1 - Baseline and File Cleanup | Pending |
+| FILE-02 | Phase 1 - Baseline and File Cleanup | Pending |
+| FILE-03 | Phase 1 - Baseline and File Cleanup | Pending |
+| FILE-04 | Phase 1 - Baseline and File Cleanup | Pending |
+| MOD-01 | Phase 2 - Shared Module Introduction | Pending |
+| MOD-02 | Phase 2 - Shared Module Introduction | Pending |
+| MOD-03 | Phase 2 - Shared Module Introduction | Pending |
+| MOD-04 | Phase 2 - Shared Module Introduction | Pending |
+| SPEC-01 | Phase 3 - Spec Strengthening | Pending |
+| SPEC-02 | Phase 3 - Spec Strengthening | Pending |
+| SPEC-03 | Phase 3 - Spec Strengthening | Pending |
+| SPEC-04 | Phase 3 - Spec Strengthening | Pending |
+| DEDUP-01 | Phase 4 - Proof De-duplication | Pending |
+| DEDUP-02 | Phase 4 - Proof De-duplication | Pending |
+| DEDUP-03 | Phase 4 - Proof De-duplication | Pending |
+| DEDUP-04 | Phase 4 - Proof De-duplication | Pending |
+| DEDUP-05 | Phase 4 - Proof De-duplication | Pending |
+| HYG-01 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-02 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-03 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-04 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-05 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-06 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-07 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-08 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-09 | Phase 5 - Comment and Tactic Hygiene | Pending |
 
 **Coverage:**
 - v1 requirements: 27 total
 - Mapped to phases: 27
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-03*
-*Last updated: 2026-03-03 after initial definition*
+*Last updated: 2026-03-03 after roadmap creation*
