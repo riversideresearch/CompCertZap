@@ -9,9 +9,9 @@ Requirements for this cleanup cycle. Each maps to roadmap phases.
 
 ### File Cleanup
 
-- [ ] **FILE-01**: All 13 untracked backup files are deleted from backend/ and driver/
-- [ ] **FILE-02**: backend/AdvSem.v is removed after reference/build verification
-- [ ] **FILE-03**: backend/Replicate3proof.v is removed after reference/build verification
+- [x] **FILE-01**: All 13 untracked backup files are deleted from backend/ and driver/
+- [x] **FILE-02**: backend/AdvSem.v is removed after reference/build verification
+- [x] **FILE-03**: backend/Replicate3proof.v is removed after reference/build verification
 - [x] **FILE-04**: Baseline health record captured (make check-admitted + targeted .vo builds)
 
 ### Module Reorganization
@@ -76,9 +76,9 @@ Deferred to future cleanup cycle. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILE-01 | Phase 1 - Baseline and File Cleanup | Pending |
-| FILE-02 | Phase 1 - Baseline and File Cleanup | Pending |
-| FILE-03 | Phase 1 - Baseline and File Cleanup | Pending |
+| FILE-01 | Phase 1 - Baseline and File Cleanup | Complete |
+| FILE-02 | Phase 1 - Baseline and File Cleanup | Complete |
+| FILE-03 | Phase 1 - Baseline and File Cleanup | Complete |
 | FILE-04 | Phase 1 - Baseline and File Cleanup | Complete |
 | MOD-01 | Phase 2 - Shared Module Introduction | Pending |
 | MOD-02 | Phase 2 - Shared Module Introduction | Pending |
