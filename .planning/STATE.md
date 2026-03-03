@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 1 of 5 (Baseline and File Cleanup)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-03 — Roadmap created
+Plan: 1 of 2 in current phase
+Status: Executing
+Last activity: 2026-03-03 — Completed 01-01-PLAN.md (baseline proof health)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 10%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 6min
+- Total execution time: 0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-baseline-and-file-cleanup | 1 | 6min | 6min |
 
 **Recent Trend:**
-- Last 5 plans: none yet
+- Last 5 plans: 01-01 (6min)
 - Trend: -
 
 *Updated after each plan completion*
@@ -42,6 +42,7 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [01-01]: Removed commented-out Admitted/admit strings from tracked sources to fix make check-admitted false positives (Deviation Rule 3 -- blocking)
 - [Roadmap]: Follow dependency-aware execution order (original plan: 0,1,3,2,4,5) — spec strengthening (Phase 3) must precede proof de-duplication (Phase 4) so de-duplicated proofs can reference the cleaner relational specs
 - [Roadmap]: Separate commits by type (move-only, extraction, statement changes) to prevent accidental proof obligation changes
 - [Roadmap]: Verify via `rg` + build before any file deletion to prevent removing externally referenced code
@@ -60,5 +61,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Roadmap created, STATE.md initialized. No plans written yet.
+Stopped at: Completed 01-01-PLAN.md (baseline proof health). Next: 01-02-PLAN.md (file cleanup).
 Resume file: None

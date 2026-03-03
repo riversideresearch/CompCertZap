@@ -26,7 +26,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Requirements**: FILE-01, FILE-02, FILE-03, FILE-04
 **Plans:** 2 plans
 Plans:
-- [ ] 01-01-PLAN.md — Capture build baseline (make depend, targeted .vo builds, check-admitted)
+- [x] 01-01-PLAN.md — Capture build baseline (make depend, targeted .vo builds, check-admitted)
 - [ ] 01-02-PLAN.md — Delete 16 dead files (14 backups + 2 dead stubs) and verify clean state
 **Success Criteria** (what must be TRUE):
   1. `make check-admitted` and `grep -rn "^\s*Admitted" backend/ driver/` both report zero active admitted proofs — baseline recorded
@@ -89,7 +89,7 @@ Note: This order differs from the original plan's phase numbering (0,1,3,2,4,5) 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Baseline and File Cleanup | 0/2 | Planning complete | - |
+| 1. Baseline and File Cleanup | 1/2 | Executing | - |
 | 2. Shared Module Introduction | 0/TBD | Not started | - |
 | 3. Spec Strengthening | 0/TBD | Not started | - |
 | 4. Proof De-duplication | 0/TBD | Not started | - |
