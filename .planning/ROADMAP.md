@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 2 plans
 Plans:
 - [x] 01-01-PLAN.md — Capture build baseline (make depend, targeted .vo builds, check-admitted)
-- [ ] 01-02-PLAN.md — Delete 16 dead files (14 backups + 2 dead stubs) and verify clean state
+- [x] 01-02-PLAN.md — Delete 16 dead files (14 backups + 2 dead stubs) and verify clean state
 **Success Criteria** (what must be TRUE):
   1. `make check-admitted` and `grep -rn "^\s*Admitted" backend/ driver/` both report zero active admitted proofs — baseline recorded
   2. `make backend/Novotesproof.vo backend/RTLdmrproof.vo backend/RTLtmrproof.vo backend/RTLtolerant.vo` all succeed — targeted build baseline captured
@@ -38,6 +38,10 @@ Plans:
 **Goal**: Two new shared modules exist, compile, and are imported by both DMR and TMR files — with no proof obligations changed
 **Depends on**: Phase 1
 **Requirements**: MOD-01, MOD-02, MOD-03, MOD-04
+**Plans:** 2 plans
+Plans:
+- [ ] 02-01-PLAN.md — Create RTLreplicateSpecCommon.v and RTLreplicateProofCommon.v, wire spec files to import from SpecCommon
+- [ ] 02-02-PLAN.md — Wire proof files to import from ProofCommon, full verification
 **Success Criteria** (what must be TRUE):
   1. `backend/RTLreplicateSpecCommon.v` compiles independently (`make backend/RTLreplicateSpecCommon.vo` succeeds) and contains the 6 shared Ltac tactics and shared type definitions previously duplicated in both spec files
   2. `backend/RTLreplicateProofCommon.v` compiles independently and contains the globally-scoped boilerplate lemmas previously duplicated in both proof files
@@ -89,8 +93,8 @@ Note: This order differs from the original plan's phase numbering (0,1,3,2,4,5) 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Baseline and File Cleanup | 1/2 | Executing | - |
-| 2. Shared Module Introduction | 0/TBD | Not started | - |
+| 1. Baseline and File Cleanup | 2/2 | Complete | 2026-03-03 |
+| 2. Shared Module Introduction | 0/2 | Planned | - |
 | 3. Spec Strengthening | 0/TBD | Not started | - |
 | 4. Proof De-duplication | 0/TBD | Not started | - |
 | 5. Comment and Tactic Hygiene | 0/TBD | Not started | - |
