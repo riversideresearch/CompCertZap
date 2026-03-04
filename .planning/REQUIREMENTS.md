@@ -34,7 +34,7 @@ Requirements for this cleanup cycle. Each maps to roadmap phases.
 - [ ] **DEDUP-02**: maj_voteR_step in RTLtmrproof.v refactored from four-case duplication to parametric lemma
 - [ ] **DEDUP-03**: external_call_vote_lessdef in RTLtolerant.v refactored from four identical cases to type-parametric lemma
 - [ ] **DEDUP-04**: Deprecated external_call_Three_Two removed from RTLtolerant.v after migrating all 3 call sites to external_call_Three_Two'
-- [ ] **DEDUP-05**: check_col_instr_sound in RTLcolorcheck.v broken into per-instruction lemmas
+- [x] **DEDUP-05**: check_col_instr_sound in RTLcolorcheck.v broken into per-instruction lemmas
 
 ### Comment & Tactic Hygiene
 
@@ -92,7 +92,7 @@ Deferred to future cleanup cycle. Tracked but not in current roadmap.
 | DEDUP-02 | Phase 4 - Proof De-duplication | Pending |
 | DEDUP-03 | Phase 4 - Proof De-duplication | Pending |
 | DEDUP-04 | Phase 4 - Proof De-duplication | Pending |
-| DEDUP-05 | Phase 4 - Proof De-duplication | Pending |
+| DEDUP-05 | Phase 4 - Proof De-duplication | Complete |
 | HYG-01 | Phase 5 - Comment and Tactic Hygiene | Pending |
 | HYG-02 | Phase 5 - Comment and Tactic Hygiene | Pending |
 | HYG-03 | Phase 5 - Comment and Tactic Hygiene | Pending |

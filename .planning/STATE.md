@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-stopped_at: Completed 04-02 Task 2 (maj_voteR_step dedup), abandoned Task 1 (Novotesproof.v). Moving to 04-03.
-last_updated: "2026-03-04T04:50:00.000Z"
-last_activity: 2026-03-04 -- 04-02 partial (RTLtmrproof.v done, Novotesproof.v abandoned)
+status: executing
+stopped_at: Completed 04-03-PLAN.md (RTLcolorcheck per-instruction decomposition) -- Phase 4 complete
+last_updated: "2026-03-04T05:23:41.736Z"
+last_activity: 2026-03-04 -- 04-03 RTLcolorcheck per-instruction decomposition, Phase 4 complete
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** All Coq proofs continue to compile cleanly after every change — no regressions, no new Admitted proofs.
-**Current focus:** Phase 4 in progress - proof de-duplication (04-01 partial, moving to 04-02)
+**Current focus:** Phase 4 complete - proof de-duplication. Ready for Phase 5 (Comment and Tactic Hygiene).
 
 ## Current Position
 
-Phase: 4 of 5 (Proof De-duplication) -- IN PROGRESS
-Plan: 2 of 3 in current phase (2 partial)
-Status: Executing
-Last activity: 2026-03-04 -- 04-02 partial (maj_voteR_step dedup done, Novotesproof.v abandoned)
+Phase: 4 of 5 (Proof De-duplication) -- COMPLETE
+Plan: 3 of 3 in current phase (all complete)
+Status: Phase 4 complete
+Last activity: 2026-03-04 -- 04-03 RTLcolorcheck per-instruction decomposition + full suite verification
 
 Progress: [██████████] 100%
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | Phase 02 P02 | 2min | 1 tasks | 3 files |
 | Phase 03 P01 | 8min | 2 tasks | 1 files |
 | Phase 03 P02 | 7min | 2 tasks | 1 files |
+| Phase 04 P03 | 4min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ Recent decisions affecting current work:
 - [Roadmap]: Verify via `rg` + build before any file deletion to prevent removing externally referenced code
 - [Roadmap]: no_votes policy alignment (XPASS-01, XPASS-02) deferred to v2 — requires cross-pass architecture decision not needed for current cleanup
 - [Phase 02]: Changed RTLreplicateProofCommon from Require Import to Require Export for transitive import propagation (same pattern as SpecCommon in plan 01)
+- [Phase 04]: Decomposed check_col_instr_sound into 14 per-instruction lemmas with explicit preconditions for builtin variants. Dispatcher pattern keeps main lemma to 20 lines.
 
 ### Pending Todos
 
@@ -90,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-04T00:57:37Z
-Stopped at: Completed 03-02-PLAN.md (TMR relational spec decomposition) -- Phase 3 complete
+Last session: 2026-03-04T05:23:41.735Z
+Stopped at: Completed 04-03-PLAN.md (RTLcolorcheck per-instruction decomposition) -- Phase 4 complete
 Resume file: None
