@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 02-02-PLAN.md (proof common wiring). Phase 2 complete.
-last_updated: "2026-03-04T00:13:19.905Z"
-last_activity: 2026-03-04 -- Completed 02-02-PLAN.md (proof common wiring)
+status: in-progress
+stopped_at: Completed 03-01-PLAN.md (DMR relational spec decomposition)
+last_updated: "2026-03-04T00:46:45Z"
+last_activity: 2026-03-04 -- Completed 03-01-PLAN.md (DMR relational spec)
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_plans: 6
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** All Coq proofs continue to compile cleanly after every change — no regressions, no new Admitted proofs.
-**Current focus:** Phase 2 complete - shared module introduction done
+**Current focus:** Phase 3 in progress - spec strengthening (DMR done, TMR next)
 
 ## Current Position
 
-Phase: 2 of 5 (Shared Module Introduction) -- COMPLETE
-Plan: 2 of 2 in current phase (all complete)
-Status: Phase Complete
-Last activity: 2026-03-04 -- Completed 02-02-PLAN.md (proof common wiring)
+Phase: 3 of 5 (Spec Strengthening)
+Plan: 1 of 2 in current phase (1 complete)
+Status: In Progress
+Last activity: 2026-03-04 -- Completed 03-01-PLAN.md (DMR relational spec)
 
-Progress: [██████████] 100%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 3.3min
-- Total execution time: 0.22 hours
+- Total plans completed: 5
+- Average duration: 4.2min
+- Total execution time: 0.35 hours
 
 **By Phase:**
 
@@ -45,14 +45,16 @@ Progress: [██████████] 100%
 |-------|-------|-------|----------|
 | 01-baseline-and-file-cleanup | 2 | 7min | 3.5min |
 | 02-shared-module-introduction | 2 | 6min | 3min |
+| 03-spec-strengthening | 1 | 8min | 8min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (6min), 01-02 (1min), 02-01 (4min), 02-02 (2min)
-- Trend: improving
+- Last 5 plans: 01-02 (1min), 02-01 (4min), 02-02 (2min), 03-01 (8min)
+- Trend: stable (03-01 longer due to proof development complexity)
 
 *Updated after each plan completion*
 | Phase 02 P01 | 4min | 2 tasks | 5 files |
 | Phase 02 P02 | 2min | 1 tasks | 3 files |
+| Phase 03 P01 | 8min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -61,6 +63,8 @@ Progress: [██████████] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [03-01]: Added NoDup precondition to foldM_satisfies_rel, discharged via elements_NoDup from Regset.elements_3w
+- [03-01]: Factored shadow injectivity into replication_map_rel_injective for reuse by TMR spec
 - [02-01]: Used Require Export (not Import) for RTLreplicateSpecCommon in spec files so downstream proof files get unqualified access to shared names
 - [01-02]: Deleted all 16 dead files (14 backups + 2 stubs) including RTLinfercolor_unify.ml which lacks backup_ prefix but is functionally dead per research
 - [01-01]: Removed commented-out Admitted/admit strings from tracked sources to fix make check-admitted false positives (Deviation Rule 3 -- blocking)
@@ -82,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-04T00:10:05.580Z
-Stopped at: Completed 02-02-PLAN.md (proof common wiring). Phase 2 complete.
+Last session: 2026-03-04T00:46:45Z
+Stopped at: Completed 03-01-PLAN.md (DMR relational spec decomposition)
 Resume file: None

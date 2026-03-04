@@ -23,9 +23,9 @@ Requirements for this cleanup cycle. Each maps to roadmap phases.
 
 ### Spec Strengthening
 
-- [ ] **SPEC-01**: Relational spec defined for DMR replication-map construction in RTLdmrspec.v
+- [x] **SPEC-01**: Relational spec defined for DMR replication-map construction in RTLdmrspec.v
 - [ ] **SPEC-02**: Relational spec defined for TMR replication-map construction in RTLtmrspec.v
-- [ ] **SPEC-03**: Monolithic replication_map_wf_aux proof in RTLdmrspec.v replaced with spec + impl + consequence composition
+- [x] **SPEC-03**: Monolithic replication_map_wf_aux proof in RTLdmrspec.v replaced with spec + impl + consequence composition
 - [ ] **SPEC-04**: Monolithic replication_map_wf_aux proof in RTLtmrspec.v replaced with spec + impl + consequence composition
 
 ### Proof De-duplication
@@ -84,9 +84,9 @@ Deferred to future cleanup cycle. Tracked but not in current roadmap.
 | MOD-02 | Phase 2 - Shared Module Introduction | Complete |
 | MOD-03 | Phase 2 - Shared Module Introduction | Complete |
 | MOD-04 | Phase 2 - Shared Module Introduction | Complete |
-| SPEC-01 | Phase 3 - Spec Strengthening | Pending |
+| SPEC-01 | Phase 3 - Spec Strengthening | Complete |
 | SPEC-02 | Phase 3 - Spec Strengthening | Pending |
-| SPEC-03 | Phase 3 - Spec Strengthening | Pending |
+| SPEC-03 | Phase 3 - Spec Strengthening | Complete |
 | SPEC-04 | Phase 3 - Spec Strengthening | Pending |
 | DEDUP-01 | Phase 4 - Proof De-duplication | Pending |
 | DEDUP-02 | Phase 4 - Proof De-duplication | Pending |
