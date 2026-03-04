@@ -972,134 +972,166 @@ Proof.
       simpl. intros a Ha. destruct (rm # a) as [a2 a3]. auto.
 Qed.
 
-Lemma replication_map_wf_aux regs acc s rm s' pf :
-  Forall (fun r => r < s.(st_nextreg)) regs ->
+(** Stability of [replication_map_rel] under [PMap.set] for keys
+    outside the register list. *)
+Lemma replication_map_rel_set regs rm lo hi a v :
+  replication_map_rel regs rm lo hi ->
+  ~ In a regs ->
+  replication_map_rel regs (PMap.set a v rm) lo hi.
+Proof.
+  intros H Hnotin; induction H.
+  - constructor.
+  - constructor.
+    + apply IHreplication_map_rel. intro Hin; apply Hnotin; right; auto.
+    + rewrite PMap.gso; auto. intro; subst; apply Hnotin; left; auto.
+Qed.
+
+(** The [foldM] computation that builds the TMR replication map
+    satisfies the relational specification. *)
+Lemma foldM_satisfies_rel regs acc s rm s' pf :
+  NoDup regs ->
   foldM
     (fun rm r1 => do r2 <- new_reg; do r3 <- new_reg; ret rm # r1 <- (r2, r3))
     regs acc s = RTLgen.OK rm s' pf ->
-  rm_wf rm regs /\
-    Forall (fun r1 => forall r2 r3, PMap.get r1 rm = (r2, r3) ->
-                            s.(st_nextreg) <= r2 < s'.(st_nextreg) /\
-                              s.(st_nextreg) <= r3 < s'.(st_nextreg)) regs.
+  replication_map_rel regs rm s.(st_nextreg) s'.(st_nextreg).
 Proof.
   revert acc s rm s' pf.
-  induction regs; simpl; intros acc s rm s' pf Hall H.
-  { split.
-    - intros r1 r2 r3 [].
-    - constructor. }
-  unfold new_reg in H.
-  unfold RTLgen.bind in H.
-  simpl in H.
-  match goal with
-  | [ _: match ?X with | RTLgen.Error _ => _ | RTLgen.OK _ _ _ => _ end = _ |- _ ] => destruct X eqn:HX
-  end.
-  { inv H. }
-  inv H.
-  inv Hall.
-  rename t into rm.
-  assert (rm_wf rm regs).
-  { eapply IHregs; eauto. }
-  assert (Forall
-            (fun r1 : positive =>
-               forall r2 r3 : reg,
-                 rm # r1 = (r2, r3) -> st_nextreg s <= r2 < st_nextreg s'0 /\
-                                        st_nextreg s <= r3 < st_nextreg s'0) regs).
-  { eapply IHregs; eauto. }
-  clear HX IHregs.
-  rewrite Forall_forall in H0.
-  rewrite Forall_forall in H2.
+  induction regs; simpl; intros acc s rm s' pf Hnd Hfold.
+  - inv Hfold. constructor.
+  - unfold RTLgen.bind in Hfold. simpl in Hfold.
+    destruct (foldM _ regs acc s) eqn:Hrec; try discriminate.
+    unfold new_reg in Hfold. simpl in Hfold.
+    inv Hfold. inv Hnd. simpl.
+    econstructor.
+    + apply replication_map_rel_set; auto.
+      eapply IHregs; eauto.
+    + rewrite PMap.gss. reflexivity.
+Qed.
+
+(** Shadow-pair injectivity: distinct original registers get distinct
+    shadow pairs. *)
+Lemma replication_map_rel_injective regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  NoDup regs ->
+  forall r r', In r regs -> In r' regs -> r <> r' -> rm # r <> rm # r'.
+Proof.
+  induction 1; intros Hnd r0 r0' Hr0 Hr0' Hneq.
+  - destruct Hr0.
+  - inv Hnd.
+    destruct Hr0 as [-> | Hr0]; destruct Hr0' as [-> | Hr0'].
+    + congruence.
+    + subst.
+      pose proof (replication_map_rel_range _ _ _ _ H) as Hrng.
+      rewrite Forall_forall in Hrng. specialize (Hrng _ Hr0').
+      destruct (rm # r0') as [a2 a3].
+      rewrite H0. intros [= Ha Hb]. subst. lia.
+    + subst.
+      pose proof (replication_map_rel_range _ _ _ _ H) as Hrng.
+      rewrite Forall_forall in Hrng. specialize (Hrng _ Hr0).
+      destruct (rm # r0) as [a2 a3].
+      rewrite H0. intros [= Ha Hb]. subst. lia.
+    + eapply IHreplication_map_rel; eauto.
+Qed.
+
+(** Each shadow pair is consecutive: r3 = Pos.succ r2. *)
+Lemma replication_map_rel_consecutive regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  Forall (fun r => let '(r2, r3) := rm # r in r3 = Pos.succ r2) regs.
+Proof.
+  intro H; induction H.
+  - constructor.
+  - constructor.
+    + rewrite H0. reflexivity.
+    + eapply Forall_impl; [ | eauto ].
+      simpl. intros a Ha. destruct (rm # a) as [a2 a3]. auto.
+Qed.
+
+(** The relational spec implies shadow intervals don't overlap for
+    distinct registers: both shadow components differ by at least 2. *)
+Lemma replication_map_rel_disjoint_shadows regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  NoDup regs ->
+  forall r r', In r regs -> In r' regs -> r <> r' ->
+    let '(r2, r3) := rm # r in
+    let '(r2', r3') := rm # r' in
+    (r3 < r2' \/ r3' < r2).
+Proof.
+  induction 1; intros Hnd r0 r0' Hr0 Hr0' Hneq.
+  - destruct Hr0.
+  - inv Hnd.
+    destruct Hr0 as [-> | Hr0]; destruct Hr0' as [-> | Hr0'].
+    + congruence.
+    + rewrite H0.
+      pose proof (replication_map_rel_range _ _ _ _ H) as Hrng.
+      rewrite Forall_forall in Hrng. specialize (Hrng _ Hr0').
+      destruct (rm # r0') as [a2 a3]. right; lia.
+    + rewrite H0.
+      pose proof (replication_map_rel_range _ _ _ _ H) as Hrng.
+      rewrite Forall_forall in Hrng. specialize (Hrng _ Hr0).
+      destruct (rm # r0) as [a2 a3]. left; lia.
+    + eapply IHreplication_map_rel; eauto.
+Qed.
+
+(** The relational spec implies [rm_wf]: separate algorithmic
+    correctness from invariant consequences. *)
+Lemma rel_implies_rm_wf regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  Forall (fun r => r < lo) regs ->
+  NoDup regs ->
+  rm_wf rm regs.
+Proof.
+  intros Hrel Hlt Hnd.
+  pose proof (replication_map_rel_range _ _ _ _ Hrel) as Hrange.
+  pose proof (replication_map_rel_consecutive _ _ _ _ Hrel) as Hcons.
+  rewrite Forall_forall in Hlt.
+  rewrite Forall_forall in Hrange.
+  rewrite Forall_forall in Hcons.
+  intros r1 r2 r3 Hin Hr1.
+  specialize (Hlt _ Hin) as Hlt1.
+  specialize (Hrange _ Hin) as Hrange1. rewrite Hr1 in Hrange1.
+  destruct Hrange1 as [Hr2lo [Hr2hi [Hr3lo Hr3hi]]].
+  specialize (Hcons _ Hin) as Hcons1. rewrite Hr1 in Hcons1.
+  (* r3 = Pos.succ r2, so r2 < r3 *)
   split.
-  - intros r1 r2 r3 Hin Hr1.
-    inv s0; simpl in *; unfold Ple in *.
-    destruct (peq a r1); subst.
-    + clear Hin.
-      rewrite PMap.gss in Hr1; inv Hr1.
-      split.
-      * constructor.
-        { intro Hin; inv Hin; try lia.
-          inv H6; try lia; inv H7. }
-        constructor.
-        { intro Hin; inv Hin; try lia; inv H6. }
-        constructor.
-        { intros []. }
-        constructor.
-      * intros r1' r2' r3' Hin Hneq Hr1'.
-        inv Hin.
-        { congruence. }
-        rewrite PMap.gso in Hr1'; auto.
-        specialize (H0 r1' H6 r2' r3' Hr1').
-        constructor.
-        { intro Hin; inv Hin; try lia.
-          inv H7; try lia.
-          inv H8; try congruence.
-          inv H7; try lia.
-          inv H8; try lia.
-          inv H7. }
-        constructor.
-        { intro Hin; inv Hin; try lia.
-          specialize (H2 r1' H6).
-          inv pf; simpl in *; unfold Ple in *.
-          inv H7; lia. }
-        constructor.
-        { intro Hin; inv Hin.
-          - specialize (H2 (Pos.succ (st_nextreg s'0)) H6); lia.
-          - inv H7; try lia.
-            inv H8; try lia.
-            inv H7. }
-        specialize (H r1' r2' r3' H6 Hr1'); intuition.
-    + destruct Hin as [? | Hin]; try congruence.
-      rewrite PMap.gso in Hr1; auto.
-      specialize (H2 r1 Hin).
-      split.
-      * specialize (H r1 r2 r3 Hin Hr1); intuition.
-      * specialize (H r1 r2 r3 Hin Hr1); destruct H as [H H'].
-        intros r1' r2' r3' Hin' Hneq Hr1'; try congruence.
-        destruct (peq a r1'); subst.
-        { rewrite PMap.gss in Hr1'; inv Hr1'.
-          clear Hin' n.
-          constructor.
-          { intro HC; inv HC.
-            { inv H; apply H8; left; reflexivity. }
-            inv H6.
-            { inv H; apply H8; right; left; reflexivity. }
-            inv H7; try contradiction.
-            inv H6; try lia.
-            inv H7; try lia.
-            inv H6. }
-          constructor.
-          { intro HC; inv HC.
-            { inv H; inv H9; apply H7; left; reflexivity. }
-            inv H6.
-            { specialize (H0 r1 Hin r2 r3 Hr1); lia. }
-            inv H7.
-            { specialize (H0 r1 Hin (st_nextreg s'0) r3 Hr1); lia. }
-            inv H6.
-            { specialize (H0 r1 Hin (Pos.succ (st_nextreg s'0)) r3 Hr1); lia. }
-            destruct H7. }
-          constructor.
-          { intro HC; inv HC.
-            { specialize (H0 r1 Hin r2 r3 Hr1); lia. }
-            inv H6.
-            { specialize (H0 r1 Hin r2 (st_nextreg s'0) Hr1); lia. }
-            inv H7.
-            { specialize (H0 r1 Hin r2 (Pos.succ (st_nextreg s'0)) Hr1); lia. }
-            destruct H6. }
-          constructor.
-          { intro HC; inv HC; try lia.
-            inv H6; try lia; destruct H7. }
-          constructor.
-          { intro HC; inv HC; try lia; destruct H6. }
-          constructor; auto; constructor. }
-        destruct Hin' as [? | Hin']; try contradiction.
-        rewrite PMap.gso in Hr1'; auto.
-  - simpl.
-    apply Forall_forall; intros r1 Hin r2 r3 Hr1.
-    inv s0; simpl in *; unfold Ple in *.
-    destruct (peq a r1); subst.
-    { rewrite PMap.gss in Hr1; inv Hr1; lia. }
-    inv Hin; try congruence.
-    rewrite PMap.gso in Hr1; auto.
-    specialize (H0 r1 H6 r2 r3 Hr1); lia.
+  - (* NoDup [r1; r2; r3] *)
+    constructor.
+    { simpl. intros [?|[?|[]]]; subst; lia. }
+    constructor.
+    { simpl. intros [?|[]]; subst; lia. }
+    constructor; [ simpl; intros [] | constructor ].
+  - (* Cross-register NoDup *)
+    intros r1' r2' r3' Hin' Hneq Hr1'.
+    specialize (Hlt _ Hin') as Hlt1'.
+    specialize (Hrange _ Hin') as Hrange1'. rewrite Hr1' in Hrange1'.
+    destruct Hrange1' as [Hr2'lo [Hr2'hi [Hr3'lo Hr3'hi]]].
+    specialize (Hcons _ Hin') as Hcons1'. rewrite Hr1' in Hcons1'.
+    pose proof (replication_map_rel_disjoint_shadows _ _ _ _ Hrel Hnd
+                  r1 r1' Hin Hin' Hneq) as Hdisjoint.
+    rewrite Hr1, Hr1' in Hdisjoint.
+    (* Now we know: r3 = r2+1, r3' = r2'+1, and shadows don't overlap *)
+    destruct Hdisjoint as [Hdisjoint | Hdisjoint];
+      (constructor;
+       [ simpl; intros [?|[?|[?|[?|[?|[]]]]]]; subst; lia
+       | constructor;
+         [ simpl; intros [?|[?|[?|[?|[]]]]]; subst; lia
+         | constructor;
+           [ simpl; intros [?|[?|[?|[]]]]; subst; lia
+           | constructor;
+             [ simpl; intros [?|[?|[]]]; subst; lia
+             | constructor;
+               [ simpl; intros [?|[]]; subst; lia
+               | constructor; [ simpl; intros [] | constructor ]]]]]]).
+Qed.
+
+(** [NoDup] for [Regset.elements], derived from [NoDupA]. *)
+Lemma elements_NoDup s : NoDup (Regset.elements s).
+Proof.
+  pose proof (Regset.elements_3w s) as H.
+  induction H.
+  - constructor.
+  - constructor; auto.
+    intro Hin. apply H.
+    apply SetoidList.In_InA with (eqA := eq); auto. apply Eqsth.
 Qed.
 
 Lemma in_elements p s :
@@ -1136,9 +1168,13 @@ Lemma replication_map_wf f rm s pf :
   replication_map f (init_state f) = RTLgen.OK rm s pf ->
   rm_wf rm (fun_regs_list f).
 Proof.
-  intro H; eapply replication_map_wf_aux; eauto.
-  apply Forall_forall; intros r Hin.
-  apply in_lt_max_reg; auto.
+  intro H.
+  eapply rel_implies_rm_wf.
+  - eapply foldM_satisfies_rel; eauto.
+    apply elements_NoDup.
+  - apply Forall_forall; intros r Hin.
+    apply in_lt_max_reg; auto.
+  - apply elements_NoDup.
 Qed.
 
 Lemma rm_wf_antimonotone rm rs1 rs2 :
