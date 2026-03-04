@@ -19,7 +19,7 @@ Requirements for this cleanup cycle. Each maps to roadmap phases.
 - [x] **MOD-01**: backend/RTLreplicateSpecCommon.v created with shared spec tactics and definitions extracted from RTLdmrspec.v and RTLtmrspec.v
 - [x] **MOD-02**: backend/RTLreplicateProofCommon.v created with shared proof lemmas extracted from RTLdmrproof.v and RTLtmrproof.v
 - [x] **MOD-03**: RTLdmrspec.v and RTLtmrspec.v import from RTLreplicateSpecCommon.v instead of duplicating
-- [ ] **MOD-04**: RTLdmrproof.v and RTLtmrproof.v import from RTLreplicateProofCommon.v instead of duplicating
+- [x] **MOD-04**: RTLdmrproof.v and RTLtmrproof.v import from RTLreplicateProofCommon.v instead of duplicating
 
 ### Spec Strengthening
 
@@ -83,7 +83,7 @@ Deferred to future cleanup cycle. Tracked but not in current roadmap.
 | MOD-01 | Phase 2 - Shared Module Introduction | Complete |
 | MOD-02 | Phase 2 - Shared Module Introduction | Complete |
 | MOD-03 | Phase 2 - Shared Module Introduction | Complete |
-| MOD-04 | Phase 2 - Shared Module Introduction | Pending |
+| MOD-04 | Phase 2 - Shared Module Introduction | Complete |
 | SPEC-01 | Phase 3 - Spec Strengthening | Pending |
 | SPEC-02 | Phase 3 - Spec Strengthening | Pending |
 | SPEC-03 | Phase 3 - Spec Strengthening | Pending |
