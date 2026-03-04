@@ -73,7 +73,7 @@ Definition transfer
           reg_list_live args (reg_sum_live ros Regset.empty)
       | Ibuiltin ef args res s =>
           reg_list_live (params_of_builtin_args args)
-            (reg_list_dead (params_of_builtin_res res) after)
+            (match res with BR x => reg_dead x after | _ => after end)
       | Icond cond args ifso ifnot =>
           reg_list_live args after
       | Ijumptable arg tbl =>
