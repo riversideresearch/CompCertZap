@@ -73,7 +73,11 @@ Plans:
   3. `RTLtolerant.v`: the deprecated `external_call_Three_Two` is absent (all 3 call sites migrated to `external_call_Three_Two'`), and `external_call_vote_lessdef` four-case duplication is collapsed into a `vote_lessdef_of_type` helper — `make backend/RTLtolerant.vo` succeeds
   4. `RTLcolorcheck.v`: `check_col_instr_sound` is split into per-instruction lemmas — `make backend/RTLcolorcheck.vo` succeeds
   5. `make proof -j$(nproc)` and `make check-admitted` both pass cleanly after all de-duplication is complete
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 04-01-PLAN.md — Collapse external_call_vote_lessdef + remove deprecated external_call_Three_Two in RTLtolerant.v
+- [ ] 04-02-PLAN.md — Collapse no_votes_external_call (Novotesproof.v) + maj_voteR_step (RTLtmrproof.v)
+- [ ] 04-03-PLAN.md — Split check_col_instr_sound into per-instruction lemmas (RTLcolorcheck.v) + full suite verification
 
 ### Phase 5: Comment and Tactic Hygiene
 **Goal**: All abandoned commented-out proof blocks are removed from active files, all in-scope TODO markers are resolved, and DMR/TMR naming conventions are aligned
@@ -98,5 +102,5 @@ Note: This order differs from the original plan's phase numbering (0,1,3,2,4,5) 
 | 1. Baseline and File Cleanup | 2/2 | Complete | 2026-03-03 |
 | 2. Shared Module Introduction | 2/2 | Complete | 2026-03-04 |
 | 3. Spec Strengthening | 0/2 | Not started | - |
-| 4. Proof De-duplication | 0/TBD | Not started | - |
+| 4. Proof De-duplication | 0/3 | Not started | - |
 | 5. Comment and Tactic Hygiene | 0/TBD | Not started | - |
