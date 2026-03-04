@@ -41,25 +41,27 @@ Plans:
 **Plans:** 2 plans
 Plans:
 - [x] 02-01-PLAN.md — Create RTLreplicateSpecCommon.v and RTLreplicateProofCommon.v, wire spec files to import from SpecCommon
-- [ ] 02-02-PLAN.md — Wire proof files to import from ProofCommon, full verification
+- [x] 02-02-PLAN.md — Wire proof files to import from ProofCommon, full verification
 **Success Criteria** (what must be TRUE):
   1. `backend/RTLreplicateSpecCommon.v` compiles independently (`make backend/RTLreplicateSpecCommon.vo` succeeds) and contains the 6 shared Ltac tactics and shared type definitions previously duplicated in both spec files
   2. `backend/RTLreplicateProofCommon.v` compiles independently and contains the globally-scoped boilerplate lemmas previously duplicated in both proof files
   3. `make backend/RTLdmrspec.vo backend/RTLtmrspec.vo` succeed with `Require Import RTLreplicateSpecCommon` in place and duplicated content removed
   4. `make backend/RTLdmrproof.vo backend/RTLtmrproof.vo` succeed with `Require Import RTLreplicateProofCommon` in place and duplicated content removed
   5. `make check-admitted` still reports zero admitted proofs after all module wiring is complete
-**Plans**: TBD
 
 ### Phase 3: Spec Strengthening
 **Goal**: The monolithic replication_map_wf_aux proofs in both spec files are replaced by a relational spec that separates algorithmic correctness from invariant consequences
 **Depends on**: Phase 2
 **Requirements**: SPEC-01, SPEC-02, SPEC-03, SPEC-04
+**Plans:** 2 plans
+Plans:
+- [ ] 03-01-PLAN.md — Define relational spec and replace monolithic proof in RTLdmrspec.v (DMR)
+- [ ] 03-02-PLAN.md — Define relational spec and replace monolithic proof in RTLtmrspec.v (TMR)
 **Success Criteria** (what must be TRUE):
   1. `RTLdmrspec.v` defines a `replication_map_rel` inductive and two consequence lemmas (`foldM_satisfies_rel` and `rel_implies_rm_wf`), and the monolithic `replication_map_wf_aux` is replaced by their composition
   2. `RTLtmrspec.v` has the same parallel relational structure (different arity matching TMR's `PMap.t (reg * reg)`) with `replication_map_wf_aux` similarly replaced
   3. `make backend/RTLdmrspec.vo backend/RTLdmrproof.vo` succeed — the proof file still type-checks against the new spec interface
   4. `make backend/RTLtmrspec.vo backend/RTLtmrproof.vo` succeed — the proof file still type-checks against the new spec interface
-**Plans**: TBD
 
 ### Phase 4: Proof De-duplication
 **Goal**: Repeated proof patterns across four files are collapsed into parametric helpers, and the deprecated external_call_Three_Two lemma is removed after caller migration
@@ -94,7 +96,7 @@ Note: This order differs from the original plan's phase numbering (0,1,3,2,4,5) 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Baseline and File Cleanup | 2/2 | Complete | 2026-03-03 |
-| 2. Shared Module Introduction | 1/2 | In Progress | - |
-| 3. Spec Strengthening | 0/TBD | Not started | - |
+| 2. Shared Module Introduction | 2/2 | Complete | 2026-03-04 |
+| 3. Spec Strengthening | 0/2 | Not started | - |
 | 4. Proof De-duplication | 0/TBD | Not started | - |
 | 5. Comment and Tactic Hygiene | 0/TBD | Not started | - |
