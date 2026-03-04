@@ -134,15 +134,15 @@ End RTL_WEAK_AGREEMENT.
 (*     apply H with s. *)
 (*     ... *)
 
-(* TODO: get rid of no_votes at the C level, and just add an RTL pass
-that checks that there are no votes before the replication pass. Then
-we will have weak_agreement at the RTL level right before replication
+(* Design note: An alternative approach would be to remove no_votes at the C level
+and add an RTL pass that checks there are no votes before the replication pass.
+This would give weak_agreement at the RTL level right before replication
 (because no_votes implies weak_agreement trivially), then also after
 replication via preservation by forward simulation, and so forth down
-to asm. This way we 1) don't need to include no_votes as an explicit
-hypothesis in the top-level theorems, 2) don't need to define
-weak_agreement for anything above RTL, and 3) don't have to establish
-weak agreement via strong agreement at the replication pass. *)
+to asm. Benefits: 1) no_votes would not appear as an explicit hypothesis
+in the top-level theorems, 2) weak_agreement would not need to be defined
+for anything above RTL, and 3) weak agreement would not need to be
+established via strong agreement at the replication pass. *)
 
 (* Addendum: maybe we don't even need no_votes. The proof below
    doesn't seem to need it.. (it will be generalized so that the
