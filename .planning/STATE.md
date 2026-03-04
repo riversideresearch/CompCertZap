@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 03-02-PLAN.md (TMR relational spec decomposition) -- Phase 3 complete
-last_updated: "2026-03-04T01:03:12.821Z"
-last_activity: 2026-03-04 -- Completed 03-02-PLAN.md (TMR relational spec)
+status: in_progress
+stopped_at: Abandoned 04-01 Task 2 (vote_lessdef dedup), kept Task 1 (deprecated lemma removal). Moving to 04-02.
+last_updated: "2026-03-04T04:35:00.000Z"
+last_activity: 2026-03-04 -- 04-01 partial (Task 1 done, Task 2 abandoned)
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_plans: 9
+  completed_plans: 7
+  percent: 78
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** All Coq proofs continue to compile cleanly after every change — no regressions, no new Admitted proofs.
-**Current focus:** Phase 3 complete - spec strengthening (DMR + TMR relational specs done)
+**Current focus:** Phase 4 in progress - proof de-duplication (04-01 partial, moving to 04-02)
 
 ## Current Position
 
-Phase: 3 of 5 (Spec Strengthening) -- COMPLETE
-Plan: 2 of 2 in current phase (2 complete)
-Status: Phase Complete
-Last activity: 2026-03-04 -- Completed 03-02-PLAN.md (TMR relational spec)
+Phase: 4 of 5 (Proof De-duplication) -- IN PROGRESS
+Plan: 1 of 3 in current phase (1 partial)
+Status: Executing
+Last activity: 2026-03-04 -- 04-01 partial (deprecated lemma removed, vote_lessdef dedup abandoned)
 
 Progress: [██████████] 100%
 
@@ -64,6 +64,7 @@ Progress: [██████████] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [04-01]: Abandoned external_call_vote_lessdef Ltac deduplication — hypothesis name instability across inversion chains makes robust automation impractical. Four-case duplication is ugly but stable and correct. Kept deprecated lemma removal (Task 1).
 - [03-02]: TMR NoDup6 proofs require replication_map_rel_consecutive and replication_map_rel_disjoint_shadows beyond the DMR pattern, due to 6-element pairwise distinctness needing non-overlapping shadow intervals
 - [03-01]: Added NoDup precondition to foldM_satisfies_rel, discharged via elements_NoDup from Regset.elements_3w
 - [03-01]: Factored shadow injectivity into replication_map_rel_injective for reuse by TMR spec
