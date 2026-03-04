@@ -51,13 +51,6 @@ Definition rs_compat (rs1 rs2 : regset) : Prop :=
 
 Section match_states.
 
-  (* (** When a fault has occurred elsewhere and regsets [rs1] and [rs2] *)
-  (*     are unchanged, they still match. *) *)
-  (* Lemma match_rs_fault col (pc : node) (rs1 rs2 : regset) : *)
-  (*   match_rs (col pc) false rs1 rs2 -> *)
-  (*   match_rs (col pc) true rs1 rs2. *)
-  (* Proof. intro H; exists Red; split; auto; constructor. Qed. *)
-
   (** When a fault has occurred elsewhere and regsets [rs1] and [rs2]
       are unchanged, they still match. *)
   Lemma match_rs_upto_fault res col (pc : node) (rs1 rs2 : regset) :
@@ -478,14 +471,6 @@ Section TOLERANCE.
     repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
     inv Hmod1; inv Hmod2; constructor.
   Qed.
-
-  (* Lemma dfgd v1 v1' v2 v2': *)
-  (*   val_compat v1 v1' -> *)
-  (*   val_compat v2 v2' -> *)
-  (*   val_compat (Val.shl v1 v2) (Val.shl v1' v2'). *)
-  (* Proof. *)
-  (*   intros H0 H1; inv H0; inv H1; try constructor; simpl. *)
-  (*   do 2 destruct (Integers.Int.ltu _ _); try constructor. *)
 
   Lemma val_compat_shl_imm v v' n :
     val_compat v v' ->
@@ -929,117 +914,10 @@ Section TOLERANCE.
       + constructor.
   Qed.
 
-  (* Lemma eval_addressing_val_compat rs1 rs2 sp addr args a a' : *)
-  (*   rs_compat rs1 rs2 -> *)
-  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs1 ## args = Some a -> *)
-  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs2 ## args = Some a' -> *)
-  (*   val_compat a a'. *)
-  (* Admitted. *)
-                                                         
-  (* Lemma not_div_eval_operation rs1 rs2 sp op args m v : *)
-  (*   ~ is_div op -> *)
-  (*   Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v -> *)
-  (*   exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'. *)
-  (* Proof. *)
-  (*   intros Hnodiv Hop. *)
-  (*   destruct op; simpl in *; *)
-  (*     try (destruct args; simpl in *; try congruence); *)
-  (*     try (destruct args; simpl in *; try congruence); *)
-  (*     try (destruct args; simpl in *; try congruence); *)
-  (*     inv Hop; eexists; eauto; *)
-  (*     try solve [exfalso; apply Hnodiv; constructor].     *)
-  (*   - unfold Val.divs in *. *)
-  (*     simpl in *. *)
-  (* Admitted. *)
-
   Ltac inv_Forall :=
     repeat match goal with
       | [H : Forall _ (_ :: _) |- _] => inv H
       end.
-
-  (* Lemma rs_eq_eval_addressing sp addr rs1 rs2 args a : *)
-  (*   (forall r, rs1 # r = rs2 # r) -> *)
-  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs1 ## args = Some a -> *)
-  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs2 ## args = Some a. *)
-  (* Proof. *)
-  (*   unfold Op.eval_addressing. *)
-  (*   destruct Archi.ptr64 eqn: Harchi. *)
-  (*   - intros Heq Heval. *)
-  (*     destruct addr; simpl in *; *)
-  (*       repeat (destruct args; simpl in *; try congruence). *)
-  (*   - intros Heq Heval. *)
-  (*     destruct addr; simpl in *; try rewrite Harchi in *; *)
-  (*       repeat (destruct args; simpl in *; try congruence). *)
-  (* Qed. *)
-
-  (* Lemma rs_eq_map {A : Type} (rs1 rs2 : Regmap.t A) args : *)
-  (*   Forall (fun a => rs1 # a = rs2 # a) args -> *)
-  (*   rs1 ## args = rs2 ## args. *)
-  (* Proof. *)
-  (*   induction args; simpl; intro Hforall; auto. *)
-  (*   inv Hforall; rewrite H1, IHargs; auto. *)
-  (* Qed. *)
-  
-  (* Lemma rs_eq_eval_addressing sp addr rs1 rs2 args a : *)
-  (*   Forall (fun r => rs1 # r = rs2 # r) args -> *)
-  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs1 ## args = Some a -> *)
-  (*   Op.eval_addressing (Genv.globalenv prog) sp addr rs2 ## args = Some a. *)
-  (* Proof. intros Hforall Hop; erewrite <- rs_eq_map; eauto. Qed. *)
-
-  (* Lemma rs_eq_eval_condition cond rs1 rs2 args m b : *)
-  (*   Forall (fun r => rs1 # r = rs2 # r) args -> *)
-  (*   Op.eval_condition cond rs1 ## args m = Some b -> *)
-  (*   Op.eval_condition cond rs2 ## args m = Some b. *)
-  (* Proof. intros Hforall Heval; erewrite <- rs_eq_map; eauto. Qed. *)
-
-  (* Lemma rs_eq_eval_operation rs1 rs2 sp op args m v : *)
-  (*   Forall (fun a => rs1 # a = rs2 # a) args -> *)
-  (*   Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v -> *)
-  (*   Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v. *)
-  (* Proof. intros Hforall Heval; erewrite <- rs_eq_map; eauto. Qed. *)
-
-  (* Fixpoint builtin_arg_rs_eq (rs1 rs2 : Regmap.t val) (barg : builtin_arg reg) : Prop := *)
-  (*   match barg with *)
-  (*   | BA r => rs1 # r = rs2 # r *)
-  (*   | BA_splitlong hi lo => builtin_arg_rs_eq rs1 rs2 hi /\ builtin_arg_rs_eq rs1 rs2 lo *)
-  (*   | BA_addptr a1 a2 => builtin_arg_rs_eq rs1 rs2 a1 /\ builtin_arg_rs_eq rs1 rs2 a2 *)
-  (*   | _ => True *)
-  (*   end. *)
-
-  (* Lemma in_builtin_arg_rs_eq rs1 rs2 arg : *)
-  (*   (forall r, in_builtin_arg r arg -> rs1 # r = rs2 # r) -> *)
-  (*   builtin_arg_rs_eq rs1 rs2 arg. *)
-  (* Proof. *)
-  (*   induction arg; simpl; intros Hin; auto. *)
-  (*   - apply Hin; constructor. *)
-  (*   - split; try apply IHarg1; try apply IHarg2; *)
-  (*       intros x Hx; apply Hin; solve [constructor; auto]. *)
-  (*   - split; try apply IHarg1; try apply IHarg2; *)
-  (*       intros x Hx; apply Hin; solve [constructor; auto]. *)
-  (* Qed. *)
-
-  (* Lemma rs_eq_eval_builtin_arg rs1 rs2 barg sp m b : *)
-  (*   builtin_arg_rs_eq rs1 rs2 barg -> *)
-  (*   eval_builtin_arg (Genv.globalenv prog) (fun r : positive => rs1 # r) sp m barg b -> *)
-  (*   eval_builtin_arg (Genv.globalenv prog) (fun r : positive => rs2 # r) sp m barg b. *)
-  (* Proof. *)
-  (*   revert b. *)
-  (*   induction barg; simpl; intros b Heq Heval; inv Heval; try solve [constructor; auto]. *)
-  (*   - rewrite Heq; constructor. *)
-  (*   - destruct Heq as [Heq0 Heq1]; constructor; auto. *)
-  (*   - destruct Heq as [Heq0 Heq1]; constructor; auto. *)
-  (* Qed. *)
-
-  (* Lemma rs_eq_eval_builtin_args rs1 rs2 sp m args vargs : *)
-  (*   Forall (builtin_arg_rs_eq rs1 rs2) args -> *)
-  (*   eval_builtin_args (Genv.globalenv prog) (fun r : positive => rs1 # r) sp m args vargs -> *)
-  (*   eval_builtin_args (Genv.globalenv prog) (fun r : positive => rs2 # r) sp m args vargs. *)
-  (* Proof. *)
-  (*   revert vargs; induction args; intro vargs; *)
-  (*     intros Hforall Heval; inv Heval; constructor; inv Hforall. *)
-  (*   - eapply rs_eq_eval_builtin_arg; eauto. *)
-  (*   - apply IHargs; auto. *)
-  (* Qed. *)
 
   Ltac inv_stk :=
     match goal with
@@ -1047,28 +925,6 @@ Section TOLERANCE.
               (Stackframe ?res ?f ?sp ?pc ?rs :: ?s) ?stk2 |- _ ] =>
         inv H
     end.
-
-  (* Ltac inv_match_rs := *)
-  (*   inv_wc; *)
-  (*   erewrite rs_eq_map; eauto; apply Forall_forall; intros r Hin; *)
-  (*   match goal with *)
-  (*   | [ Hrs : match_rs _ true _ _ |- _ ] => *)
-  (*       destruct Hrs as (c & Hc & Hrs); rewrite Hrs; auto; *)
-  (*       match goal with *)
-  (*       | [ H : Forall (fun arg : reg => is_white _ /\ is_red _) _ |- _ ] => *)
-  (*           rewrite Forall_forall in H; *)
-  (*           apply H in Hin; destruct Hin as [Hwhite _]; *)
-  (*           intros HC; rewrite Hwhite in HC; inv HC; inv Hc *)
-  (*       end *)
-  (*   end. *)
-
-  (* Ltac inv_match_rs' := *)
-  (*   inv_wc; *)
-  (*   match goal with *)
-  (*   | [ Hrs : match_rs _ true _ _, Hwhite : is_white _ |- _ ] => *)
-  (*       destruct Hrs as (c & Hc & Hrs); rewrite <- Hrs; eauto; *)
-  (*       intros HC; rewrite Hwhite in HC; inv HC; inv Hc *)
-  (*   end. *)
 
   Lemma known_builtin_sem_Three_Two b vargs m t v m' :
     @known_builtin_sem Three VoteSemantics_Three b (Genv.globalenv prog) vargs m t v m' ->
@@ -1101,22 +957,6 @@ Section TOLERANCE.
         apply vote3_lessdef_vote.
   Qed.
     
-  (* Lemma builtin_or_external_sem_Three_Two name sg vargs m t v m' : *)
-  (*   @builtin_or_external_sem Three VoteSemantics_Three *)
-  (*     name sg (Genv.globalenv prog) vargs m t v m' -> *)
-  (*   exists v' m'', @builtin_or_external_sem Two VoteSemantics_Two *)
-  (*               name sg (Genv.globalenv prog) vargs m t v' m''. *)
-  (* Proof. *)
-  (*   unfold builtin_or_external_sem. *)
-  (*   intro Hsem. *)
-  (*   destruct (Builtins.lookup_builtin_function _ _) eqn:Hlookup. *)
-  (*   -  unfold Builtins.lookup_builtin_function in *. *)
-  (*      simpl in *. *)
-  (*      destruct (string_dec name _ && signature_eq sg _%asttyp); *)
-  (*        eapply known_builtin_sem_Three_Two; eauto. *)
-  (*   - eexists; eexists; eauto. *)
-  (* Qed. *)
-  
   Lemma builtin_or_external_sem_Three_Two name sg vargs m t v m' :
     @builtin_or_external_sem Three VoteSemantics_Three
       name sg (Genv.globalenv prog) vargs m t v m' ->
@@ -1149,31 +989,6 @@ Section TOLERANCE.
     - eexists; eauto.
   Qed.
 
-  (* Lemma external_call_Three_Two ef vargs m t v m' : *)
-  (*   @external_call Three VoteSemantics_Three *)
-  (*     ef (Genv.globalenv prog) vargs m t v m' -> *)
-  (*   exists v' m'', @external_call Two VoteSemantics_Two *)
-  (*               ef (Genv.globalenv prog) vargs m t v' m''. *)
-  (* Proof. *)
-  (*   intro Hef. *)
-  (*   destruct ef; simpl in *; *)
-  (*     try solve [eexists; eexists; eauto]; *)
-  (*     eapply builtin_or_external_sem_Three_Two; eauto. *)
-  (* Qed. *)
-
-  (* TODO: remove this and replace with better version below. *)
-  Lemma external_call_Three_Two ef vargs m t v m' :
-    @external_call Three VoteSemantics_Three
-      ef (Genv.globalenv prog) vargs m t v m' ->
-    exists v', @external_call Two VoteSemantics_Two
-            ef (Genv.globalenv prog) vargs m t v' m'.
-  Proof.
-    intro Hef.
-    destruct ef; simpl in *;
-      try solve [eexists; eauto];
-      eapply builtin_or_external_sem_Three_Two; eauto.
-  Qed.
-
   Lemma external_call_Three_Two' ef vargs m t v m' :
     @external_call Three VoteSemantics_Three
       ef (Genv.globalenv prog) vargs m t v m' ->
@@ -1186,15 +1001,6 @@ Section TOLERANCE.
       eapply builtin_or_external_sem_Three_Two'; eauto.
   Qed.
 
-  (* Inductive list_eq_mod_1 {A : Type} : list A -> list A -> Prop := *)
-  (* | list_eq_mod_1_nil : list_eq_mod_1 nil nil *)
-  (* | list_eq_mod_1_cons_eq : forall x l1 l2, *)
-  (*     list_eq_mod_1 l1 l2 -> *)
-  (*     list_eq_mod_1 (x :: l1 ) (x :: l2) *)
-  (* | list_eq_mod_1_cons_neq : forall x y l, *)
-  (*     x <> y -> *)
-  (*     list_eq_mod_1 (x :: l) (y :: l). *)
-
   Inductive list_lessdef_mod_1 : list val -> list val -> Prop :=
   | list_lessdef_mod_1_nil : list_lessdef_mod_1 nil nil
   | list_lessdef_mod_1_cons_lessdef : forall x y l1 l2,
@@ -1206,20 +1012,6 @@ Section TOLERANCE.
       Forall2 Val.lessdef l1 l2 ->
       list_lessdef_mod_1 (x :: l1) (y :: l2).
 
-  (* Lemma lessdef_vote3_vote x x0 x1 y y0 y1 : *)
-  (*   Val.lessdef x y -> *)
-  (*   Val.lessdef x0 y0 -> *)
-  (*   Val.lessdef x1 y1 -> *)
-  (*   Val.lessdef (vote3 Tint x x0 x1) (vote Tint y y0 y1). *)
-  (* Proof. *)
-  (*   intros H0 H1 H2. *)
-  (*   unfold vote3, vote. *)
-  (*   inv H0; inv H1; inv H2; simpl; *)
-  (*     destruct (Val.has_type_dec _ _); simpl; try constructor; *)
-  (*     destruct (Val.eq _ _); simpl; try constructor; subst; *)
-  (*     destruct (Val.eq _ _); subst; simpl; constructor. *)
-  (* Qed. *)
-  
   Lemma lessdef_vote3_vote ty x x0 x1 y y0 y1 :
     Val.lessdef x y ->
     Val.lessdef x0 y0 ->
@@ -1324,22 +1116,6 @@ Section TOLERANCE.
       try congruence; inv Hcall; auto.
   Qed.
 
-  (* Lemma external_call_smove_res {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT} *)
-  (*   ef m t v v' m' : *)
-  (*   is_smove_builtin ef -> *)
-  (*   external_call ef (Genv.globalenv prog) [v] m t v' m' -> *)
-  (*   v' = v. *)
-  (* Proof. *)
-  (*   intros Hef Hcall. *)
-  (*   unfold external_call, builtin_or_external_sem, *)
-  (*     Builtins.lookup_builtin_function in Hcall. *)
-  (*   simpl in Hcall. *)
-  (*   inv Hef; simpl in *; destruct (signature_eq _ _); *)
-  (*     try congruence; inv Hcall; auto. *)
-  (*   simpl in *. *)
-  (*   - destruct v; simpl in *; inv H; auto. *)
-  (* Qed. *)
-
   Lemma external_call_vote_E0 {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
     ef vs m t v m' :
     is_vote_builtin ef ->
@@ -1368,8 +1144,9 @@ Section TOLERANCE.
       try congruence; inv Hcall; auto.
   Qed.
 
-  (* TODO: the four cases in this proof are literally the same except
-     the type argument to [vote]. *)
+  (* Note: The four cases below are structurally identical modulo the type
+     argument to [vote]. Deduplication via Ltac was attempted in Phase 4
+     but abandoned due to hypothesis name instability across inversion chains. *)
   Lemma external_call_vote_lessdef ef vs1 vs2 m1 m2 t v m' :
     is_vote_builtin ef ->
     list_lessdef_mod_1 vs1 vs2 ->
@@ -1703,8 +1480,8 @@ Section TOLERANCE.
           (vargs' := rs2 ## (arg1 :: arg2 :: arg3 :: nil)) in H1; eauto.
              2: { constructor; auto. }
              destruct H1 as (vres' & m2' & Hext & Hvres & Hmem & Hmem').
-             apply external_call_Three_Two in Hext.
-             destruct Hext as [v' Hext].
+             apply external_call_Three_Two' in Hext.
+             destruct Hext as [v' [Hext _]].
              eexists; econstructor.
              2: { apply maybe_zap_refl. }
              eapply exec_Ibuiltin; eauto.
@@ -1763,8 +1540,8 @@ Section TOLERANCE.
         destruct H0 as (vl2 & Heval & Hvl2).
         eapply external_call_mem_extends in H1; eauto.
         destruct H1 as (vres' & m2' & Hext & Hvres' & Hmem & Hmem').
-        apply external_call_Three_Two in Hext.
-        destruct Hext as [v' Hext].
+        apply external_call_Three_Two' in Hext.
+        destruct Hext as [v' [Hext _]].
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
         eapply exec_Ibuiltin; eauto.
@@ -1826,24 +1603,6 @@ Section TOLERANCE.
       eexists; repeat constructor.
   Qed.
 
-  (* Lemma external_call_mem_extends *)
-  (*   {VT1: Builtins2.vote_type} {vsem1: Builtins2.VoteSemantics VT1} *)
-  (*   {VT2: Builtins2.vote_type} {vsem2: Builtins2.VoteSemantics VT2} *)
-  (*   ef vargs1 vargs2 m1 m2 t vres1 vres2 m1' m2' : *)
-  (*   Val.lessdef_list vargs1 vargs2 -> *)
-  (*   Memory.Mem.extends m1 m2 -> *)
-  (*   @external_call VT1 vsem1 ef (Genv.globalenv prog) vargs1 m1 t vres1 m1' -> *)
-  (*   @external_call VT2 vsem2 ef (Genv.globalenv prog) vargs2 m2 t vres2 m2' -> *)
-  (*   Memory.Mem.extends m1' m2'. *)
-  (* Proof. *)
-  (*   intros Hlessdef Hmem Hext1 Hext2. *)
-  (*   eapply external_call_mem_extends in Hext1; eauto. *)
-  (*   destruct Hext1 as (vres' & m2'' & Hext1 & Hld & Hmem' & Hmem''). *)
-  (*   eapply external_call_deterministic in Hext2; eauto. *)
-  (*   destruct Hext2; subst. *)
-  (*   auto. *)
-  (* Qed. *)
-
   Lemma external_call_mem_extends
     ef vargs1 vargs2 m1 m2 t vres1 vres2 m1' m2' :
     Val.lessdef_list vargs1 vargs2 ->
@@ -1853,8 +1612,8 @@ Section TOLERANCE.
     Memory.Mem.extends m1' m2'.
   Proof.
     intros Hlessdef Hmem Hext1 Hext2.
-    apply external_call_Three_Two in Hext1.
-    destruct Hext1 as [v' Hext1].
+    apply external_call_Three_Two' in Hext1.
+    destruct Hext1 as [v' [Hext1 _]].
     eapply external_call_mem_extends in Hext1; eauto.
     destruct Hext1 as (vres' & m2'' & Hext1 & Hld & Hmem' & Hmem'').
     eapply external_call_deterministic in Hext2; eauto.

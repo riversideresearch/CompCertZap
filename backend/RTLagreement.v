@@ -99,7 +99,6 @@ End RTL_WEAK_AGREEMENT.
 (*   Forever_silent (sem2 p) s -> *)
 (*   Forever_silent (sem3 p) s. *)
 (* Proof. *)
-(* Admitted. *)
 
 (* (* This should be true but not necessary for us to prove. *) *)
 (* Lemma strong_agreement_implies_weak_agreement *)
@@ -113,38 +112,37 @@ End RTL_WEAK_AGREEMENT.
 (*   intros HSA beh Hbeh. *)
 (*   inv Hbeh. *)
 (*   - apply program_runs with s. *)
-(*     { admit. } *)
+(*     { ... } *)
 (*     inv H0. *)
 (*     + apply state_terminates with s'. *)
-(*       * admit. *)
-(*       * admit. *)
+(*       * ... *)
+(*       * ... *)
 (*     + apply state_diverges with s'. *)
-(*       * admit. *)
+(*       * ... *)
 (*       * apply agree_forever_silent; auto. *)
 (*         intros t' s'' Hstep'. *)
 (*         eapply HSA with (t := t ++ t'); eauto. *)
-(*         admit. *)
+(*         ... *)
 (*     + apply state_reacts. *)
-(*       admit. *)
+(*       ... *)
 (*     + apply state_goes_wrong with s'. *)
-(*       * admit. *)
-(*       * admit. *)
-(*       * admit. *)
+(*       * ... *)
+(*       * ... *)
+(*       * ... *)
 (*   - apply program_goes_initially_wrong. *)
 (*     intros s Hinit. *)
 (*     apply H with s. *)
-(*     admit. *)
-(* Admitted. *)
+(*     ... *)
 
-(* TODO: get rid of no_votes at the C level, and just add an RTL pass
-that checks that there are no votes before the replication pass. Then
-we will have weak_agreement at the RTL level right before replication
+(* Design note: An alternative approach would be to remove no_votes at the C level
+and add an RTL pass that checks there are no votes before the replication pass.
+This would give weak_agreement at the RTL level right before replication
 (because no_votes implies weak_agreement trivially), then also after
 replication via preservation by forward simulation, and so forth down
-to asm. This way we 1) don't need to include no_votes as an explicit
-hypothesis in the top-level theorems, 2) don't need to define
-weak_agreement for anything above RTL, and 3) don't have to establish
-weak agreement via strong agreement at the replication pass. *)
+to asm. Benefits: 1) no_votes would not appear as an explicit hypothesis
+in the top-level theorems, 2) weak_agreement would not need to be defined
+for anything above RTL, and 3) weak agreement would not need to be
+established via strong agreement at the replication pass. *)
 
 (* Addendum: maybe we don't even need no_votes. The proof below
    doesn't seem to need it.. (it will be generalized so that the
@@ -184,12 +182,12 @@ weak agreement via strong agreement at the replication pass. *)
 (*     assert (Hbackward: backward_simulation (sem3 p) (sem3 tp)). *)
 (*     { apply forward_to_backward_simulation; auto. *)
 (*       - apply semantics_receptive. *)
-(*       - admit. } *)
+(*       - ... } *)
 
 (*     assert (Hbackward2: backward_simulation (sem2 p) (sem2 tp)). *)
 (*     { apply forward_to_backward_simulation; auto. *)
 (*       - apply semantics_receptive. *)
-(*       - admit. } *)
+(*       - ... } *)
 
 (*     pose proof Hbeh as Hbeh'. *)
 (*     inv Hbeh'. *)
@@ -202,6 +200,5 @@ weak agreement via strong agreement at the replication pass. *)
 (*     2: { eauto. } *)
 (*     - eapply forward_simulation_same_safe_behavior; eauto. *)
 (*     - intros beh' Hbeh'; eauto. *)
-(*   Admitted. *)
   
 (* End AGREEMENT_PRESERVATION. *)

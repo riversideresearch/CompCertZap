@@ -263,203 +263,337 @@ Section color_checker.
     | [ H: _ || _ = true |- _] => apply orb_prop in H; destruct H as [H1 | H2]
     end.
 
+  (* Per-instruction soundness lemmas, extracted from check_col_instr_sound *)
+
+  Lemma check_col_Inop_sound pc succ :
+    check_col_instr pc (Inop succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Inop succ).
+  Proof.
+    simpl; intro Hcheck.
+    constructor.
+    intros r c Hrc.
+    rewrite PTree_Properties.for_all_correct in Hcheck.
+    apply Hcheck in Hrc.
+    apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Iop_protected_sound pc op args res succ :
+    is_protected op ->
+    check_col_instr pc (Iop op args res succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Iop op args res succ).
+  Proof.
+    intros Hprot Hcheck; simpl in Hcheck.
+    destruct (is_protectedb_spec op); try contradiction.
+    destruct_andb Hargs Hn.
+    destruct_andb Hargs Hpres.
+    rewrite forallb_forall in Hargs.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    apply wc_Iop_protected; auto.
+    - apply Forall_forall; intros x Hin; apply is_colorb_sound; auto.
+    - apply is_colorb_sound; auto.
+    - intros x c Hnotin Hnoteq Hx.
+      apply Hpres in Hx.
+      destruct_orb Hin Hx.
+      { destruct_orb Hin Hx.
+        - exfalso; eapply not_in_inb; eauto.
+        - apply Peqb_true_eq in Hx; congruence. }
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Iop_safe_sound pc op args res succ :
+    ~ is_protected op ->
+    check_col_instr pc (Iop op args res succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Iop op args res succ).
+  Proof.
+    intros Hnprot Hcheck; simpl in Hcheck.
+    destruct (is_protectedb_spec op); try contradiction.
+    destruct_andb Hcheck Hpres.
+    destruct_andb Hr Hargs.
+    rewrite forallb_forall in Hargs.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    apply wc_Iop_safe; auto.
+    - apply is_basicb'_sound; auto.
+    - apply Forall_forall; intros x Hin.
+      apply Hargs in Hin.
+      apply eqb'_sound; auto.
+    - intros x c Hneq Hx.
+      apply Hpres in Hx.
+      destruct_orb H H.
+      { apply Peqb_true_eq in H; congruence. }
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Iload_sound pc chunk addr args res succ :
+    check_col_instr pc (Iload chunk addr args res succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Iload chunk addr args res succ).
+  Proof.
+    simpl; intro Hcheck.
+    destruct_andb Hcheck Hpres.
+    destruct_andb Hargs Hwhite.
+    rewrite forallb_forall in Hargs.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    constructor.
+    + apply Forall_forall; intros x Hin; apply is_colorb_sound; auto.
+    + apply is_colorb_sound; auto.
+    + intros x c Hnotin Hneq Hx.
+      apply Hpres in Hx.
+      destruct_orb Hin Hx.
+      { destruct_orb Hin Hx.
+        - exfalso; eapply not_in_inb; eauto.
+        - apply Peqb_true_eq in Hx; congruence. }
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Istore_sound pc chunk addr args src succ :
+    check_col_instr pc (Istore chunk addr args src succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Istore chunk addr args src succ).
+  Proof.
+    simpl; intro Hcheck.
+    destruct_andb Hcheck Hpres.
+    destruct_andb Hwhite Hargs.
+    rewrite forallb_forall in Hargs.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    constructor.
+    + apply is_colorb_sound; auto.
+    + apply Forall_forall; intros x Hin; apply is_colorb_sound; auto.
+    + intros x c Hnotin Hneq Hx.
+      apply Hpres in Hx.
+      destruct_orb Hin Hx.
+      { destruct_orb Hin Hx.
+        - exfalso; eapply not_in_inb; eauto.
+        - apply Peqb_true_eq in Hx; congruence. }
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Icall_sound pc sig fn args res succ :
+    check_col_instr pc (Icall sig fn args res succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Icall sig fn args res succ).
+  Proof.
+    simpl; intro Hcheck.
+    destruct_andb Hcheck Hpres.
+    destruct_andb Hcheck Hwhite.
+    destruct_andb Hf Hargs.
+    rewrite forallb_forall in Hargs.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    constructor.
+    + intros x Hx; destruct fn; inv Hx; apply is_colorb_sound; auto.
+    + apply Forall_forall; intros x Hin. apply is_colorb_sound; auto.
+    + apply is_colorb_sound; auto.
+    + intros x c Hnotin Hneqr Hneq Hx.
+      apply Hpres in Hx.
+      destruct_orb Hin Hx.
+      { destruct_orb Hin Hx.
+        - destruct_orb Hin Hx.
+          { exfalso; eapply not_in_inb; eauto. }
+          apply Pos.eqb_eq in Hx; subst; congruence.
+        - destruct fn; try congruence.
+          apply Pos.eqb_eq in Hx; subst.
+          specialize (Hneq x eq_refl); congruence. }
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Itailcall_sound pc sig fn args :
+    check_col_instr pc (Itailcall sig fn args) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Itailcall sig fn args).
+  Proof.
+    simpl; intro Hcheck.
+    destruct_andb Hf Hargs.
+    rewrite forallb_forall in Hargs.
+    constructor.
+    + intros x Hx; destruct fn; inv Hx.
+      apply is_colorb_sound; auto.
+    + apply Forall_forall; intros x Hin.
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Ibuiltin_smove_green_sound pc ef args res succ :
+    is_green_smove_builtin ef ->
+    check_col_instr pc (Ibuiltin ef args res succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Ibuiltin ef args res succ).
+  Proof.
+    intros Hgreen Hcheck; simpl in Hcheck.
+    destruct (is_green_smove_builtinb_spec ef); try contradiction.
+    destruct args; try congruence.
+    destruct b; try congruence.
+    destruct args; try congruence.
+    destruct res; try congruence.
+    destruct_andb Hpres Hargs.
+    apply is_colorb_sound in Hargs; rename Hargs into Hgreenr.
+    apply andb_prop in Hpres; destruct Hpres as [Hpres Hpink].
+    apply andb_prop in Hpres; destruct Hpres as [Hpres Hwhite].
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    apply wc_Ibuiltin_smove_green; auto.
+    - apply is_colorb_sound; auto.
+    - apply is_colorb_sound; auto.
+    - intros r c H0 H1 Hrc; apply Hpres in Hrc.
+      destruct_orb H H.
+      { destruct_orb H H; apply Pos.eqb_eq in H; congruence. }
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Ibuiltin_smove_blue_sound pc ef args res succ :
+    is_blue_smove_builtin ef ->
+    check_col_instr pc (Ibuiltin ef args res succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Ibuiltin ef args res succ).
+  Proof.
+    intros Hblue Hcheck; simpl in Hcheck.
+    destruct (is_green_smove_builtinb_spec ef).
+    { exfalso; clear Hcheck.
+      destruct ef; try (inv Hblue); try (inv i). }
+    destruct (is_blue_smove_builtinb_spec ef); try contradiction.
+    destruct args; try congruence.
+    destruct b; try congruence.
+    destruct args; try congruence.
+    destruct res; try congruence.
+    destruct_andb Hpres Hargs.
+    apply is_colorb_sound in Hargs; rename Hargs into Hbluer.
+    apply andb_prop in Hpres; destruct Hpres as [Hpres Hred].
+    apply andb_prop in Hpres; destruct Hpres as [Hpres Hpink].
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    apply wc_Ibuiltin_smove_blue; auto.
+    - apply is_colorb_sound; auto.
+    - apply is_colorb_sound; auto.
+    - intros r c H0 H1 Hrc; apply Hpres in Hrc.
+      destruct_orb H H.
+      { destruct_orb H H; apply Pos.eqb_eq in H; congruence. }
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Ibuiltin_vote_sound pc ef args res succ :
+    is_vote_builtin ef ->
+    ~ is_green_smove_builtin ef ->
+    ~ is_blue_smove_builtin ef ->
+    check_col_instr pc (Ibuiltin ef args res succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Ibuiltin ef args res succ).
+  Proof.
+    intros Hvote Hng Hnb Hcheck; simpl in Hcheck.
+    destruct (is_green_smove_builtinb_spec ef); try contradiction.
+    destruct (is_blue_smove_builtinb_spec ef); try contradiction.
+    destruct (is_vote_builtinb_spec ef); try contradiction.
+    repeat match goal with
+           | [ H : match ?x with | _ => _ end = true |- _ ] =>
+               destruct x; try congruence
+           end.
+    destruct_andb Hcheck Hpres.
+    destruct_andb Hcheck Hwhite.
+    destruct_andb Hcheck Hblue.
+    destruct_andb Hred Hgreen.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    constructor; auto; try solve [apply is_colorb_sound; auto].
+    intros r c Hneq Hrc; apply Hpres in Hrc.
+    destruct_orb H H.
+    { apply Pos.eqb_eq in H; congruence. }
+    apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Ibuiltin_other_sound pc ef args res succ :
+    ~ is_green_smove_builtin ef ->
+    ~ is_blue_smove_builtin ef ->
+    ~ is_vote_builtin ef ->
+    check_col_instr pc (Ibuiltin ef args res succ) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Ibuiltin ef args res succ).
+  Proof.
+    intros Hng Hnb Hnv Hcheck; simpl in Hcheck.
+    destruct (is_green_smove_builtinb_spec ef); try contradiction.
+    destruct (is_blue_smove_builtinb_spec ef); try contradiction.
+    destruct (is_vote_builtinb_spec ef); try contradiction.
+    destruct_andb Hcheck Hpres.
+    destruct_andb Hargs Hres.
+    rewrite forallb_forall in Hargs.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    constructor; auto.
+    * apply Forall_forall.
+      intros barg Hin.
+      apply Hargs in Hin.
+      apply builtin_arg_forallb_sound in Hin.
+      eapply builtin_arg_forall_impl; eauto.
+      intros; apply is_colorb_sound; auto.
+    * apply builtin_res_forallb_sound in Hres.
+      eapply builtin_res_forall_impl; eauto.
+      intros r Hwhite; apply is_colorb_sound; auto.
+    * intros r c Hnotex Hnoteq Hrc; apply Hpres in Hrc.
+      destruct_orb H H.
+      { destruct_orb H H.
+        - apply Forall_Exists_neg in Hnotex.
+          rewrite Forall_forall in Hnotex.
+          apply existsb_exists in H.
+          destruct H as (barg & Hin & Hin').
+          apply Hnotex in Hin.
+          apply in_builtin_argb_sound in Hin'; contradiction.
+        - destruct res; try congruence.
+          apply Pos.eqb_eq in H; subst.
+          exfalso; eapply Hnoteq; eauto. }
+      apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Icond_sound pc cond args ifso ifnot :
+    check_col_instr pc (Icond cond args ifso ifnot) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Icond cond args ifso ifnot).
+  Proof.
+    simpl; intro Hcheck.
+    destruct_andb Hargs Hpres.
+    rewrite forallb_forall in Hargs.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    constructor.
+    + apply Forall_forall; intros x Hin.
+      apply is_colorb_sound; auto.
+    + intros r c' Hnotin Hrc; apply Hpres in Hrc.
+      destruct_orb H H.
+      * exfalso; eapply not_in_inb; eauto.
+      * destruct_andb H H'.
+        split; apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Ijumptable_sound pc arg tbl :
+    check_col_instr pc (Ijumptable arg tbl) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Ijumptable arg tbl).
+  Proof.
+    simpl; intro Hcheck.
+    destruct_andb Hwhite Hpres.
+    rewrite PTree_Properties.for_all_correct in Hpres.
+    constructor.
+    + apply is_colorb_sound; auto.
+    + intros x c Hneq Hxc; apply Hpres in Hxc.
+      destruct_orb H H.
+      * apply Pos.eqb_eq in H; congruence.
+      * rewrite forallb_forall in H.
+        apply Forall_forall; intros; apply is_colorb_sound; auto.
+  Qed.
+
+  Lemma check_col_Ireturn_sound pc optarg :
+    check_col_instr pc (Ireturn optarg) = true ->
+    wc_instruction (fun n r => (col n) ! r) pc (Ireturn optarg).
+  Proof.
+    simpl; intro Hcheck.
+    destruct optarg.
+    + constructor; apply is_colorb_sound; auto.
+    + constructor; apply I.
+  Qed.
+
+  (* Main dispatcher: delegates to per-instruction lemmas *)
   Lemma check_col_instr_sound (pc : node) (instr : instruction) :
     check_col_instr pc instr = true ->
     wc_instruction (fun n r => (col n) ! r) pc instr.
   Proof.
-    destruct instr; simpl; intro Hcheck; try congruence.
-    - constructor.
-      intros r c Hrc.
-      rewrite PTree_Properties.for_all_correct in Hcheck.
-      apply Hcheck in Hrc.
-      apply is_colorb_sound; auto.
+    destruct instr.
+    - apply check_col_Inop_sound.
     - destruct (is_protectedb_spec o).
-      + destruct_andb Hargs Hn.
-        destruct_andb Hargs Hpres.
-        rewrite forallb_forall in Hargs.
-        rewrite PTree_Properties.for_all_correct in Hpres.
-        apply wc_Iop_protected; auto.
-        * apply Forall_forall; intros x Hin; apply is_colorb_sound; auto.
-        * apply is_colorb_sound; auto.
-        * intros x c Hnotin Hnoteq Hx.
-          apply Hpres in Hx.
-          destruct_orb Hin Hx.
-          { destruct_orb Hin Hx.
-            - exfalso; eapply not_in_inb; eauto.
-            - apply Peqb_true_eq in Hx; congruence. }
-          apply is_colorb_sound; auto.
-      + destruct_andb Hcheck Hpres.
-        destruct_andb Hr Hargs.
-        rewrite forallb_forall in Hargs.
-        rewrite PTree_Properties.for_all_correct in Hpres.
-        apply wc_Iop_safe; auto.
-        * apply is_basicb'_sound; auto.
-        * apply Forall_forall; intros x Hin.
-          apply Hargs in Hin.
-          apply eqb'_sound; auto.
-        * intros x c Hneq Hx.
-          apply Hpres in Hx.
-          destruct_orb H H.
-          { apply Peqb_true_eq in H; congruence. }
-          apply is_colorb_sound; auto.
-    - destruct_andb Hcheck Hpres.
-      destruct_andb Hargs Hwhite.
-      rewrite forallb_forall in Hargs.
-      rewrite PTree_Properties.for_all_correct in Hpres.
-      constructor.
-      + apply Forall_forall; intros x Hin; apply is_colorb_sound; auto.
-      + apply is_colorb_sound; auto.
-      + intros x c Hnotin Hneq Hx.
-        apply Hpres in Hx.
-        destruct_orb Hin Hx.
-        { destruct_orb Hin Hx.
-          - exfalso; eapply not_in_inb; eauto.
-          - apply Peqb_true_eq in Hx; congruence. }
-        apply is_colorb_sound; auto.
-    - destruct_andb Hcheck Hpres.
-      destruct_andb Hwhite Hargs.
-      (* destruct_andb Hwhite Hred. *)
-      rewrite forallb_forall in Hargs.
-      rewrite PTree_Properties.for_all_correct in Hpres.
-      constructor.
-      + apply is_colorb_sound; auto.
-      (* + apply is_colorb_sound; auto. *)
-      + apply Forall_forall; intros x Hin; apply is_colorb_sound; auto.
-      + intros x c Hnotin Hneq Hx.
-        apply Hpres in Hx.
-        destruct_orb Hin Hx.
-        { destruct_orb Hin Hx.
-          - exfalso; eapply not_in_inb; eauto.
-          - apply Peqb_true_eq in Hx; congruence. }
-        apply is_colorb_sound; auto.
-    -  destruct_andb Hcheck Hpres.
-       destruct_andb Hcheck Hwhite.
-       destruct_andb Hf Hargs.
-       rewrite forallb_forall in Hargs.
-       rewrite PTree_Properties.for_all_correct in Hpres.
-       constructor.
-       + intros x Hx; destruct s0; inv Hx; apply is_colorb_sound; auto.
-       + apply Forall_forall; intros x Hin. apply is_colorb_sound; auto.
-       + apply is_colorb_sound; auto.
-       + intros x c Hnotin Hneqr Hneq Hx.
-         apply Hpres in Hx.
-         destruct_orb Hin Hx.
-         { destruct_orb Hin Hx.
-           - destruct_orb Hin Hx.
-             { exfalso; eapply not_in_inb; eauto. }
-             apply Pos.eqb_eq in Hx; subst; congruence.
-           - destruct s0; try congruence.
-             apply Pos.eqb_eq in Hx; subst.
-             specialize (Hneq x eq_refl); congruence. }
-         apply is_colorb_sound; auto.
-    - destruct_andb Hf Hargs.
-      rewrite forallb_forall in Hargs.
-      constructor.
-      + intros x Hx; destruct s0; inv Hx.
-        apply is_colorb_sound; auto.
-      + apply Forall_forall; intros x Hin.
-        apply is_colorb_sound; auto.
+      + apply check_col_Iop_protected_sound; auto.
+      + apply check_col_Iop_safe_sound; auto.
+    - apply check_col_Iload_sound.
+    - apply check_col_Istore_sound.
+    - apply check_col_Icall_sound.
+    - apply check_col_Itailcall_sound.
     - destruct (is_green_smove_builtinb_spec e).
-      { destruct l; try congruence.
-        destruct b0; try congruence.
-        destruct l; try congruence.
-        destruct b; try congruence.
-        destruct_andb Hpres Hargs.
-        apply is_colorb_sound in Hargs; rename Hargs into Hgreen.
-        apply andb_prop in Hpres; destruct Hpres as [Hpres Hpink].
-        apply andb_prop in Hpres; destruct Hpres as [Hpres Hwhite].
-        rewrite PTree_Properties.for_all_correct in Hpres.
-        apply wc_Ibuiltin_smove_green; auto.
-        - apply is_colorb_sound; auto.
-        - apply is_colorb_sound; auto.
-        - intros r c H0 H1 Hrc; apply Hpres in Hrc.
-          destruct_orb H H.
-        { destruct_orb H H; apply Pos.eqb_eq in H; congruence. }
-        apply is_colorb_sound; auto. }
-      destruct (is_blue_smove_builtinb_spec e).
-      { destruct l; try congruence.
-        destruct b0; try congruence.
-        destruct l; try congruence.
-        destruct b; try congruence.
-        destruct_andb Hpres Hargs.
-        apply is_colorb_sound in Hargs; rename Hargs into Hgreen.
-        apply andb_prop in Hpres; destruct Hpres as [Hpres Hred].
-        apply andb_prop in Hpres; destruct Hpres as [Hpres Hpink].
-        rewrite PTree_Properties.for_all_correct in Hpres.
-        apply wc_Ibuiltin_smove_blue; auto.
-        - apply is_colorb_sound; auto.
-        - apply is_colorb_sound; auto.
-        - intros r c H0 H1 Hrc; apply Hpres in Hrc.
-          destruct_orb H H.
-        { destruct_orb H H; apply Pos.eqb_eq in H; congruence. }
-        apply is_colorb_sound; auto. }
-      destruct (is_vote_builtinb_spec e).
-      + (* vote *)
-        repeat match goal with
-               | [ H : match ?x with | _ => _ end = true |- _ ] =>
-                   destruct x; try congruence
-               end.
-        destruct_andb Hcheck Hpres.
-        destruct_andb Hcheck Hwhite.
-        destruct_andb Hcheck Hblue.
-        destruct_andb Hred Hgreen.
-        rewrite PTree_Properties.for_all_correct in Hpres.
-        constructor; auto; try solve [apply is_colorb_sound; auto].
-        intros r c Hneq Hrc; apply Hpres in Hrc.
-        destruct_orb H H.
-        { apply Pos.eqb_eq in H; congruence. }
-        apply is_colorb_sound; auto.
-      + (* other builtin *)
-        destruct_andb Hcheck Hpres.
-        destruct_andb Hargs Hres.
-        rewrite forallb_forall in Hargs.
-        rewrite PTree_Properties.for_all_correct in Hpres.
-        constructor; auto.
-        * apply Forall_forall.
-          intros barg Hin.
-          apply Hargs in Hin.
-          apply builtin_arg_forallb_sound in Hin.
-          eapply builtin_arg_forall_impl; eauto.
-          intros; apply is_colorb_sound; auto.
-        * apply builtin_res_forallb_sound in Hres.
-          eapply builtin_res_forall_impl; eauto.
-          intros r Hwhite; apply is_colorb_sound; auto.
-        * intros r c Hnotex Hnoteq Hrc; apply Hpres in Hrc.
-          destruct_orb H H.
-          { destruct_orb H H.
-            - apply Forall_Exists_neg in Hnotex.
-              rewrite Forall_forall in Hnotex.
-              apply existsb_exists in H.
-              destruct H as (barg & Hin & Hin').
-              apply Hnotex in Hin.
-              apply in_builtin_argb_sound in Hin'; contradiction.
-            - destruct b; try congruence.
-              apply Pos.eqb_eq in H; subst.
-              exfalso; eapply Hnoteq; eauto. }
-          apply is_colorb_sound; auto.
-    - destruct_andb Hargs Hpres.
-      rewrite forallb_forall in Hargs.
-      rewrite PTree_Properties.for_all_correct in Hpres.
-      constructor.
-      + apply Forall_forall; intros x Hin.
-        apply is_colorb_sound; auto.
-      + intros r c' Hnotin Hrc; apply Hpres in Hrc.
-        destruct_orb H H.
-        * exfalso; eapply not_in_inb; eauto.
-        * destruct_andb H H'.
-          split; apply is_colorb_sound; auto.
-    - destruct_andb Hwhite Hpres.
-      rewrite PTree_Properties.for_all_correct in Hpres.
-      constructor.
-      + apply is_colorb_sound; auto.
-      + intros x c Hneq Hxc; apply Hpres in Hxc.
-        destruct_orb H H.
-        * apply Pos.eqb_eq in H; congruence.
-        * rewrite forallb_forall in H.
-          apply Forall_forall; intros; apply is_colorb_sound; auto.
-    - destruct o.
-      + constructor; apply is_colorb_sound; auto.
-      + constructor; apply I.
+      + apply check_col_Ibuiltin_smove_green_sound; auto.
+      + destruct (is_blue_smove_builtinb_spec e).
+        * apply check_col_Ibuiltin_smove_blue_sound; auto.
+        * destruct (is_vote_builtinb_spec e).
+          { apply check_col_Ibuiltin_vote_sound; auto. }
+          { apply check_col_Ibuiltin_other_sound; auto. }
+    - apply check_col_Icond_sound.
+    - apply check_col_Ijumptable_sound.
+    - apply check_col_Ireturn_sound.
   Qed.
 
   Lemma check_col_function_sound (f : function) :
@@ -485,7 +619,6 @@ Section color_checker.
   (* (* Maybe not necessary but should be true anyway. *) *)
   (* Lemma check_col_function_complete (f : function) : *)
   (*   wc_function (fun pc r => (col pc) ! r) f -> check_col_function f = true. *)
-  (* Admitted. *)
 
   (* Theorem check_col_function_spec (f : function) : *)
   (*   reflect (wc_function (fun pc r => (col pc) ! r) f) (check_col_function f). *)

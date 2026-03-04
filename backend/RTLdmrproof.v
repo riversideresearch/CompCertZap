@@ -1,31 +1,8 @@
 (** * Forward simulation proof for DMR pass. *)
 
-(* TODO: factor out things in common with TMR? (and do same for spec). *)
-
-Require Import
-  AST
-  Coqlib
-  Errors
-  Events
-  Floats
-  Globalenvs
-  Integers
-  Linking
-  Maps
-  Op
-  Registers
-  RTLdmrspec
-  RTLgen
-  RTLtyping
-  Smallstep
-  Values
-.
-Require Import RTL.
+Require Import RTLreplicateProofCommon.
+Require Import RTLdmrspec.
 Require Import RTLdmr.
-Require Import Errors.
-Import ListNotations.
-
-Local Open Scope positive_scope.
 
 Section VOTE.
 Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.

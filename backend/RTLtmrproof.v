@@ -1,29 +1,8 @@
 (** * Forward simulation proof for TMR pass. *)
 
-Require Import
-  AST
-  Coqlib
-  Errors
-  Events
-  Floats
-  Globalenvs
-  Integers
-  Linking
-  Maps
-  Op
-  Registers
-  RTLgen
-  RTLtmrspec
-  RTLtyping
-  Smallstep
-  Values
-.
-Require Import RTL.
+Require Import RTLreplicateProofCommon.
+Require Import RTLtmrspec.
 Require Import RTLtmr.
-Require Import Errors.
-Import ListNotations.
-
-Local Open Scope positive_scope.
 
 Section VOTE.
 Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
@@ -769,90 +748,45 @@ Section PRESERVATION.
   Proof.
     intros Hact Hr2 Hr3 Hmaj; inv Hmaj.
     destruct vsem.
-    (* TODO: all four cases are very similar. combine them somehow or *)
-    (*      factor out commonality? *)
-    destruct ty; simpl in *; try contradiction; clear H.
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-          rewrite <- Hr3, <- Hr2.
-          apply vote_sem_int_ok.
-          apply Val.has_inj_type in Hact; auto.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        destruct (peq r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          (* This is necessary for riscv but not x86_64. Why? *)
-          try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
-                     destruct (eq_block _ _); simpl; try congruence;
-                     destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Int.eq_dec i i); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-          rewrite <- Hr3, <- Hr2.
-          apply vote_sem_float_ok.
-          apply Val.has_inj_type in Hact; auto.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        destruct (peq r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-          rewrite <- Hr3, <- Hr2.
-          apply vote_sem_long_ok.
-          apply Val.has_inj_type in Hact; auto.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        destruct (peq r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          try solve[rewrite PMap.gss; reflexivity];
-          try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity];
-          destruct Archi.ptr64 eqn:Harchi; simpl;
-          try solve[simpl in Hact; congruence];
-          destruct (eq_block _ _); simpl; try congruence;
-          destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-          rewrite <- Hr3, <- Hr2.
-          apply vote_sem_single_ok.
-          apply Val.has_inj_type in Hact; auto.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        destruct (peq r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float32.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
+    destruct ty; simpl in *; try contradiction; clear H;
+    (inv H0;
+     eexists; split;
+     [ econstructor;
+       [ eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+           eauto; repeat constructor;
+         rewrite <- Hr3, <- Hr2;
+         first [ apply vote_sem_int_ok
+               | apply vote_sem_float_ok
+               | apply vote_sem_long_ok
+               | apply vote_sem_single_ok ];
+         apply Val.has_inj_type in Hact; auto
+       | apply star_refl
+       | reflexivity ]
+     | intro r; simpl;
+       destruct (peq r r1); subst;
+       [ destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
+         try solve [rewrite PMap.gss; reflexivity];
+         try solve [destruct (Int.eq_dec i i); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct (Float.eq_dec f f); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct (Float32.eq_dec f f); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
+                    destruct (eq_block _ _); simpl; try congruence;
+                    destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct Archi.ptr64 eqn:Harchi; simpl;
+                    try solve [simpl in Hact; congruence];
+                    destruct (eq_block _ _); simpl; try congruence;
+                    destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity]
+       | rewrite PMap.gso; auto ] ]).
   Qed.
 
-  Lemma maj_vote_regR_star_step
+  Lemma maj_vote_regsR_star_step
     c re (rm : PMap.t (reg * reg))
     args pc n tstk sig params stacksize entrypoint sp rs m :
     Forall (fun r1 => Val.has_type (rs # r1) (re r1) /\
@@ -1929,7 +1863,7 @@ Section PRESERVATION.
                    right; auto. }
               specialize (REGS _ _ _ Hr1 Hused); intuition. }
       +
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+        eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto.
@@ -1995,7 +1929,7 @@ Section PRESERVATION.
       assert (Hargs: Forall (reg_used_in_code c) args).
       { apply Forall_forall; intros x Hx;
           eexists; eexists; split; eauto; constructor; auto. }
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
@@ -2049,7 +1983,7 @@ Section PRESERVATION.
                  ; fn_entrypoint := entrypoint |}).
       pose proof CODE as Hcode.
       specialize (CODE pc (Istore chunk addr args src pc') H); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_REGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_REGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto.
@@ -2096,7 +2030,7 @@ Section PRESERVATION.
       pose proof H as Hcode.
       specialize (CODE pc (Icall (funsig fd) ros args res pc') Hcode); inv CODE.
       smoveR_inv.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { apply in_dedup in Hin.
@@ -2180,7 +2114,7 @@ Section PRESERVATION.
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
       specialize (CODE pc (Itailcall (funsig fd) ros args) Hcode); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { apply in_dedup in Hin.
@@ -2264,7 +2198,7 @@ Section PRESERVATION.
       pose proof H as Hcode.
       specialize (CODE pc (Ibuiltin ef args res pc') Hcode); inv CODE.
       { (* No result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+        eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto; constructor; auto.
@@ -2307,7 +2241,7 @@ Section PRESERVATION.
           econstructor; eauto.
           eapply match_regsets_ext_r; eauto. }
       { (* With result register *)
-        eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+        eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.
              assert (Hused: reg_used_in_code c r1).
              { eexists; eexists; split; eauto; constructor; auto.
@@ -2375,7 +2309,7 @@ Section PRESERVATION.
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
       specialize (CODE pc (Icond cond args ifso ifnot) Hcode); inv CODE.
-      eapply maj_vote_regR_star_step with (m:=m) in VOTE_ARGS; eauto.
+      eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
       2: { apply Forall_forall; intros r1 Hin.
            assert (Hused: reg_used_in_code c r1).
            { eexists; eexists; split; eauto; constructor; auto.
