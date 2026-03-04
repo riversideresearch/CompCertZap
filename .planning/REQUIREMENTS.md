@@ -42,11 +42,11 @@ Requirements for this cleanup cycle. Each maps to roadmap phases.
 - [x] **HYG-02**: Large commented-out blocks removed from RTLagreement.v
 - [x] **HYG-03**: Commented-out blocks removed from RTLtmr.v
 - [x] **HYG-04**: Commented-out blocks removed from driver/Complements.v (keep distilled design notes for vote-parametric RTL->Asm forward-sim sketch and asm weak-agreement proof direction sketch; delete other stubs)
-- [ ] **HYG-05**: Commented-out blocks removed from RTLcolorcheck.v
-- [ ] **HYG-06**: Commented-out blocks removed from Novotes.v
-- [ ] **HYG-07**: Commented-out blocks removed from RTLfault.v
-- [ ] **HYG-08**: All TODO markers in in-scope files resolved or removed (excluding CSEproof.v)
-- [ ] **HYG-09**: Naming conventions aligned between DMR and TMR helper functions where semantics match
+- [x] **HYG-05**: Commented-out blocks removed from RTLcolorcheck.v
+- [x] **HYG-06**: Commented-out blocks removed from Novotes.v
+- [x] **HYG-07**: Commented-out blocks removed from RTLfault.v
+- [x] **HYG-08**: All TODO markers in in-scope files resolved or removed (excluding CSEproof.v)
+- [x] **HYG-09**: Naming conventions aligned between DMR and TMR helper functions where semantics match
 
 ## v2 Requirements
 
@@ -97,11 +97,11 @@ Deferred to future cleanup cycle. Tracked but not in current roadmap.
 | HYG-02 | Phase 5 - Comment and Tactic Hygiene | Complete |
 | HYG-03 | Phase 5 - Comment and Tactic Hygiene | Complete |
 | HYG-04 | Phase 5 - Comment and Tactic Hygiene | Complete |
-| HYG-05 | Phase 5 - Comment and Tactic Hygiene | Pending |
-| HYG-06 | Phase 5 - Comment and Tactic Hygiene | Pending |
-| HYG-07 | Phase 5 - Comment and Tactic Hygiene | Pending |
-| HYG-08 | Phase 5 - Comment and Tactic Hygiene | Pending |
-| HYG-09 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-05 | Phase 5 - Comment and Tactic Hygiene | Complete |
+| HYG-06 | Phase 5 - Comment and Tactic Hygiene | Complete |
+| HYG-07 | Phase 5 - Comment and Tactic Hygiene | Complete |
+| HYG-08 | Phase 5 - Comment and Tactic Hygiene | Complete |
+| HYG-09 | Phase 5 - Comment and Tactic Hygiene | Complete |
 
 **Coverage:**
 - v1 requirements: 27 total
