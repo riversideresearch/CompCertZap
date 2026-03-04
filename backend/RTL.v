@@ -892,15 +892,15 @@ Lemma in_builtin_resb_sound (r : reg) (bres : builtin_res reg) :
   in_builtin_resb r bres = true -> in_builtin_res r bres.
 Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
 
-(* TODO: maybe we can just assume faulted floats aren't NaN, and then
-   the conversions from single/float to int/long will always succeed
-   and we can consider them safe?
+(* Design note: maybe we can just assume faulted floats aren't NaN,
+   and then the conversions from single/float to int/long will always
+   succeed and we can consider them safe?
 
    It seems that considering NaN conversions to int/long to be
    immediate UB is a CompCert choice that isn't necessarily dictated
    by the C standard.
 
-   Also TODO: this might need to go into backend specific Op.v
+   Also: this might need to go into backend specific Op.v
    file. And should it be called something else? 'is_protected'?
  *)
 Inductive is_protected : operation -> Prop :=
