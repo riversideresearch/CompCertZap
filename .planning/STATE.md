@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Abandoned 04-01 Task 2 (vote_lessdef dedup), kept Task 1 (deprecated lemma removal). Moving to 04-02.
-last_updated: "2026-03-04T04:35:00.000Z"
-last_activity: 2026-03-04 -- 04-01 partial (Task 1 done, Task 2 abandoned)
+stopped_at: Completed 04-02 Task 2 (maj_voteR_step dedup), abandoned Task 1 (Novotesproof.v). Moving to 04-03.
+last_updated: "2026-03-04T04:50:00.000Z"
+last_activity: 2026-03-04 -- 04-02 partial (RTLtmrproof.v done, Novotesproof.v abandoned)
 progress:
   total_phases: 5
   completed_phases: 3
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 4 of 5 (Proof De-duplication) -- IN PROGRESS
-Plan: 1 of 3 in current phase (1 partial)
+Plan: 2 of 3 in current phase (2 partial)
 Status: Executing
-Last activity: 2026-03-04 -- 04-01 partial (deprecated lemma removed, vote_lessdef dedup abandoned)
+Last activity: 2026-03-04 -- 04-02 partial (maj_voteR_step dedup done, Novotesproof.v abandoned)
 
 Progress: [██████████] 100%
 
@@ -64,6 +64,7 @@ Progress: [██████████] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [04-02]: Abandoned Novotesproof.v no_votes_external_call dedup — tactic causes infinite memory consumption during proof checking. RTLtmrproof.v maj_voteR_step dedup succeeded using inline semicolon chaining.
 - [04-01]: Abandoned external_call_vote_lessdef Ltac deduplication — hypothesis name instability across inversion chains makes robust automation impractical. Four-case duplication is ugly but stable and correct. Kept deprecated lemma removal (Task 1).
 - [03-02]: TMR NoDup6 proofs require replication_map_rel_consecutive and replication_map_rel_disjoint_shadows beyond the DMR pattern, due to 6-element pairwise distinctness needing non-overlapping shadow intervals
 - [03-01]: Added NoDup precondition to foldM_satisfies_rel, discharged via elements_NoDup from Regset.elements_3w
