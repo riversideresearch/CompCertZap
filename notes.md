@@ -22,3 +22,8 @@
 
 # Notes
 - We shouldn't need to actually use preservation of weak agreement directly (thus we shouldn't need to assume safety of the source program) if we just compose behavioral refinement at the right places (from source to right after novotes, where weak agreement can be trivially obtained and thus a behavioral refinement of 2-voting with 3-voting, then compose with behavioral refinement wrt. 3-voting from that point (obtained via forward simulation as usual) to asm.
+
+Pin to old menhir until we rebase on 3.17:
+```bash
+opam pin menhir 20200624
+```
