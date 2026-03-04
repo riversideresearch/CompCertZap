@@ -15,10 +15,10 @@
 
 ### Color System Update
 
-- [ ] **COLR-01**: RTLcolor.v references ProofLiveness.analyze instead of Liveness.analyze in wc_function
-- [ ] **COLR-02**: RTLcolorcheck.v references ProofLiveness.analyze instead of Liveness.analyze in check_function and check_col_function_sound
-- [ ] **COLR-03**: check_col_instr_sound proof completed (no Admitted) in RTLcolorcheck.v
-- [ ] **COLR-04**: RTLcolor.vo and RTLcolorcheck.vo compile with zero Admitted
+- [x] **COLR-01**: RTLcolor.v references ProofLiveness.analyze instead of Liveness.analyze in wc_function
+- [x] **COLR-02**: RTLcolorcheck.v references ProofLiveness.analyze instead of Liveness.analyze in check_function and check_col_function_sound
+- [x] **COLR-03**: check_col_instr_sound proof completed (no Admitted) in RTLcolorcheck.v
+- [x] **COLR-04**: RTLcolor.vo and RTLcolorcheck.vo compile with zero Admitted
 
 ### Faulty Simulation Proof
 
@@ -63,10 +63,10 @@
 | PLIV-03 | Phase 1 | Complete |
 | PLIV-04 | Phase 1 | Complete |
 | PLIV-05 | Phase 1 | Complete |
-| COLR-01 | Phase 2 | Pending |
-| COLR-02 | Phase 2 | Pending |
-| COLR-03 | Phase 2 | Pending |
-| COLR-04 | Phase 2 | Pending |
+| COLR-01 | Phase 2 | Complete |
+| COLR-02 | Phase 2 | Complete |
+| COLR-03 | Phase 2 | Complete |
+| COLR-04 | Phase 2 | Complete |
 | FSIM-01 | Phase 3 | Pending |
 | FSIM-02 | Phase 3 | Pending |
 | FSIM-03 | Phase 3 | Pending |

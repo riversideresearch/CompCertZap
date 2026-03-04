@@ -42,10 +42,10 @@ Plans:
   2. `check_function` in RTLcolorcheck.v uses `ProofLiveness.analyze` (not `Liveness.analyze`) to compute liveness
   3. `check_col_instr_sound` is proved for all 14 instruction cases with no Admitted
   4. `make backend/RTLcolor.vo && make backend/RTLcolorcheck.vo` succeeds with zero Admitted in both files
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md -- Swap Liveness to ProofLiveness in RTLcolor.v and RTLcolorcheck.v; complete check_col_instr_sound proof
 
 ### Phase 3: Faulty Simulation Proof
 **Goal**: The faulty backward simulation in RTLtolerant.v is fully proved using the liveness-bounded match relation parameterized by ProofLiveness.analyze, with no Admitted lemmas
@@ -83,7 +83,7 @@ Note: Phase 2 and Phase 3 are independent and can execute in parallel after Phas
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. ProofLiveness Analysis | 0/1 | Planned | - |
-| 2. Color System Update | 0/? | Not started | - |
+| 1. ProofLiveness Analysis | 1/1 | Complete | 2026-03-04 |
+| 2. Color System Update | 0/1 | Planned | - |
 | 3. Faulty Simulation Proof | 0/? | Not started | - |
 | 4. Integration and Validation | 0/? | Not started | - |
