@@ -1341,8 +1341,26 @@ Section TOLERANCE.
       try congruence; inv Hcall; auto.
   Qed.
 
-  (* TODO: the four cases in this proof are literally the same except
-     the type argument to [vote]. *)
+  Local Ltac solve_vote_lessdef_case :=
+    inv Heq; try congruence;
+    [ inv H1; try congruence;
+      [ inv H3; try congruence;
+        [ inv H4; try congruence;
+          inv H;
+          eexists; split; [constructor; auto | apply lessdef_vote3_vote; auto]
+        | inv H1; try congruence;
+          inv H;
+          eexists; split; [constructor; auto | apply lessdef_vote3_vote; auto] ]
+      | inv H2; try congruence;
+        inv H3; try congruence;
+        inv H;
+        eexists; split; [constructor; auto | apply lessdef_vote3_vote'; auto] ]
+    | inv H0; try congruence;
+      inv H2; try congruence;
+      inv H3; try congruence;
+      inv H;
+      eexists; split; [constructor; auto | apply lessdef_vote3_vote''; auto] ].
+
   Lemma external_call_vote_lessdef ef vs1 vs2 m1 m2 t v m' :
     is_vote_builtin ef ->
     list_lessdef_mod_1 vs1 vs2 ->
@@ -1352,135 +1370,12 @@ Section TOLERANCE.
             Val.lessdef v v'.
   Proof.
     intros Hbuiltin Heq Hmem Hext.
-    inv Hbuiltin; simpl in *.
-    - unfold builtin_or_external_sem in *.
-      unfold Builtins.lookup_builtin_function in *; simpl in *.
-      destruct (signature_eq _ _); simpl in *; try congruence.
-      clear e.
-      inv Hext.
-      simpl in *.
-      inv Heq; try congruence.
-      + inv H1; try congruence.
-        * inv H3; try congruence.
-          { inv H4; try congruence.
-            inv H.
-            exists (vote Tint y y0 y1); split.
-            - constructor; auto.
-            - apply lessdef_vote3_vote; auto. }
-          inv H1; try congruence.
-          inv H.
-          exists (vote Tint y y0 y1); split.
-          { constructor; auto. }
-          apply lessdef_vote3_vote; auto.
-        * inv H2; try congruence.
-          inv H3; try congruence.
-          inv H.
-          exists (vote Tint y y0 y1); split.
-          { constructor; auto. }
-          apply lessdef_vote3_vote'; auto.
-      + inv H0; try congruence.
-        inv H2; try congruence.
-        inv H3; try congruence.
-        inv H.
-        exists (vote Tint y y0 y1); split.
-        { constructor; auto. }
-        apply lessdef_vote3_vote''; auto.
-    - unfold builtin_or_external_sem in *.
-      unfold Builtins.lookup_builtin_function in *; simpl in *.
-      destruct (signature_eq _ _); simpl in *; try congruence.
-      clear e.
-      inv Hext.
-      simpl in *.
-      inv Heq; try congruence.
-      + inv H1; try congruence.
-        * inv H3; try congruence.
-          { inv H4; try congruence.
-            inv H.
-            exists (vote Tlong y y0 y1); split.
-            - constructor; auto.
-            - apply lessdef_vote3_vote; auto. }
-          inv H1; try congruence.
-          inv H.
-          exists (vote Tlong y y0 y1); split.
-          { constructor; auto. }
-          apply lessdef_vote3_vote; auto.
-        * inv H2; try congruence.
-          inv H3; try congruence.
-          inv H.
-          exists (vote Tlong y y0 y1); split.
-          { constructor; auto. }
-          apply lessdef_vote3_vote'; auto.
-      + inv H0; try congruence.
-        inv H2; try congruence.
-        inv H3; try congruence.
-        inv H.
-        exists (vote Tlong y y0 y1); split.
-        { constructor; auto. }
-        apply lessdef_vote3_vote''; auto.
-    - unfold builtin_or_external_sem in *.
-      unfold Builtins.lookup_builtin_function in *; simpl in *.
-      destruct (signature_eq _ _); simpl in *; try congruence.
-      clear e.
-      inv Hext.
-      simpl in *.
-      inv Heq; try congruence.
-      + inv H1; try congruence.
-        * inv H3; try congruence.
-          { inv H4; try congruence.
-            inv H.
-            exists (vote Tsingle y y0 y1); split.
-            - constructor; auto.
-            - apply lessdef_vote3_vote; auto. }
-          inv H1; try congruence.
-          inv H.
-          exists (vote Tsingle y y0 y1); split.
-          { constructor; auto. }
-          apply lessdef_vote3_vote; auto.
-        * inv H2; try congruence.
-          inv H3; try congruence.
-          inv H.
-          exists (vote Tsingle y y0 y1); split.
-          { constructor; auto. }
-          apply lessdef_vote3_vote'; auto.
-      + inv H0; try congruence.
-        inv H2; try congruence.
-        inv H3; try congruence.
-        inv H.
-        exists (vote Tsingle y y0 y1); split.
-        { constructor; auto. }
-        apply lessdef_vote3_vote''; auto.
-    - unfold builtin_or_external_sem in *.
-      unfold Builtins.lookup_builtin_function in *; simpl in *.
-      destruct (signature_eq _ _); simpl in *; try congruence.
-      clear e.
-      inv Hext.
-      simpl in *.
-      inv Heq; try congruence.
-      + inv H1; try congruence.
-        * inv H3; try congruence.
-          { inv H4; try congruence.
-            inv H.
-            exists (vote Tfloat y y0 y1); split.
-            - constructor; auto.
-            - apply lessdef_vote3_vote; auto. }
-          inv H1; try congruence.
-          inv H.
-          exists (vote Tfloat y y0 y1); split.
-          { constructor; auto. }
-          apply lessdef_vote3_vote; auto.
-        * inv H2; try congruence.
-          inv H3; try congruence.
-          inv H.
-          exists (vote Tfloat y y0 y1); split.
-          { constructor; auto. }
-          apply lessdef_vote3_vote'; auto.
-      + inv H0; try congruence.
-        inv H2; try congruence.
-        inv H3; try congruence.
-        inv H.
-        exists (vote Tfloat y y0 y1); split.
-        { constructor; auto. }
-        apply lessdef_vote3_vote''; auto.
+    inv Hbuiltin; simpl in *;
+      unfold builtin_or_external_sem in *;
+      unfold Builtins.lookup_builtin_function in *; simpl in *;
+      destruct (signature_eq _ _); simpl in *; try congruence;
+      clear e; inv Hext; simpl in *;
+      solve_vote_lessdef_case.
   Qed.
 
   Lemma forall_lessdef_list rs1 rs2 args :
