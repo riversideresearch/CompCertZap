@@ -1147,31 +1147,6 @@ Section TOLERANCE.
     - eexists; eauto.
   Qed.
 
-  (* Lemma external_call_Three_Two ef vargs m t v m' : *)
-  (*   @external_call Three VoteSemantics_Three *)
-  (*     ef (Genv.globalenv prog) vargs m t v m' -> *)
-  (*   exists v' m'', @external_call Two VoteSemantics_Two *)
-  (*               ef (Genv.globalenv prog) vargs m t v' m''. *)
-  (* Proof. *)
-  (*   intro Hef. *)
-  (*   destruct ef; simpl in *; *)
-  (*     try solve [eexists; eexists; eauto]; *)
-  (*     eapply builtin_or_external_sem_Three_Two; eauto. *)
-  (* Qed. *)
-
-  (* TODO: remove this and replace with better version below. *)
-  Lemma external_call_Three_Two ef vargs m t v m' :
-    @external_call Three VoteSemantics_Three
-      ef (Genv.globalenv prog) vargs m t v m' ->
-    exists v', @external_call Two VoteSemantics_Two
-            ef (Genv.globalenv prog) vargs m t v' m'.
-  Proof.
-    intro Hef.
-    destruct ef; simpl in *;
-      try solve [eexists; eauto];
-      eapply builtin_or_external_sem_Three_Two; eauto.
-  Qed.
-
   Lemma external_call_Three_Two' ef vargs m t v m' :
     @external_call Three VoteSemantics_Three
       ef (Genv.globalenv prog) vargs m t v m' ->
@@ -1701,8 +1676,8 @@ Section TOLERANCE.
           (vargs' := rs2 ## (arg1 :: arg2 :: arg3 :: nil)) in H1; eauto.
              2: { constructor; auto. }
              destruct H1 as (vres' & m2' & Hext & Hvres & Hmem & Hmem').
-             apply external_call_Three_Two in Hext.
-             destruct Hext as [v' Hext].
+             apply external_call_Three_Two' in Hext.
+             destruct Hext as [v' [Hext _]].
              eexists; econstructor.
              2: { apply maybe_zap_refl. }
              eapply exec_Ibuiltin; eauto.
@@ -1761,8 +1736,8 @@ Section TOLERANCE.
         destruct H0 as (vl2 & Heval & Hvl2).
         eapply external_call_mem_extends in H1; eauto.
         destruct H1 as (vres' & m2' & Hext & Hvres' & Hmem & Hmem').
-        apply external_call_Three_Two in Hext.
-        destruct Hext as [v' Hext].
+        apply external_call_Three_Two' in Hext.
+        destruct Hext as [v' [Hext _]].
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
         eapply exec_Ibuiltin; eauto.
@@ -1851,8 +1826,8 @@ Section TOLERANCE.
     Memory.Mem.extends m1' m2'.
   Proof.
     intros Hlessdef Hmem Hext1 Hext2.
-    apply external_call_Three_Two in Hext1.
-    destruct Hext1 as [v' Hext1].
+    apply external_call_Three_Two' in Hext1.
+    destruct Hext1 as [v' [Hext1 _]].
     eapply external_call_mem_extends in Hext1; eauto.
     destruct Hext1 as (vres' & m2'' & Hext1 & Hld & Hmem' & Hmem'').
     eapply external_call_deterministic in Hext2; eauto.
