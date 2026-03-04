@@ -5,7 +5,7 @@ Require Import
   Events
   Integers
   List
-  Liveness
+  ProofLiveness
   Maps
   Registers
   RTL
@@ -218,7 +218,7 @@ End wc.
 
 Inductive wc_function col : function -> Prop :=
   wc_function_function : forall f live
-      (WC_LIVE: Liveness.analyze f = Some live)
+      (WC_LIVE: ProofLiveness.analyze f = Some live)
       (WC_PARAMS: Forall (fun param => col f.(fn_entrypoint) param = White) f.(fn_params))
       (WC_CODE: wc_code live col f.(fn_code)),
       wc_function col f.
