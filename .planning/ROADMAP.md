@@ -12,9 +12,9 @@ This roadmap replaces the overly-coarse register invariant in the CompCertZAP fa
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: ProofLiveness Analysis** - Create conservative liveness analysis with fixpoint proof and membership lemmas
-- [ ] **Phase 2: Color System Update** - Swap analysis reference in RTLcolor/RTLcolorcheck and complete checker soundness proof
-- [ ] **Phase 3: Faulty Simulation Proof** - Rebuild RTLtolerant backward simulation with liveness-bounded match relation
+- [x] **Phase 1: ProofLiveness Analysis** - Create conservative liveness analysis with fixpoint proof and membership lemmas
+- [x] **Phase 2: Color System Update** - Swap analysis reference in RTLcolor/RTLcolorcheck and complete checker soundness proof
+- [x] **Phase 3: Faulty Simulation Proof** - Rebuild RTLtolerant backward simulation with liveness-bounded match relation
 - [ ] **Phase 4: Integration and Validation** - Rebuild Complements.v and validate end-to-end compiler build
 
 ## Phase Details
@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md -- Create ProofLiveness.v with conservative transfer, solver instantiation, fixpoint proof, and membership lemma; register in Makefile
+- [x] 01-01-PLAN.md -- Create ProofLiveness.v with conservative transfer, solver instantiation, fixpoint proof, and membership lemma; register in Makefile
 
 ### Phase 2: Color System Update
 **Goal**: The well-coloredness specification and Boolean checker reference ProofLiveness.analyze, and the checker soundness proof (check_col_instr_sound) is fully machine-checked with no Admitted
@@ -45,7 +45,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 02-01-PLAN.md -- Swap Liveness to ProofLiveness in RTLcolor.v and RTLcolorcheck.v; complete check_col_instr_sound proof
+- [x] 02-01-PLAN.md -- Swap Liveness to ProofLiveness in RTLcolor.v and RTLcolorcheck.v; complete check_col_instr_sound proof
 
 ### Phase 3: Faulty Simulation Proof
 **Goal**: The faulty backward simulation in RTLtolerant.v is fully proved using the liveness-bounded match relation parameterized by ProofLiveness.analyze, with no Admitted lemmas
@@ -57,10 +57,10 @@ Plans:
   3. `faulty_progress` is proved for all instruction cases
   4. `faulty_backward_simulation` theorem is proved, composing step_simulation and faulty_progress
   5. `make backend/RTLtolerant.vo` succeeds with zero Admitted proofs
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: TBD
+- [x] 03-01-PLAN.md -- Complete faulty backward simulation proof with liveness-bounded match relation and zero Admitted
 
 ### Phase 4: Integration and Validation
 **Goal**: The top-level theorem chain composes successfully and the compiler binary builds end-to-end, confirming the liveness-bounded proof integrates with the full CompCert pipeline
@@ -84,6 +84,6 @@ Note: Phase 2 and Phase 3 are independent and can execute in parallel after Phas
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. ProofLiveness Analysis | 1/1 | Complete | 2026-03-04 |
-| 2. Color System Update | 0/1 | Planned | - |
-| 3. Faulty Simulation Proof | 0/? | Not started | - |
+| 2. Color System Update | 1/1 | Complete | 2026-03-04 |
+| 3. Faulty Simulation Proof | 1/1 | Complete | 2026-03-04 |
 | 4. Integration and Validation | 0/? | Not started | - |

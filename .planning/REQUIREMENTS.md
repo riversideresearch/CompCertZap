@@ -22,14 +22,14 @@
 
 ### Faulty Simulation Proof
 
-- [ ] **FSIM-01**: RTLtolerant.v references ProofLiveness.analyze in match_stackframes and match_states
-- [ ] **FSIM-02**: Per-instruction membership helper lemmas prove args are in live set for all RTL instruction forms
-- [ ] **FSIM-03**: match_rs_weaken lemma: Regset.Subset s1 s2 -> match_rs s2 ... -> match_rs s1 ...
-- [ ] **FSIM-04**: forall2_lessdef_match_rs_init_regs updated for live parameter
-- [ ] **FSIM-05**: step_simulation proof complete for all instruction cases
-- [ ] **FSIM-06**: faulty_progress proof complete for all instruction cases
-- [ ] **FSIM-07**: faulty_backward_simulation theorem proved
-- [ ] **FSIM-08**: RTLtolerant.vo compiles with zero Admitted
+- [x] **FSIM-01**: RTLtolerant.v references ProofLiveness.analyze in match_stackframes and match_states
+- [x] **FSIM-02**: Per-instruction membership helper lemmas prove args are in live set for all RTL instruction forms
+- [x] **FSIM-03**: match_rs_weaken lemma: Regset.Subset s1 s2 -> match_rs s2 ... -> match_rs s1 ...
+- [x] **FSIM-04**: forall2_lessdef_match_rs_init_regs updated for live parameter
+- [x] **FSIM-05**: step_simulation proof complete for all instruction cases
+- [x] **FSIM-06**: faulty_progress proof complete for all instruction cases
+- [x] **FSIM-07**: faulty_backward_simulation theorem proved
+- [x] **FSIM-08**: RTLtolerant.vo compiles with zero Admitted
 
 ### Integration and Validation
 
@@ -67,14 +67,14 @@
 | COLR-02 | Phase 2 | Complete |
 | COLR-03 | Phase 2 | Complete |
 | COLR-04 | Phase 2 | Complete |
-| FSIM-01 | Phase 3 | Pending |
-| FSIM-02 | Phase 3 | Pending |
-| FSIM-03 | Phase 3 | Pending |
-| FSIM-04 | Phase 3 | Pending |
-| FSIM-05 | Phase 3 | Pending |
-| FSIM-06 | Phase 3 | Pending |
-| FSIM-07 | Phase 3 | Pending |
-| FSIM-08 | Phase 3 | Pending |
+| FSIM-01 | Phase 3 | Complete |
+| FSIM-02 | Phase 3 | Complete |
+| FSIM-03 | Phase 3 | Complete |
+| FSIM-04 | Phase 3 | Complete |
+| FSIM-05 | Phase 3 | Complete |
+| FSIM-06 | Phase 3 | Complete |
+| FSIM-07 | Phase 3 | Complete |
+| FSIM-08 | Phase 3 | Complete |
 | INTG-01 | Phase 4 | Pending |
 | INTG-02 | Phase 4 | Pending |
 | INTG-03 | Phase 4 | Pending |
