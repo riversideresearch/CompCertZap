@@ -1,6 +1,13 @@
 (** * Forward simulation proof for DMR pass. *)
 
-Require Import RTLreplicateProofCommon.
+Require Import AST Coqlib Errors Events Floats Globalenvs Integers Linking Maps Op Registers RTLgen RTLtyping Smallstep Values.
+Require Import RTL.
+Require Import Errors.
+Require Import RTLreplicateSpecCommon.
+Export ListNotations.
+
+Global Open Scope positive_scope.
+
 Require Import RTLdmrspec.
 Require Import RTLdmr.
 
