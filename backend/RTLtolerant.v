@@ -7,6 +7,7 @@ Require Import
   Globalenvs
   Linking
   Maps
+  ProofLiveness
   Registers
   RTLtmr
   RTLtmrspec
@@ -47,6 +48,213 @@ Proof.
   exists c; split; auto.
 Qed.
 
+Lemma match_rs_weaken s1 s2 col faulted rs1 rs2 :
+  Regset.Subset s1 s2 ->
+  match_rs s2 col faulted rs1 rs2 ->
+  match_rs s1 col faulted rs1 rs2.
+Proof.
+  unfold match_rs; intros Hsub RS.
+  destruct faulted.
+  - destruct RS as (c & Hc & RS).
+    exists c; split; auto.
+    intros r Hr Hcol. apply RS; auto.
+  - intros r Hr. apply RS. apply Hsub; auto.
+Qed.
+
+(** Per-instruction liveness membership helpers. *)
+
+Lemma args_in_live_iop f live pc op args res succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Iop op args res succ) ->
+  In r args ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc Hin.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl; auto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma args_in_live_iload f live pc chunk addr args dst succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
+  In r args ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc Hin.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl; auto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma args_in_live_istore f live pc chunk addr args src succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  In r args ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc Hin.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl; auto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma src_in_live_istore f live pc chunk addr args src succ :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  Regset.In src (live !! pc).
+Proof.
+  intros LIVE Hpc.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl; auto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_live_icall f live pc sig ros args res succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
+  In r args ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc Hin.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl; auto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma ros_in_live_icall f live pc sig r args res succ :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Icall sig (inl r) args res succ) ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl; auto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  simpl. apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_live_itailcall f live pc sig ros args r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Itailcall sig ros args) ->
+  In r args ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc Hin.
+  (* Itailcall has no successors, so analyze_solution cannot be used directly.
+     Instead, the fact that some predecessor of this node exists in the CFG
+     means the backward solver will have propagated transfer results.
+     For well-formed functions, the entry point reaches this node, and
+     the solver processes it. We use a different approach: since this node
+     IS reachable, some predecessor m has it as successor, and
+     transfer f pc live!!pc is computed. But we actually need live!!pc
+     to contain args. Since Itailcall has no successors,
+     no constraint forces args into live!!pc from the fixpoint.
+
+     However, looking at faulty_progress and step_simulation more carefully,
+     the Itailcall case in faulty_progress (lines ~1444-1461) does NOT
+     use `apply RS` for args directly -- it uses find_function_lessdef
+     which only needs ros, and the rest uses known arg properties.
+
+     Actually, for Itailcall, the code at line 1449-1455 uses
+     find_function_lessdef for ros (via inv_rs; inv_wc; apply RS),
+     and the args are handled through Forall2 lessdef construction.
+     But both need Regset.In.
+
+     Since Itailcall is a no-successor instruction, the backward solver
+     gives live!!pc = bot = empty for it. So args are NOT in live!!pc.
+
+     This means the proof must NOT rely on this lemma for Itailcall.
+     The Itailcall case must use a different argument.
+
+     We mark this as Admitted for now and will remove it if unused. *)
+Abort.
+
+Lemma ros_in_live_itailcall f live pc sig r args :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Itailcall sig (inl r) args) ->
+  Regset.In r (live !! pc).
+Proof.
+  (* Same issue as args_in_live_itailcall -- Itailcall has no successors. *)
+Abort.
+
+Lemma args_in_live_icond f live pc cond args ifso ifnot r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
+  In r args ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc Hin.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl; auto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma arg_in_live_ijumptable f live pc arg tbl :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
+  Regset.In arg (live !! pc).
+Proof.
+  intros LIVE Hpc.
+  destruct tbl as [|s tbl'].
+  - (* Empty table -- vacuous case; well-formed functions shouldn't have this *)
+    exfalso.
+    (* Actually we cannot prove this for empty table.
+       But Ijumptable always has at least one successor in practice.
+       The transfer function uses reg_live arg after, and analyze_solution
+       requires In s (successors_instr i). For non-empty table,
+       successors_instr returns the table entries. *)
+    admit.
+  - eapply ProofLiveness.analyze_solution in LIVE; eauto.
+    2: { simpl; left; auto. }
+    apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+    apply Regset.add_1. reflexivity.
+Abort.
+
+Lemma arg_in_live_ijumptable f live pc arg tbl n succ :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
+  list_nth_z tbl n = Some succ ->
+  Regset.In arg (live !! pc).
+Proof.
+  intros LIVE Hpc Hnth.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl. eapply list_nth_z_in; eauto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_live_ibuiltin f live pc ef args res succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
+  In r (params_of_builtin_args args) ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc Hin.
+  eapply ProofLiveness.analyze_solution in LIVE; eauto.
+  2: { simpl; auto. }
+  apply LIVE. unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma ireturn_optarg_in_live f live pc or r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Ireturn or) ->
+  or = Some r ->
+  Regset.In r (live !! pc).
+Proof.
+  intros LIVE Hpc Hor; subst.
+  (* Ireturn has no successors, same issue as Itailcall. *)
+Abort.
+
 Definition rs_compat (rs1 rs2 : regset) : Prop :=
   forall r, val_compat (rs1 # r) (rs2 # r).
 
@@ -65,7 +273,7 @@ Section match_states.
     forall col res f sp pc rs1 rs2 live
       (WC_FUN: wc_function col f)
       (RS_COMPAT: rs_compat rs1 rs2)
-      (LIVE: Liveness.analyze f = Some live)
+      (LIVE: ProofLiveness.analyze f = Some live)
       (RS: match_rs_upto res (live !! pc) (col pc) faulted rs1 rs2),
       match_stackframes faulted
         (Stackframe res f sp pc rs1)
@@ -88,7 +296,7 @@ Section match_states.
   Inductive match_states : bool -> RTL.state -> fstate -> Prop :=
   | match_states_State :
     forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool) live
-      (LIVE: Liveness.analyze f = Some live)
+      (LIVE: ProofLiveness.analyze f = Some live)
       (STK: Forall2 (match_stackframes b) stk1 stk2)
       (WC_FUN: wc_function col f)
       (RS_COMPAT: rs_compat rs1 rs2)
@@ -281,10 +489,10 @@ Section TOLERANCE.
   Ltac inv_rs :=
     match goal with
     | [ H : exists c : color,
-          is_basic c /\ (forall r : reg, ?col ?pc r <> Some c ->
-                                   Val.lessdef (?rs1 # r) (?rs2 # r)) |- _ ] =>
+          is_basic c /\ (forall r : reg, Regset.In r _ -> _ r <> c ->
+                                   Val.lessdef (_ # r) (_ # r)) |- _ ] =>
         destruct H as (c & Hc & H)
-    | [ H : match_rs _ true _ _ |- _ ] => destruct H as (c & Hc & H)
+    | [ H : match_rs _ _ true _ _ |- _ ] => destruct H as (c & Hc & H)
     end.
 
   Lemma val_compat_eval_addressing32 args1 args2 sp a v :
@@ -1658,28 +1866,30 @@ Section TOLERANCE.
   Qed.
 
   
-  Lemma forall2_lessdef_match_rs_init_regs args1 args2 col b params :
+  Lemma forall2_lessdef_match_rs_init_regs live args1 args2 col b params :
     Forall2 Val.lessdef args1 args2 ->
-    match_rs col b (init_regs args1 params) (init_regs args2 params).
+    match_rs live col b (init_regs args1 params) (init_regs args2 params).
   Proof.
     revert b args1 args2.
     induction params; simpl; intros b args1 args2 Hforall.
     { destruct b.
       exists Red; split; try constructor.
-      intro r; apply Val.lessdef_refl. }
+      intros r _; apply Val.lessdef_refl.
+      intros r _; apply Val.lessdef_refl. }
     destruct b.
     - destruct args1; inv Hforall.
-      { exists Red; split; try constructor; apply Val.lessdef_refl. }
+      { exists Red; split; try constructor;
+        intros r _; apply Val.lessdef_refl. }
       eapply IHparams with (b := true) in H3; eauto.
       destruct H3 as (c & Hc & RS).
       exists c; split; auto.
-      intros r Hr.
+      intros r Hlive Hr.
       destruct (peq r a); subst.
       + rewrite 2!Regmap.gss; assumption.
       + rewrite 2!Regmap.gso; auto.
     - destruct args1; inv Hforall.
-      { intro r; apply Val.lessdef_refl. }
-      intro r.
+      { intros r _; apply Val.lessdef_refl. }
+      intros r Hlive.
       destruct (peq r a); subst.
       + rewrite 2!Regmap.gss; assumption.
       + rewrite 2!Regmap.gso; auto.
