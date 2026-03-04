@@ -40,8 +40,8 @@ Requirements for this cleanup cycle. Each maps to roadmap phases.
 
 - [x] **HYG-01**: Large commented-out abandoned proof blocks removed from RTLtolerant.v
 - [x] **HYG-02**: Large commented-out blocks removed from RTLagreement.v
-- [ ] **HYG-03**: Commented-out blocks removed from RTLtmr.v
-- [ ] **HYG-04**: Commented-out blocks removed from driver/Complements.v (keep distilled design notes for vote-parametric RTL->Asm forward-sim sketch and asm weak-agreement proof direction sketch; delete other stubs)
+- [x] **HYG-03**: Commented-out blocks removed from RTLtmr.v
+- [x] **HYG-04**: Commented-out blocks removed from driver/Complements.v (keep distilled design notes for vote-parametric RTL->Asm forward-sim sketch and asm weak-agreement proof direction sketch; delete other stubs)
 - [ ] **HYG-05**: Commented-out blocks removed from RTLcolorcheck.v
 - [ ] **HYG-06**: Commented-out blocks removed from Novotes.v
 - [ ] **HYG-07**: Commented-out blocks removed from RTLfault.v
@@ -95,8 +95,8 @@ Deferred to future cleanup cycle. Tracked but not in current roadmap.
 | DEDUP-05 | Phase 4 - Proof De-duplication | Complete |
 | HYG-01 | Phase 5 - Comment and Tactic Hygiene | Complete |
 | HYG-02 | Phase 5 - Comment and Tactic Hygiene | Complete |
-| HYG-03 | Phase 5 - Comment and Tactic Hygiene | Pending |
-| HYG-04 | Phase 5 - Comment and Tactic Hygiene | Pending |
+| HYG-03 | Phase 5 - Comment and Tactic Hygiene | Complete |
+| HYG-04 | Phase 5 - Comment and Tactic Hygiene | Complete |
 | HYG-05 | Phase 5 - Comment and Tactic Hygiene | Pending |
 | HYG-06 | Phase 5 - Comment and Tactic Hygiene | Pending |
 | HYG-07 | Phase 5 - Comment and Tactic Hygiene | Pending |
