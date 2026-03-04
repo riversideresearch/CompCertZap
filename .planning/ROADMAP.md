@@ -88,7 +88,11 @@ Plans:
   2. `rg 'TODO' backend/ driver/` returns no unresolved TODO markers in any in-scope file (each is either removed as stale, replaced by a concrete fix, or recorded with a resolution rationale)
   3. DMR and TMR helper functions with matching semantics use aligned names — `rg` comparison of naming patterns between `RTLdmrproof.v` and `RTLtmrproof.v` shows no semantically-equivalent functions with divergent names
   4. `make proof -j$(nproc)`, `make check-admitted`, and `grep -rn "^\s*Admitted" backend/ driver/` all pass clean — zero regressions from the hygiene pass
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 05-01-PLAN.md — Remove commented-out blocks from RTLtolerant.v and RTLagreement.v, convert TODOs to design notes
+- [ ] 05-02-PLAN.md — Remove commented-out blocks from RTLtmr.v and Complements.v, distill design-note sketches
+- [ ] 05-03-PLAN.md — Remove commented-out blocks from RTLcolorcheck.v/Novotes.v/RTLfault.v, resolve remaining TODOs, rename maj_vote_regR_star_step
 
 ## Progress
 
@@ -103,4 +107,4 @@ Note: This order differs from the original plan's phase numbering (0,1,3,2,4,5) 
 | 2. Shared Module Introduction | 2/2 | Complete | 2026-03-04 |
 | 3. Spec Strengthening | 0/2 | Not started | - |
 | 4. Proof De-duplication | 0/3 | Not started | - |
-| 5. Comment and Tactic Hygiene | 0/TBD | Not started | - |
+| 5. Comment and Tactic Hygiene | 0/3 | Not started | - |
