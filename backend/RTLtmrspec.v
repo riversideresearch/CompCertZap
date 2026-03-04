@@ -922,10 +922,56 @@ Proof.
   inv H5; econstructor; eauto.
 Qed.
 
-(* TODO: clean up this mess. Might be a good idea to define a
-   relational specification of the algorithm and factor this into 1)
-   proving the code satisfies the spec and 2) proving the spec implies
-   rm_wf.  *)
+(** Relational specification of the TMR replication map construction.
+    [replication_map_rel regs rm lo hi] holds when [rm] maps each
+    register in [regs] to a pair of distinct shadows in [lo, hi).
+    Each original register consumes two positions: r2 at mid, r3 at mid+1.
+    The foldM processes the tail first, so the tail occupies [lo, mid)
+    and the head register gets shadows at [mid] and [mid+1]. *)
+Inductive replication_map_rel
+  : list reg -> PMap.t (reg * reg) -> positive -> positive -> Prop :=
+| rmr_nil :
+  forall rm lo,
+    replication_map_rel [] rm lo lo
+| rmr_cons :
+  forall r regs rm lo mid,
+    replication_map_rel regs rm lo mid ->
+    rm # r = (mid, Pos.succ mid) ->
+    replication_map_rel (r :: regs) rm lo (Pos.succ (Pos.succ mid)).
+
+Lemma replication_map_rel_lo_le_hi regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  lo <= hi.
+Proof. intro H; induction H; lia. Qed.
+
+(** Derived range lemma: all shadow pairs lie in [lo, hi). *)
+Lemma replication_map_rel_range regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  Forall (fun r => let '(r2, r3) := rm # r in
+                   lo <= r2 /\ r2 < hi /\ lo <= r3 /\ r3 < hi) regs.
+Proof.
+  intro H; induction H.
+  - constructor.
+  - constructor.
+    + pose proof (replication_map_rel_lo_le_hi _ _ _ _ H).
+      rewrite H0. lia.
+    + eapply Forall_impl; [ | eauto ].
+      simpl. intros a Ha. destruct (rm # a) as [a2 a3]. lia.
+Qed.
+
+(** Shadows within a single register are distinct. *)
+Lemma replication_map_rel_shadow_distinct regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  Forall (fun r => let '(r2, r3) := rm # r in r2 <> r3) regs.
+Proof.
+  intro H; induction H.
+  - constructor.
+  - constructor.
+    + rewrite H0. lia.
+    + eapply Forall_impl; [ | eauto ].
+      simpl. intros a Ha. destruct (rm # a) as [a2 a3]. auto.
+Qed.
+
 Lemma replication_map_wf_aux regs acc s rm s' pf :
   Forall (fun r => r < s.(st_nextreg)) regs ->
   foldM
