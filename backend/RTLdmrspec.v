@@ -805,11 +805,39 @@ Proof.
   inv H1; econstructor; eauto.
 Qed.
 
-(* TODO: This is a bit of a mess. Might be a good idea to define a
-   relational specification of the algorithm and factor this into 1)
-   proving the code satisfies the spec and 2) proving the spec implies
-   rm_wf. However, it isn't as bad here for DMR as it is for TMR in
-   Replicatespec.v. *)
+(** Relational specification of the DMR replication map construction.
+    [replication_map_rel regs rm lo hi] holds when [rm] maps each
+    register in [regs] to a distinct shadow in the range [lo, hi).
+    The foldM processes the tail first, so the tail occupies [lo, mid)
+    and the head register gets shadow at [mid]. *)
+Inductive replication_map_rel
+  : list reg -> PMap.t reg -> positive -> positive -> Prop :=
+| rmr_nil :
+  forall rm lo,
+    replication_map_rel [] rm lo lo
+| rmr_cons :
+  forall r regs rm lo mid,
+    replication_map_rel regs rm lo mid ->
+    rm # r = mid ->
+    replication_map_rel (r :: regs) rm lo (Pos.succ mid).
+
+Lemma replication_map_rel_lo_le_hi regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  lo <= hi.
+Proof. intro H; induction H; lia. Qed.
+
+Lemma replication_map_rel_range regs rm lo hi :
+  replication_map_rel regs rm lo hi ->
+  Forall (fun r => lo <= rm # r < hi) regs.
+Proof.
+  intro H; induction H.
+  - constructor.
+  - constructor.
+    + pose proof (replication_map_rel_lo_le_hi _ _ _ _ H). subst; lia.
+    + eapply Forall_impl; [ | eauto ].
+      simpl. intros a Ha; lia.
+Qed.
+
 Lemma replication_map_wf_aux regs acc s rm s' pf :
   Forall (fun r => r < s.(st_nextreg)) regs ->
   foldM
