@@ -748,87 +748,42 @@ Section PRESERVATION.
   Proof.
     intros Hact Hr2 Hr3 Hmaj; inv Hmaj.
     destruct vsem.
-    (* TODO: all four cases are very similar. combine them somehow or *)
-    (*      factor out commonality? *)
-    destruct ty; simpl in *; try contradiction; clear H.
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-          rewrite <- Hr3, <- Hr2.
-          apply vote_sem_int_ok.
-          apply Val.has_inj_type in Hact; auto.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        destruct (peq r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          (* This is necessary for riscv but not x86_64. Why? *)
-          try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
-                     destruct (eq_block _ _); simpl; try congruence;
-                     destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Int.eq_dec i i); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-          rewrite <- Hr3, <- Hr2.
-          apply vote_sem_float_ok.
-          apply Val.has_inj_type in Hact; auto.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        destruct (peq r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-          rewrite <- Hr3, <- Hr2.
-          apply vote_sem_long_ok.
-          apply Val.has_inj_type in Hact; auto.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        destruct (peq r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-          try solve[rewrite PMap.gss; reflexivity];
-          try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
-                     rewrite PMap.gss; reflexivity];
-          destruct Archi.ptr64 eqn:Harchi; simpl;
-          try solve[simpl in Hact; congruence];
-          destruct (eq_block _ _); simpl; try congruence;
-          destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-          rewrite PMap.gss; reflexivity. }
-    { inv H0.
-      eexists; split.
-      - econstructor.
-        + eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-            eauto; repeat constructor.
-          rewrite <- Hr3, <- Hr2.
-          apply vote_sem_single_ok.
-          apply Val.has_inj_type in Hact; auto.
-        + apply star_refl.
-        + reflexivity.
-      - intro r; simpl.
-        destruct (peq r r1); subst.
-        2: { rewrite PMap.gso; auto. }
-        destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact].
-        * rewrite PMap.gss; reflexivity.
-        * destruct (Float32.eq_dec f f); simpl; try congruence.
-          rewrite PMap.gss; reflexivity. }
+    destruct ty; simpl in *; try contradiction; clear H;
+    (inv H0;
+     eexists; split;
+     [ econstructor;
+       [ eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
+           eauto; repeat constructor;
+         rewrite <- Hr3, <- Hr2;
+         first [ apply vote_sem_int_ok
+               | apply vote_sem_float_ok
+               | apply vote_sem_long_ok
+               | apply vote_sem_single_ok ];
+         apply Val.has_inj_type in Hact; auto
+       | apply star_refl
+       | reflexivity ]
+     | intro r; simpl;
+       destruct (peq r r1); subst;
+       [ destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
+         try solve [rewrite PMap.gss; reflexivity];
+         try solve [destruct (Int.eq_dec i i); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct (Float.eq_dec f f); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct (Float32.eq_dec f f); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
+                    destruct (eq_block _ _); simpl; try congruence;
+                    destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity];
+         try solve [destruct Archi.ptr64 eqn:Harchi; simpl;
+                    try solve [simpl in Hact; congruence];
+                    destruct (eq_block _ _); simpl; try congruence;
+                    destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
+                    rewrite PMap.gss; reflexivity]
+       | rewrite PMap.gso; auto ] ]).
   Qed.
 
   Lemma maj_vote_regR_star_step
