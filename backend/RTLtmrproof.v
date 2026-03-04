@@ -1,29 +1,8 @@
 (** * Forward simulation proof for TMR pass. *)
 
-Require Import
-  AST
-  Coqlib
-  Errors
-  Events
-  Floats
-  Globalenvs
-  Integers
-  Linking
-  Maps
-  Op
-  Registers
-  RTLgen
-  RTLtmrspec
-  RTLtyping
-  Smallstep
-  Values
-.
-Require Import RTL.
+Require Import RTLreplicateProofCommon.
+Require Import RTLtmrspec.
 Require Import RTLtmr.
-Require Import Errors.
-Import ListNotations.
-
-Local Open Scope positive_scope.
 
 Section VOTE.
 Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.

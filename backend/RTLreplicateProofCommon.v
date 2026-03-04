@@ -1,12 +1,12 @@
 (** * Shared imports and utilities for DMR/TMR replication proofs. *)
 
-Require Import AST Coqlib Errors Events Floats Globalenvs Integers Linking Maps Op Registers RTLgen RTLtyping Smallstep Values.
-Require Import RTL.
-Require Import Errors.
-Require Import RTLreplicateSpecCommon.
-Import ListNotations.
+Require Export AST Coqlib Errors Events Floats Globalenvs Integers Linking Maps Op Registers RTLgen RTLtyping Smallstep Values.
+Require Export RTL.
+Require Export Errors.
+Require Export RTLreplicateSpecCommon.
+Export ListNotations.
 
-Local Open Scope positive_scope.
+Global Open Scope positive_scope.
 
 (** Section-internal proof lemmas remain in the pass-specific files
     (RTLdmrproof.v and RTLtmrproof.v) per the move-only constraint.
