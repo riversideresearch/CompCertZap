@@ -21,9 +21,9 @@ Requirements for removing novotes dependency from the RTL fault-tolerance proof 
 
 ### Theorem
 
-- [ ] **THERM-01**: Rewrite transf_c_program_to_rtl_preservation_faulty with 3-step composition
-- [ ] **THERM-02**: Remove obsolete novotes-dependent lemmas from Complements.v
-- [ ] **THERM-03**: Clean up dead Novotes/Novotesproof imports
+- [x] **THERM-01**: Rewrite transf_c_program_to_rtl_preservation_faulty with 3-step composition
+- [x] **THERM-02**: Remove obsolete novotes-dependent lemmas from Complements.v
+- [x] **THERM-03**: Clean up dead Novotes/Novotesproof imports
 
 ### Validation
 
@@ -65,9 +65,9 @@ Deferred to future release.
 | PIPE-01 | Phase 6 | Complete |
 | PIPE-02 | Phase 6 | Complete |
 | PIPE-03 | Phase 6 | Complete |
-| THERM-01 | Phase 7 | Pending |
-| THERM-02 | Phase 7 | Pending |
-| THERM-03 | Phase 7 | Pending |
+| THERM-01 | Phase 7 | Complete |
+| THERM-02 | Phase 7 | Complete |
+| THERM-03 | Phase 7 | Complete |
 | VALID-01 | Phase 8 | Pending |
 | VALID-02 | Phase 8 | Pending |
 | VALID-03 | Phase 8 | Pending |
@@ -81,4 +81,4 @@ Deferred to future release.
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after Phase 5 Plan 1 completion*
+*Last updated: 2026-03-05 after Phase 7 Plan 1 completion*
