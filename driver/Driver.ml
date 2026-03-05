@@ -64,8 +64,8 @@ let compile_c_file sourcename ifile ofile =
     (* print_endline "RTL program is well-colored :)" *)
     ()
   else begin
-      print_endline "RTL program not well-colored!"
-      (* exit 1 *)
+      print_endline "RTL program not well-colored!";
+      exit 1
     end;
   
   (* Convert to Asm *)

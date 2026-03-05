@@ -5,6 +5,7 @@ Require Import
   Events
   Integers
   List
+  ProofLiveness
   Maps
   Registers
   RTL
@@ -48,12 +49,16 @@ Definition eqb (c1 c2 : color) : bool :=
 
 Declare Scope color_scope.
 
-Infix "=?" := eqb (at level 70) : color_scope.
+Infix "=?" := eqb (at level 70, no associativity) : color_scope.
 
 Local Open Scope color_scope.
 
 Lemma eqb_spec (c1 c2 : color) : reflect (c1 = c2) (c1 =? c2).
 Proof. destruct c1, c2; simpl; try left; auto; right; congruence. Qed.
+
+Lemma eqb_sound (c1 c2 : color) :
+  c1 =? c2 = true -> c1 = c2.
+Proof. destruct (eqb_spec c1 c2); congruence. Qed.
 
 Definition eqb' (oc1 oc2 : option color) : bool :=
   match oc1, oc2 with
@@ -94,7 +99,8 @@ Notation is_green x := (is_color x Green).
 Notation is_blue x := (is_color x Blue).
 
 Section wc.
-  Variable col : node -> reg -> option color.
+  Variable live : PMap.t Regset.t.
+  Variable col : node -> reg -> color.
 
   (** An instruction is well-colored wrt. coloring [col].
 
@@ -107,104 +113,126 @@ Section wc.
 
   Inductive wc_instruction (pc : node) : instruction -> Prop :=
   | wc_Inop : forall succ,
-      (forall r c, col pc r = Some c -> col succ r = Some c) ->
+      Regset.For_all (fun r => col pc r = col succ r) (live !! pc) ->
       wc_instruction pc (Inop succ)
   | wc_Iop_safe : forall op args res succ,
       ~ is_protected op ->
-      is_basic' (col succ res) ->
+      is_basic (col succ res) ->
       Forall (fun arg => col pc arg = col succ res) args ->
-      (forall r c, r <> res -> col pc r = Some c -> col succ r = Some c) ->
+      Regset.For_all (fun r => r <> res -> col pc r = col succ r) (live !! pc) ->
       wc_instruction pc (Iop op args res succ)
   | wc_Iop_protected : forall op args res succ,
       is_protected op ->
-      Forall (fun arg => is_white (col pc arg)) args ->
-      is_white (col succ res) ->
-      (forall r c, ~ In r args -> r <> res ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      Forall (fun arg => col pc arg = White) args ->
+      col succ res = White ->
+      Regset.For_all (fun r => ~ In r args -> r <> res -> col pc r = col succ r)
+        (live !! pc) ->
       wc_instruction pc (Iop op args res succ)
   | wc_Iload : forall chunk addr args res succ,
-      Forall (fun arg => is_white (col pc arg)) args ->
-      is_white (col succ res) ->
-      (forall r c, ~ In r args -> r <> res ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      Forall (fun arg => col pc arg = White) args ->
+      col succ res = White ->
+      Regset.For_all (fun r => ~ In r args -> r <> res -> col pc r = col succ r)
+        (live !! pc) ->
       wc_instruction pc (Iload chunk addr args res succ)
   | wc_Istore : forall chunk addr args src succ,
-      is_white (col pc src) ->
-      Forall (fun arg => is_white (col pc arg)) args ->
-      (forall r c, ~ In r args -> r <> src ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      col pc src = White ->
+      Forall (fun arg => col pc arg = White) args ->
+      Regset.For_all (fun r => ~ In r args -> r <> src -> col pc r = col succ r)
+        (live !! pc) ->
       wc_instruction pc (Istore chunk addr args src succ)
   | wc_Icall : forall sig fn args res succ,
-      (forall r, fn = inl r -> is_white (col pc r)) ->
-      Forall (fun arg => is_white (col pc arg)) args ->
-      is_white (col succ res) ->
-      (forall r c, ~ In r args -> r <> res -> (forall r', fn = inl r' -> r <> r') ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      (forall r, fn = inl r -> col pc r = White) ->
+      Forall (fun arg => col pc arg = White) args ->
+      col succ res = White ->
+      Regset.For_all (fun r => ~ In r args -> r <> res ->
+                            (forall r', fn = inl r' -> r <> r') ->
+                            col pc r = col succ r)
+        (live !! pc) ->
       wc_instruction pc (Icall sig fn args res succ)
   | wc_Itailcall : forall sig fn args,
-      (forall r, fn = inl r -> is_white (col pc r)) ->
-      Forall (fun arg => is_white (col pc arg)) args ->
+      (forall r, fn = inl r -> col pc r = White) ->
+      Forall (fun arg => col pc arg = White) args ->
       wc_instruction pc (Itailcall sig fn args)
   | wc_Ibuiltin_smove_green : forall ef arg res succ,
       is_green_smove_builtin ef ->
-      is_white (col pc arg) ->
-      is_pink (col succ arg) ->
-      is_green (col succ res) ->
-      (forall r c, r <> arg -> r <> res ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      col pc arg = White ->
+      col succ arg = Pink ->
+      col succ res = Green ->
+      Regset.For_all (fun r => r <> arg -> r <> res -> col pc r = col succ r)
+        (live !! pc) ->
       wc_instruction pc (Ibuiltin ef (BA arg :: nil) (BR res) succ)
   | wc_Ibuiltin_smove_blue : forall ef arg res succ,
       is_blue_smove_builtin ef ->
-      is_pink (col pc arg) ->
-      is_red (col succ arg) ->
-      is_blue (col succ res) ->
-      (forall r c, r <> arg -> r <> res ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      col pc arg = Pink ->
+      col succ arg = Red ->
+      col succ res = Blue ->
+      Regset.For_all (fun r => r <> arg -> r <> res -> col pc r = col succ r)
+        (live !! pc) ->
       wc_instruction pc (Ibuiltin ef (BA arg :: nil) (BR res) succ)
   | wc_Ibuiltin_vote : forall ef arg1 arg2 arg3 res succ,
       is_vote_builtin ef ->
-      is_red (col pc arg1) ->
-      is_green (col pc arg2) ->
-      is_blue (col pc arg3) ->
-      is_white (col succ res) ->
-      (forall r c, r <> res ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      col pc arg1 = Red ->
+      col pc arg2 = Green ->
+      col pc arg3 = Blue ->
+      col succ res = White ->
+      Regset.For_all (fun r => r <> res -> col pc r = col succ r)
+        (live !! pc) ->
       wc_instruction pc (Ibuiltin ef (BA arg1 :: BA arg2 :: BA arg3 :: nil) (BR res) succ)
   | wc_Ibuiltin : forall ef bargs bres succ,
       ~ is_green_smove_builtin ef ->
       ~ is_blue_smove_builtin ef ->
       ~ is_vote_builtin ef ->
-      Forall (builtin_arg_forall (fun r => is_white (col pc r))) bargs ->
-      builtin_res_forall (fun r => is_white (col succ r)) bres ->
-      (forall r c, ~ Exists (in_builtin_arg r) bargs ->
-              (forall x, bres = BR x -> r <> x) ->
-              is_color (col pc r) c -> is_color (col succ r) c) ->
+      Forall (builtin_arg_forall (fun r => col pc r = White)) bargs ->
+      builtin_res_forall (fun r => col succ r = White) bres ->
+      Regset.For_all (fun r => ~ Exists (in_builtin_arg r) bargs ->
+                            (forall x, bres = BR x -> r <> x) ->
+                            col pc r = col succ r)
+        (live !! pc) ->
       wc_instruction pc (Ibuiltin ef bargs bres succ)
   | wc_Icond : forall cond args ifso ifnot,
-      Forall (fun arg => is_white (col pc arg)) args ->
-      (forall r c, ~ In r args -> is_color (col pc r) c ->
-              is_color (col ifso r) c /\ is_color (col ifnot r) c) ->
+      Forall (fun arg => col pc arg = White) args ->
+      Regset.For_all (fun r => ~ In r args -> col pc r = col ifso r /\ col pc r = col ifnot r)
+        (live !! pc) ->
       wc_instruction pc (Icond cond args ifso ifnot)
   | wc_Ijumptable : forall arg tbl,
-      is_white (col pc arg) ->
-      (forall r c, r <> arg -> is_color (col pc r) c ->
-              Forall (fun succ => is_color (col succ r) c) tbl) ->
+      col pc arg = White ->
+      Regset.For_all (fun r => r <> arg -> Forall (fun succ => col pc r = col succ r) tbl)
+        (live !! pc) ->
       wc_instruction pc (Ijumptable arg tbl)
   | wc_Ireturn : forall or,
-      optionP (fun r => is_white (col pc r)) or ->
+      optionP (fun r => col pc r = White) or ->
       wc_instruction pc (Ireturn or).
 
+  
   Definition wc_code (c : code) : Prop :=
     forall pc i, c ! pc = Some i -> wc_instruction pc i.
 
-  Record wc_function (f : function) : Prop :=
-    mk_wc_function {
-        wc_fn_params : Forall (fun param => col f.(fn_entrypoint) param = Some White)
-                         f.(fn_params);
-        wc_fn_code : wc_code f.(fn_code)
-      }.
+  (* Record wc_function (f : function) : Prop := *)
+  (*   mk_wc_function { *)
+  (*       wc_fn_params : Forall (fun param => col f.(fn_entrypoint) param = White) *)
+  (*                        f.(fn_params); *)
+  (*       wc_fn_code : wc_code f.(fn_code) *)
+  (*     }. *)
 
 End wc.
+
+Inductive wc_function col : function -> Prop :=
+  wc_function_function : forall f live
+      (WC_LIVE: ProofLiveness.analyze f = Some live)
+      (WC_PARAMS: Forall (fun param => col f.(fn_entrypoint) param = White) f.(fn_params))
+      (WC_CODE: wc_code live col f.(fn_code)),
+      wc_function col f.
+
+(* Record wc_function col (f : function) : Prop := *)
+(*   mk_wc_function { *)
+(*       wc_fn_params : Forall (fun param => col f.(fn_entrypoint) param = White) *)
+(*                        f.(fn_params); *)
+(*       wc_fn_code : match Liveness.analyze f with *)
+(*                    | Some live => wc_code live col f.(fn_code) *)
+(*                    | None => False *)
+(*                    end *)
+(*     }. *)
+
 
 (* Definition wc_program (p : program) : Prop := *)
 (*   forall i f, In (i, Gfun (Internal f)) (prog_defs p) -> exists col, wc_function col f. *)

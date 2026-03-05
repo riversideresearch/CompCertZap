@@ -7,6 +7,7 @@ Require Import
   Globalenvs
   Linking
   Maps
+  ProofLiveness
   Registers
   RTLtmr
   RTLtmrspec
@@ -20,30 +21,441 @@ Require Import
 Import ListNotations.
 Local Open Scope string_scope.
 
-Definition match_rs
-  (col : reg -> option color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
+Definition match_rs (live : Regset.t)
+  (col : reg -> color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
     exists c, is_basic c /\
-           forall r, col r <> Some c -> Val.lessdef (rs1 # r) (rs2 # r)
+           forall r, Regset.In r live -> col r <> c -> Val.lessdef (rs1 # r) (rs2 # r)
   else
     forall r, Val.lessdef (rs1 # r) (rs2 # r).
 
-Definition match_rs_upto (res : reg)
-  (col : reg -> option color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
+Definition match_rs_upto (res : reg) (live : Regset.t)
+  (col : reg -> color) (faulted : bool) (rs1 rs2 : regset) : Prop :=
   if faulted then
     exists c, is_basic c /\
-           forall r, r <> res -> col r <> Some c -> Val.lessdef (rs1 # r) (rs2 # r)
+           forall r, r <> res ->
+                Regset.In r live -> col r <> c -> Val.lessdef (rs1 # r) (rs2 # r)
   else
     forall r, r <> res -> Val.lessdef (rs1 # r) (rs2 # r).
 
-Lemma match_rs_match_rs_upto res col faulted rs1 rs2 :
-  match_rs col faulted rs1 rs2 ->
-  match_rs_upto res col faulted rs1 rs2.
+Lemma match_rs_match_rs_upto live res col faulted rs1 rs2 :
+  match_rs live col faulted rs1 rs2 ->
+  match_rs_upto res live col faulted rs1 rs2.
 Proof.
   unfold match_rs, match_rs_upto; intro RS.
   destruct faulted; auto.
   destruct RS as (c & Hc & RS).
   exists c; split; auto.
+Qed.
+
+Lemma match_rs_weaken s1 s2 col faulted rs1 rs2 :
+  Regset.Subset s1 s2 ->
+  match_rs s2 col faulted rs1 rs2 ->
+  match_rs s1 col faulted rs1 rs2.
+Proof.
+  unfold match_rs; intros Hsub RS.
+  destruct faulted.
+  - destruct RS as (c & Hc & RS).
+    exists c; split; [auto|].
+    intros r Hr Hcol. apply RS; auto.
+  - auto.
+Qed.
+
+(** Propagate match_rs from predecessor to successor with color change.
+    For r in s1 (successor's live set), if:
+    - s1 <= s2 (predecessor's live set)
+    - For r in s_mid, col1 r = col2 r
+    - s1 <= s_mid
+    Then match_rs s2 col1 faulted rs1 rs2 implies match_rs s1 col2 faulted rs1 rs2. *)
+
+Lemma match_rs_color_weaken s1 s2 s_mid col1 col2 faulted rs1 rs2 :
+  Regset.Subset s1 s2 ->
+  Regset.Subset s1 s_mid ->
+  (forall r, Regset.In r s_mid -> col1 r = col2 r) ->
+  match_rs s2 col1 faulted rs1 rs2 ->
+  match_rs s1 col2 faulted rs1 rs2.
+Proof.
+  unfold match_rs; intros Hsub1 Hsub2 Hcol RS.
+  destruct faulted.
+  - destruct RS as (c & Hc & RS).
+    exists c; split; [auto|].
+    intros r Hr Hcol_ne.
+    apply RS.
+    + apply Hsub1; auto.
+    + rewrite Hcol; auto.
+  - auto.
+Qed.
+
+(** Bridge: [in_builtin_arg] implies membership in [params_of_builtin_arg]. *)
+
+Lemma in_builtin_arg_in_params {A : Type} (a : A) barg :
+  in_builtin_arg a barg -> In a (params_of_builtin_arg barg).
+Proof.
+  induction barg; simpl; intro H; inv H;
+    try (left; reflexivity);
+    try (apply in_or_app; left; auto; fail);
+    try (apply in_or_app; right; auto; fail).
+Qed.
+
+Lemma in_builtin_arg_in_params_args {A : Type} (a : A) barg bargs :
+  In barg bargs ->
+  in_builtin_arg a barg ->
+  In a (params_of_builtin_args bargs).
+Proof.
+  induction bargs; simpl; intros Hin Harg.
+  - destruct Hin.
+  - destruct Hin as [-> | Hin].
+    + apply in_or_app; left. apply in_builtin_arg_in_params; auto.
+    + apply in_or_app; right. eapply IHbargs; eauto.
+Qed.
+
+(** Variant of [builtin_arg_forall_impl] that also provides
+    [in_builtin_arg a barg] evidence to the callback. *)
+
+Lemma builtin_arg_forall_impl_in {A : Type} (P Q : A -> Prop) barg :
+  (forall a, P a -> in_builtin_arg a barg -> Q a) ->
+  builtin_arg_forall P barg ->
+  builtin_arg_forall Q barg.
+Proof.
+  induction barg; simpl; intros Hpq Hforall; auto.
+  - apply Hpq; auto. constructor.
+  - destruct Hforall as [H1 H2]; split.
+    + apply IHbarg1; auto.
+      intros a Ha Hin. apply Hpq; auto. constructor; auto.
+    + apply IHbarg2; auto.
+      intros a Ha Hin. apply Hpq; auto.
+      apply in_builtin_arg_splitlong_lo; auto.
+  - destruct Hforall as [H1 H2]; split.
+    + apply IHbarg1; auto.
+      intros a Ha Hin. apply Hpq; auto. constructor; auto.
+    + apply IHbarg2; auto.
+      intros a Ha Hin. apply Hpq; auto.
+      apply in_builtin_arg_addptr_a2; auto.
+Qed.
+
+(** Per-instruction liveness membership helpers.
+    These prove that instruction arguments are in the transfer-function
+    image [ProofLiveness.transfer f pc (live !! pc)], which is the
+    "live-before" set at node [pc]. *)
+
+Lemma args_in_transfer_iop f live pc op args res succ r :
+  (fn_code f) ! pc = Some (Iop op args res succ) ->
+  In r args ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma args_in_transfer_iload f live pc chunk addr args dst succ r :
+  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
+  In r args ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma args_in_transfer_istore f live pc chunk addr args src succ r :
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  In r args ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma src_in_transfer_istore f live pc chunk addr args src succ :
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  Regset.In src (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_transfer_icall f live pc sig ros args res succ r :
+  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
+  In r args ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma ros_in_transfer_icall f live pc sig r args res succ :
+  (fn_code f) ! pc = Some (Icall sig (inl r) args res succ) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  simpl. apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_transfer_itailcall f live pc sig ros args r :
+  (fn_code f) ! pc = Some (Itailcall sig ros args) ->
+  In r args ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma ros_in_transfer_itailcall f live pc sig r args :
+  (fn_code f) ! pc = Some (Itailcall sig (inl r) args) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  simpl. apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_transfer_icond f live pc cond args ifso ifnot r :
+  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
+  In r args ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma arg_in_transfer_ijumptable f live pc arg tbl :
+  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
+  Regset.In arg (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_transfer_ibuiltin f live pc ef args res succ r :
+  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
+  In r (params_of_builtin_args args) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_in; auto.
+Qed.
+
+Lemma optarg_in_transfer_ireturn f live pc r :
+  (fn_code f) ! pc = Some (Ireturn (Some r)) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  simpl. apply Regset.add_1. reflexivity.
+Qed.
+
+(** For step_simulation: the transfer set at a successor is a subset
+    of the solution at the current node, which in turn is a subset of
+    the transfer set at the current node (since the transfer function
+    adds arguments on top of a subset of the solution). *)
+
+Lemma transfer_succ_subset f live pc i succ :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some i ->
+  In succ (successors_instr i) ->
+  Regset.Subset (ProofLiveness.transfer f succ (live !! succ)) (live !! pc).
+Proof.
+  intros LIVE Hpc Hsucc.
+  eapply ProofLiveness.analyze_solution; eauto.
+Qed.
+
+(** Helper: if [r] is in [live !! pc] and [r <> res], then [r] is in
+    the transfer-function image for Iop / Iload instructions. *)
+
+Lemma live_in_transfer_iop f live pc op args res succ r :
+  (fn_code f) ! pc = Some (Iop op args res succ) ->
+  r <> res ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hneq Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  apply Regset.remove_2; auto.
+Qed.
+
+Lemma live_in_transfer_iload f live pc chunk addr args dst succ r :
+  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
+  r <> dst ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hneq Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  apply Regset.remove_2; auto.
+Qed.
+
+Lemma live_in_transfer_istore f live pc chunk addr args src succ r :
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  apply Regset.add_2; auto.
+Qed.
+
+Lemma live_in_transfer_icall f live pc sig ros args res succ r :
+  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
+  r <> res ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hneq Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  destruct ros; simpl.
+  - apply Regset.add_2. apply Regset.remove_2; auto.
+  - apply Regset.remove_2; auto.
+Qed.
+
+Lemma live_in_transfer_icond f live pc cond args ifso ifnot r :
+  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl; auto.
+Qed.
+
+Lemma live_in_transfer_ijumptable f live pc arg tbl r :
+  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply Regset.add_2; auto.
+Qed.
+
+Lemma reg_list_dead_incl rl s r :
+  Regset.In r s ->
+  ~ In r rl ->
+  Regset.In r (reg_list_dead rl s).
+Proof.
+  revert s; induction rl; simpl; intros s Hin Hnotin.
+  - assumption.
+  - apply IHrl.
+    + apply Regset.remove_2.
+      * intro Heq; apply Hnotin; left; auto.
+      * assumption.
+    + intro Hin'; apply Hnotin; right; auto.
+Qed.
+
+Lemma live_in_transfer_ibuiltin f live pc ef args res succ r :
+  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
+  (forall x, res = BR x -> r <> x) ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hnotin Hin.
+  unfold ProofLiveness.transfer. rewrite Hpc.
+  apply ProofLiveness.reg_list_live_incl.
+  destruct res; simpl; auto.
+  apply Regset.remove_2; auto.
+  intro Heq; eapply Hnotin; eauto.
+Qed.
+
+(** Composite helpers: successor transfer set membership implies
+    current transfer set membership (for non-killed registers).
+    These compose [transfer_succ_subset] with [live_in_transfer_*]. *)
+
+Lemma succ_in_transfer_iop f live pc op args res succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Iop op args res succ) ->
+  r <> res ->
+  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hneq Hr.
+  eapply live_in_transfer_iop; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
+Qed.
+
+Lemma succ_in_transfer_iload f live pc chunk addr args dst succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
+  r <> dst ->
+  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hneq Hr.
+  eapply live_in_transfer_iload; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
+Qed.
+
+Lemma succ_in_transfer_istore f live pc chunk addr args src succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hr.
+  eapply live_in_transfer_istore; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
+Qed.
+
+Lemma succ_in_transfer_icall f live pc sig ros args res succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
+  r <> res ->
+  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hneq Hr.
+  eapply live_in_transfer_icall; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
+Qed.
+
+Lemma succ_in_transfer_icond f live pc cond args ifso ifnot succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
+  In succ (successors_instr (Icond cond args ifso ifnot)) ->
+  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hsucc Hr.
+  eapply live_in_transfer_icond; eauto.
+  eapply transfer_succ_subset; eauto.
+Qed.
+
+Lemma succ_in_transfer_ijumptable f live pc arg tbl succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
+  In succ (successors_instr (Ijumptable arg tbl)) ->
+  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hsucc Hr.
+  eapply live_in_transfer_ijumptable; eauto.
+  eapply transfer_succ_subset; eauto.
+Qed.
+
+Lemma succ_in_transfer_ibuiltin f live pc ef args res succ r :
+  ProofLiveness.analyze f = Some live ->
+  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
+  (forall x, res = BR x -> r <> x) ->
+  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
+  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hnotin Hr.
+  eapply live_in_transfer_ibuiltin; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
 Qed.
 
 Definition rs_compat (rs1 rs2 : regset) : Prop :=
@@ -53,18 +465,19 @@ Section match_states.
 
   (** When a fault has occurred elsewhere and regsets [rs1] and [rs2]
       are unchanged, they still match. *)
-  Lemma match_rs_upto_fault res col (pc : node) (rs1 rs2 : regset) :
-    match_rs_upto res (col pc) false rs1 rs2 ->
-    match_rs_upto res (col pc) true rs1 rs2.
+  Lemma match_rs_upto_fault res live col (pc : node) (rs1 rs2 : regset) :
+    match_rs_upto res live (col pc) false rs1 rs2 ->
+    match_rs_upto res live (col pc) true rs1 rs2.
   Proof. intro H; exists Red; split; auto; constructor. Qed.
 
   Inductive match_stackframes (faulted : bool)
     : RTL.stackframe -> RTL.stackframe -> Prop :=
   | match_stackframes_Stackframe :
-    forall col res f sp pc rs1 rs2
+    forall col res f sp pc rs1 rs2 live
       (WC_FUN: wc_function col f)
       (RS_COMPAT: rs_compat rs1 rs2)
-      (RS: match_rs_upto res (col pc) faulted rs1 rs2),
+      (LIVE: ProofLiveness.analyze f = Some live)
+      (RS: match_rs_upto res (ProofLiveness.transfer f pc (live !! pc)) (col pc) faulted rs1 rs2),
       match_stackframes faulted
         (Stackframe res f sp pc rs1)
         (Stackframe res f sp pc rs2).
@@ -85,11 +498,12 @@ Section match_states.
       registers except those of the affected color. *)
   Inductive match_states : bool -> RTL.state -> fstate -> Prop :=
   | match_states_State :
-    forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool)
+    forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool) live
+      (LIVE: ProofLiveness.analyze f = Some live)
       (STK: Forall2 (match_stackframes b) stk1 stk2)
       (WC_FUN: wc_function col f)
       (RS_COMPAT: rs_compat rs1 rs2)
-      (RS: match_rs (col pc) b rs1 rs2)
+      (RS: match_rs (ProofLiveness.transfer f pc (live !! pc)) (col pc) b rs1 rs2)
       (MEM: Memory.Mem.extends m1 m2),
       match_states b (State stk1 f sp pc rs1 m1)
                    {| fs_state := State stk2 f sp pc rs2 m2; fault := b |}
@@ -156,24 +570,41 @@ Section TOLERANCE.
     | [ H : wc_function _ _ |- _ ] => inv H
     end;
     match goal with
-    | [ Hwc : wc_code _ _, Hpc : (fn_code _) ! _ = Some _ |- _ ] =>
-        apply Hwc in Hpc; inv Hpc; try congruence
+    | [ Hwc : wc_code _ _ _, Hpc : (fn_code _) ! _ = Some _ |- _ ] =>
+        let Hpc' := fresh "Hpc" in
+        pose proof Hpc as Hpc';
+        apply Hwc in Hpc'; inv Hpc'; try congruence
     end.
 
-  Lemma wc_col_succ_exists f col pc i r succ :
-    (fn_code f) ! pc = Some i ->
-    res_of_instruction i = Some r ->
-    succ_of_instruction i = Some succ ->
-    wc_function col f ->
-    exists c, col succ r = Some c.
-  Proof.
-    intros Hpc Hr Hsucc Hwc.
-    inv_wc; simpl in *; try congruence; inv Hr; inv Hsucc;
-      try solve [exists White; auto]; try solve [eexists; eauto].
-    - inv H0; eexists; eauto.
-    - destruct bres; simpl in *; try congruence.
-      inv H6; exists White; auto.
-  Qed.
+  (** Unify the two [live] variables from [match_states] and [wc_function].
+      Call AFTER [inv_wc] when step_simulation needs [Hin_live] to refer
+      to the same [live] used in the [wc_code] hypotheses. *)
+  Ltac unify_live :=
+    match goal with
+    | [ H1 : ProofLiveness.analyze ?f = Some ?l1,
+        H2 : ProofLiveness.analyze ?f = Some ?l2 |- _ ] =>
+        match l1 with
+        | l2 => idtac  (* already unified *)
+        | _ => let Heq := fresh in
+               assert (Heq : l1 = l2) by congruence;
+               subst l2
+        end
+    end.
+
+  (* Lemma wc_col_succ_exists f col pc i r succ : *)
+  (*   (fn_code f) ! pc = Some i -> *)
+  (*   res_of_instruction i = Some r -> *)
+  (*   succ_of_instruction i = Some succ -> *)
+  (*   wc_function col f -> *)
+  (*   exists c, col succ r = Some c. *)
+  (* Proof. *)
+  (*   intros Hpc Hr Hsucc Hwc. *)
+  (*   inv_wc; simpl in *; try congruence; inv Hr; inv Hsucc; *)
+  (*     try solve [exists White; auto]; try solve [eexists; eauto]. *)
+  (*   - inv H0; eexists; eauto. *)
+  (*   - destruct bres; simpl in *; try congruence. *)
+  (*     inv H6; exists White; auto. *)
+  (* Qed. *)
 
   Lemma res_exists_succ i r :
     res_of_instruction i = Some r ->
@@ -214,15 +645,14 @@ Section TOLERANCE.
         eapply val_compat_trans; eauto.
       + rewrite Regmap.gso; auto.
     - unfold match_rs in *.
-      assert (Hc: exists c, col pc' r = Some c /\ is_basic c).
+      assert (Hc: is_basic (col pc' r)).
       { pose proof H0 as Hop.
         inv Hmatch.
         eapply step_succ in Hstep; eauto.
         clear WC_FUN0.
         inv_wc; simpl in *; try congruence; inv H2; inv Hstep; try contradiction.
-        inv H4; exists c; split; eauto. }
-      destruct Hc as (c & Hr & Hc).
-      exists c; split; auto.
+        inv H4; constructor. }
+      exists (col pc' r); split; auto.
       intros x Hx.
       destruct (peq x r); subst; try congruence.
       rewrite Regmap.gso; auto.
@@ -278,11 +708,34 @@ Section TOLERANCE.
 
   Ltac inv_rs :=
     match goal with
-    | [ H : exists c : color,
-          is_basic c /\ (forall r : reg, ?col ?pc r <> Some c ->
-                                   Val.lessdef (?rs1 # r) (?rs2 # r)) |- _ ] =>
-        destruct H as (c & Hc & H)
-    | [ H : match_rs _ true _ _ |- _ ] => destruct H as (c & Hc & H)
+    | [ RS : exists c : color, is_basic c /\ _ |- _ ] =>
+        destruct RS as (c & Hc & RS)
+    | [ RS : match_rs _ _ true _ _ |- _ ] =>
+        unfold match_rs in RS; destruct RS as (c & Hc & RS)
+    end.
+
+  (** Tactic to apply RS with automatic Regset.In resolution *)
+  Ltac apply_RS :=
+    match goal with
+    | [ RS : forall r, Regset.In r _ -> _ -> Val.lessdef _ _ |- _ ] =>
+        apply RS;
+        [ first [ assumption
+                | eauto using args_in_transfer_iop, args_in_transfer_iload,
+                              args_in_transfer_istore, src_in_transfer_istore,
+                              args_in_transfer_icall, ros_in_transfer_icall,
+                              args_in_transfer_itailcall, ros_in_transfer_itailcall,
+                              args_in_transfer_icond, arg_in_transfer_ijumptable,
+                              args_in_transfer_ibuiltin, optarg_in_transfer_ireturn,
+                              live_in_transfer_iop, live_in_transfer_iload,
+                              live_in_transfer_istore, live_in_transfer_icall,
+                              live_in_transfer_icond, live_in_transfer_ijumptable,
+                              live_in_transfer_ibuiltin,
+                              succ_in_transfer_iop, succ_in_transfer_iload,
+                              succ_in_transfer_istore, succ_in_transfer_icall,
+                              succ_in_transfer_icond, succ_in_transfer_ijumptable,
+                              succ_in_transfer_ibuiltin,
+                              transfer_succ_subset ]
+        | ]
     end.
 
   Lemma val_compat_eval_addressing32 args1 args2 sp a v :
@@ -1359,12 +1812,12 @@ Section TOLERANCE.
         eapply Op.eval_operation_lessdef with (vl2 := rs2 ## args) in H0; eauto.
         2: { apply forall_lessdef_list.
              apply Forall_forall; intros r Hin.
-             unfold match_rs in RS.
-             destruct fault; auto.
-             inv_rs; inv_wc.
-             apply RS.
-             rewrite Forall_forall in H6; apply H6 in Hin.
-             intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+             destruct fault.
+             - unfold match_rs in RS. inv_rs; inv_wc.
+               apply_RS.
+               rewrite Forall_forall in H6; apply H6 in Hin.
+               intro HC; rewrite Hin in HC; inv HC; inv Hc.
+             - apply RS. }
         destruct H0 as (v2 & Hop & Hv2).
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
@@ -1383,12 +1836,12 @@ Section TOLERANCE.
     - eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args) in H0.
       2: { apply forall_lessdef_list.
            apply Forall_forall; intros r Hin.
-           unfold match_rs in RS.
-           destruct fault; auto.
-           inv_rs; inv_wc.
-           apply RS.
-           rewrite Forall_forall in H5; apply H5 in Hin.
-           intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+           destruct fault.
+           - unfold match_rs in RS. inv_rs; inv_wc.
+             apply_RS.
+             rewrite Forall_forall in H5; apply H5 in Hin.
+             intro HC; rewrite Hin in HC; inv HC; inv Hc.
+           - apply RS. }
       destruct H0 as (v2 & Hop & Hv2).
       eapply Memory.Mem.loadv_extends in H1; eauto.
       destruct H1 as (v3 & Hmem & Hv3).
@@ -1400,22 +1853,22 @@ Section TOLERANCE.
     - eapply Op.eval_addressing_lessdef with (vl2 := rs2 ## args) in H0.
       2: { apply forall_lessdef_list.
            apply Forall_forall; intros r Hin.
-           unfold match_rs in RS.
-           destruct fault; auto.
-           inv_rs; inv_wc.
-           apply RS.
-           rewrite Forall_forall in H8; apply H8 in Hin.
-           intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+           destruct fault.
+           - unfold match_rs in RS. inv_rs; inv_wc.
+             apply_RS.
+             rewrite Forall_forall in H8; apply H8 in Hin.
+             intro HC; rewrite Hin in HC; inv HC; inv Hc.
+           - apply RS. }
       destruct H0 as (v2 & Hop & Hv2).
       eapply Memory.Mem.storev_extends in H1.
       2: { eauto. }
       2: { eauto. }
-      2: { unfold match_rs in RS.
-           destruct fault.
-           - inv_rs; inv_wc.
-             apply RS.
+      2: { destruct fault.
+           - unfold match_rs in RS.
+             inv_rs; inv_wc.
+             apply_RS.
              intro HC; rewrite H4 in HC; inv HC; inv Hc.
-             - auto. }
+           - apply RS. }
       destruct H1 as (v3 & Hmem & Hv3).
       eexists; econstructor.
       2: { apply maybe_zap_refl. }
@@ -1427,10 +1880,10 @@ Section TOLERANCE.
       + eapply find_function_lessdef in H0.
         2: { intros x Hx; subst; inv Hx.
              destruct fault.
-             - inv_rs; inv_wc.
-               apply RS.
+             - unfold match_rs in RS. inv_rs; inv_wc.
+               apply_RS.
                intro HC; rewrite H5 in HC; auto; inv HC; inv Hc.
-             - auto. }
+             - apply RS. }
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
         eapply exec_Icall; eauto.
@@ -1446,10 +1899,10 @@ Section TOLERANCE.
       + eapply find_function_lessdef in H0.
         2: { intros x Hx; subst; inv Hx.
              destruct fault.
-             - inv_rs; inv_wc.
-               apply RS.
+             - unfold match_rs in RS. inv_rs; inv_wc.
+               apply_RS.
                intro HC; rewrite H3 in HC; auto; inv HC; inv Hc.
-             - auto. }
+             - apply RS. }
         eexists; econstructor.
         2: { apply maybe_zap_refl. }
         eapply exec_Itailcall; eauto.
@@ -1490,20 +1943,29 @@ Section TOLERANCE.
           with (vs2 := rs2 ## (arg1 :: arg2 :: arg3 :: nil)) in H1; eauto.
         destruct H1 as (v' & Hext & Hv').
         2: { inv_rs.
+             assert (Hparams_in: forall r, In r (arg1 :: arg2 :: arg3 :: nil) ->
+                       Regset.In r (ProofLiveness.transfer f pc (live !! pc))).
+             { intros r' Hr'. eapply args_in_transfer_ibuiltin; eauto. }
              destruct c.
              - apply list_lessdef_mod_1_cons.
                repeat constructor.
-               + apply RS; intro HC; rewrite H8 in HC; inv HC.
-               + apply RS; intro HC; rewrite H9 in HC; inv HC.
+               + apply RS; [apply Hparams_in; simpl; auto|].
+                 intro HC; rewrite H8 in HC; inv HC.
+               + apply RS; [apply Hparams_in; simpl; auto|].
+                 intro HC; rewrite H9 in HC; inv HC.
              - apply list_lessdef_mod_1_cons_lessdef.
-               { apply RS; intro HC; rewrite H7 in HC; inv HC. }
+               { apply RS; [apply Hparams_in; simpl; auto|].
+                 intro HC; rewrite H7 in HC; inv HC. }
                apply list_lessdef_mod_1_cons.
                repeat constructor.
-               + apply RS; intro HC; rewrite H9 in HC; inv HC.
+               + apply RS; [apply Hparams_in; simpl; auto|].
+                 intro HC; rewrite H9 in HC; inv HC.
              - apply list_lessdef_mod_1_cons_lessdef.
-               { apply RS; intro HC; rewrite H7 in HC; inv HC. }
+               { apply RS; [apply Hparams_in; simpl; auto|].
+                 intro HC; rewrite H7 in HC; inv HC. }
                apply list_lessdef_mod_1_cons_lessdef.
-               { apply RS; intro HC; rewrite H8 in HC; inv HC. }
+               { apply RS; [apply Hparams_in; simpl; auto|].
+                 intro HC; rewrite H8 in HC; inv HC. }
                apply list_lessdef_mod_1_cons.
                repeat constructor.
              - inv Hc.
@@ -1512,29 +1974,40 @@ Section TOLERANCE.
         2: { apply maybe_zap_refl. }
         eapply exec_Ibuiltin; eauto.
         repeat constructor.
-      + unfold match_rs in RS.
-        eapply eval_builtin_args_lessdef' with (e2 := fun r => rs2 # r) in H0; eauto.
+      + eapply eval_builtin_args_lessdef' with (e2 := fun r => rs2 # r) in H0; eauto.
         2: { apply Forall_forall.
              intros barg Hin.
-             inv_wc.
-             - inv Hin; simpl.
-               + unfold match_rs in RS.
-                 destruct fault; auto.
-                 inv_rs; apply RS.
-                 intro HC; rewrite H7 in HC; inv HC; inv Hc.
-               + inv H.
-             - inv Hin; simpl.
-               + unfold match_rs in RS.
-                 destruct fault; auto.
-                 inv_rs; apply RS.
-                 intro HC; rewrite H7 in HC; inv HC; inv Hc.
-               + inv H.
-             - rewrite Forall_forall in H9; apply H9 in Hin.
+             inv_wc; try contradiction.
+             - (* smove_green *)
+               inv Hin; [|contradiction].
+               simpl.
                destruct fault.
-               + inv_rs.
-                 eapply builtin_arg_forall_impl; eauto.
-                 simpl; intros a Ha.
-                 apply RS; intro HC; rewrite Ha in HC; inv HC; inv Hc.
+               + unfold match_rs in RS. inv_rs.
+                 apply RS.
+                 * eapply args_in_transfer_ibuiltin; eauto. simpl; auto.
+                 * intro HC; rewrite H7 in HC; inv HC; inv Hc.
+               + apply RS.
+             - (* smove_blue *)
+               inv Hin; [|contradiction].
+               simpl.
+               destruct fault.
+               + unfold match_rs in RS. inv_rs.
+                 apply RS.
+                 * eapply args_in_transfer_ibuiltin; eauto. simpl; auto.
+                 * intro HC; rewrite H7 in HC; inv HC; inv Hc.
+               + apply RS.
+             - (* general builtin *)
+               pose proof Hin as Hin_save.
+               rewrite Forall_forall in H9; apply H9 in Hin.
+               destruct fault.
+               + unfold match_rs in RS. inv_rs.
+                 eapply builtin_arg_forall_impl_in.
+                 2: { exact Hin. }
+                 simpl; intros a Ha Hin_barg.
+                 apply RS.
+                 * eapply args_in_transfer_ibuiltin; eauto.
+                   eapply in_builtin_arg_in_params_args; eauto.
+                 * intro HC; rewrite Ha in HC; inv HC; inv Hc.
                + eapply builtin_arg_forall_impl with (P := fun _ => True); auto.
                  apply builtin_arg_forall_true. }
         destruct H0 as (vl2 & Heval & Hvl2).
@@ -1552,10 +2025,11 @@ Section TOLERANCE.
       2: { apply forall_lessdef_list.
            apply Forall_forall; intros r Hin.
            destruct fault.
-           - inv_rs; inv_wc.
+           - unfold match_rs in RS. inv_rs; inv_wc.
+             apply_RS.
              rewrite Forall_forall in H3; apply H3 in Hin.
-             apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc.
-           - auto. }
+             intro HC; rewrite Hin in HC; inv HC; inv Hc.
+           - apply RS. }
       2: { eauto. }
       eexists; econstructor.
       2: { apply maybe_zap_refl. }
@@ -1567,9 +2041,10 @@ Section TOLERANCE.
       eapply exec_Ijumptable; eauto.
       assert (Hlessdef: Val.lessdef (rs # arg) (rs2 # arg)).
       { destruct fault.
-        - inv_rs; inv_wc.
-          apply RS; intro HC; rewrite H4 in HC; inv HC; inv Hc.
-        - auto. }
+        - unfold match_rs in RS. inv_rs; inv_wc.
+          apply_RS.
+          intro HC; rewrite H4 in HC; inv HC; inv Hc.
+        - apply RS. }
       rewrite H0 in Hlessdef; inv Hlessdef; reflexivity.
 
     (* exec_Ireturn *)
@@ -1655,22 +2130,24 @@ Section TOLERANCE.
   Qed.
 
   
-  Lemma forall2_lessdef_match_rs_init_regs args1 args2 col b params :
+  Lemma forall2_lessdef_match_rs_init_regs live args1 args2 col b params :
     Forall2 Val.lessdef args1 args2 ->
-    match_rs col b (init_regs args1 params) (init_regs args2 params).
+    match_rs live col b (init_regs args1 params) (init_regs args2 params).
   Proof.
     revert b args1 args2.
     induction params; simpl; intros b args1 args2 Hforall.
     { destruct b.
-      exists Red; split; try constructor.
-      intro r; apply Val.lessdef_refl. }
+      - exists Red; split; [constructor|].
+        intros r _ _; apply Val.lessdef_refl.
+      - intro r; apply Val.lessdef_refl. }
     destruct b.
     - destruct args1; inv Hforall.
-      { exists Red; split; try constructor; apply Val.lessdef_refl. }
+      { exists Red; split; [constructor|].
+        intros r _ _; apply Val.lessdef_refl. }
       eapply IHparams with (b := true) in H3; eauto.
       destruct H3 as (c & Hc & RS).
       exists c; split; auto.
-      intros r Hr.
+      intros r Hlive Hr.
       destruct (peq r a); subst.
       + rewrite 2!Regmap.gss; assumption.
       + rewrite 2!Regmap.gso; auto.
@@ -1699,14 +2176,27 @@ Section TOLERANCE.
 
     (* exec_Inop *)
     - inv Hmatch.
+      assert (Hwc_instr: wc_instruction live col pc (Inop pc')).
+      { inv WC_FUN. rewrite LIVE in WC_LIVE; inv WC_LIVE.
+        apply WC_CODE; assumption. }
+      inv Hwc_instr.
       eexists; split.
       + eapply exec_Inop; eauto.
       + econstructor; eauto.
-        inv WC_FUN.
-        apply wc_fn_code in H; inv H.
         unfold match_rs in *.
-        destruct b; simpl in *; auto.
-        inv_rs; exists c; split; auto.
+        destruct b; auto.
+        destruct RS as (c & Hc & RS).
+        exists c; split; [auto|].
+        intros r Hr Hcol.
+        assert (Hsub: Regset.Subset (ProofLiveness.transfer f pc' (live !! pc'))
+                                    (live !! pc)).
+        { eapply transfer_succ_subset; eauto. simpl; auto. }
+        assert (Hin_live: Regset.In r (live !! pc)).
+        { apply Hsub; auto. }
+        assert (Hin_xfer: Regset.In r (ProofLiveness.transfer f pc (live !! pc))).
+        { unfold ProofLiveness.transfer. rewrite H. exact Hin_live. }
+        apply RS; auto.
+        rewrite (H1 r Hin_live); auto.
 
     (* exec_Iop *)
     - inv Hmatch.
@@ -1730,7 +2220,8 @@ Section TOLERANCE.
                  intros r Hin.
                  destruct b; auto.
                  inv_rs; inv_wc.
-                 apply RS; intro HC.
+                 apply RS; [eapply args_in_transfer_iop; eauto|].
+                 intro HC.
                  rewrite Forall_forall in H6; apply H6 in Hin.
                  rewrite Hin in HC; inv HC; inv Hc. }
             destruct H10 as (v2 & Hop & Hv2).
@@ -1742,39 +2233,56 @@ Section TOLERANCE.
         destruct b; simpl in *.
         * inv_rs; exists c; split; auto.
           intros r Hr.
-          inv_wc.
-          { (* Safe op (replicated *)
+          assert (Hin_live: Regset.In r (live !! pc)).
+          { eapply transfer_succ_subset; eauto. simpl; auto. }
+          inv_wc; try unify_live.
+          { (* Safe op (replicated) *)
             destruct (peq r res0); subst.
             - rewrite 2!Regmap.gss.
+              intro Hcol_ne.
               eapply Op.eval_operation_lessdef
                 with (vl2 := rs ## args0) in H10; eauto.
               2: { apply forall_lessdef_list.
                    apply Forall_forall.
                    intros r Hin.
-                   apply RS; intro HC; apply Hr.                   
-                   rewrite Forall_forall in H7.
-                   apply H7 in Hin. rewrite <- Hin; auto. }
+                   apply RS.
+                   + eapply args_in_transfer_iop; eauto.
+                   + rewrite Forall_forall in H7; apply H7 in Hin.
+                     rewrite Hin. exact Hcol_ne. }
               destruct H10 as (v2 & Hop & Hv2).
               rewrite H0 in Hop; inv Hop; assumption.
-            - rewrite 2!Regmap.gso; auto. }
+            - rewrite 2!Regmap.gso; auto.
+              intro Hcol_ne.
+              apply RS.
+              + eapply live_in_transfer_iop; eauto.
+              + intro HC. apply Hcol_ne.
+                rewrite <- (H8 r Hin_live n). exact HC. }
           (* Protected op (voted) *)
           destruct (peq r res0); subst.
           { rewrite 2!Regmap.gss.
+            intro Hcol_ne.
             eapply Op.eval_operation_lessdef
               with (vl2 := rs ## args0) in H10; eauto.
             2: { apply forall_lessdef_list.
                  apply Forall_forall.
                  intros r Hin.
-                 apply RS; intro HC.
-                 rewrite Forall_forall in H6; apply H6 in Hin.
-                 rewrite Hin in HC; inv HC; inv Hc. }
+                 apply RS.
+                 + eapply args_in_transfer_iop; eauto.
+                 + rewrite Forall_forall in H6; apply H6 in Hin.
+                   intro HC; rewrite Hin in HC; inv HC; inv Hc. }
             destruct H10 as (v2 & Hop & Hv2).
             rewrite H0 in Hop; inv Hop; assumption. }
-          rewrite 2!Regmap.gso; auto; apply RS; intro HC.
+          rewrite 2!Regmap.gso; auto.
+          intro Hcol_ne.
+          apply RS.
+          { destruct (in_dec peq r args0).
+            - eapply args_in_transfer_iop; eauto.
+            - eapply live_in_transfer_iop; eauto. }
+          intro HC.
           destruct (in_dec peq r args0).
           { rewrite Forall_forall in H6; apply H6 in i.
             rewrite i in HC; inv HC; inv Hc. }
-          apply H8 in HC; auto.
+          apply Hcol_ne. rewrite <- (H8 r Hin_live n0 n). exact HC.
         * intro r; destruct (peq r res0); subst.
           { rewrite 2!Regmap.gss.
             eapply Op.eval_operation_lessdef
@@ -1801,8 +2309,9 @@ Section TOLERANCE.
         apply Forall_forall; intros r Hin.
         destruct b; auto.
         inv_rs; inv_wc.
+        apply RS; [eapply args_in_transfer_iload; eauto|].
         rewrite Forall_forall in H5; apply H5 in Hin.
-        apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+        intro HC; rewrite Hin in HC; inv HC; inv Hc. }
       assert (Hlessdef_v: Val.lessdef v0 v).
       { eapply Op.eval_addressing_lessdef in H11; eauto.
         destruct H11 as (v2 & Heval & Hv2).
@@ -1821,14 +2330,21 @@ Section TOLERANCE.
         * inv_rs; exists c; split; auto.
           intros r Hr.
           destruct (peq r dst0); subst.
-          { rewrite 2!Regmap.gss; auto. }
-          rewrite 2!PMap.gso; auto.
-          inv_wc.
-          apply RS; intro HC.
+          { rewrite 2!Regmap.gss; intro; exact Hlessdef_v. }
+          rewrite 2!Regmap.gso; auto.
+          assert (Hin_live: Regset.In r (live !! pc)).
+          { eapply transfer_succ_subset; eauto. simpl; auto. }
+          inv_wc; try unify_live.
+          intro Hcol_ne.
+          apply RS.
+          { destruct (in_dec peq r args0).
+            - eapply args_in_transfer_iload; eauto.
+            - eapply live_in_transfer_iload; eauto. }
+          intro HC.
           destruct (in_dec peq r args0).
           { rewrite Forall_forall in H5.
             apply H5 in i; rewrite i in HC; inv HC; inv Hc. }
-          apply Hr, H9; auto.
+          apply Hcol_ne. rewrite <- (H9 r Hin_live n0 n). exact HC.
         * intro r.
           destruct (peq r dst0); subst.
           { rewrite 2!Regmap.gss; auto. }
@@ -1849,30 +2365,51 @@ Section TOLERANCE.
         apply Forall_forall; intros r Hin.
         destruct b; auto.
         inv_rs; inv_wc.
+        apply RS; [eapply args_in_transfer_istore; eauto|].
         rewrite Forall_forall in H8; apply H8 in Hin.
-        apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+        intro HC; rewrite Hin in HC; inv HC; inv Hc. }
       assert (Ha: Val.lessdef a0 a).
       { eapply Op.eval_addressing_lessdef in H11; eauto.
         destruct H11 as (v2 & Heval & Hv2).
         rewrite H0 in Heval; inv Heval; assumption. }
       assert (Hsrc: Val.lessdef (rs1 # src0) (rs # src0)).
       { destruct b; auto; inv_rs; inv_wc.
-        apply RS; intro HC; rewrite H5 in HC; inv HC; inv Hc. }
+        apply RS; [eapply src_in_transfer_istore; eauto|].
+        intro HC; rewrite H5 in HC; inv HC; inv Hc. }
       assert (Memory.Mem.extends m'0 m').
       { eapply Memory.Mem.storev_extends in H12; eauto.
         destruct H12 as (m2' & Hstore & Hm2').
         rewrite H1 in Hstore; inv Hstore; auto. }
       econstructor; eauto.
       destruct b; auto.
-      inv_rs; inv_wc; exists c; split; auto.
+      inv_rs; inv_wc; try unify_live; exists c; split; auto.
       intros r Hr.
-      apply RS; intro HC.
-      destruct (peq r src0); subst.
-      { rewrite H6 in HC; inv HC; inv Hc. }
+      assert (Hin_live: Regset.In r (live !! pc)).
+      { eapply transfer_succ_subset; eauto. simpl; auto. }
+      intro Hcol_ne.
+      apply RS.
+      { eapply live_in_transfer_istore; eauto. }
+      intro HC.
+      destruct (peq r src0) as [Heq_src | Hneq_src].
+      { subst r.
+        match goal with
+        | [ Hsrc : col _ src0 = White, HC0 : col _ src0 = ?c0,
+            Hc0 : is_basic ?c0 |- _ ] =>
+            rewrite Hsrc in HC0; inv HC0; inv Hc0
+        end. }
       destruct (in_dec peq r args0).
-      { rewrite Forall_forall in H9; apply H9 in i.
-        rewrite i in HC; inv HC; inv Hc. }
-      apply Hr, H10; auto.
+      { match goal with
+        | [ Hforall : Forall (fun arg => col _ arg = White) ?al,
+            Hin0 : In r ?al, HC0 : col _ r = ?c0,
+            Hc0 : is_basic ?c0 |- _ ] =>
+            rewrite Forall_forall in Hforall; apply Hforall in Hin0;
+            rewrite Hin0 in HC0; inv HC0; inv Hc0
+        end. }
+      apply Hcol_ne.
+      match goal with
+      | [ Hfa : Regset.For_all _ (live !! pc) |- _ ] =>
+          rewrite <- (Hfa r Hin_live n Hneq_src); exact HC
+      end.
 
     (* exec_Icall *)
     - inv Hmatch.
@@ -1888,7 +2425,8 @@ Section TOLERANCE.
       2: { intros r Hr.
            destruct b; auto.
            inv_rs; inv_wc.
-           apply RS; intro HC.
+           apply RS; [eapply ros_in_transfer_icall; eauto|].
+           intro HC.
            rewrite (H6 _ (eq_refl _)) in HC; inv HC; inv Hc. }
       rewrite H0 in H10; inv H10.
       assert (Hlessdef: Forall2 Val.lessdef rs1 ## args0 rs ## args0).
@@ -1897,27 +2435,45 @@ Section TOLERANCE.
         intros r Hin.
         destruct b; auto.
         inv_rs; inv_wc.
+        apply RS; [eapply args_in_transfer_icall; eauto|].
         rewrite Forall_forall in H8; apply H8 in Hin.
-        apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+        intro HC; rewrite Hin in HC; inv HC; inv Hc. }
       econstructor; auto.
       2: { eapply find_function_wc_fundef; eauto. }
       constructor; auto.
       econstructor; eauto.
       destruct b.
-      2: { apply match_rs_match_rs_upto; assumption. }
-      inv_rs; inv_wc; exists c; split; auto.
-      intros r Hneq Hr.
+      2: { unfold match_rs in RS; unfold match_rs_upto; intros r Hneq; apply RS. }
+      inv_rs.
+      assert (Hsucc_subset: Regset.Subset
+                (ProofLiveness.transfer f pc'0 (live !! pc'0)) (live !! pc)).
+      { eapply transfer_succ_subset; eauto. simpl; auto. }
+      inv_wc; try unify_live; exists c; split; auto.
+      intros r Hneq Hr Hcol_ne.
       destruct (peq r res0); subst; try congruence.
-      destruct (in_dec peq r args0).
-      { rewrite Forall_forall in H8; apply H8 in i.
-        apply RS; intro HC; rewrite i in HC; inv HC; inv Hc. }
-      destruct ros0.
-      { destruct (peq r r0); subst.
-        - apply RS; intro HC; rewrite H6 in HC; auto; inv HC; inv Hc.
-        - apply RS; intro HC; apply Hr; apply H10; auto.
-          intros x Hx; inv Hx; assumption. }
-      apply RS; intro HC; apply Hr; apply H10; auto.
-      intros x Hx; inv Hx; assumption.
+      assert (Hin_live: Regset.In r (live !! pc)).
+      { apply Hsucc_subset; assumption. }
+      destruct (in_dec peq r args0) as [Hin_args | Hni_args].
+      { apply RS; [eapply args_in_transfer_icall; eauto|].
+        intro HC.
+        match goal with
+        | [ Hforall : Forall _ args0 |- _ ] =>
+            rewrite Forall_forall in Hforall; specialize (Hforall _ Hin_args);
+            rewrite Hforall in HC; inv HC; inv Hc
+        end. }
+      apply RS; [eapply live_in_transfer_icall; eauto|].
+      intro HC; apply Hcol_ne.
+      assert (Hros_ne: forall x, ros0 = inl x -> r <> x).
+      { intros x Hx.
+        intro Heq; subst r.
+        match goal with
+        | [ Hros : forall _, _ = inl _ -> _ |- _ ] =>
+            specialize (Hros _ Hx); rewrite Hros in HC; inv HC; inv Hc
+        end. }
+      match goal with
+      | [ Hfa : Regset.For_all _ _ |- _ ] =>
+          rewrite <- (Hfa r Hin_live Hni_args n Hros_ne); exact HC
+      end.
 
     (* exec_Itailcall *)
     - inv Hmatch.
@@ -1937,7 +2493,8 @@ Section TOLERANCE.
       2: { intros r Hr.
            destruct b; auto.
            inv_rs; inv_wc.
-           apply RS; intro HC.
+           apply RS; [eapply ros_in_transfer_itailcall; eauto|].
+           intro HC.
            rewrite (H5 _ (eq_refl _)) in HC; inv HC; inv Hc. }
       rewrite H0 in H11; inv H11.
       assert (Hlessdef: Forall2 Val.lessdef rs1 ## args0 rs ## args0).
@@ -1946,8 +2503,9 @@ Section TOLERANCE.
         intros r Hin.
         destruct b; auto.
         inv_rs; inv_wc.
+        apply RS; [eapply args_in_transfer_itailcall; eauto|].
         rewrite Forall_forall in H7; apply H7 in Hin.
-        apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+        intro HC; rewrite Hin in HC; inv HC; inv Hc. }
       econstructor; auto.
       eapply find_function_wc_fundef; eauto.
 
@@ -1964,7 +2522,7 @@ Section TOLERANCE.
       + (* Fault has occurred *)
         inv_rs.
         pose proof WC_FUN as Hwc.
-        inv_wc.
+        inv_wc; try unify_live.
         * (* green smove *)
           repeat match goal with
                  | [ H : eval_builtin_args _  _ _ _ _ _ |- _ ] => inv H
@@ -1985,8 +2543,9 @@ Section TOLERANCE.
             destruct H12 as (v' & Hext' & Hv').
             eapply Events.external_call_mem_extends
               with (vargs' := [rs # arg]) in Hext'; eauto.
-            2: { repeat constructor; apply RS.
-                 intro HC; rewrite H7 in HC; inv HC; inv Hc. }
+            2: { repeat constructor.
+                 apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+                 intro HC; destruct c; try (inv Hc); congruence. }
             destruct Hext' as (vres' & m2' & Hext' & Hvres' & Hmem & Hmem').
             eapply external_call_deterministic in Hext'.
             2: { eapply H1. }
@@ -2003,14 +2562,22 @@ Section TOLERANCE.
               apply val_lessdef_compat; auto.
             - rewrite 2!Regmap.gso; auto. }
           exists c; split; auto.
-          intros r Hr.
+          intros r Hr Hcol_ne.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
           destruct (peq r arg); subst.
-          { apply RS; intro HC.
-            rewrite H7 in HC; inv HC; inv Hc. }
-          apply RS; intro HC; apply Hr, H10; auto.
+          { apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+            intro HC; destruct c; try (inv Hc); congruence. }
+          assert (Hin_live: Regset.In r (live !! pc)).
+          { eapply transfer_succ_subset; try eassumption. simpl; auto. }
+          apply RS.
+          { eapply live_in_transfer_ibuiltin; eauto. intros x Hx; inv Hx; congruence. }
+          intro HC; apply Hcol_ne.
+          match goal with
+          | [ Hfa : Regset.For_all (fun r0 => r0 <> _ -> r0 <> _ -> _ = _) _ |- _ ] =>
+              rewrite <- (Hfa r Hin_live); auto
+          end.
 
         * (* blue smove *)
           repeat match goal with
@@ -2032,8 +2599,9 @@ Section TOLERANCE.
             destruct H12 as (v' & Hext' & Hv').
             eapply Events.external_call_mem_extends
               with (vargs' := [rs # arg]) in Hext'; eauto.
-            2: { repeat constructor; apply RS.
-                 intro HC; rewrite H7 in HC; inv HC; inv Hc. }
+            2: { repeat constructor.
+                 apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+                 intro HC; destruct c; try (inv Hc); congruence. }
             destruct Hext' as (vres' & m2' & Hext' & Hvres' & Hmem & Hmem').
             eapply external_call_deterministic in Hext'.
             2: { eapply H1. }
@@ -2050,14 +2618,22 @@ Section TOLERANCE.
               apply val_lessdef_compat; auto.
             - rewrite 2!Regmap.gso; auto. }
           exists c; split; auto.
-          intros r Hr.
+          intros r Hr Hcol_ne.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
           destruct (peq r arg); subst.
-          { apply RS; intro HC.
-            rewrite H7 in HC; inv HC; inv Hc. }
-          apply RS; intro HC; apply Hr, H10; auto.
+          { apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+            intro HC; destruct c; try (inv Hc); congruence. }
+          assert (Hin_live: Regset.In r (live !! pc)).
+          { eapply transfer_succ_subset; try eassumption. simpl; auto. }
+          apply RS.
+          { eapply live_in_transfer_ibuiltin; eauto. intros x Hx; inv Hx; congruence. }
+          intro HC; apply Hcol_ne.
+          match goal with
+          | [ Hfa : Regset.For_all (fun r0 => r0 <> _ -> r0 <> _ -> _ = _) _ |- _ ] =>
+              rewrite <- (Hfa r Hin_live); auto
+          end.
 
         * (* vote *)
           repeat match goal with
@@ -2081,17 +2657,23 @@ Section TOLERANCE.
             - destruct c.
               + apply list_lessdef_mod_1_cons.
                 repeat constructor.
-                * apply RS; intro HC; rewrite H8 in HC; inv HC.
-                * apply RS; intro HC; rewrite H9 in HC; inv HC.
+                * apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+                  intro HC; congruence.
+                * apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+                  intro HC; congruence.
               + apply list_lessdef_mod_1_cons_lessdef.
-                * apply RS; intro HC; rewrite H7 in HC; inv HC.
+                * apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+                  intro HC; congruence.
                 * apply list_lessdef_mod_1_cons.
                   {  repeat constructor.
-                     apply RS; intro HC; rewrite H9 in HC; inv HC. }
+                     apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+                     intro HC; congruence. }
               + apply list_lessdef_mod_1_cons_lessdef.
-                * apply RS; intro HC; rewrite H7 in HC; inv HC.
+                * apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+                  intro HC; congruence.
                 * apply list_lessdef_mod_1_cons_lessdef.
-                  { apply RS; intro HC; rewrite H8 in HC; inv HC. }
+                  { apply RS; [eapply args_in_transfer_ibuiltin; eauto; simpl; auto|].
+                    intro HC; congruence. }
                   { apply list_lessdef_mod_1_cons; constructor. }
               + inv Hc.
               + inv Hc. }
@@ -2104,11 +2686,19 @@ Section TOLERANCE.
               apply val_lessdef_compat; auto.
             - rewrite 2!Regmap.gso; auto. }
           exists c; split; auto.
-          intros r Hr; simpl in *.
+          intros r Hr Hcol_ne; simpl in *.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
-          apply RS; intro HC; apply Hr; apply H13; auto.
+          assert (Hin_live: Regset.In r (live !! pc)).
+          { eapply transfer_succ_subset; try eassumption. simpl; auto. }
+          apply RS.
+          { eapply live_in_transfer_ibuiltin; eauto. intros x Hx; inv Hx; congruence. }
+          intro HC; apply Hcol_ne.
+          match goal with
+          | [ Hfa : Regset.For_all (fun r0 => r0 <> _ -> _ = _) _ |- _ ] =>
+              rewrite <- (Hfa r Hin_live); auto
+          end.
 
         * (* other builtin *)
           simpl in *.
@@ -2118,11 +2708,14 @@ Section TOLERANCE.
             - destruct H11 as (vl2 & Heval & Hvl2).
               eapply eval_builtin_args_determ in H0; eauto; subst; auto.
             - apply Forall_forall.
-              intros barg Hin.
+              intros barg Hin_barg.
               rewrite Forall_forall in H9.
-              eapply builtin_arg_forall_impl; eauto.
-              simpl; intros r Hr.
-              apply RS; intro HC; rewrite Hr in HC; inv HC; inv Hc. }
+              eapply builtin_arg_forall_impl_in; eauto.
+              simpl; intros r Hr Hin_r.
+              apply RS.
+              { eapply args_in_transfer_ibuiltin; eauto.
+                eapply in_builtin_arg_in_params_args; eauto. }
+              intro HC; rewrite Hr in HC; inv HC; inv Hc. }
           assert (exists vres' m'', @external_call _ VoteSemantics_Three
                                  ef0 (Genv.globalenv prog) vargs0 m1 t vres' m'' /\
                  Val.lessdef vres' vres /\ Memory.Mem.extends m'' m').
@@ -2159,18 +2752,32 @@ Section TOLERANCE.
                             Val.lessdef rs1 # r rs # r).
           { intro Hex.
             apply existsb_exists in Hex.
-            destruct Hex as (y & Hy & Hin).
-            apply in_builtin_argb_sound in Hin.
+            destruct Hex as (y & Hy & Hin_argb).
+            apply in_builtin_argb_sound in Hin_argb.
+            pose proof Hy as Hy_orig.
             rewrite Forall_forall in H9; apply H9 in Hy.
             eapply in_builtin_arg_forall in Hy; eauto.
-            apply RS; intro HC; rewrite Hy in HC; inv HC; inv Hc. }
+            apply RS.
+            { eapply args_in_transfer_ibuiltin; eauto.
+              eapply in_builtin_arg_in_params_args; eauto. }
+            intro HC; rewrite Hy in HC; inv HC; inv Hc. }
+          intro Hcol_ne.
+          assert (Hin_live: Regset.In r (live !! pc)).
+          { eapply transfer_succ_subset; try eassumption. simpl; auto. }
           destruct res0; simpl.
           { destruct (peq r x); subst.
             { rewrite 2!Regmap.gss; auto. }
             rewrite 2!Regmap.gso; auto.
             destruct (existsb (in_builtin_argb r) args0) eqn:Hex; auto.
-            apply RS; intro HC; apply Hr.
-            apply H13; auto.
+            apply RS.
+            { eapply live_in_transfer_ibuiltin; eauto.
+              intros y Hy; inv Hy; congruence. }
+            intro HC; apply Hcol_ne.
+            match goal with
+            | [ Hfa : Regset.For_all _ _ |- _ ] =>
+                rewrite <- (Hfa r Hin_live)
+            end.
+            - exact HC.
             - intro Hexists.
               rewrite Exists_exists in Hexists.
               destruct Hexists as (y & Hy & Hin).
@@ -2181,8 +2788,14 @@ Section TOLERANCE.
               + congruence.
             - intros y Hy; inv Hy; assumption. }
           { destruct (existsb (in_builtin_argb r) args0) eqn:Hex; auto.
-            apply RS; intro HC; apply Hr.
-            apply H13; auto.
+            apply RS.
+            { eapply live_in_transfer_ibuiltin; try eassumption. intros x Hx; discriminate. }
+            intro HC; apply Hcol_ne.
+            match goal with
+            | [ Hfa : Regset.For_all _ _ |- _ ] =>
+                rewrite <- (Hfa r Hin_live)
+            end.
+            - exact HC.
             - intro Hexists.
               rewrite Exists_exists in Hexists.
               destruct Hexists as (y & Hy & Hin).
@@ -2192,9 +2805,17 @@ Section TOLERANCE.
                 destruct (in_builtin_argb_spec r y); auto.
                 + congruence.
             - intros ? ?; discriminate. }
+          (* BR_splitlong - regmap_setres is a no-op, transfer no longer kills *)
           { destruct (existsb (in_builtin_argb r) args0) eqn:Hex; auto.
-            apply RS; intro HC; apply Hr.
-            apply H13; auto.
+            apply RS.
+            { eapply live_in_transfer_ibuiltin; try eassumption.
+              intros x Hx; discriminate. }
+            intro HC; apply Hcol_ne.
+            match goal with
+            | [ Hfa : Regset.For_all _ _ |- _ ] =>
+                rewrite <- (Hfa r Hin_live)
+            end.
+            - exact HC.
             - intro Hexists.
               rewrite Exists_exists in Hexists.
               destruct Hexists as (y & Hy & Hin).
@@ -2394,22 +3015,44 @@ Section TOLERANCE.
         apply Forall_forall; intros r Hin.
         destruct b; auto.
         inv_rs; inv_wc.
+        apply RS; [eapply args_in_transfer_icond; eauto|].
         rewrite Forall_forall in H3; apply H3 in Hin.
-        apply RS; intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+        intro HC; rewrite Hin in HC; inv HC; inv Hc. }
+      pose proof Hlessdef_list as Hll.
       eapply Op.eval_condition_lessdef in H10; eauto.
       rewrite H0 in H10; inv H10.
+      assert (Hsucc_in: forall succ, (succ = ifso0 \/ succ = ifnot0) ->
+                In succ (successors_instr (Icond cond0 args0 ifso0 ifnot0))).
+      { intros succ [-> | ->]; simpl; auto. }
       econstructor; eauto.
       destruct b; auto.
-      inv_rs; inv_wc; exists c; split; auto.
-      intros r Hr.
-      apply RS; intro HC.
+      inv_rs.
+      assert (Hin_succ: forall r succ, (succ = ifso0 \/ succ = ifnot0) ->
+                Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
+                Regset.In r (live !! pc)).
+      { intros r0 succ Hsucc Hr0.
+        eapply transfer_succ_subset; eauto. }
+      inv_wc; try unify_live; exists c; split; auto.
+      intros r Hr Hcol_ne.
+      assert (Hin_live: Regset.In r (live !! pc)).
+      { eapply Hin_succ; [|exact Hr].
+        match goal with
+        | [ |- context [if ?b then _ else _] ] => destruct b; auto
+        end. }
+      apply RS.
+      { eapply live_in_transfer_icond; eauto. }
+      intro HC.
       destruct (in_dec peq r args0).
-      { rewrite Forall_forall in H3; apply H3 in i.
+      { rewrite Forall_forall in H3; apply H3 in i;
         rewrite i in HC; inv HC; inv Hc. }
-      apply Hr.
-      eapply H6 in n; eauto; destruct n.
-      destruct b1; auto.
-      
+      apply Hcol_ne.
+      match goal with
+      | [ Hfa : Regset.For_all _ _ |- _ ] =>
+          destruct (Hfa r Hin_live n) as [Hifso Hifnot]
+      end.
+      (* The successor is if b_cond then ifso else ifnot; color is preserved *)
+      destruct b1; [rewrite <- Hifso | rewrite <- Hifnot]; exact HC.
+
     (* exec_Ijumptable *)
     - inv Hmatch.
       specialize (Hsafe _ (star_refl _ _ _)).
@@ -2421,21 +3064,33 @@ Section TOLERANCE.
       rewrite H in H10; inv H10.
       assert (Hlessdef: Val.lessdef (rs1 # arg0) (rs # arg0)).
       { destruct b; auto; inv_rs; inv_wc.
-        apply RS; intro HC; rewrite H4 in HC; inv HC; inv Hc. }
+        apply RS; [eapply arg_in_transfer_ijumptable; eauto|].
+        intro HC; destruct c; try (inv Hc); congruence. }
+      (* Save list_nth_z fact before destructive rewrites *)
+      assert (Hin_tbl: In pc'0 tbl0).
+      { eapply list_nth_z_in; eauto. }
       rewrite H0, H11 in Hlessdef; inv Hlessdef.
       rewrite H1 in H12; inv H12.
       econstructor; eauto.
       destruct b; auto.
-      inv_rs; inv_wc.
+      inv_rs.
+      assert (Hsucc_subset: Regset.Subset
+                (ProofLiveness.transfer f pc'0 (live !! pc'0)) (live !! pc)).
+      { eapply transfer_succ_subset; eauto. }
+      inv_wc; try unify_live.
       exists c; split; auto.
-      intros r Hr.
+      intros r Hr Hcol_ne.
+      assert (Hin_live: Regset.In r (live !! pc)).
+      { apply Hsucc_subset; assumption. }
       destruct (peq r arg0); subst.
-      + apply RS; intro HC; rewrite H4 in HC; inv HC; inv Hc.
-      + apply RS; intro HC; apply Hr.
-        apply list_nth_z_in in H1.
-        apply H5 in HC; auto.
-        rewrite Forall_forall in HC.
-        apply HC in H1; assumption.
+      + apply RS; [eapply arg_in_transfer_ijumptable; eauto|].
+        intro HC; destruct c; try (inv Hc); congruence.
+      + apply RS.
+        { eapply live_in_transfer_ijumptable; eauto. }
+        intro HC; apply Hcol_ne.
+        specialize (H5 r Hin_live n0).
+        rewrite Forall_forall in H5.
+        rewrite <- (H5 pc'0); [exact HC | exact Hin_tbl].
 
     (* exec_Ireturn *)
     - inv Hmatch.
@@ -2453,7 +3108,8 @@ Section TOLERANCE.
       destruct or0; simpl; auto.
       destruct b; auto.
       inv_rs; inv_wc.
-      apply RS; intro HC; rewrite H2 in HC; inv HC; inv Hc.
+      apply RS; [eapply optarg_in_transfer_ireturn; eauto|].
+      intro HC; destruct c; try (inv Hc); congruence.
 
     (* exec_function_internal *)
     - inv Hmatch.
@@ -2467,10 +3123,12 @@ Section TOLERANCE.
         with (lo2 := 0) (hi2 := fn_stacksize f) in H8; eauto; try reflexivity.
       destruct H8 as (m2' & Halloc & Hm2').
       rewrite H0 in Halloc; inv Halloc.
-      inv WC_FD.
+      destruct WC_FD as (col0 & Hwc0).
+      inv Hwc0.
       econstructor; eauto.
-      + apply forall2_lessdef_rs_compat_init_regs; assumption.
-      + apply forall2_lessdef_match_rs_init_regs; assumption.
+      { econstructor; eauto. }
+      { apply forall2_lessdef_rs_compat_init_regs; assumption. }
+      { apply forall2_lessdef_match_rs_init_regs; assumption. }
 
     (* exec_function_external *)
     - inv Hmatch.
@@ -2529,10 +3187,11 @@ Section TOLERANCE.
         destruct b.
         * destruct RS as (c & Hc & RS).
           exists c; split; auto.
-          intros r Hr.
+          intros r Hr Hcol_ne.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
-          rewrite 2!Regmap.gso; auto.
+          rewrite 2!Regmap.gso; [|assumption|assumption].
+          apply RS; assumption.
         * intro r.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
