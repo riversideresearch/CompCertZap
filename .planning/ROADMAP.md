@@ -70,10 +70,10 @@ Plans:
   1. `make driver/Complements.vo` succeeds (transf_c_program_to_rtl_preservation_faulty theorem fully grounded)
   2. `make check-admitted` passes for all touched files (ProofLiveness.v, RTLcolor.v, RTLcolorcheck.v, RTLtolerant.v, Complements.v)
   3. `make ccomp` succeeds and the resulting ccomp binary can compile a test C program with `-tmr` flag
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md -- Fix commented Admitted in RTLcolorcheck.v, rebuild Complements.vo, validate check-admitted, build ccomp, test TMR compilation
 
 ## Progress
 
@@ -86,4 +86,4 @@ Note: Phase 2 and Phase 3 are independent and can execute in parallel after Phas
 | 1. ProofLiveness Analysis | 1/1 | Complete | 2026-03-04 |
 | 2. Color System Update | 1/1 | Complete | 2026-03-04 |
 | 3. Faulty Simulation Proof | 1/1 | Complete | 2026-03-04 |
-| 4. Integration and Validation | 0/? | Not started | - |
+| 4. Integration and Validation | 0/1 | Not started | - |

@@ -33,9 +33,9 @@
 
 ### Integration and Validation
 
-- [ ] **INTG-01**: driver/Complements.vo rebuilds successfully (no source changes expected)
-- [ ] **INTG-02**: `make check-admitted` passes for all touched files
-- [ ] **INTG-03**: `make ccomp` succeeds (compiler binary builds end-to-end)
+- [x] **INTG-01**: driver/Complements.vo rebuilds successfully (no source changes expected)
+- [x] **INTG-02**: `make check-admitted` passes for all touched files
+- [x] **INTG-03**: `make ccomp` succeeds (compiler binary builds end-to-end)
 
 ## v2 Requirements
 
@@ -75,9 +75,9 @@
 | FSIM-06 | Phase 3 | Complete |
 | FSIM-07 | Phase 3 | Complete |
 | FSIM-08 | Phase 3 | Complete |
-| INTG-01 | Phase 4 | Pending |
-| INTG-02 | Phase 4 | Pending |
-| INTG-03 | Phase 4 | Pending |
+| INTG-01 | Phase 4 | Complete |
+| INTG-02 | Phase 4 | Complete |
+| INTG-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 20 total
