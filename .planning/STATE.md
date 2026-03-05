@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: Liveness-Bounded Fault Tolerance Proof
-status: milestone_complete
-stopped_at: "v1.0 milestone archived"
+milestone: v2.0
+milestone_name: No-Novotes Proof Composition
+status: executing
+stopped_at: "Completed 05-01-PLAN.md"
 last_updated: "2026-03-05"
-last_activity: 2026-03-05 -- v1.0 milestone complete
+last_activity: 2026-03-05 -- Completed Phase 5 Plan 1 (RTL3-to-RTL Bridge)
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 5
+  completed_phases: 1
+  total_plans: 5
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -21,30 +21,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Faulty backward simulation proof compiles with no Admitted using liveness-bounded register match invariant
-**Current focus:** v1.0 shipped -- planning next milestone
+**Current focus:** Phase 5 -- RTL3-to-RTL Bridge (complete)
 
 ## Current Position
 
-Milestone: v1.0 Liveness-Bounded Fault Tolerance Proof -- SHIPPED 2026-03-05
-Status: Milestone complete, archived to .planning/milestones/
+Phase: 5 of 9 (RTL3-to-RTL Bridge) -- first phase of v2.0
+Plan: 1 of 1 in current phase (COMPLETE)
+Status: Phase 5 complete
+Last activity: 2026-03-05 -- Completed RTL3-to-RTL bridge proof
 
-Progress: [██████████] 100%
+Progress: [##........] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 69 min
-- Total execution time: 4.6 hours
+- Total plans completed: 5 (4 v1.0 + 1 v2.0)
+- Average duration: --
+- Total execution time: --
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-proofliveness-analysis | 1 | 2 min | 2 min |
-| 02-color-system-update | 1 | 7 min | 7 min |
-| 03-faulty-simulation-proof | 1 | 267 min | 267 min |
-| 04-integration-and-validation | 1 | 1 min | 1 min |
+| 1-4 (v1.0) | 4 | -- | -- |
+| 5 (v2.0) | 1 | ~45min | ~45min |
 
 ## Accumulated Context
 
@@ -52,16 +52,23 @@ Progress: [██████████] 100%
 
 See PROJECT.md Key Decisions table for full log.
 
+- v1.0: Created separate ProofLiveness.v rather than modifying Liveness.v
+- v1.0: Conservative transfer function always includes Iop/Iload args
+- v1.0: Save-before-inv pattern in RTLtolerant.v for backward simulation
+- v2.0 P5: Corrected behavior_improves direction in rtl_weak_agreement' (beh3 beh2 not beh2 beh3)
+- v2.0 P5: Forward simulation RTL3->RTL (not RTL->RTL3) since eval_operation_lessdef goes less-defined to more-defined
+- v2.0 P5: rtl_weak_agreement' holds unconditionally; no_votes_weak_agreement' delegates to it
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-None -- all resolved in v1.0.
+- Pre-existing Admitted in Complements.v (transf_c_program_to_rtl_preservation_faulty) needs RTL3 DMR/TMR forward simulations. See deferred-items.md in phase 05 directory.
 
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: v1.0 milestone archived
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
