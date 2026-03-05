@@ -22,7 +22,7 @@
 **Milestone Goal:** Remove the novotes dependency from the RTL fault-tolerance proof, replacing the 4-step composition (C >= RTL2 >= RTL3 >= RTL3+TMR >= faulty RTL2+TMR) with a direct 3-step composition (C >= RTL >= RTL+TMR >= faulty RTL+TMR) by proving a generic RTL3-to-RTL bridge that does not require a no_votes premise.
 
 - [x] **Phase 5: RTL3-to-RTL Bridge** - Prove generic forward simulation from RTL3 to RTL semantics without no_votes
-- [ ] **Phase 6: Pipeline Simplification** - Remove Novotes pass from Compiler.v transf_rtl_program
+- [x] **Phase 6: Pipeline Simplification** - Remove Novotes pass from Compiler.v transf_rtl_program
 - [ ] **Phase 7: Theorem Recomposition** - Rewrite transf_c_program_to_rtl_preservation_faulty as 3-step composition
 - [ ] **Phase 8: Validation and Cleanup** - Full build validation: all .vo compile, zero Admitted, ccomp builds
 - [ ] **Phase 9: Technical Report** - Document the no-novotes refactor rationale and architecture
@@ -54,7 +54,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md -- Remove Novotes from Compiler.v and Complements.v pipeline definitions, fix match proofs, use Phase 5 bridge
+- [x] 06-01-PLAN.md -- Remove Novotes from Compiler.v and Complements.v pipeline definitions, fix match proofs, use Phase 5 bridge
 
 ### Phase 7: Theorem Recomposition
 **Goal**: transf_c_program_to_rtl_preservation_faulty in Complements.v uses a 3-step composition (standard backward sim, TMR backward sim, faulty backward sim) via the Phase 5 bridge instead of the old 4-step chain that depended on no_votes
@@ -64,10 +64,10 @@ Plans:
   1. transf_c_program_to_rtl_preservation_faulty in Complements.v is proved with a 3-step composition: C >= RTL >= RTL+TMR >= faulty RTL+TMR
   2. No lemma in Complements.v references Novotes, Novotesproof, or any no_votes predicate
   3. Complements.vo compiles with zero Admitted
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 07-01: Rewrite faulty theorem and remove dead Novotes references
+- [ ] 07-01-PLAN.md -- Prove faulty theorem via 3-step behavior composition and remove dead Novotes references
 
 ### Phase 8: Validation and Cleanup
 **Goal**: Full end-to-end validation confirming the entire Coq development compiles, contains no Admitted proofs, the ccomp binary builds, and no residual Novotes references remain in the active pipeline
@@ -107,7 +107,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 | 3. Faulty Simulation Proof | v1.0 | 1/1 | Complete | 2026-03-04 |
 | 4. Integration and Validation | v1.0 | 1/1 | Complete | 2026-03-05 |
 | 5. RTL3-to-RTL Bridge | v2.0 | 1/1 | Complete | 2026-03-05 |
-| 6. Pipeline Simplification | v2.0 | 0/1 | Not started | - |
+| 6. Pipeline Simplification | v2.0 | 1/1 | Complete | 2026-03-05 |
 | 7. Theorem Recomposition | v2.0 | 0/1 | Not started | - |
 | 8. Validation and Cleanup | v2.0 | 0/1 | Not started | - |
 | 9. Technical Report | v2.0 | 0/1 | Not started | - |
