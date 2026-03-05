@@ -45,7 +45,6 @@ make cleanall           # Remove everything including generated files
 Csyntax -> SimplExpr -> Clight -> SimplLocals -> Cshmgen -> Cminorgen
   -> Cminor -> Selection -> CminorSel -> RTLgen -> RTL
   -> [Tailcall -> Inlining -> Renumber -> Constprop -> Renumber -> CSE -> Deadcode -> Unusedglob]
-  -> Novotes check
   -> [DMR/TMR insertion (optional)]
   -> Renumber
   -> [Allocation -> Tunneling -> Linearize -> CleanupLabels -> Debugvar (optional) -> Stacking -> Asmgen]

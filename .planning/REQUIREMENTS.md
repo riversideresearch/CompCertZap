@@ -15,9 +15,9 @@ Requirements for removing novotes dependency from the RTL fault-tolerance proof 
 
 ### Pipeline
 
-- [ ] **PIPE-01**: Remove Novotes.transf_program from transf_rtl_program in Compiler.v
-- [ ] **PIPE-02**: Remove Novotes.transf_program from transf_rtl_program_to_rtl in Compiler.v
-- [ ] **PIPE-03**: Update pass-match and correctness proofs in Compiler.v for simplified pipeline
+- [x] **PIPE-01**: Remove Novotes.transf_program from transf_rtl_program in Compiler.v
+- [x] **PIPE-02**: Remove Novotes.transf_program from transf_rtl_program_to_rtl in Compiler.v
+- [x] **PIPE-03**: Update pass-match and correctness proofs in Compiler.v for simplified pipeline
 
 ### Theorem
 
@@ -62,9 +62,9 @@ Deferred to future release.
 | BRIDGE-01 | Phase 5 | Complete |
 | BRIDGE-02 | Phase 5 | Complete |
 | BRIDGE-03 | Phase 5 | Complete |
-| PIPE-01 | Phase 6 | Pending |
-| PIPE-02 | Phase 6 | Pending |
-| PIPE-03 | Phase 6 | Pending |
+| PIPE-01 | Phase 6 | Complete |
+| PIPE-02 | Phase 6 | Complete |
+| PIPE-03 | Phase 6 | Complete |
 | THERM-01 | Phase 7 | Pending |
 | THERM-02 | Phase 7 | Pending |
 | THERM-03 | Phase 7 | Pending |

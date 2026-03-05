@@ -51,10 +51,10 @@ Plans:
   1. transf_rtl_program in Compiler.v does not mention Novotes.transf_program
   2. transf_rtl_program_to_rtl in Compiler.v does not mention Novotes.transf_program
   3. Compiler.vo compiles successfully with updated pass_match and correctness proof obligations
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 06-01: Remove Novotes from Compiler.v and fix proof obligations
+- [ ] 06-01-PLAN.md -- Remove Novotes from Compiler.v and Complements.v pipeline definitions, fix match proofs, use Phase 5 bridge
 
 ### Phase 7: Theorem Recomposition
 **Goal**: transf_c_program_to_rtl_preservation_faulty in Complements.v uses a 3-step composition (standard backward sim, TMR backward sim, faulty backward sim) via the Phase 5 bridge instead of the old 4-step chain that depended on no_votes
