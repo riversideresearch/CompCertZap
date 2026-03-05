@@ -104,3 +104,31 @@ The fault tolerance proof composes four refinements:
 - Uses local copies of Flocq (floating-point) and MenhirLib (parser)
 - Coq project file: `_CoqProject` (includes `-R` flags for all directories)
 - OPAM switch: `4.14.2` (OCaml)
+
+# Key Definitions
+
+## `behavior_improves`
+
+`behavior_improves a b` means: `b` is at least as good as `a`.
+- Either `a = b`
+- Or `a = Goes_wrong t` and `t` is a prefix of `b`
+
+So do **not** read it as "a improves b".
+
+## Forward simulation
+
+From `forward_simulation L1 L2`:
+
+`program_behaves L1 beh1 -> exists beh2, program_behaves L2 beh2 /\ behavior_improves beh1 beh2`.
+
+Interpretation: `L2` refines `L1`.
+
+## Backward simulation
+
+From `backward_simulation L1 L2`:
+
+`program_behaves L2 beh2 -> exists beh1, program_behaves L1 beh1 /\ behavior_improves beh1 beh2`.
+
+Interpretation: `L2` refines `L1`.
+
+Mnemonic: `backward_simulation source target` implies **target refines source**.

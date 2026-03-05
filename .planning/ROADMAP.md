@@ -91,10 +91,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. doc/no-novotes-report.md exists and covers: rationale for removing novotes, new bridge proof architecture, 3-step composition structure, and validation results
   2. The report includes before/after diagrams of the proof composition chain
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 09-01: Write technical report
+- [ ] 09-01-PLAN.md -- Write no-novotes technical report with before/after diagrams and validation results
 
 ## Progress
 

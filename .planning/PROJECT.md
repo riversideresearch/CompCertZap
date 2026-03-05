@@ -4,6 +4,16 @@
 
 An update to the CompCertZAP fault tolerance proof that replaces the overly-coarse register invariant (quantifying over all registers) with a liveness-bounded invariant. The liveness-bounded approach enables color inference to use sparse tables instead of dense quadratic-sized tables, dramatically improving memory usage on large functions while maintaining the same formal guarantees. The full proof chain is machine-checked with zero Admitted lemmas.
 
+## Current Milestone: v2.0 No-Novotes Proof Composition
+
+**Goal:** Remove novotes dependency from the RTL fault-tolerance proof and simplify the composition to faulty -> RTL3 -> RTL -> C.
+
+**Target features:**
+- Generic RTL3 -> RTL bridge (no no_votes)
+- Remove Novotes checker pass from compiler pipeline
+- Simplified 3-step theorem composition in Complements.v
+- Technical report documenting the refactor
+
 ## Core Value
 
 The faulty backward simulation proof (`RTLtolerant.v`) compiles with no `Admitted` lemmas using the new liveness-bounded register match invariant.
@@ -21,7 +31,11 @@ The faulty backward simulation proof (`RTLtolerant.v`) compiles with no `Admitte
 
 ### Active
 
-(None -- start next milestone to define new requirements)
+- [ ] Generic RTL3 -> RTL bridge theorem (no no_votes premise)
+- [ ] Remove Novotes pass from Compiler.v pipeline
+- [ ] Rewrite transf_c_program_to_rtl_preservation_faulty with 3-step composition
+- [ ] End-to-end validation (all .vo files compile, zero Admitted, ccomp builds)
+- [ ] Comprehensive technical report documenting the refactor
 
 ### Out of Scope
 
@@ -60,4 +74,4 @@ Total: +1,509 / -842 lines changed across 6 Coq/OCaml files.
 - **Existing structure**: Follow CompCert conventions (forward/backward simulation, `TransfLink`, Section/Context for vote type parameterization)
 
 ---
-*Last updated: 2026-03-05 after v1.0 milestone*
+*Last updated: 2026-03-05 after v2.0 milestone started*
