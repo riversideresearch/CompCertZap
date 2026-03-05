@@ -356,7 +356,9 @@ Lemma wc_rtl3_behavior_in_rtl:
   forall beh, program_behaves (RTL3.semantics p) beh ->
   program_behaves (RTL.semantics p) beh.
 Proof.
-Admitted.
+  intros p HWC beh HBEH.
+  exact (RTLagreement.wc_rtl3_behavior_in_rtl p beh HBEH).
+Qed.
 
 Theorem transf_c_program_to_rtl_preservation_faulty:
   forall p tp beh,
