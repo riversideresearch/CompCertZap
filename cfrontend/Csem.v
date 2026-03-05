@@ -41,8 +41,6 @@ Definition env := PTree.t (block * type). (* map variable -> location & type *)
 
 Definition empty_env: env := (PTree.empty (block * type)).
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section SEMANTICS.
 
@@ -866,4 +864,3 @@ Proof.
   inv H; simpl; try lia. eapply external_call_trace_length; eauto.
 Qed.
 
-End VOTE.

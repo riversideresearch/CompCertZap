@@ -65,8 +65,6 @@ Ltac TrivialExists :=
   | [ |- exists v, _ /\ Val.lessdef ?a v ] => exists a; split; [EvalOp | auto]
   end.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** * Correctness of the smart constructors *)
 
@@ -1024,4 +1022,3 @@ Qed.
 
 End CMCONSTR.
 
-End VOTE.

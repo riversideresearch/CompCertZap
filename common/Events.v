@@ -1412,9 +1412,6 @@ Proof.
   split. constructor. auto.
 Qed.
 
-Section VOTE.
-Context {VT: vote_type} {HVT: VoteSemantics VT}.
-
 (** ** Semantics of known built-in functions. *)
 
 (** Some built-in functions and runtime support functions have known semantics
@@ -1653,7 +1650,192 @@ Proof.
   intros. exploit external_call_determ. eexact H. eexact H0. intuition.
 Qed.
 
-End VOTE.
+(** ** FT-local strict-3 variants *)
+
+Inductive known_builtin_sem3 (bf: builtin_function) (ge: Senv.t):
+              list val -> mem -> trace -> val -> mem -> Prop :=
+  | known_builtin_sem3_intro: forall vargs vres m,
+      builtin_function_sem3 bf vargs = Some vres ->
+      known_builtin_sem3 bf ge vargs m E0 vres m.
+
+Remark known_builtin_sem3_inject: forall bf ge vargs m1 t vres m2 f ge' vargs' m',
+  known_builtin_sem3 bf ge vargs m1 t vres m2 ->
+  Val.inject_list f vargs vargs' ->
+  exists vres', known_builtin_sem3 bf ge' vargs' m' t vres' m' /\ Val.inject f vres vres'.
+Proof.
+  intros. inv H. exploit builtin_function_sem3_inject; eauto. intros (vres' & A & B).
+  exists vres'; auto using known_builtin_sem3.
+Qed.
+
+Remark known_builtin_sem3_lessdef: forall bf ge vargs m1 t vres m2 ge' vargs' m',
+  known_builtin_sem3 bf ge vargs m1 t vres m2 ->
+  Val.lessdef_list vargs vargs' ->
+  exists vres', known_builtin_sem3 bf ge' vargs' m' t vres' m' /\ Val.lessdef vres vres'.
+Proof.
+  intros. inv H. exploit builtin_function_sem3_lessdef; eauto. intros (vres' & A & B).
+  exists vres'; auto using known_builtin_sem3.
+Qed.
+
+Lemma known_builtin_ok3: forall bf,
+  extcall_properties (known_builtin_sem3 bf) (builtin_function_sig bf).
+Proof.
+  intros. set (bsem := builtin_function_sem3 bf). constructor; intros.
+(* well typed *)
+- inv H.
+  specialize (bs_well_typed  _ bsem vargs).
+  unfold val_opt_has_rettype, bsem; rewrite H0.
+  auto.
+(* symbols *)
+- inv H0. econstructor; eauto.
+(* valid blocks *)
+- inv H; auto.
+(* perms *)
+- inv H; auto.
+(* readonly *)
+- inv H; auto.
+(* mem extends *)
+- assert (m2 = m1) by (inv H; auto). subst m2.
+  exploit known_builtin_sem3_lessdef; eauto. intros (vres' & A & B).
+  exists vres', m1'; intuition eauto using Mem.unchanged_on_refl.
+(* mem inject *)
+- assert (m2 = m1) by (inv H0; auto). subst m2.
+  exploit known_builtin_sem3_inject; eauto. intros (vres' & A & B).
+  exists f, vres', m1'; intuition eauto using Mem.unchanged_on_refl.
+  red; intros; congruence.
+(* trace length *)
+- inv H; simpl; lia.
+(* receptive *)
+- inv H; inv H0. exists vres1, m1; constructor; auto.
+(* determ *)
+- inv H; inv H0.
+  split. constructor. intuition congruence.
+Qed.
+
+Definition builtin_or_external_sem3 name sg :=
+  match lookup_builtin_function name sg with
+  | Some bf => known_builtin_sem3 bf
+  | None => external_functions_sem name sg
+  end.
+
+Lemma builtin_or_external_sem3_ok: forall name sg,
+  extcall_properties (builtin_or_external_sem3 name sg) sg.
+Proof.
+  unfold builtin_or_external_sem3; intros.
+  destruct (lookup_builtin_function name sg) as [bf|] eqn:L.
+- exploit lookup_builtin_function_sig; eauto. intros EQ; subst sg.
+  apply known_builtin_ok3.
+- apply external_functions_properties.
+Qed.
+
+Definition external_call3 (ef: external_function): extcall_sem :=
+  match ef with
+  | EF_external name sg  => external_functions_sem name sg
+  | EF_builtin name sg   => builtin_or_external_sem3 name sg
+  | EF_runtime name sg   => builtin_or_external_sem3 name sg
+  | EF_vload chunk       => volatile_load_sem chunk
+  | EF_vstore chunk      => volatile_store_sem chunk
+  | EF_malloc            => extcall_malloc_sem
+  | EF_free              => extcall_free_sem
+  | EF_memcpy sz al      => extcall_memcpy_sem sz al
+  | EF_annot kind txt targs   => extcall_annot_sem txt targs
+  | EF_annot_val kind txt targ => extcall_annot_val_sem txt targ
+  | EF_inline_asm txt sg clb => inline_assembly_sem txt sg
+  | EF_debug kind txt targs => extcall_debug_sem
+  end.
+
+Theorem external_call3_spec:
+  forall ef,
+  extcall_properties (external_call3 ef) (ef_sig ef).
+Proof.
+  intros. unfold external_call3, ef_sig; destruct ef.
+  apply external_functions_properties.
+  apply builtin_or_external_sem3_ok.
+  apply builtin_or_external_sem3_ok.
+  apply volatile_load_ok.
+  apply volatile_store_ok.
+  apply extcall_malloc_ok.
+  apply extcall_free_ok.
+  apply extcall_memcpy_ok.
+  apply extcall_annot_ok.
+  apply extcall_annot_val_ok.
+  apply inline_assembly_properties.
+  apply extcall_debug_ok.
+Qed.
+
+Definition external_call3_well_typed_gen ef := ec_well_typed (external_call3_spec ef).
+Definition external_call3_symbols_preserved ef := ec_symbols_preserved (external_call3_spec ef).
+Definition external_call3_valid_block ef := ec_valid_block (external_call3_spec ef).
+Definition external_call3_max_perm ef := ec_max_perm (external_call3_spec ef).
+Definition external_call3_readonly ef := ec_readonly (external_call3_spec ef).
+Definition external_call3_mem_extends ef := ec_mem_extends (external_call3_spec ef).
+Definition external_call3_mem_inject_gen ef := ec_mem_inject (external_call3_spec ef).
+Definition external_call3_trace_length ef := ec_trace_length (external_call3_spec ef).
+Definition external_call3_receptive ef := ec_receptive (external_call3_spec ef).
+Definition external_call3_determ ef := ec_determ (external_call3_spec ef).
+
+Lemma external_call3_well_typed:
+  forall ef ge vargs m1 t vres m2,
+  external_call3 ef ge vargs m1 t vres m2 ->
+  Val.has_type vres (proj_sig_res (ef_sig ef)).
+Proof.
+  intros. apply Val.has_proj_xtype. eapply external_call3_well_typed_gen; eauto.
+Qed.
+
+Lemma external_call3_nextblock:
+  forall ef ge vargs m1 t vres m2,
+  external_call3 ef ge vargs m1 t vres m2 ->
+  Ple (Mem.nextblock m1) (Mem.nextblock m2).
+Proof.
+  intros. destruct (plt (Mem.nextblock m2) (Mem.nextblock m1)).
+  exploit external_call3_valid_block; eauto. intros.
+  eelim Plt_strict; eauto.
+  unfold Plt, Ple in *; zify; lia.
+Qed.
+
+Lemma external_call3_mem_inject:
+  forall ef F V (ge: Genv.t F V) vargs m1 t vres m2 f m1' vargs',
+  meminj_preserves_globals ge f ->
+  external_call3 ef ge vargs m1 t vres m2 ->
+  Mem.inject f m1 m1' ->
+  Val.inject_list f vargs vargs' ->
+  exists f', exists vres', exists m2',
+     external_call3 ef ge vargs' m1' t vres' m2'
+    /\ Val.inject f' vres vres'
+    /\ Mem.inject f' m2 m2'
+    /\ Mem.unchanged_on (loc_unmapped f) m1 m2
+    /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
+    /\ inject_incr f f'
+    /\ inject_separated f f' m1 m1'.
+Proof.
+  intros. destruct H as (A & B & C). eapply external_call3_mem_inject_gen with (ge1 := ge); eauto.
+  repeat split; intros.
+  + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
+  + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
+  + simpl in H3. exists b1; split; eauto.
+  + simpl; unfold Genv.block_is_volatile.
+    destruct (Genv.find_var_info ge b1) as [gv1|] eqn:V1.
+    * exploit B; eauto. intros EQ; rewrite EQ in H; inv H. rewrite V1; auto.
+    * destruct (Genv.find_var_info ge b2) as [gv2|] eqn:V2; auto.
+      exploit C; eauto. intros EQ; subst b2. congruence.
+Qed.
+
+Lemma external_call3_match_traces:
+  forall ef ge vargs m t1 vres1 m1 t2 vres2 m2,
+  external_call3 ef ge vargs m t1 vres1 m1 ->
+  external_call3 ef ge vargs m t2 vres2 m2 ->
+  match_traces ge t1 t2.
+Proof.
+  intros. exploit external_call3_determ. eexact H. eexact H0. tauto.
+Qed.
+
+Lemma external_call3_deterministic:
+  forall ef ge vargs m t vres1 m1 vres2 m2,
+  external_call3 ef ge vargs m t vres1 m1 ->
+  external_call3 ef ge vargs m t vres2 m2 ->
+  vres1 = vres2 /\ m1 = m2.
+Proof.
+  intros. exploit external_call3_determ. eexact H. eexact H0. intuition.
+Qed.
 
 (** * Evaluation of builtin arguments *)
 

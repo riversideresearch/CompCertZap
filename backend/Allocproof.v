@@ -1617,8 +1617,6 @@ Proof.
 + eauto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Lemma add_equations_builtin_eval:
   forall ef env args args' e1 e2 m1 m1' rs ls (ge: RTL.genv) sp vargs t vres m2,
@@ -2547,4 +2545,3 @@ Qed.
 
 End PRESERVATION.
 
-End VOTE.

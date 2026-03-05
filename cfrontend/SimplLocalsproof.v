@@ -32,8 +32,6 @@ Proof.
   split; auto. apply match_transform_partial_program. rewrite EQ. destruct x; auto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section PRESERVATION.
 
@@ -2334,4 +2332,3 @@ Local Transparent Linker_fundef.
   destruct andb; inv H2. econstructor; split; eauto. 
 Qed.
 
-End VOTE.

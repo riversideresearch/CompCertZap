@@ -72,8 +72,6 @@ Proof.
   try contradiction; try discriminate; econstructor; eauto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section PRESERVATION.
 
@@ -2225,4 +2223,3 @@ Qed.
 
 End PRESERVATION.
 
-End VOTE.

@@ -466,7 +466,7 @@ Qed.
 
 Lemma transf_c_program_to_rtl'_preservation' p tp beh :
   transf_c_program_to_rtl' p = OK tp ->
-  program_behaves (@RTL.semantics _ VoteSemantics_Three tp) beh ->
+  program_behaves (RTL3.semantics tp) beh ->
   exists beh', program_behaves (Csem.semantics p) beh' /\
             behavior_improves beh' beh.
 Proof.
@@ -512,9 +512,9 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma transf_rtl_program_to_rtl'_forward_simulation VT VSEM p tp :
+Lemma transf_rtl_program_to_rtl'_forward_simulation p tp :
   transf_rtl_program_to_rtl' p = OK tp ->
-  forward_simulation (@RTL.semantics VT VSEM p) (RTL.semantics tp).
+  forward_simulation (RTL.semantics p) (RTL.semantics tp).
 Proof.
   intro Hmatch.
   apply transf_rtl_program_to_rtl_match_prog in Hmatch.
@@ -531,8 +531,8 @@ Qed.
 
 Lemma transf_rtl_program_to_rtl'_preservation p tp beh :
   transf_rtl_program_to_rtl' p = OK tp ->
-  program_behaves (@RTL.semantics _ VoteSemantics_Three tp) beh ->
-  exists beh', program_behaves (@RTL.semantics _ VoteSemantics_Three p) beh' /\
+  program_behaves (RTL.semantics tp) beh ->
+  exists beh', program_behaves (RTL.semantics p) beh' /\
             behavior_improves beh' beh.
 Proof.
   intros Hp Hbeh.

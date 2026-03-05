@@ -273,8 +273,6 @@ Inductive wt_state: state -> Prop :=
         (UOUT: outgoing_undef rs),
       wt_state (Returnstate s rs m).
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** Preservation of state typing by transitions *)
 
@@ -463,4 +461,3 @@ Proof.
   intros. inv H; auto.
 Qed.
 
-End VOTE.

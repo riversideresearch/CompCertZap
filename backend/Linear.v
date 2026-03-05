@@ -89,8 +89,6 @@ Fixpoint find_label (lbl: label) (c: code) {struct c} : option code :=
   | i1 :: il => if is_label lbl i1 then Some il else find_label lbl il
   end.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section RELSEM.
 
@@ -269,4 +267,3 @@ Inductive final_state: state -> int -> Prop :=
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
-End VOTE.

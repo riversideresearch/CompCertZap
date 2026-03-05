@@ -43,8 +43,6 @@ Definition helper_functions_declared {F V: Type} (p: AST.program (AST.fundef F) 
   /\ helper_declared p i64_umulh "__compcert_i64_umulh" sig_ll_l
   /\ helper_declared p i64_smulh "__compcert_i64_smulh" sig_ll_l.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** * Correctness of the instruction selection functions for 64-bit operators *)
 
@@ -1159,4 +1157,3 @@ Qed.
 
 End CMCONSTR.
 
-End VOTE.

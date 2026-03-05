@@ -849,7 +849,7 @@ Proof.
 - eauto.
 Qed.
 
-Lemma external_call_parallel_rule {VT: Builtins2.vote_type} {HVT: Builtins2.VoteSemantics VT} :
+Lemma external_call_parallel_rule :
   forall (F V: Type) ef (ge: Genv.t F V) vargs1 m1 t vres1 m1' m2 j P vargs2,
   external_call ef ge vargs1 m1 t vres1 m1' ->
   m2 |= minjection j m1 ** globalenv_inject ge j ** P ->

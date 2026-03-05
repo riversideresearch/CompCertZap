@@ -10,6 +10,7 @@ Require Import
   Novotes
   Op
   RTL
+  RTL3
   RTLagreement
   Smallstep
 .
@@ -56,13 +57,12 @@ Lemma no_votes_external_call (p : RTL.program) ef vargs t vres m m' :
   ~ is_vote_runtime ef ->
   external_call ef (Globalenvs.Genv.to_senv (Globalenvs.Genv.globalenv p))
     vargs m t vres m' ->
-  @external_call _ VoteSemantics_Three
-    ef (Globalenvs.Genv.to_senv (Globalenvs.Genv.globalenv p))
-    vargs m t vres m'.
+  external_call3 ef (Globalenvs.Genv.to_senv (Globalenvs.Genv.globalenv p))
+                 vargs m t vres m'.
 Proof.
   intros Hef Hef'.
   destruct ef; simpl; auto.
-  - unfold builtin_or_external_sem; intro Hsem.
+  - unfold builtin_or_external_sem, builtin_or_external_sem3; intro Hsem.
     destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; auto.
     inv Hsem.
     constructor.
@@ -141,7 +141,7 @@ Proof.
       clear Heq.
       repeat (destruct (string_dec name _ && signature_eq sg _);
               simpl in *; try solve [inv Hlookup]).
-  - unfold builtin_or_external_sem; intro Hsem.
+  - unfold builtin_or_external_sem, builtin_or_external_sem3; intro Hsem.
     destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; auto.
     inv Hsem.
     constructor.
@@ -259,7 +259,7 @@ Lemma no_votes_step_simulation :
   RTL.step (Globalenvs.Genv.globalenv p) s1 t s1' ->
   forall s2 : RTL.state,
   match_states s1 s2 ->
-  exists s2' : RTL.state, @RTL.step _ VoteSemantics_Three
+  exists s2' : RTL.state, RTL3.step
                        (Globalenvs.Genv.globalenv p) s2 t s2' /\ match_states s1' s2'.
 Proof.
   intros s1 t s1' Hstep s2 Hmatch.
@@ -277,10 +277,10 @@ Proof.
     inv H4.
     specialize (H6 _ _ H).
     simpl in H6.
-    eapply exec_Ibuiltin; eauto.
+    eapply RTL3.exec_Ibuiltin; eauto.
     destruct H6.
     eapply no_votes_external_call; auto.
-  - eapply exec_function_external.
+  - eapply RTL3.exec_function_external.
     assert (~ is_vote_builtin ef /\ ~ is_vote_runtime ef).
     { inv H0.
       destruct H6 as [i Hin].
@@ -344,7 +344,7 @@ Proof.
   apply forward_to_backward_simulation.
   - apply no_votes_forward_simulation.
   - apply RTL.semantics_receptive.
-  - apply RTL.semantics_determinate.
+  - apply RTL3.semantics_determinate.
 Qed.
 
 End IMPLIES_AGREEMENT.

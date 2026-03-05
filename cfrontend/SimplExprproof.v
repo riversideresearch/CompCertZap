@@ -93,8 +93,6 @@ Proof.
   intros. inv H; auto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** Properties of smart constructors. *)
 
@@ -2439,7 +2437,6 @@ Proof.
   exact simulation.
 Qed.
 
-End VOTE.
 
 End PRESERVATION.
 

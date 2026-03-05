@@ -481,8 +481,6 @@ Proof.
   assert (64 < Int.max_unsigned) by (compute; auto). lia.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** * Correctness of the smart constructors for division and modulus *)
 
@@ -975,4 +973,3 @@ Qed.
 
 End CMCONSTRS.
 
-End VOTE.

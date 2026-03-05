@@ -30,8 +30,6 @@ Proof.
   intros. eapply match_transform_program; eauto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section CLEANUP.
 
@@ -359,4 +357,3 @@ Qed.
 
 End CLEANUP.
 
-End VOTE.

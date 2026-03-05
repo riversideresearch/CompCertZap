@@ -265,106 +265,79 @@ Qed.
 Definition vote3_sem (t : typ) : builtin_sem (inj_type t) :=
   mkbuiltin_v3t (inj_type t) (vote3 t) (vote3_well_typed t) (vote3_compat_inject t).
 
-(** Stuff for switching vote type (2- or 3-vote). *)
+(** Core vote semantics and explicit strict-3 variants for fault-tolerance. *)
 
-Record vote_sems : Type :=
-  { vote_sem_int : builtin_sem Xint
-  ; vote_sem_long : builtin_sem Xlong
-  ; vote_sem_single : builtin_sem Xsingle
-  ; vote_sem_float : builtin_sem Xfloat
-  }.
+Definition vote_sem_int : builtin_sem Xint := vote_sem Tint.
+Definition vote_sem_long : builtin_sem Xlong := vote_sem Tlong.
+Definition vote_sem_single : builtin_sem Xsingle := vote_sem Tsingle.
+Definition vote_sem_float : builtin_sem Xfloat := vote_sem Tfloat.
 
-Inductive vote_type : Type :=
-| Two
-| Three.
-
-Definition vote_eqb (v1 v2 : vote_type) : bool :=
-  match v1, v2 with
-  | Two, Two => true
-  | Three, Three => true
-  | _, _ => false
-  end.
-
-Definition vote_type_sem (vty: vote_type) : vote_sems :=
-  match vty with
-  | Two => {| vote_sem_int := vote_sem Tint
-            ; vote_sem_long := vote_sem Tlong
-            ; vote_sem_single := vote_sem Tsingle
-            ; vote_sem_float := vote_sem Tfloat |}
-  | Three => {| vote_sem_int := vote3_sem Tint
-              ; vote_sem_long := vote3_sem Tlong
-              ; vote_sem_single := vote3_sem Tsingle
-              ; vote_sem_float := vote3_sem Tfloat |}
-  end.
+Definition vote3_sem_int : builtin_sem Xint := vote3_sem Tint.
+Definition vote3_sem_long : builtin_sem Xlong := vote3_sem Tlong.
+Definition vote3_sem_single : builtin_sem Xsingle := vote3_sem Tsingle.
+Definition vote3_sem_float : builtin_sem Xfloat := vote3_sem Tfloat.
 
 (* When all three arguments are equal, the output is equal to them. *)
 Definition vote_sem_ok {tret: xtype} (sem : builtin_sem tret) : Prop :=
   forall a, Val.has_rettype a tret -> sem.(bs_sem _) [a; a; a] = Some a.
 
-Class VoteSemantics (vty : vote_type) : Prop :=
-  { vote_sem_int_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_int)
-  ; vote_sem_long_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_long)
-  ; vote_sem_single_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_single)
-  ; vote_sem_float_ok : vote_sem_ok (vote_type_sem vty).(vote_sem_float)
-  }.
-
-Section VOTE_SEMANTICS.
-
-#[export]
-Program Instance VoteSemantics_Two : VoteSemantics Two.
-Next Obligation.
+Lemma vote_sem_int_ok : vote_sem_ok vote_sem_int.
+Proof.
   intros a Ha; simpl; f_equal; unfold vote.
   destruct a; auto; try contradiction.
   - destruct (Val.eq _ _); simpl; congruence.
   - simpl in *; rewrite Ha; simpl.
     destruct (Val.eq _ _); simpl; congruence.
 Qed.
-Next Obligation.
+Lemma vote_sem_long_ok : vote_sem_ok vote_sem_long.
+Proof.
   intros a Ha; simpl; f_equal; unfold vote.
   destruct a; auto; try contradiction.
   - destruct (Val.eq _ _); simpl; congruence.
   - simpl in *; rewrite Ha; simpl.
     destruct (Val.eq _ _); simpl; congruence.
 Qed.
-Next Obligation.
+Lemma vote_sem_single_ok : vote_sem_ok vote_sem_single.
+Proof.
   intros a Ha; simpl; f_equal; unfold vote.
   destruct a; auto; try contradiction.
   destruct (Val.eq _ _); simpl; congruence.
 Qed.
-Next Obligation.
+Lemma vote_sem_float_ok : vote_sem_ok vote_sem_float.
+Proof.
   intros a Ha; simpl; f_equal; unfold vote.
   destruct a; auto; try contradiction.
   destruct (Val.eq _ _); simpl; congruence.
 Qed.
 
-(* #[export] *)
-Program Instance VoteSemantics_Three : VoteSemantics Three.
-Next Obligation.
+Lemma vote3_sem_int_ok : vote_sem_ok vote3_sem_int.
+Proof.
   intros a Ha; simpl; f_equal; unfold vote3.
   destruct a; auto; try contradiction.
   - destruct (Val.eq _ _); simpl; congruence.
   - simpl in *; rewrite Ha; simpl.
     destruct (Val.eq _ _); simpl; congruence.
 Qed.
-Next Obligation.
+Lemma vote3_sem_long_ok : vote_sem_ok vote3_sem_long.
+Proof.
   intros a Ha; simpl; f_equal; unfold vote3.
   destruct a; auto; try contradiction.
   - destruct (Val.eq _ _); simpl; congruence.
   - simpl in *; rewrite Ha; simpl.
     destruct (Val.eq _ _); simpl; congruence.
 Qed.
-Next Obligation.
+Lemma vote3_sem_single_ok : vote_sem_ok vote3_sem_single.
+Proof.
   intros a Ha; simpl; f_equal; unfold vote3.
   destruct a; auto; try contradiction.
   destruct (Val.eq _ _); simpl; congruence.
 Qed.
-Next Obligation.
+Lemma vote3_sem_float_ok : vote_sem_ok vote3_sem_float.
+Proof.
   intros a Ha; simpl; f_equal; unfold vote3.
   destruct a; auto; try contradiction.
   destruct (Val.eq _ _); simpl; congruence.
 Qed.
-
-End VOTE_SEMANTICS.
 
 Lemma vote3_lessdef_vote (t : typ) (x y z : val) :
   Val.lessdef (vote3 t x y z) (vote t x y z).
@@ -393,7 +366,7 @@ Proof. auto. Qed.
 Definition check_sem : builtin_sem Xvoid :=
   mkbuiltin_v2t Xvoid check check_well_typed check_compat_inject.
 
-Definition replicate_builtin_sem {VT: vote_type} `{VoteSemantics VT}
+Definition replicate_builtin_sem
   (b: replicate_builtin)
   : builtin_sem (sig_res (replicate_builtin_sig b)) :=
   match b with
@@ -405,10 +378,32 @@ Definition replicate_builtin_sem {VT: vote_type} `{VoteSemantics VT}
   | BI_smove_long_blue => smove_long_sem
   | BI_smove_single_blue => smove_single_sem
   | BI_smove_float_blue => smove_float_sem
-  | BI_vote_int => (vote_type_sem VT).(vote_sem_int)
-  | BI_vote_long => (vote_type_sem VT).(vote_sem_long)
-  | BI_vote_single => (vote_type_sem VT).(vote_sem_single)
-  | BI_vote_float => (vote_type_sem VT).(vote_sem_float)
+  | BI_vote_int => vote_sem_int
+  | BI_vote_long => vote_sem_long
+  | BI_vote_single => vote_sem_single
+  | BI_vote_float => vote_sem_float
+  | BI_check_int => check_sem
+  | BI_check_long => check_sem
+  | BI_check_single => check_sem
+  | BI_check_float => check_sem
+  end.
+
+Definition replicate_builtin_sem3
+  (b: replicate_builtin)
+  : builtin_sem (sig_res (replicate_builtin_sig b)) :=
+  match b with
+  | BI_smove_int_green => smove_int_sem
+  | BI_smove_long_green => smove_long_sem
+  | BI_smove_single_green => smove_single_sem
+  | BI_smove_float_green => smove_float_sem
+  | BI_smove_int_blue => smove_int_sem
+  | BI_smove_long_blue => smove_long_sem
+  | BI_smove_single_blue => smove_single_sem
+  | BI_smove_float_blue => smove_float_sem
+  | BI_vote_int => vote3_sem_int
+  | BI_vote_long => vote3_sem_long
+  | BI_vote_single => vote3_sem_single
+  | BI_vote_float => vote3_sem_float
   | BI_check_int => check_sem
   | BI_check_long => check_sem
   | BI_check_single => check_sem

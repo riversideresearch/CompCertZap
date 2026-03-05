@@ -209,8 +209,6 @@ Proof.
   intros. apply match_transform_program; auto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section PRESERVATION.
 
@@ -612,4 +610,3 @@ Qed.
 
 End PRESERVATION.
 
-End VOTE.

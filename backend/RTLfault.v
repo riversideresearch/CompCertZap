@@ -83,7 +83,7 @@ Inductive not_regular_state : RTL.state -> Prop :=
 
 Inductive fstep : fstate -> trace -> fstate -> Prop :=
 | fstep_step_State : forall stk f sp pc rs m t s' s'' b b'
-    (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge
+    (STEP: @RTL.step ge
              (State stk f sp pc rs m) t s')
     (ZAP: maybe_zap f pc s' b s'' b'),
     fstep
@@ -92,7 +92,7 @@ Inductive fstep : fstate -> trace -> fstate -> Prop :=
       {| fs_state := s''; fault := b' |}
 | fstep_step_other : forall s t s' b
     (HS: not_regular_state s)
-    (STEP: @RTL.step Builtins2.Two Builtins2.VoteSemantics_Two ge s t s'),
+    (STEP: @RTL.step ge s t s'),
     fstep {| fs_state := s; fault := b |} t {| fs_state := s'; fault := b |}.
 
 Inductive initial_state (p : program) : fstate -> Prop :=

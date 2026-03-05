@@ -188,8 +188,6 @@ Proof.
   monadInv H. simpl. rewrite EQ; simpl. rewrite (IHsl _ EQ1). simpl. auto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** * Correctness of Csharpminor construction functions *)
 
@@ -2003,4 +2001,3 @@ Local Transparent Linker_fundef Linking.Linker_fundef.
 - replace (program_of_program p) with pp. auto. inv E; destruct pp; auto.
 Qed.
 
-End VOTE.

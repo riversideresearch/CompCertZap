@@ -10,9 +10,8 @@ Global Open Scope positive_scope.
 
 Require Import RTLtmrspec.
 Require Import RTLtmr.
+Require Import Builtins2.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition match_prog (prog tprog: program) :=
   match_program (fun cu f tf => transf_fundef f = OK tf) eq prog tprog.
@@ -754,43 +753,66 @@ Section PRESERVATION.
                     sp succ rs' m) /\ (forall r, rs # r = rs' # r).
   Proof.
     intros Hact Hr2 Hr3 Hmaj; inv Hmaj.
-    destruct vsem.
-    destruct ty; simpl in *; try contradiction; clear H;
-    (inv H0;
-     eexists; split;
-     [ econstructor;
-       [ eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]);
-           eauto; repeat constructor;
-         rewrite <- Hr3, <- Hr2;
-         first [ apply vote_sem_int_ok
-               | apply vote_sem_float_ok
-               | apply vote_sem_long_ok
-               | apply vote_sem_single_ok ];
-         apply Val.has_inj_type in Hact; auto
-       | apply star_refl
-       | reflexivity ]
-     | intro r; simpl;
-       destruct (peq r r1); subst;
-       [ destruct (rs # r1) eqn:Hr1; simpl; try solve [inv Hact];
-         try solve [rewrite PMap.gss; reflexivity];
-         try solve [destruct (Int.eq_dec i i); simpl; try congruence;
-                    rewrite PMap.gss; reflexivity];
-         try solve [destruct (Float.eq_dec f f); simpl; try congruence;
-                    rewrite PMap.gss; reflexivity];
-         try solve [destruct (Int64.eq_dec i i); simpl; try congruence;
-                    rewrite PMap.gss; reflexivity];
-         try solve [destruct (Float32.eq_dec f f); simpl; try congruence;
-                    rewrite PMap.gss; reflexivity];
-         try solve [destruct Archi.ptr64 eqn:Harchi; simpl in *; try congruence;
-                    destruct (eq_block _ _); simpl; try congruence;
-                    destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-                    rewrite PMap.gss; reflexivity];
-         try solve [destruct Archi.ptr64 eqn:Harchi; simpl;
-                    try solve [simpl in Hact; congruence];
-                    destruct (eq_block _ _); simpl; try congruence;
-                    destruct (Ptrofs.eq_dec _ _); simpl; try congruence;
-                    rewrite PMap.gss; reflexivity]
-       | rewrite PMap.gso; auto ] ]).
+    destruct ty; simpl in *; try contradiction;
+      match goal with
+      | Hvote: maj_vote_of_typ _ _ _ _ = Some _ |- _ => inv Hvote
+      end.
+    - eexists; split.
+      + econstructor.
+        * eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]); eauto.
+          { repeat constructor. }
+          { constructor; simpl.
+            rewrite <- Hr3, <- Hr2.
+            apply vote_sem_int_ok.
+            apply Val.has_inj_type in Hact; exact Hact. }
+        * apply star_refl.
+        * reflexivity.
+      + intro r; simpl.
+        destruct (peq r r1); subst.
+        * rewrite PMap.gss; reflexivity.
+        * rewrite PMap.gso; auto.
+    - eexists; split.
+      + econstructor.
+        * eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]); eauto.
+          { repeat constructor. }
+          { constructor; simpl.
+            rewrite <- Hr3, <- Hr2.
+            apply vote_sem_float_ok.
+            apply Val.has_inj_type in Hact; exact Hact. }
+        * apply star_refl.
+        * reflexivity.
+      + intro r; simpl.
+        destruct (peq r r1); subst.
+        * rewrite PMap.gss; reflexivity.
+        * rewrite PMap.gso; auto.
+    - eexists; split.
+      + econstructor.
+        * eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]); eauto.
+          { repeat constructor. }
+          { constructor; simpl.
+            rewrite <- Hr3, <- Hr2.
+            apply vote_sem_long_ok.
+            apply Val.has_inj_type in Hact; exact Hact. }
+        * apply star_refl.
+        * reflexivity.
+      + intro r; simpl.
+        destruct (peq r r1); subst.
+        * rewrite PMap.gss; reflexivity.
+        * rewrite PMap.gso; auto.
+    - eexists; split.
+      + econstructor.
+        * eapply exec_Ibuiltin with (vargs := [rs # r1; rs # r2; rs # r3]); eauto.
+          { repeat constructor. }
+          { constructor; simpl.
+            rewrite <- Hr3, <- Hr2.
+            apply vote_sem_single_ok.
+            apply Val.has_inj_type in Hact; exact Hact. }
+        * apply star_refl.
+        * reflexivity.
+      + intro r; simpl.
+        destruct (peq r r1); subst.
+        * rewrite PMap.gss; reflexivity.
+        * rewrite PMap.gso; auto.
   Qed.
 
   Lemma maj_vote_regsR_star_step
@@ -2570,5 +2592,3 @@ Section PRESERVATION.
   Qed.
 
 End PRESERVATION.
-
-End VOTE.

@@ -1790,8 +1790,6 @@ Proof.
 - destruct v; contradiction || constructor.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Lemma wt_rred:
   forall ge tenv a m t a' m',
@@ -2290,4 +2288,3 @@ Proof.
   intros. destruct (sem_cast_already_typed v t1 t2 m H0); congruence.
 Qed.
 
-End VOTE.

@@ -205,8 +205,6 @@ End RTLtypes.
 
 Module S := UniSolver(RTLtypes).
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section INFERENCE.
 
@@ -1004,4 +1002,3 @@ Qed.
 
 End SUBJECT_REDUCTION.
 
-End VOTE.

@@ -784,8 +784,6 @@ Proof.
   intros. destruct H. auto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** * Execution of straight-line code *)
 
@@ -997,4 +995,3 @@ Qed.
 
 End MATCH_STACK.
 
-End VOTE.

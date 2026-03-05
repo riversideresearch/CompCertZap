@@ -20,8 +20,6 @@ Require Import Initializers.
 
 Open Scope error_monad_scope.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section SOUNDNESS.
 
@@ -1353,4 +1351,3 @@ Proof.
   rewrite <- H4. eapply init_data_list_of_state_correct; eauto; rewrite H4; auto.
 Qed.
 
-End VOTE.

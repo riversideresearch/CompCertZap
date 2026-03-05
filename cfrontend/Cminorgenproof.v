@@ -32,8 +32,6 @@ Proof.
   intros. apply match_transform_partial_program; auto.
 Qed.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section TRANSLATION.
 
@@ -1964,7 +1962,6 @@ Proof.
   apply plus_one. constructor.
   eapply match_state_seq; eauto.
   exploit IHMK; eauto. intros [T2 [A B]].
-  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split. eapply plus_left. constructor. apply plus_star; eauto. traceEq.
   auto.
 (* skip block *)
@@ -1974,7 +1971,6 @@ Proof.
   apply plus_one. constructor.
   econstructor; eauto.
   exploit IHMK; eauto. intros [T2 [A B]].
-  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split. eapply plus_left. constructor. apply plus_star; eauto. traceEq.
   auto.
 (* skip call *)
@@ -2090,10 +2086,8 @@ Opaque PTree.set.
   apply plus_one. constructor.
   econstructor; eauto. simpl. auto.
   exploit IHMK; eauto. intros [T2 [A B]].
-  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split; auto. eapply plus_left. constructor. apply plus_star; eauto. traceEq.
   exploit IHMK; eauto. intros [T2 [A B]].
-  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split; auto. eapply plus_left.
   simpl. constructor. apply plus_star; eauto. traceEq.
 
@@ -2104,7 +2098,6 @@ Opaque PTree.set.
   simpl. apply plus_one. constructor.
   econstructor; eauto.
   exploit IHMK; eauto. intros [T2 [A B]].
-  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split; auto. simpl.
   eapply plus_left. constructor. apply plus_star; eauto. traceEq.
 
@@ -2115,7 +2108,6 @@ Opaque PTree.set.
   simpl. apply plus_one. constructor.
   econstructor; eauto. auto.
   exploit IHMK; eauto. intros [T2 [A B]].
-  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split; auto. simpl.
   eapply plus_left. constructor. apply plus_star; eauto. traceEq.
 
@@ -2267,5 +2259,3 @@ Proof.
 Qed.
 
 End TRANSLATION.
-
-End VOTE.

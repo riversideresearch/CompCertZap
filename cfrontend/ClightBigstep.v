@@ -30,8 +30,6 @@ Require Import Ctypes.
 Require Import Cop.
 Require Import Clight.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section CLIGHT.
 
@@ -601,7 +599,6 @@ End BIGSTEP_TO_TRANSITIONS.
 
 End CLIGHT.
 
-End VOTE.
 
 (** ** Specialized definitions for Clight1 and Clight2 *)
 
@@ -609,8 +606,6 @@ End VOTE.
 
 Module Clight1.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition exec_stmt := exec_stmt function_entry1.
 Definition eval_funcall := eval_funcall function_entry1.
@@ -623,15 +618,12 @@ Theorem bigstep_semantics_sound: forall prog,
   bigstep_sound (bigstep_semantics prog) (Clight.semantics1 prog).
 Proof (bigstep_semantics_sound function_entry1).
 
-End VOTE.
 End Clight1.
 
 (** Clight2: function parameters are temporaries. *)
 
 Module Clight2.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition exec_stmt := exec_stmt function_entry2.
 Definition eval_funcall := eval_funcall function_entry2.
@@ -644,5 +636,4 @@ Theorem bigstep_semantics_sound: forall prog,
   bigstep_sound (bigstep_semantics prog) (Clight.semantics2 prog).
 Proof (bigstep_semantics_sound function_entry2).
 
-End VOTE.
 End Clight2.

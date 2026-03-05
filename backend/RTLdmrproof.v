@@ -11,8 +11,6 @@ Global Open Scope positive_scope.
 Require Import RTLdmrspec.
 Require Import RTLdmr.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Definition match_prog (prog tprog: program) :=
   match_program (fun cu f tf => transf_fundef f = OK tf) eq prog tprog.
@@ -1662,4 +1660,3 @@ Section PRESERVATION.
 
 End PRESERVATION.
 
-End VOTE.

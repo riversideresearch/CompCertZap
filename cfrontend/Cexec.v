@@ -95,8 +95,6 @@ Defined.
 
 (** * Events, volatile memory accesses, and external functions. *)
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section EXEC.
 
@@ -2319,4 +2317,3 @@ Definition at_final_state (S: state): option int :=
   | _ => None
   end.
 
-End VOTE.

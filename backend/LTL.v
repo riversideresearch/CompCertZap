@@ -160,8 +160,6 @@ Inductive state : Type :=
              (m: mem),                (**r memory state *)
       state.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section RELSEM.
 
@@ -323,4 +321,3 @@ Fixpoint successors_block (b: bblock) : list node :=
   | instr :: b' => successors_block b'
   end.
 
-End VOTE.

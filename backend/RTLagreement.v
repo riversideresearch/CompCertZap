@@ -9,6 +9,7 @@ Require Import
   (* Novotes *)
   Registers
   RTL
+  RTL3
   Smallstep
   Values
 .
@@ -72,8 +73,8 @@ Import ListNotations.
 Section RTL_WEAK_AGREEMENT.
   Variable p : RTL.program.
 
-  Definition rtl_sem2 := @RTL.semantics Two (VoteSemantics_Two) p.
-  Definition rtl_sem3 := @RTL.semantics Three (VoteSemantics_Three) p.
+  Definition rtl_sem2 := RTL.semantics p.
+  Definition rtl_sem3 := RTL3.semantics p.
 
   Definition rtl_weak_agreement :=
     forall beh,

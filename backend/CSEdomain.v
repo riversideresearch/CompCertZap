@@ -137,7 +137,7 @@ Inductive rhs_eval_to (valu: valuation) (ge: genv) (sp: val) (m: mem):
       rhs_eval_to valu ge sp m (Load chunk addr vl p) v
   | builtin_eval_to: forall bf args vargs v,
       eval_builtin_args ge valu sp m args vargs ->
-      @builtin_function_sem Builtins2.Two Builtins2.VoteSemantics_Two bf vargs = Some v ->
+      @builtin_function_sem bf vargs = Some v ->
       rhs_eval_to valu ge sp m (Builtin bf args) v.
 
 Lemma rhs_eval_to_compat: forall valu ge sp m rh v rh',

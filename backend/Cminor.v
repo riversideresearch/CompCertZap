@@ -28,8 +28,6 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Switch.
 
-Section VOTE.
-Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 (** * Abstract syntax *)
 
@@ -1252,4 +1250,3 @@ Qed.
 
 End BIGSTEP_TO_TRANSITION.
 
-End VOTE.

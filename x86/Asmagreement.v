@@ -32,8 +32,8 @@ Import ListNotations.
 Section ASM_WEAK_AGREEMENT.
   Variable p : Asm.program.
 
-  Definition asm_sem2 := @Asm.semantics Two (VoteSemantics_Two) p.
-  Definition asm_sem3 := @Asm.semantics Three (VoteSemantics_Three) p.
+  Definition asm_sem2 := Asm.semantics p.
+  Definition asm_sem3 := Asm.semantics p.
 
   Definition asm_weak_agreement :=
     forall beh,
@@ -76,7 +76,7 @@ Section AGREEMENT_PRESERVATION.
 
     assert (Hbackward: backward_simulation (rtl_sem3 p) (asm_sem3 tp)).
     { apply forward_to_backward_simulation; auto.
-      - apply RTL.semantics_receptive.
+      - apply RTL3.semantics_receptive.
       - apply Asm.semantics_determinate. }
 
     assert (Hbackward2: backward_simulation (rtl_sem2 p) (asm_sem2 tp)).
@@ -108,15 +108,20 @@ Section AGREEMENT_PRESERVATION.
     intros Hsafe Hforward2 Hforward3 Hagree beh3 Hbeh3.
     assert (Hbackward: backward_simulation (rtl_sem3 p) (asm_sem3 tp)).
     { apply forward_to_backward_simulation; auto.
-      - apply RTL.semantics_receptive.
+      - apply RTL3.semantics_receptive.
       - apply Asm.semantics_determinate. }
     eapply backward_simulation_behavior_improves in Hbackward; eauto.
     destruct Hbackward as (beh1 & Hbeh1 & Himp).
     eapply Hagree in Hbeh1.
     destruct Hbeh1 as (beh2 & Hbeh2 & Himp').
+    assert (Hbeh2_asm: program_behaves (asm_sem2 tp) beh2).
+    { eapply forward_simulation_same_safe_behavior.
+      - exact Hforward2.
+      - exact Hbeh2.
+      - eapply Hsafe; eauto. }
     exists beh2; split.
     2: { eapply behavior_improves_trans; eauto. }
-    eapply forward_simulation_same_safe_behavior; eauto.
+    exact Hbeh2_asm.
   Qed.
   
 End AGREEMENT_PRESERVATION.
