@@ -19,7 +19,6 @@ Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
 Require Import Compopts.
 Require Import RTLagreement RTLcolorcheck RTLfault RTLtolerant.
-Require Import Novotes Novotesproof.
 Require Import Asmagreement.
 Require Import Builtins2.
 
@@ -330,8 +329,6 @@ Proof.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  unfold transf_program in T.
-  destruct (check_program p14) eqn:Hnovotes; simpl in T; try discriminate.
   inv T.
   unfold match_prog; simpl.
   exists p1; split. apply SimplExprproof.transf_program_match; auto.
@@ -429,66 +426,7 @@ Proof.
   apply match_prog_c_rtl_backward_simulation; assumption.
 Qed.
 
-Lemma transf_c_program_to_rtl'_no_votes p tp :
-  transf_c_program_to_rtl' p = OK tp ->
-  no_votes tp.
-Proof.
-  intros T.
-  unfold transf_c_program_to_rtl', time in T. simpl in T.
-  destruct (SimplExpr.transl_program p) as [p1|e] eqn:P1; simpl in T; try discriminate.
-  unfold transf_clight_program_to_rtl, time in T.
-  rewrite ! compose_print_identity in T. simpl in T.
-  destruct (SimplLocals.transf_program p1) as [p2|e] eqn:P2; simpl in T; try discriminate.
-  destruct (Cshmgen.transl_program p2) as [p3|e] eqn:P3; simpl in T; try discriminate.
-  destruct (Cminorgen.transl_program p3) as [p4|e] eqn:P4; simpl in T; try discriminate.
-  unfold transf_cminor_program_to_rtl, time in T.
-  rewrite ! compose_print_identity in T. simpl in T.
-  destruct (Selection.sel_program p4) as [p5|e] eqn:P5; simpl in T; try discriminate.
-  destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6; simpl in T; try discriminate.
-  unfold transf_rtl_program_to_rtl, time in T.
-  rewrite ! compose_print_identity in T. simpl in T.
-  set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *.
-  destruct (Inlining.transf_program p7) as [p8|e] eqn:P8; simpl in T; try discriminate.
-  set (p9 := Renumber.transf_program p8) in *.
-  set (p10 := total_if optim_constprop Constprop.transf_program p9) in *.
-  set (p11 := total_if optim_constprop Renumber.transf_program p10) in *.
-  destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12;
-    simpl in T; try discriminate.
-  destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13;
-    simpl in T; try discriminate.
-  destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14;
-    simpl in T; try discriminate.
-  unfold transf_program in T.
-  destruct (Novotes.check_program p14) eqn:Hnovotes; simpl in T; try discriminate.
-  inv T.
-  eapply Novotesproof.check_program_sound; eauto.
-Qed.
 
-Lemma transf_c_program_to_rtl'_preservation' p tp beh :
-  transf_c_program_to_rtl' p = OK tp ->
-  program_behaves (RTL3.semantics tp) beh ->
-  exists beh', program_behaves (Csem.semantics p) beh' /\
-            behavior_improves beh' beh.
-Proof.
-  intros Hp Hbeh.
-  (** Since the pipeline guarantees [no_votes tp], we have
-      [forward_simulation (RTL.semantics tp) (RTL3.semantics tp)]
-      and thus [backward_simulation (RTL.semantics tp) (RTL3.semantics tp)].
-      This lets us map the RTL3 behavior back to an RTL behavior. *)
-  assert (Hnovotes: no_votes tp).
-  { eapply transf_c_program_to_rtl'_no_votes; eassumption. }
-  assert (Hback: backward_simulation (RTL.semantics tp) (RTL3.semantics tp)).
-  { apply forward_to_backward_simulation.
-    - apply no_votes_forward_simulation; auto.
-    - apply RTL.semantics_receptive.
-    - apply RTL3.semantics_determinate. }
-  exploit backward_simulation_behavior_improves; eauto.
-  intros (beh2 & Hbeh2 & Himp).
-  exploit transf_c_program_to_rtl'_preservation; eauto.
-  intros (beh' & Hbeh' & Himp').
-  eexists; split; eauto.
-  eapply behavior_improves_trans; eauto.
-Qed.
 
 Definition rtl_to_rtl_passes :=
       mkpass (match_if Compopts.dmr RTLdmrproof.match_prog)
