@@ -327,7 +327,6 @@ Definition CompCert's_passes :=
   ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog)
   ::: mkpass (match_if Compopts.optim_redundancy Deadcodeproof.match_prog)
   ::: mkpass Unusedglobproof.match_prog
-  (* ::: mkpass Novotesproof.match_prog *)
   ::: mkpass (match_if Compopts.dmr RTLdmrproof.match_prog)
   ::: mkpass (match_if Compopts.tmr RTLtmrproof.match_prog)
   ::: mkpass Renumberproof.match_prog
@@ -355,7 +354,6 @@ Definition to_rtl_passes :=
   ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog)
   ::: mkpass (match_if Compopts.optim_redundancy Deadcodeproof.match_prog)
   ::: mkpass Unusedglobproof.match_prog
-  (* ::: mkpass Novotesproof.match_prog *)
   ::: mkpass (match_if Compopts.dmr RTLdmrproof.match_prog)
   ::: mkpass (match_if Compopts.tmr RTLtmrproof.match_prog)
   ::: mkpass Renumberproof.match_prog
@@ -426,7 +424,6 @@ Proof.
   exists p12; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
   exists p13; split. eapply partial_if_match; eauto. apply Deadcodeproof.transf_program_match.
   exists p14; split. apply Unusedglobproof.transf_program_match; auto.
-  (* exists pnovotes; split. apply Novotesproof.check_program_match; auto. *)
   exists pdmr; split. eapply partial_if_match; eauto. apply RTLdmrproof.transf_program_match; auto.
   exists p15'; split. eapply partial_if_match; eauto. apply RTLtmrproof.transf_program_match; auto.
   exists p15; split. apply Renumberproof.transf_program_match; auto.
@@ -484,7 +481,6 @@ Proof.
   exists p12; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
   exists p13; split. eapply partial_if_match; eauto. apply Deadcodeproof.transf_program_match.
   exists p14; split. apply Unusedglobproof.transf_program_match; auto.
-  (* exists pnovotes; split. apply Novotesproof.check_program_match; auto. *)
   exists pdmr; split. eapply partial_if_match; eauto. apply RTLdmrproof.transf_program_match; auto.
   exists p15'; split. eapply partial_if_match; eauto. apply RTLtmrproof.transf_program_match; auto.
   exists p15; split. apply Renumberproof.transf_program_match; auto.
@@ -569,8 +565,6 @@ Ltac DestructM :=
     eapply match_if_simulation. eassumption. exact Deadcodeproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply Unusedglobproof.transf_program_correct; eassumption.
-  (* eapply compose_forward_simulations. *)
-  (*   apply Novotesproof.check_program_correct; eassumption. *)
   eapply compose_forward_simulations.
   eapply match_if_simulation. eassumption.
   apply RTLdmrproof.transf_program_correct; eassumption.
@@ -639,8 +633,6 @@ Proof.
     eapply match_if_simulation. eassumption. exact Deadcodeproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
   eapply Unusedglobproof.transf_program_correct; eassumption.
-  (* eapply compose_forward_simulations. *)
-  (* apply Novotesproof.check_program_correct; eassumption. *)
   eapply compose_forward_simulations.
   eapply match_if_simulation. eassumption.
   apply RTLdmrproof.transf_program_correct; eassumption.

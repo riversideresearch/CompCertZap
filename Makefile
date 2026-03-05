@@ -161,14 +161,13 @@ BACKEND=\
   SelectOp.v SelectDiv.v SplitLong.v SelectLong.v Selection.v \
   SelectOpproof.v SelectDivproof.v SplitLongproof.v \
   SelectLongproof.v Selectionproof.v \
-  Registers.v RTL.v \
+  Registers.v RTL.v RTL3.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   RTLreplicateSpecCommon.v \
   RTLdmr.v RTLdmrspec.v RTLdmrproof.v \
   RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
   RTLagreement.v RTLfault.v RTLtolerant.v \
   RTLcolor.v RTLcolorcheck.v \
-  Novotes.v Novotesproof.v \
   Tailcall.v Tailcallproof.v \
   Inlining.v Inliningspec.v Inliningproof.v \
   Renumber.v Renumberproof.v \

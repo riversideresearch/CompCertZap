@@ -6,7 +6,6 @@
 (*   Coqlib *)
 (*   LTL *)
 (*   Maps *)
-(*   Novotes *)
 (*   Registers *)
 (*   RTL *)
 (*   Smallstep *)

@@ -1571,9 +1571,6 @@ Proof.
   intros. inv H0. inv H. inv RES. inv STACK. constructor.
 Qed.
 
-(* TODO: make this theorem take Novotes as extra hypothesis, and
-precede this step in the compiler with one that checks that
-property. *)
 Theorem transf_program_correct :
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.

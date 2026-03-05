@@ -6,7 +6,6 @@ Require Import
   Coqlib
   Cstrategy
   Maps
-  Novotes
   Registers
   RTLagreement
   Smallstep
