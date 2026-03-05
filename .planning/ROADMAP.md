@@ -23,7 +23,7 @@
 
 - [x] **Phase 5: RTL3-to-RTL Bridge** - Prove generic forward simulation from RTL3 to RTL semantics without no_votes
 - [x] **Phase 6: Pipeline Simplification** - Remove Novotes pass from Compiler.v transf_rtl_program
-- [ ] **Phase 7: Theorem Recomposition** - Rewrite transf_c_program_to_rtl_preservation_faulty as 3-step composition
+- [x] **Phase 7: Theorem Recomposition** - Rewrite transf_c_program_to_rtl_preservation_faulty as 3-step composition (completed 2026-03-05)
 - [ ] **Phase 8: Validation and Cleanup** - Full build validation: all .vo compile, zero Admitted, ccomp builds
 - [ ] **Phase 9: Technical Report** - Document the no-novotes refactor rationale and architecture
 
@@ -109,7 +109,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 | 4. Integration and Validation | v1.0 | 1/1 | Complete | 2026-03-05 |
 | 5. RTL3-to-RTL Bridge | v2.0 | 1/1 | Complete | 2026-03-05 |
 | 6. Pipeline Simplification | v2.0 | 1/1 | Complete | 2026-03-05 |
-| 7. Theorem Recomposition | v2.0 | 1/2 | Gap closure | 2026-03-05 |
+| 7. Theorem Recomposition | 2/2 | Complete   | 2026-03-05 | 2026-03-05 |
 | 8. Validation and Cleanup | v2.0 | 0/1 | Not started | - |
 | 9. Technical Report | v2.0 | 0/1 | Not started | - |
 
