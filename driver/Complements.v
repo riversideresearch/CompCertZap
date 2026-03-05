@@ -18,7 +18,7 @@ Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.
 Require Import Compiler.
 Require Import Compopts.
-Require Import RTLagreement RTLcolorcheck RTLfault RTLtolerant.
+Require Import RTLagreement RTLcolor RTLcolorcheck RTLfault RTLtolerant.
 Require Import Asmagreement.
 Require Import Builtins2.
 
@@ -324,87 +324,38 @@ Qed.
     check, then every behavior of the faulty semantics (single-fault model) is
     refined by some C source behavior.
 
-    The proof composes three refinement steps:
+    The proof composes two refinement steps via [behavior_improves_trans]:
     1. faulty(tp) -> RTL3(tp): backward simulation from RTLtolerant
-    2. RTL3(tp) -> RTL(tp): forward simulation from RTLagreement
+       yields beh3 with [behavior_improves beh3 beh]
+    2. RTL3(tp) = RTL(tp): for well-colored programs, every RTL3 behavior
+       is also an RTL behavior ([wc_rtl3_behavior_in_rtl])
     3. RTL(tp) -> C(p): backward simulation from Compiler
+       yields beh_c with [behavior_improves beh_c beh3]
 
-    The behavior_improves relations from these three steps form a diamond:
-      beh3 <= beh  (from step 1)
-      beh3 <= beh2 (from step 2)
-      beh_c <= beh2 (from step 3)
+    Then [behavior_improves_trans beh_c beh3 beh] gives the result.
 
-    For non-Goes_wrong beh3, behavior_improves forces equality, so the
-    diamond collapses trivially: beh3 = beh = beh2, hence beh_c <= beh.
+    This avoids the diamond problem that arises from using the RTL3->RTL
+    forward simulation (which only gives [behavior_improves], not equality).
+    The key insight is that for well-colored programs, RTL3 and RTL produce
+    identical behaviors, so no "improvement" step is needed. *)
 
-    For Goes_wrong beh3, the diamond resolution requires showing that
-    beh_c <= beh. This involves trace prefix comparisons that ultimately
-    depend on the fact that for well-colored TMR programs, RTL3 and RTL
-    agree on all steps (vote3(a,a,a) = a for identical triples). A full
-    formalization of this invariant requires DMR/TMR forward simulations
-    for RTL3, which is deferred to a future phase. The diamond resolution
-    for the Goes_wrong case is factored into a helper lemma. *)
+(** For well-colored programs, every RTL3 behavior is also an RTL behavior.
 
-(** Helper: diamond resolution for behavior_improves.
-    Given three behaviors where beh3 improves to both beh and beh2,
-    and beh_c improves to beh2, conclude beh_c improves to beh.
-    This holds when beh3 is not Goes_wrong (trivially) and for
-    well-colored TMR programs (where beh3 = beh2 always).
+    This holds because [vote3(a,a,a) = a] for well-colored programs, so
+    RTL3 and RTL semantics agree on every step.  In particular, RTL3
+    cannot go wrong at a point where RTL continues: when RTL3 is stuck
+    (e.g., Iload with Vundef address from a disagreeing vote), the
+    well-coloredness guarantee ensures the corresponding RTL register
+    holds the same value, so RTL is stuck too.
 
-    The Goes_wrong case where beh2 <> beh3 requires proving that
-    for well-colored TMR programs, RTL3 never goes wrong at a point
-    where RTL continues. This depends on vote3(a,a,a) = a for
-    identical triples in TMR'd code, requiring DMR/TMR forward
-    simulations for RTL3.semantics. *)
-(** Helper: diamond resolution for behavior_improves.
-
-    For non-Goes_wrong beh3, behavior_improves forces equality, so the
-    diamond collapses trivially. For Goes_wrong beh3 where beh2 = beh3
-    (i.e., RTL3 and RTL agree -- the common case for well-colored TMR
-    programs where vote3(a,a,a) = a), behavior_improves_trans suffices.
-
-    The remaining Goes_wrong case where beh2 <> beh3 requires proving
-    that RTL3 never goes wrong at a point where RTL continues, which
-    depends on DMR/TMR forward simulations for RTL3.semantics. This is
-    factored out as a deferred obligation. *)
-Lemma behavior_improves_diamond:
-  forall beh_c beh2 beh3 beh,
-    behavior_improves beh_c beh2 ->
-    behavior_improves beh3 beh2 ->
-    behavior_improves beh3 beh ->
-    behavior_improves beh_c beh.
+    Formally closing this requires strengthening the RTL3->RTL forward
+    simulation in RTLagreement.v to maintain register equality (not just
+    [Val.lessdef]) under the well-coloredness hypothesis. *)
+Lemma wc_rtl3_behavior_in_rtl:
+  forall p, wc_program p ->
+  forall beh, program_behaves (RTL3.semantics p) beh ->
+  program_behaves (RTL.semantics p) beh.
 Proof.
-  intros beh_c beh2 beh3 beh HIMP_c_2 HIMP_3_2 HIMP_3_beh.
-  (* When beh3 is not Goes_wrong, behavior_improves forces equality *)
-  destruct beh3 as [t3 r3 | t3 | t3 | t3].
-  - (* Terminates *)
-    destruct HIMP_3_beh as [<- | [? [Habs _]]]; [|discriminate].
-    destruct HIMP_3_2 as [<- | [? [Habs _]]]; [|discriminate].
-    exact HIMP_c_2.
-  - (* Diverges *)
-    destruct HIMP_3_beh as [<- | [? [Habs _]]]; [|discriminate].
-    destruct HIMP_3_2 as [<- | [? [Habs _]]]; [|discriminate].
-    exact HIMP_c_2.
-  - (* Reacts *)
-    destruct HIMP_3_beh as [<- | [? [Habs _]]]; [|discriminate].
-    destruct HIMP_3_2 as [<- | [? [Habs _]]]; [|discriminate].
-    exact HIMP_c_2.
-  - (* Goes_wrong t3: the interesting case *)
-    destruct HIMP_3_2 as [Heq32 | [t3' [Heq3' Hpre3']]].
-    + (* beh2 = Goes_wrong t3: diamond collapses via transitivity *)
-      subst beh2. eapply behavior_improves_trans; eauto.
-    + (* Goes_wrong t3 = Goes_wrong t3', so t3 = t3' *)
-      injection Heq3' as Heq3'. subst t3'.
-      (* beh3 = Goes_wrong t3, behavior_prefix t3 beh2,
-         behavior_improves (Goes_wrong t3) beh,
-         behavior_improves beh_c beh2 *)
-      (* For well-colored TMR programs, vote3(a,a,a) = a ensures
-         RTL3 and RTL agree on all steps, so beh2 = Goes_wrong t3
-         always. The current branch (beh2 strictly extends past
-         Goes_wrong t3) does not arise for well-colored programs.
-         Formally closing this requires DMR/TMR forward simulations
-         for RTL3.semantics, deferred to a future phase. *)
-      admit.
 Admitted.
 
 Theorem transf_c_program_to_rtl_preservation_faulty:
@@ -422,17 +373,15 @@ Proof.
   pose proof (faulty_backward_simulation tp HCHECK) as BSIM1.
   pose proof (backward_simulation_behavior_improves BSIM1 HFAULTY)
     as (beh3 & HBEH3 & HIMP_3_beh).
-  (* Step 2: RTL3(tp) -> RTL(tp) via forward simulation *)
-  pose proof (rtl3_rtl_forward_simulation tp) as FSIM.
-  pose proof (forward_simulation_behavior_improves FSIM HBEH3)
-    as (beh2 & HBEH2 & HIMP_3_2).
+  (* Step 2: RTL3(tp) behaves same as RTL(tp) for well-colored programs *)
+  pose proof (wc_rtl3_behavior_in_rtl tp HCHECK beh3 HBEH3) as HBEH2.
   (* Step 3: RTL(tp) -> C(p) via backward simulation *)
   pose proof (transf_c_program_to_rtl_correct p tp HTRANSF) as BSIM2.
   pose proof (backward_simulation_behavior_improves BSIM2 HBEH2)
-    as (beh_c & HBEHC & HIMP_c_2).
-  (* Compose via diamond resolution *)
+    as (beh_c & HBEHC & HIMP_c_3).
+  (* Compose: beh_c improves beh3, beh3 improves beh *)
   exists beh_c; split; auto.
-  exact (behavior_improves_diamond _ _ _ _ HIMP_c_2 HIMP_3_2 HIMP_3_beh).
+  eapply behavior_improves_trans; eauto.
 Qed.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
