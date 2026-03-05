@@ -27,10 +27,10 @@ Requirements for removing novotes dependency from the RTL fault-tolerance proof 
 
 ### Validation
 
-- [ ] **VALID-01**: All .vo files compile (RTLagreement, Compiler, RTLtolerant, Complements)
-- [ ] **VALID-02**: Zero Admitted proofs across all touched files
-- [ ] **VALID-03**: ccomp binary builds and compiles C with -tmr flag
-- [ ] **VALID-04**: No residual Novotes references in active pipeline definitions
+- [x] **VALID-01**: All .vo files compile (RTLagreement, Compiler, RTLtolerant, Complements)
+- [x] **VALID-02**: Zero Admitted proofs across all touched files
+- [x] **VALID-03**: ccomp binary builds and compiles C with -tmr flag
+- [x] **VALID-04**: No residual Novotes references in active pipeline definitions
 
 ### Documentation
 
@@ -68,10 +68,10 @@ Deferred to future release.
 | THERM-01 | Phase 7 | Complete |
 | THERM-02 | Phase 7 | Complete |
 | THERM-03 | Phase 7 | Complete |
-| VALID-01 | Phase 8 | Pending |
-| VALID-02 | Phase 8 | Pending |
-| VALID-03 | Phase 8 | Pending |
-| VALID-04 | Phase 8 | Pending |
+| VALID-01 | Phase 8 | Complete |
+| VALID-02 | Phase 8 | Complete |
+| VALID-03 | Phase 8 | Complete |
+| VALID-04 | Phase 8 | Complete |
 | DOC-01 | Phase 9 | Pending |
 
 **Coverage:**
@@ -81,4 +81,4 @@ Deferred to future release.
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after Phase 7 Plan 1 completion*
+*Last updated: 2026-03-05 after Phase 8 Plan 1 completion*

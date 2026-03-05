@@ -68,7 +68,7 @@ Plans:
 
 Plans:
 - [x] 07-01-PLAN.md -- Prove faulty theorem via 3-step behavior composition and remove dead Novotes references
-- [ ] 07-02-PLAN.md -- Close wc_rtl3_behavior_in_rtl Admitted via reverse RTL->RTL3 forward simulation (gap closure)
+- [x] 07-02-PLAN.md -- Close wc_rtl3_behavior_in_rtl Admitted via reverse RTL->RTL3 forward simulation (gap closure)
 
 ### Phase 8: Validation and Cleanup
 **Goal**: Full end-to-end validation confirming the entire Coq development compiles, contains no Admitted proofs, the ccomp binary builds, and no residual Novotes references remain in the active pipeline
@@ -79,10 +79,10 @@ Plans:
   2. `make check-admitted` reports zero Admitted proofs across all touched files
   3. `make ccomp` produces a working binary and `./ccomp test.c -tmr -o test` succeeds
   4. Grepping for `Novotes` in Compiler.v and Complements.v returns zero matches (dead code removed)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 08-01: Full build validation and Novotes residue cleanup
+- [x] 08-01-PLAN.md -- Remove Novotes residue from Compiler.v and other files, full build validation
 
 ### Phase 9: Technical Report
 **Goal**: A comprehensive technical report at doc/no-novotes-report.md documenting the motivation, architecture changes, proof structure, and validation results of the no-novotes refactor
@@ -110,7 +110,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8 -> 9
 | 5. RTL3-to-RTL Bridge | v2.0 | 1/1 | Complete | 2026-03-05 |
 | 6. Pipeline Simplification | v2.0 | 1/1 | Complete | 2026-03-05 |
 | 7. Theorem Recomposition | 2/2 | Complete   | 2026-03-05 | 2026-03-05 |
-| 8. Validation and Cleanup | v2.0 | 0/1 | Not started | - |
+| 8. Validation and Cleanup | v2.0 | 1/1 | Complete | 2026-03-05 |
 | 9. Technical Report | v2.0 | 0/1 | Not started | - |
 
 ---

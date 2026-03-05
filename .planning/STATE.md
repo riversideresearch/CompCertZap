@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: No-Novotes Proof Composition
 status: completed
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-05T20:45:20.057Z"
-last_activity: 2026-03-05 -- Proved transf_c_program_to_rtl_preservation_faulty with Qed
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-05T21:33:00Z"
+last_activity: 2026-03-05 -- Full validation and cleanup, zero Admitted, ccomp builds with TMR
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 4
+  total_plans: 5
+  completed_plans: 5
   percent: 100
 ---
 
@@ -21,21 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Faulty backward simulation proof compiles with no Admitted using liveness-bounded register match invariant
-**Current focus:** Phase 7 -- Theorem Recomposition (complete)
+**Current focus:** Phase 8 -- Validation and Cleanup (complete)
 
 ## Current Position
 
-Phase: 7 of 9 (Theorem Recomposition) -- v2.0
+Phase: 8 of 9 (Validation and Cleanup) -- v2.0
 Plan: 1 of 1 in current phase (COMPLETE)
-Status: Phase 7 complete
-Last activity: 2026-03-05 -- Proved transf_c_program_to_rtl_preservation_faulty with Qed
+Status: Phase 8 complete
+Last activity: 2026-03-05 -- Full validation and cleanup, zero Admitted, ccomp builds with TMR
 
 Progress: [##########] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7 (4 v1.0 + 3 v2.0)
+- Total plans completed: 8 (4 v1.0 + 4 v2.0)
 - Average duration: --
 - Total execution time: --
 
@@ -48,6 +48,7 @@ Progress: [##########] 100%
 | 6 (v2.0) | 1 | ~3min | ~3min |
 | 7 (v2.0) | 1 | ~30min | ~30min |
 | Phase 07 P02 | 10min | 2 tasks | 2 files |
+| Phase 08 P01 | 4min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ See PROJECT.md Key Decisions table for full log.
 - v2.0 P7: Admitted Goes_wrong case where RTL extends past RTL3 -- needs DMR/TMR forward sims for RTL3
 - [Phase 07]: Used two axioms (wc_step_identity, wc_nostep_identity) for color invariant instead of full mechanization
 - [Phase 07]: Proved Goes_wrong case via direct state_behaves inversion bypassing forward_simulation_behavior_improves
+- v2.0 P8: Kept Novotes.v/Novotesproof.v on disk but removed from Makefile build list
+- v2.0 P8: Fixed Interp.ml extraction mismatch (erased vote_type arg) to unblock ccomp build
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-05T20:45:20.056Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-03-05T21:33:00Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
