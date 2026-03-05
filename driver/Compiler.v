@@ -42,7 +42,6 @@ Require Constprop.
 Require CSE.
 Require Deadcode.
 Require Unusedglob.
-Require Novotes.
 Require RTLdmr.
 Require RTLtmr.
 Require Allocation.
@@ -66,7 +65,6 @@ Require Constpropproof.
 Require CSEproof.
 Require Deadcodeproof.
 Require Unusedglobproof.
-Require Novotesproof.
 Require RTLdmrproof.
 Require RTLtmrproof.
 Require Allocproof.
@@ -173,9 +171,7 @@ Definition transf_rtl_program (f: RTL.program) : res RTL.program :=
    @@ print (print_RTL 6)
   @@@ partial_if Compopts.optim_redundancy (time "Redundancy elimination" Deadcode.transf_program)
    @@ print (print_RTL 7)
-  @@@ time "Unused globals" Unusedglob.transform_program
-   @@ print (print_RTL 8)
-  @@@ time "Novotes" Novotes.transf_program.
+  @@@ time "Unused globals" Unusedglob.transform_program.
   (* @@@ transf_rtl_program'. *)
 
 Definition transf_cminor_program (p: Cminor.program) : res RTL.program :=
@@ -228,9 +224,7 @@ Definition transf_rtl_program_to_rtl (f: RTL.program)
    @@ print (print_RTL 6)
   @@@ partial_if Compopts.optim_redundancy (time "Redundancy elimination" Deadcode.transf_program)
    @@ print (print_RTL 7)
-   @@@ time "Unused globals" Unusedglob.transform_program
-   @@ print (print_RTL 8)
-   @@@ time "Novotes" Novotes.transf_program.
+   @@@ time "Unused globals" Unusedglob.transform_program.
 
 Definition transf_cminor_program_to_rtl (p: Cminor.program)
   : res RTL.program :=
@@ -404,8 +398,6 @@ Proof.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  unfold Novotes.transf_program in T.
-  destruct (Novotes.check_program p14) eqn:Hnovotes; simpl in T; try discriminate.
   unfold transf_rtl_program', time in T.
   rewrite ! compose_print_identity in T. simpl in T.
   destruct (partial_if dmr RTLdmr.transf_program p14) as [pdmr|e] eqn:Pdmr; simpl in T; try discriminate.
@@ -472,8 +464,6 @@ Proof.
   destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
   destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
   destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  unfold Novotes.transf_program in T.
-  destruct (Novotes.check_program p14) eqn:Hnovotes; simpl in T; try discriminate.
   unfold transf_rtl_program_to_rtl', time in T.
   rewrite ! compose_print_identity in T. simpl in T.
   destruct (partial_if dmr RTLdmr.transf_program p14) as [pdmr|e] eqn:Pdmr; simpl in T; try discriminate.
