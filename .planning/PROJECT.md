@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An update to the CompCertZAP fault tolerance proof that replaces the overly-coarse register invariant (quantifying over all registers) with a liveness-bounded invariant. This enables color inference to use sparse tables instead of dense quadratic-sized tables, dramatically improving memory usage on large functions while maintaining the same formal guarantees.
+An update to the CompCertZAP fault tolerance proof that replaces the overly-coarse register invariant (quantifying over all registers) with a liveness-bounded invariant. The liveness-bounded approach enables color inference to use sparse tables instead of dense quadratic-sized tables, dramatically improving memory usage on large functions while maintaining the same formal guarantees. The full proof chain is machine-checked with zero Admitted lemmas.
 
 ## Core Value
 
@@ -12,17 +12,16 @@ The faulty backward simulation proof (`RTLtolerant.v`) compiles with no `Admitte
 
 ### Validated
 
-- Liveness optimization implemented in color inference oracle (`RTLinfercolor.ml`) -- existing
-- Color spec (`RTLcolor.v`) updated to parameterize well-coloredness by liveness -- existing
-- Color checker (`RTLcolorcheck.v`) updated to compute and pass liveness info -- existing (structure only)
+- ProofLiveness.v conservative liveness analysis with Kildall backward solver -- v1.0
+- RTLcolor.v and RTLcolorcheck.v reference ProofLiveness.analyze -- v1.0
+- check_col_instr_sound fully proved (14 instruction cases, no Admitted) -- v1.0
+- Faulty backward simulation proved with liveness-bounded match relation -- v1.0
+- Top-level theorem chain (Complements.v) composes with updated assumptions -- v1.0
+- End-to-end validation: ccomp builds and compiles with -tmr flag -- v1.0
 
 ### Active
 
-- [ ] New `ProofLiveness.v` analysis with conservative transfer function (always includes Iop/Iload args)
-- [ ] `check_col_instr_sound` proof completed in `RTLcolorcheck.v` (currently Admitted)
-- [ ] `RTLtolerant.v` faulty backward simulation proof rebuilt with proof-liveness-bounded invariant
-- [ ] Top-level theorem chain (`driver/Complements.v`) composes with updated assumptions
-- [ ] End-to-end validation: `make ccomp` succeeds, color checker runs on test programs
+(None -- start next milestone to define new requirements)
 
 ### Out of Scope
 
@@ -30,30 +29,35 @@ The faulty backward simulation proof (`RTLtolerant.v`) compiles with no `Admitte
 - Redesigning the color inference oracle algorithm -- already functional with union-find
 - Performance benchmarking of sparse vs dense inference -- optional validation only
 - Changes to DMR pass or DMR proof -- TMR path only
+- Modifying Liveness.v -- used by DCE and register allocation
 
 ## Context
 
-This is a brownfield project on the `rtl-liveness` branch of the CompCertZAP fork. The branch already has:
-- `RTLcolor.v` updated to accept liveness parameter in `wc_instruction` and `wc_function` (uses `Liveness.analyze`)
-- `RTLcolorcheck.v` updated to compute liveness and pass it to checker (but `check_col_instr_sound` is Admitted)
-- `RTLtolerant.v` partially refactored: `match_rs`/`match_rs_upto` parameterized by `live : Regset.t`, match state definitions carry `LIVE` hypothesis, but proof breaks at line ~1367 in `exec_Iop` case
-- `RTLinfercolor.ml` already uses sparse liveness-bounded inference
+Shipped v1.0 on `rtl-liveness` branch. Key files:
+- `backend/ProofLiveness.v` (131 LOC) -- new conservative liveness analysis
+- `backend/RTLcolor.v` (247 LOC) -- well-coloredness spec
+- `backend/RTLcolorcheck.v` (539 LOC) -- verified Boolean color checker
+- `backend/RTLtolerant.v` (3,267 LOC) -- faulty backward simulation proof
+- `driver/Complements.v` (904 LOC) -- top-level theorem chain
 
-The key insight from the plan: CompCert's `Liveness.transfer` omits `Iop`/`Iload` operands when the destination register is dead. This is correct for dead code elimination but too weak for the simulation proof, which needs argument liveness to discharge `Val.lessdef` obligations. A new `ProofLiveness` analysis with a more conservative transfer function resolves this.
-
-## Constraints
-
-- **Coq compatibility**: Must compile with the project's Coq version (8.x with `-ignore-coq-version`)
-- **No Admitted**: All touched files must have zero `Admitted` proofs at completion
-- **Existing structure**: `RTLcolor.v` and `RTLcolorcheck.v` already reference `Liveness.analyze`; must be switched to `ProofLiveness.analyze`
-- **Proof style**: Follow CompCert conventions (forward/backward simulation, `TransfLink`, Section/Context for vote type parameterization)
+Total: +1,509 / -842 lines changed across 6 Coq/OCaml files.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Create separate ProofLiveness.v rather than modifying Liveness.v | Liveness.v is used by dead code elimination and register allocation; changing its transfer function would break those passes | -- Pending |
-| Conservative transfer: always include Iop/Iload args | Over-approximates liveness to guarantee simulation proof obligations can be discharged; can be refined later if needed | -- Pending |
+| Create separate ProofLiveness.v rather than modifying Liveness.v | Liveness.v is used by dead code elimination and register allocation; changing its transfer function would break those passes | Good |
+| Conservative transfer: always include Iop/Iload args | Over-approximates liveness to guarantee simulation proof obligations can be discharged | Good |
+| Reuse module names (RegsetLat, DS) from Liveness.v | No file imports both; avoids namespace churn | Good |
+| Use Regset.for_all_2 bridge in color checker | More direct than PTree_Properties.for_all_correct since checker iterates over Regset | Good |
+| Changed match_stackframes RS from live!!pc to transfer f pc (live!!pc) | Aligns with exec_return obligations in backward simulation | Good |
+| Save-before-inv pattern in RTLtolerant.v | Save critical facts before destructive inv_wc/inv Hstep to avoid Coq variable consumption | Good |
+
+## Constraints
+
+- **Coq compatibility**: Must compile with the project's Coq version (8.x with `-ignore-coq-version`)
+- **No Admitted**: All touched files must have zero `Admitted` proofs at completion
+- **Existing structure**: Follow CompCert conventions (forward/backward simulation, `TransfLink`, Section/Context for vote type parameterization)
 
 ---
-*Last updated: 2026-03-04 after initialization*
+*Last updated: 2026-03-05 after v1.0 milestone*
