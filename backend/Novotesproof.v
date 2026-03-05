@@ -338,13 +338,10 @@ Qed.
 Lemma no_votes_weak_agreement' :
   rtl_weak_agreement' p.
 Proof.
-  unfold rtl_weak_agreement'.
-  intros beh Hbeh.
-  eapply backward_simulation_behavior_improves; eauto.
-  apply forward_to_backward_simulation.
-  - apply no_votes_forward_simulation.
-  - apply RTL.semantics_receptive.
-  - apply RTL3.semantics_determinate.
+  (** [rtl_weak_agreement'] holds unconditionally for all programs
+      (proven via forward simulation RTL3 -> RTL in RTLagreement.v).
+      The no-votes hypothesis is not needed for this direction. *)
+  apply rtl_weak_agreement_no_novotes.
 Qed.
 
 End IMPLIES_AGREEMENT.
