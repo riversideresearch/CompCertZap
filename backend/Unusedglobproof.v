@@ -441,6 +441,9 @@ Proof.
   apply filter_globdefs_unique_names.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 (** * Semantic preservation *)
 
 Section SOUNDNESS.
@@ -1437,3 +1440,5 @@ Proof.
 Qed.
 
 Global Instance TransfSelectionLink : TransfLink match_prog := link_match_program.
+
+End VOTE.

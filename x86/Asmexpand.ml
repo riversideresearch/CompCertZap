@@ -137,24 +137,24 @@ let addressing_of_builtin_arg = function
 let expand_builtin_memcpy_small sz al src dst =
   let rec copy src dst sz =
     if sz >= 8 && Archi.ptr64 then begin
-	emit (Pmovq_rm (RCX, src));
-	emit (Pmovq_mr (dst, RCX));
+  emit (Pmovq_rm (RCX, src));
+  emit (Pmovq_mr (dst, RCX));
         copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
     end else if sz >= 8 && !Clflags.option_ffpu then begin
-	emit (Pmovsq_rm (XMM7, src));
-	emit (Pmovsq_mr (dst, XMM7));
+  emit (Pmovsq_rm (XMM7, src));
+  emit (Pmovsq_mr (dst, XMM7));
         copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
       end else if sz >= 4 then begin
-	emit (Pmovl_rm (RCX, src));
-	emit (Pmovl_mr (dst, RCX));
+  emit (Pmovl_rm (RCX, src));
+  emit (Pmovl_mr (dst, RCX));
         copy (offset_addressing src _4z) (offset_addressing dst _4z) (sz - 4)
       end else if sz >= 2 then begin
-	emit (Pmovw_rm (RCX, src));
-	emit (Pmovw_mr (dst, RCX));
+  emit (Pmovw_rm (RCX, src));
+  emit (Pmovw_mr (dst, RCX));
         copy (offset_addressing src _2z) (offset_addressing dst _2z) (sz - 2)
       end else if sz >= 1 then begin
-	emit (Pmovb_rm (RCX, src));
-	emit (Pmovb_mr (dst, RCX));
+  emit (Pmovb_rm (RCX, src));
+  emit (Pmovb_mr (dst, RCX));
         copy (offset_addressing src _1z) (offset_addressing dst _1z) (sz - 1)
       end in
   copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
@@ -193,11 +193,11 @@ let expand_builtin_vload_common chunk addr res =
   | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
      let addr' = offset_addressing addr _4z in
      if not (Asmgen.addressing_mentions addr res2) then begin
-	 emit (Pmovl_rm (res2,addr));
-	 emit (Pmovl_rm (res1,addr'))
+   emit (Pmovl_rm (res2,addr));
+   emit (Pmovl_rm (res1,addr'))
        end else begin
-	 emit (Pmovl_rm (res1,addr'));
-	 emit (Pmovl_rm (res2,addr))
+   emit (Pmovl_rm (res1,addr'));
+   emit (Pmovl_rm (res2,addr))
        end
   | Mfloat32, BR(FR res) ->
      emit (Pmovss_fm (res,addr))
@@ -338,6 +338,69 @@ let expand_fma args res i132 i213 i231 =
      invalid_arg ("ill-formed fma builtin")
 
 (* Handling of compiler-inlined builtins *)
+
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
+      (cmp : 'a -> 'a -> instruction)
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+  if a == b || a == c || b == c then begin
+      raise (Error "ill-formed majority vote")
+    end;
+  assert (a <> b && a <> c && b <> c);
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  side_emit (Plabel lbl_fix);
+  if a = res || b = res then begin
+      side_emit (mov res c);
+      emit (cmp a b);
+      emit (Pjcc (Cond_ne, lbl_fix));
+    end
+  else if c = res then begin
+      side_emit (mov res b);
+      emit (cmp a c);
+      emit (Pjcc (Cond_ne, lbl_fix));
+    end
+  else begin
+      side_emit (mov res c);
+      emit (cmp a b);
+      emit (Pjcc (Cond_ne, lbl_fix));
+      emit (mov res a);
+    end;
+  side_emit (Pjmp_l lbl_done);
+  emit (Plabel lbl_done)
+
+(** Majority vote integers. *)
+let maj_vote_int = maj_vote
+                     (fun x y -> Pmov_rr (x, y))
+                     (fun x y -> Pcmpl_rr (x, y))
+
+(** Majority vote floats. *)
+let maj_vote_float = maj_vote
+                       (fun x y -> Pmovsd_ff (x, y))
+                       (fun x y -> Pcomiss_ff (x, y))
+
+(** DMR checks. *)
+let check
+      (cmp : 'a -> 'a -> instruction)
+      (a : 'a) (b : 'a) : unit =
+  if a == b then begin
+      raise (Error "ill-formed DMR check")
+    end;
+  let lbl_done = new_label () in
+  let lbl_fault = new_label () in
+  side_emit (Plabel lbl_fault);
+  side_emit Pnop; (* TODO: do something *)
+  side_emit (Pjmp_l lbl_done);
+  emit (cmp a b);
+  emit (Pjcc (Cond_ne, lbl_fault));
+  emit (Plabel lbl_done)
+  
+(** Check integers. *)
+let check_int = check (fun x y -> Pcmpl_rr (x, y))
+
+(** Check floats. *)
+let check_float = check (fun x y -> Pcomiss_ff (x, y))
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -485,6 +548,53 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
+
+  (* Shadow move *)
+  | "__builtin_smove_int_green", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__builtin_smove_long_green", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__builtin_smove_single_green", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pmovsd_ff (res, a))
+  | "__builtin_smove_float_green", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pmovsd_ff (res, a))
+  | "__builtin_smove_int_blue", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__builtin_smove_long_blue", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov_rr (res, a))
+  | "__builtin_smove_single_blue", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pmovsd_ff (res, a))
+  | "__builtin_smove_float_blue", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pmovsd_ff (res, a))
+
+  (* Majority vote *)
+  | "__builtin_vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__builtin_vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__builtin_vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+  | "__builtin_vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+
+  (* DMR check *)
+  | "__builtin_check_int", [BA(IR a); BA(IR b)], BR_none ->
+     check_int a b
+  | "__builtin_check_long", [BA(IR a); BA(IR b)], BR_none ->
+     check_int a b
+  | "__builtin_check_single", [BA(FR a); BA(FR b)], BR_none ->
+     check_float a b
+  | "__builtin_check_float", [BA(FR a); BA(FR b)], BR_none ->
+     check_float a b
+
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
@@ -597,7 +707,7 @@ let expand_instruction instr =
      begin
        match ef with
        | EF_builtin(name, sg) ->
-	  expand_builtin_inline name args res
+    expand_builtin_inline (camlstring_of_coqstring name) args res
        | EF_vload chunk ->
           expand_builtin_vload chunk args res
        | EF_vstore chunk ->
@@ -689,7 +799,7 @@ let expand_function id fn =
     expand id (int_reg_to_dwarf RSP) preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
-    Errors.Error (Errors.msg s)
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
 let expand_fundef id = function
   | Internal f ->

@@ -156,7 +156,7 @@ let expand_annot_val kind txt targ args res =
 
 let offset_in_range ofs =
   let ofs = Z.to_int64 ofs in -2048L <= ofs && ofs < 2048L
-  
+
 let memcpy_small_arg sz arg tmp =
   match arg with
   | BA (IR r) ->
@@ -485,7 +485,7 @@ let expand_clz ~sixtyfour ~splitlong =
   (* N := bitsize of X's type (32 or 64) *)
   expand_loadimm32 X7 (coqint_of_camlint
                          (if sixtyfour || splitlong then 64l else 32l));
-  (* S := initial shift amount (16 or 32) *)                         
+  (* S := initial shift amount (16 or 32) *)
   expand_loadimm32 X8 (coqint_of_camlint (if sixtyfour then 32l else 16l));
   if splitlong then begin
     (* if (Xhigh == 0) goto lbl1 *)
@@ -526,7 +526,7 @@ let expand_ctz ~sixtyfour ~splitlong =
   (* N := bitsize of X's type (32 or 64) *)
   expand_loadimm32 X7 (coqint_of_camlint
                          (if sixtyfour || splitlong then 64l else 32l));
-  (* S := initial shift amount (16 or 32) *)                         
+  (* S := initial shift amount (16 or 32) *)
   expand_loadimm32 X8 (coqint_of_camlint (if sixtyfour then 32l else 16l));
   if splitlong then begin
     (* if (Xlow == 0) goto lbl1 *)
@@ -577,6 +577,102 @@ let expand_csel res cond arg1 arg2 =
         res = 0 ^ arg2 = arg2              if cond = 0 *)
 
 (* Handling of compiler-inlined builtins *)
+
+(* (\* Full sync version *\) *)
+(* (\** Generic majority vote. *\) *)
+(* let maj_vote *)
+(*       (mov : 'a -> 'a -> instruction) *)
+(*       (cmp_j : 'a -> 'a -> label -> instruction list) *)
+(*       (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit = *)
+(*   if a == b || a == c || b == c then begin *)
+(*     raise (Error "ill-formed majority vote") *)
+(*   end; *)
+(*   let lbl_done = new_label () in *)
+(*   let lbl_fix = new_label () in *)
+(*   side_emit (Plabel lbl_fix); *)
+(*   side_emit (mov res c); *)
+(*   side_emit (Pj_l lbl_done); *)
+(*   List.iter emit (cmp_j a b lbl_fix); *)
+(*       emit (mov res a); *)
+(*   emit (Plabel lbl_done) *)
+
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
+      (cmp_j : 'a -> 'a -> label -> instruction list)
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+  if a == b || a == c || b == c then begin
+      raise (Error "ill-formed majority vote")
+    end;
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  side_emit (Plabel lbl_fix);
+  if a = res || b = res then begin
+      List.iter emit (cmp_j a b lbl_fix); (* Compare a and b *)
+      side_emit (mov res c); (* If a != b, res := c *)
+    end
+  else if c = res then begin
+      List.iter emit (cmp_j a c lbl_fix); (* Compare a and c *)
+      side_emit (mov res b); (* If a != c, res := b *)
+    end
+  else begin
+      List.iter emit (cmp_j a b lbl_fix); (* Compare a and b *)
+      emit (mov res a); (* If a == b, res := a *)
+      side_emit (mov res c); (* If a != b, res := c *)
+    end;
+  side_emit (Pj_l lbl_done);
+  emit (Plabel lbl_done)
+
+(** Majority vote 32-bit integers. *)
+let maj_vote_int = maj_vote
+  (fun x y -> Pmv (x, y))
+  (fun x y lbl -> [Pbnew (X x, X y, lbl)])
+
+(** Majority vote 64-bit integers. *)
+let maj_vote_long = maj_vote
+  (fun x y -> Pmv (x, y))
+  (fun x y lbl -> [Pbnel (X x, X y, lbl)])
+
+(** Majority vote single-precision floats. *)
+let maj_vote_single = maj_vote
+  (fun x y -> Pfmv (x, y))
+  (fun x y lbl -> [Pfeqs (X31, x, y);
+    Pbeqw (X0, X X31, lbl)])
+
+(** Majority vote double-precision floats. *)
+let maj_vote_float = maj_vote
+  (fun x y -> Pfmv (x, y))
+  (fun x y lbl -> [Pfeqd (X31, x, y);
+    Pbeqw (X0, X X31, lbl)])
+
+(** DMR checks. *)
+let check
+      (cmp_j : 'a -> 'a -> label -> instruction list)
+      (a : 'a) (b : 'a) : unit =
+  if a == b then begin
+     raise (Error "ill-formed DMR check")
+  end;
+  let lbl_done = new_label () in
+  let lbl_fault = new_label () in
+  side_emit (Plabel lbl_fault);
+  side_emit Pnop; (* TODO: do something *)
+  side_emit (Pj_l lbl_done);
+  List.iter emit (cmp_j a b lbl_fault);
+  emit (Plabel lbl_done)
+
+(** Check 32-bit integers. *)
+let check_int = check (fun x y lbl -> [Pbnew (X x, X y, lbl)])
+
+(** Check 64-bit integers. *)
+let check_long = check (fun x y lbl -> [Pbnel (X x, X y, lbl)])
+
+(** Check single-precision floats. *)
+let check_single = check (fun x y lbl -> [Pfeqs (X31, x, y);
+  Pbeqw (X0, X X31, lbl)])
+
+(** Check double-precision floats. *)
+let check_float = check (fun x y lbl -> [Pfeqd (X31, x, y);
+  Pbeqw (X0, X X31, lbl)])
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -644,29 +740,29 @@ let expand_builtin_inline name args res =
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = ah) rl
-			(fun rl ->
-                         emit (Psltuw (X1, X0, X al));
-			 emit (Psubw (rl, X0, X al));
-			 emit (Psubw (rh, X0, X ah));
-			 emit (Psubw (rh, X rh, X X1)))
+      (fun rl ->
+       emit (Psltuw (X1, X0, X al));
+       emit (Psubw (rl, X0, X al));
+       emit (Psubw (rh, X0, X ah));
+       emit (Psubw (rh, X rh, X X1)))
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = bl || rl = ah || rl = bh) rl
-			(fun rl ->
-			 emit (Paddw (rl, X al, X bl));
-                         emit (Psltuw (X1, X rl, X bl));
-			 emit (Paddw (rh, X ah, X bh));
-			 emit (Paddw (rh, X rh, X X1)))
+      (fun rl ->
+       emit (Paddw (rl, X al, X bl));
+       emit (Psltuw (X1, X rl, X bl));
+       emit (Paddw (rh, X ah, X bh));
+       emit (Paddw (rh, X rh, X X1)))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = ah || rl = bh) rl
-			(fun rl ->
-                         emit (Psltuw (X1, X al, X bl));
-			 emit (Psubw (rl, X al, X bl));
-			 emit (Psubw (rh, X ah, X bh));
-			 emit (Psubw (rh, X rh, X X1)))
+      (fun rl ->
+       emit (Psltuw (X1, X al, X bl));
+       emit (Psubw (rl, X al, X bl));
+       emit (Psubw (rh, X ah, X bh));
+       emit (Psubw (rh, X rh, X X1)))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
      expand_int64_arith (rl = a || rl = b) rl
@@ -679,6 +775,41 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
+
+  (* Shadow move *)
+  | "__smove_int", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmv (res, a))
+  | "__smove_long", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmv (res, a))
+  | "__smove_single", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmv (res, a))
+  | "__smove_float", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmv (res, a))
+
+  (* Majority vote *)
+  | "__vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int a b c res
+  | "__vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_long a b c res
+  | "__vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_single a b c res
+  | "__vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float a b c res
+
+  (* DMR check *)
+  | "__builtin_check_int", [BA(IR a); BA(IR b)], BR_none ->
+     check_int a b
+  | "__builtin_check_long", [BA(IR a); BA(IR b)], BR_none ->
+     check_long a b
+  | "__builtin_check_single", [BA(FR a); BA(FR b)], BR_none ->
+     check_single a b
+  | "__builtin_check_float", [BA(FR a); BA(FR b)], BR_none ->
+     check_float a b
+
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
@@ -765,7 +896,7 @@ let expand_instruction instr =
   | Pbuiltin (ef,args,res) ->
      begin match ef with
      | EF_builtin (name,sg) ->
-        expand_builtin_inline name args res
+        expand_builtin_inline (camlstring_of_coqstring name) args res
      | EF_vload chunk ->
         expand_builtin_vload chunk args res
      | EF_vstore chunk ->
@@ -816,7 +947,7 @@ let expand_function id fn =
     expand id (* sp= *) 2 preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
-    Errors.Error (Errors.msg s)
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
 let expand_fundef id = function
   | Internal f ->

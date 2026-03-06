@@ -180,7 +180,7 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_extern,Storage_extern
     | Storage_default,Storage_default -> sto
     | _,Storage_static ->
-	error loc "static declaration of '%s' follows non-static declaration" s;
+        error loc "static declaration of '%s' follows non-static declaration" s;
         sto
     | Storage_static,_ -> Storage_static (* Static stays static *)
     | Storage_extern,_ -> if is_function_type env new_ty then Storage_extern else sto
@@ -196,8 +196,8 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     | Storage_auto,_
     | _,Storage_register
     | Storage_register,_ ->
-	error loc "unexpected %s declaration of '%s'"
-                  (name_of_storage_class sto) s;
+        error loc "unexpected %s declaration of '%s'"
+          (name_of_storage_class sto) s;
         sto
   in
     (new_sto, new_ty)
@@ -453,7 +453,7 @@ let elab_string_literal loc enc chars =
         (fun i c -> Bytes.set res i (Char.unsafe_chr (Int64.to_int c)))
         chars;
       CStr (Bytes.to_string res)
-  | EncWide | EncU16 | EncU32 -> 
+  | EncWide | EncU16 | EncU32 ->
       CWStr(chars, ik)
 
 let warn_C11_literals loc enc kind =
@@ -755,7 +755,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
      - A use of an already-defined struct/union/enum.  In this case
        the name-related attributes should go to the name being declared.
        Sending them to the struct/union/enum would cause them to be ignored,
-       with a warning.  The struct-related attributes go to the 
+       with a warning.  The struct-related attributes go to the
        struct/union/enum, are ignored, and cause a warning.
      - An incomplete declaration of a struct/union.  In this case
        the name- and struct-related attributes are just ignored,
@@ -815,7 +815,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
     | [Cabs.Tunsigned; Cabs.Tlong; Cabs.Tlong; Cabs.Tint] -> simple (TInt(IULongLong, []))
 
     | [Cabs.Tfloat] -> simple (TFloat(FFloat, []))
-    | [Cabs.Tfloat16] -> simple (TFloat(FFloat16, [])) 
+    | [Cabs.Tfloat16] -> simple (TFloat(FFloat16, []))
     | [Cabs.Tdouble] -> simple (TFloat(FDouble, []))
 
     | [Cabs.Tlong; Cabs.Tdouble] -> simple (TFloat(FLongDouble, []))
@@ -1115,7 +1115,7 @@ and elab_field_group env = function
 | Field_group_static_assert(exp, loc_exp, msg, loc_msg, loc) ->
     elab_static_assert env exp loc_exp msg loc_msg loc;
     ([], env)
-  
+
 (* Elaboration of a struct or union. C99 section 6.7.2.1 *)
 
 and elab_struct_or_union_info kind loc env members attrs =
@@ -1767,8 +1767,7 @@ type elab_context = {
   ctx_labels: StringSet.t;      (**r all labels defined in the function *)
   ctx_break: bool;              (**r is 'break' allowed? *)
   ctx_continue: bool;           (**r is 'continue' allowed? *)
-  ctx_in_switch: typ option;    (**r type of the controlling switch expression
-                                     or [None] outside of switch *)
+  ctx_in_switch: bool;          (**r are 'case' and 'default' allowed? *)
   ctx_vararg: bool;             (**r is this a vararg function? *)
   ctx_nonstatic_inline: bool    (**r is this a nonstatic inline function? *)
 }
@@ -1778,7 +1777,7 @@ type elab_context = {
 let ctx_constexp = {
   ctx_return_typ = TVoid [];
   ctx_labels = StringSet.empty;
-  ctx_break = false; ctx_continue = false; ctx_in_switch = None;
+  ctx_break = false; ctx_continue = false; ctx_in_switch = false;
   ctx_vararg = false; ctx_nonstatic_inline = false
 }
 
@@ -2112,7 +2111,7 @@ let elab_expr ctx loc env a =
       | _ -> fatal_error "request for member '%s' in something not a structure or union" mem in
     let rec offset_of_list acc env ty = function
       | [] -> acc,ty
-      | fld::rest -> 
+      | fld::rest ->
         if fld.fld_bitfield <> None then
           fatal_error "cannot compute offset of bit-field '%s'" fld.fld_name;
         let off = offsetof env ty fld in
@@ -3064,7 +3063,7 @@ let stmt_labels stmt =
 
 let ctx_loop ctx = { ctx with ctx_break = true; ctx_continue = true }
 
-let ctx_switch ctx ty = { ctx with ctx_break = true; ctx_in_switch = Some ty }
+let ctx_switch ctx = { ctx with ctx_break = true; ctx_in_switch = true }
 
 (* Check the uniqueness of 'case' and 'default' in a 'switch' *)
 
@@ -3126,11 +3125,9 @@ let rec elab_stmt env ctx s =
       { sdesc = Slabeled(Slabel lbl, s1); sloc = elab_loc loc },env
 
   | CASE(a, s1, loc) ->
+      if not ctx.ctx_in_switch then
+        error loc "'case' statement not in switch statement";
       let a',env = elab_expr ctx loc env a in
-      let a' = match ctx.ctx_in_switch with
-        | None -> error loc "'case' statement not in switch statement"; a'
-        | Some ((TInt _) as ty) -> ecast ty a'
-        | _ -> a' in
       let n =
         match Ceval.integer_expr env a' with
         | None ->
@@ -3140,8 +3137,7 @@ let rec elab_stmt env ctx s =
       { sdesc = Slabeled(Scase(a', n), s1); sloc = elab_loc loc },env
 
   | DEFAULT(s1, loc) ->
-      (*- #Link_to E_COMPCERT_TR_Robustness_ELAB_141 *)
-      if ctx.ctx_in_switch = None then
+      if not ctx.ctx_in_switch then
         error loc "'case' statement not in switch statement";
       let s1,env = elab_stmt env ctx s1 in
       { sdesc = Slabeled(Sdefault, s1); sloc = elab_loc loc },env
@@ -3221,7 +3217,7 @@ let rec elab_stmt env ctx s =
       if not (is_integer_type env' a'.etyp) then
         error loc "controlling expression of 'switch' does not have integer type (%a invalid)"
           (print_typ env') a'.etyp;
-      let s1' = elab_stmt_new_scope env' (ctx_switch ctx (unary_conversion env a'.etyp)) s1 in
+      let s1' = elab_stmt_new_scope env' (ctx_switch ctx) s1 in
       check_switch_cases s1';
       { sdesc = Sswitch(a', s1'); sloc = elab_loc loc },env
 
@@ -3330,7 +3326,7 @@ let elab_funbody return_typ vararg nonstatic_inline env b =
       ctx_labels = stmt_labels b;
       ctx_break = false;
       ctx_continue = false;
-      ctx_in_switch = None;
+      ctx_in_switch = false;
       ctx_vararg = vararg;
       ctx_nonstatic_inline = nonstatic_inline } in
   (* The function body appears as a block in the AST but should not create

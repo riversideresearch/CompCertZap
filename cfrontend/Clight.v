@@ -247,6 +247,9 @@ Inductive assign_loc (ce: composite_env) (ty: type) (m: mem) (b: block) (ofs: pt
       store_bitfield ty sz sg pos width m (Vptr b ofs) v m' v' ->
       assign_loc ce ty m b ofs (Bits sz sg pos width) v m'.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section SEMANTICS.
 
 Variable ge: genv.
@@ -755,3 +758,5 @@ Proof.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 Qed.
+
+End VOTE.

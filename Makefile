@@ -34,6 +34,8 @@ ifeq ($(CLIGHTGEN),true)
 DIRS += export
 endif
 
+DIRS += import
+
 COQINCLUDES := $(foreach d, $(DIRS), -R $(d) compcert.$(d))
 
 ifeq ($(LIBRARY_FLOCQ),local)
@@ -162,11 +164,17 @@ BACKEND=\
   SelectLongproof.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
+  RTLreplicateSpecCommon.v \
+  RTLdmr.v RTLdmrspec.v RTLdmrproof.v \
+  RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
+  RTLagreement.v RTLfault.v RTLtolerant.v \
+  RTLcolor.v RTLcolorcheck.v \
+  Novotes.v Novotesproof.v \
   Tailcall.v Tailcallproof.v \
   Inlining.v Inliningspec.v Inliningproof.v \
   Renumber.v Renumberproof.v \
   RTLtyping.v \
-  Kildall.v Liveness.v \
+  Kildall.v Liveness.v ProofLiveness.v \
   ValueDomain.v ValueAOp.v ValueAnalysis.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CSEdomain.v CombineOp.v CSE.v CombineOpproof.v CSEproof.v \
@@ -181,7 +189,8 @@ BACKEND=\
   Debugvar.v Debugvarproof.v \
   Mach.v \
   Bounds.v Stacklayout.v Stacking.v Stackingproof.v \
-  Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v
+  Asm.v Asmgen.v Asmgenproof0.v Asmgenproof1.v Asmgenproof.v \
+  Asmagreement.v
 
 # C front-end modules (in cfrontend/)
 
@@ -218,10 +227,12 @@ else
 EXPORTLIB=
 endif
 
+IMPORT=ImportPrelude.v ImportProgram.v
+
 # All source files
 
 FILES=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
-  $(MENHIRLIB) $(PARSER) $(EXPORTLIB)
+  $(MENHIRLIB) $(PARSER) $(EXPORTLIB) $(IMPORT)
 
 # Generated source files
 
@@ -241,6 +252,7 @@ endif
 ifeq ($(CLIGHTGEN),true)
 	$(MAKE) clightgen
 endif
+	$(MAKE) vcomp
 ifeq ($(INSTALL_COQDEV),true)
 	$(MAKE) compcert.config
 endif
@@ -271,6 +283,11 @@ clightgen: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen
 clightgen.byte: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen.byte
+
+vcomp: .depend.extr compcert.ini driver/Version.ml FORCE
+	$(MAKE) -f Makefile.extr vcomp
+vcomp.byte: .depend.extr compcert.ini driver/Version.ml FORCE
+	$(MAKE) -f Makefile.extr vcomp.byte
 
 runtime:
 	$(MAKE) -C runtime
@@ -377,6 +394,7 @@ install:
 ifeq ($(CLIGHTGEN),true)
 	install -m 0755 ./clightgen $(DESTDIR)$(BINDIR)
 endif
+	install -m 0755 ./vcomp $(DESTDIR)$(BINDIR)
 ifeq ($(INSTALL_COQDEV),true)
 	install -d $(DESTDIR)$(COQDEVDIR)
 	for d in $(DIRS); do \
@@ -406,6 +424,7 @@ clean:
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(GENERATED) .depend
 	rm -f .lia.cache
+	rm -f vcomp
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 

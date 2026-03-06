@@ -19,6 +19,7 @@ Require Intv.
 Require Import AST Linking.
 Require Import Values Memory Events Globalenvs Smallstep.
 Require Import Csharpminor Switch Cminor Cminorgen.
+Require Import ProofIrrelevance.
 
 Local Open Scope error_monad_scope.
 
@@ -30,6 +31,9 @@ Lemma transf_program_match:
 Proof.
   intros. apply match_transform_partial_program; auto.
 Qed.
+
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section TRANSLATION.
 
@@ -1103,8 +1107,8 @@ Qed.
 
 Fixpoint set_params' (vl: list val) (il: list ident) (te: Cminor.env) : Cminor.env :=
   match il, vl with
-  | i1 :: il, v1 :: vl => set_params' vl il (PTree.set i1 v1 te)
-  | i1 :: il, nil => set_params' nil il (PTree.set i1 Vundef te)
+  | i1 :: is, v1 :: vs => set_params' vs is (PTree.set i1 v1 te)
+  | i1 :: is, nil => set_params' nil is (PTree.set i1 Vundef te)
   | _, _ => te
   end.
 
@@ -1960,6 +1964,7 @@ Proof.
   apply plus_one. constructor.
   eapply match_state_seq; eauto.
   exploit IHMK; eauto. intros [T2 [A B]].
+  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split. eapply plus_left. constructor. apply plus_star; eauto. traceEq.
   auto.
 (* skip block *)
@@ -1969,6 +1974,7 @@ Proof.
   apply plus_one. constructor.
   econstructor; eauto.
   exploit IHMK; eauto. intros [T2 [A B]].
+  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split. eapply plus_left. constructor. apply plus_star; eauto. traceEq.
   auto.
 (* skip call *)
@@ -2084,8 +2090,10 @@ Opaque PTree.set.
   apply plus_one. constructor.
   econstructor; eauto. simpl. auto.
   exploit IHMK; eauto. intros [T2 [A B]].
+  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split; auto. eapply plus_left. constructor. apply plus_star; eauto. traceEq.
   exploit IHMK; eauto. intros [T2 [A B]].
+  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split; auto. eapply plus_left.
   simpl. constructor. apply plus_star; eauto. traceEq.
 
@@ -2096,6 +2104,7 @@ Opaque PTree.set.
   simpl. apply plus_one. constructor.
   econstructor; eauto.
   exploit IHMK; eauto. intros [T2 [A B]].
+  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split; auto. simpl.
   eapply plus_left. constructor. apply plus_star; eauto. traceEq.
 
@@ -2106,6 +2115,7 @@ Opaque PTree.set.
   simpl. apply plus_one. constructor.
   econstructor; eauto. auto.
   exploit IHMK; eauto. intros [T2 [A B]].
+  replace vsem with vsem0 by apply proof_irrelevance.
   exists T2; split; auto. simpl.
   eapply plus_left. constructor. apply plus_star; eauto. traceEq.
 
@@ -2258,3 +2268,4 @@ Qed.
 
 End TRANSLATION.
 
+End VOTE.

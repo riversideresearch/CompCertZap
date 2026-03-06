@@ -179,6 +179,9 @@ Inductive state : Type :=
              (m: mem),                (**r memory state *)
       state.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section RELSEM.
 
 Variable ge: genv.
@@ -356,6 +359,41 @@ Proof.
   red; intros; inv H; simpl; try lia.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
+Qed.
+
+(* Derived from x86 [Asm.semantics_determinate]. *)
+Lemma semantics_determinate :
+  forall p, determinate (semantics p).
+Proof.
+  Ltac Equalities :=
+    match goal with
+    | [ H1: ?a = ?b, H2: ?a = ?c |- _ ] =>
+        rewrite H1 in H2; inv H2; Equalities
+    | _ => idtac
+    end.
+  intros; constructor; simpl; intros.
+  - (* determ *)
+    inv H; inv H0; Equalities; try solve [split; try constructor; auto].
+    + assert (vargs0 = vargs) by (eapply eval_builtin_args_determ; eauto). subst vargs0.
+      exploit external_call_determ. eexact H3. eexact H13. intros [A B].
+      split. auto. intros. destruct B; auto. subst. auto.
+    + exploit external_call_determ. eexact H1. eexact H7. intros [A B].
+      split. auto. intros. destruct B; auto. subst. auto.
+  - (* trace length *)
+    red; intros; inv H; simpl; try lia.
+    eapply external_call_trace_length; eauto.
+    eapply external_call_trace_length; eauto.
+  - (* initial states *)
+    inv H; inv H0.
+    unfold ge in *.
+    unfold ge0 in *.
+    f_equal; congruence.    
+  - (* final no step *)
+    assert (NOTNULL: forall b ofs, Vnullptr <> Vptr b ofs).
+    { intros; unfold Vnullptr; destruct Archi.ptr64; congruence. }
+    inv H. red; intros; red; intros. inv H; rewrite H0 in *; eelim NOTNULL; eauto.
+  - (* final states *)
+    inv H; inv H0. congruence.
 Qed.
 
 (** * Operations on RTL abstract syntax *)
@@ -608,3 +646,756 @@ Proof.
   simpl in H1. rewrite F1 in H1. apply Genv.find_funct_ptr_iff in H1.
   exists name, sg; intuition congruence.
 Qed. 
+
+End VOTE.
+
+
+(** Helpers for CompCertZap *)
+
+Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
+  match arg with
+  | BA r => r :: nil
+  | BA_splitlong hi lo => regs_of_builtin_arg hi ++ regs_of_builtin_arg lo
+  | BA_addptr a1 a2 => regs_of_builtin_arg a1 ++ regs_of_builtin_arg a2
+  | _ => nil
+  end.
+
+(** Pull out registers from builtin_args. *)
+Fixpoint regs_of_builtin_args (args : list (builtin_arg reg)) : list reg :=
+  match args with
+  | nil => nil
+  | ba :: rest => regs_of_builtin_arg ba ++ regs_of_builtin_args rest
+  end.
+
+Definition regs_of_fn (fn : reg + ident) : list reg :=
+  match fn with
+  | inl r => r :: nil
+  | inr _ => nil
+  end.
+
+Definition args_of_instruction (instr : instruction) : list reg :=
+  match instr with
+  | Inop _ => nil
+  | Iop _ args _ _ => args
+  | Iload _  _ args _ _ => args
+  | Istore _ _ args src _ => src :: args
+  | Icall _ fn args _ _ => regs_of_fn fn ++ args
+  | Itailcall _ fn args => regs_of_fn fn ++ args
+  | Ibuiltin _ args _ _ => regs_of_builtin_args args
+  | Icond _ args _ _ => args
+  | Ijumptable arg _ => arg :: nil
+  | Ireturn (Some r) => r :: nil
+  | Ireturn None => nil
+  end.
+
+Definition inb (p : positive) (l : list positive) : bool :=
+  existsb (fun x => Pos.eqb x p) l.
+
+Lemma inb_spec (p : positive) (l : list positive) :
+  reflect (In p l) (inb p l).
+Proof.
+  revert p; induction l; intros; simpl.
+  { right; auto. }
+  destruct (peq a p); subst.
+  - rewrite Pos.eqb_refl; left; left; reflexivity.
+  - destruct (IHl p).
+    + rewrite orb_true_r; left; right; assumption.
+    + apply Pos.eqb_neq in n; rewrite n; right; intros [H|H]; subst.
+      * rewrite Pos.eqb_refl in n; discriminate.
+      * contradiction.
+Qed.
+
+Lemma not_in_inb x l :
+  ~ In x l ->
+  inb x l = true ->
+  False.
+Proof. intros Hnotin Hinb; destruct (inb_spec x l); congruence. Qed.
+
+Fixpoint dedup (l : list positive) : list positive :=
+  match l with
+  | nil => nil
+  | x :: xs =>
+      let l' := dedup xs in
+      if inb x l' then l' else x :: l'
+  end.
+
+Lemma in_dedup (p : positive) (l : list positive) :
+  In p (dedup l) -> In p l.
+Proof.
+  revert p; induction l; simpl; intros p Hin; auto.
+  destruct (inb_spec a (dedup l)).
+  - right; apply IHl; assumption.
+  - inv Hin.
+    + left; reflexivity.
+    + right; apply IHl; assumption.
+Qed.
+
+Definition succ_of_instruction (instr : instruction) : option node :=
+  match instr with
+  | Inop succ => Some succ
+  | Iop _ _ _ succ => Some succ
+  | Iload _ _ _ _ succ => Some succ
+  | Istore _ _ _ _ succ => Some succ
+  | Icall _ _ _ _ succ => Some succ
+  | Ibuiltin _ _ _ succ => Some succ
+  | _ => None
+  end.
+
+(* Includes Icond and Ijumptable *)
+Definition succs_of_instruction (instr : instruction) : list node :=
+  match instr with
+  | Inop succ => succ :: nil
+  | Iop _ _ _ succ => succ :: nil
+  | Iload _ _ _ _ succ => succ :: nil
+  | Istore _ _ _ _ succ => succ :: nil
+  | Icall _ _ _ _ succ => succ :: nil
+  | Ibuiltin _ _ _ succ => succ :: nil
+  | Icond _ _ ifso ifnot => ifso :: ifnot :: nil
+  | Ijumptable _ succs => succs
+  | _ => nil
+  end.
+
+(** Modify [instr] to jump to [new_succ]. *)
+Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
+  match instr with
+  | Inop _ => Inop new_succ
+  | Iop op args dst _ => Iop op args dst new_succ
+  | Iload chunk addr args dst _ => Iload chunk addr args dst new_succ
+  | Istore chunk addr args src _ => Istore chunk addr args src new_succ
+  | Icall sig fn args dst _ => Icall sig fn args dst new_succ
+  | Ibuiltin ef args dst _ => Ibuiltin ef args dst new_succ
+  | _ => instr
+  end.
+
+(** This ignores the recursive cases because according to
+    [exec_Ibuiltin] (specifically [regmap_setres]) the result is used
+    only in the [BR] case.  *)
+Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
+  match res with
+  | BR r => Some r
+  | _ => None
+  end.
+
+(** Result register of instruction. *)
+Definition res_of_instruction (instr : instruction) : option reg :=
+  match instr with
+  | Iop _ _ res _ => Some res
+  | Iload _ _ _ res _ => Some res
+  | Icall _ _ _ res _ => Some res
+  | Ibuiltin _ _ res _ => reg_of_builtin_res res
+  | _ => None
+  end.
+
+Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
+| in_builtin_arg_BA : in_builtin_arg a (BA a)
+| in_builtin_arg_splitlong_hi : forall hi lo,
+    in_builtin_arg a hi ->
+    in_builtin_arg a (BA_splitlong hi lo)
+| in_builtin_arg_splitlong_lo : forall hi lo,
+    in_builtin_arg a lo ->
+    in_builtin_arg a (BA_splitlong hi lo)
+| in_builtin_arg_addptr_a1 : forall a1 a2,
+    in_builtin_arg a a1 ->
+    in_builtin_arg a (BA_addptr a1 a2)
+| in_builtin_arg_addptr_a2 : forall a1 a2,
+    in_builtin_arg a a2 ->
+    in_builtin_arg a (BA_addptr a1 a2).
+
+Fixpoint in_builtin_argb (r : reg) (barg : builtin_arg reg) : bool :=
+  match barg with
+  | BA r' => Pos.eqb r r'
+  | BA_splitlong hi lo => in_builtin_argb r hi || in_builtin_argb r lo
+  | BA_addptr a b => in_builtin_argb r a || in_builtin_argb r b
+  | _ => false
+  end.
+
+Lemma in_builtin_argb_spec (r : reg) (barg : builtin_arg reg) :
+  reflect (in_builtin_arg r barg) (in_builtin_argb r barg).
+Proof.
+  induction barg; simpl; try solve [right; intro HC; inv HC].
+  - destruct (Pos.eqb_spec r x); subst.
+    + left; constructor.
+    + right; intro HC; inv HC; congruence.
+  - destruct IHbarg1; simpl.
+    + left; constructor; auto.
+    + destruct IHbarg2; simpl.
+      * left; solve [constructor; auto].
+      * right; intro HC; inv HC; contradiction.
+  - destruct IHbarg1; simpl.
+    + left; constructor; auto.
+    + destruct IHbarg2; simpl.
+      * left; solve [constructor; auto].
+      * right; intro HC; inv HC; contradiction.
+Qed.
+
+Lemma in_builtin_argb_sound (r : reg) (barg : builtin_arg reg) :
+  in_builtin_argb r barg = true -> in_builtin_arg r barg.
+Proof. destruct (in_builtin_argb_spec r barg); congruence. Qed.
+
+Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
+  In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.
+Proof.
+  split.
+  - induction barg; simpl; intro Hin; try contradiction;
+      try (destruct Hin; subst; try contradiction; constructor);
+      apply in_app_or in Hin; destruct Hin as [Hin | Hin];
+      solve [constructor; auto].
+  - induction barg; simpl; intro Hin; inv Hin; auto; apply in_or_app; auto.
+Qed.
+
+Lemma in_regs_of_builtin_args_exists_in_builtin_arg r bargs :
+  In r (regs_of_builtin_args bargs) <-> Exists (in_builtin_arg r) bargs.
+Proof.
+  split.
+  - induction bargs; simpl; intro Hin; try contradiction.
+    apply in_app_or in Hin.
+    destruct Hin as [Hin | Hin].
+    + constructor; apply in_regs_of_builtin_arg_in_builtin_arg; auto.
+    + right; auto.
+  - induction bargs; simpl; intro Hin; inv Hin.
+    + apply in_or_app; left.
+      apply in_regs_of_builtin_arg_in_builtin_arg; auto.
+    + apply in_or_app; right; auto.
+Qed.
+
+Inductive in_builtin_res {A : Type} (a : A) : builtin_res A -> Prop :=
+| in_builtin_res_BR : in_builtin_res a (BR a)
+| in_builtin_res_splitlong_hi : forall hi lo,
+    in_builtin_res a hi ->
+    in_builtin_res a (BR_splitlong hi lo)
+| in_builtin_res_splitlong_lo : forall hi lo,
+    in_builtin_res a lo ->
+    in_builtin_res a (BR_splitlong hi lo).
+
+Fixpoint in_builtin_resb (r : reg) (bres : builtin_res reg) : bool :=
+  match bres with
+  | BR r' => Pos.eqb r r'
+  | BR_none => false
+  | BR_splitlong hi lo => in_builtin_resb r hi || in_builtin_resb r lo
+  end.
+
+Lemma in_builtin_resb_spec (r : reg) (bres : builtin_res reg) :
+  reflect (in_builtin_res r bres) (in_builtin_resb r bres).
+Proof.
+  induction bres; simpl; try solve [right; intro HC; inv HC].
+  - destruct (Pos.eqb_spec r x); subst.
+    + left; constructor.
+    + right; intro HC; inv HC; congruence.
+  - destruct IHbres1; simpl.
+    + left; constructor; auto.
+    + destruct IHbres2; simpl.
+      * left; solve [constructor; auto].
+      * right; intro HC; inv HC; contradiction.
+Qed.
+
+Lemma in_builtin_resb_sound (r : reg) (bres : builtin_res reg) :
+  in_builtin_resb r bres = true -> in_builtin_res r bres.
+Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
+
+(* Design note: maybe we can just assume faulted floats aren't NaN,
+   and then the conversions from single/float to int/long will always
+   succeed and we can consider them safe?
+
+   It seems that considering NaN conversions to int/long to be
+   immediate UB is a CompCert choice that isn't necessarily dictated
+   by the C standard.
+
+   Also: this might need to go into backend specific Op.v
+   file. And should it be called something else? 'is_protected'?
+ *)
+Inductive is_protected : operation -> Prop :=
+(* Because division by zero causes immediate UB (see [Val.divs] in
+   common/Values.v) *)
+| is_protected_Odiv : is_protected Odiv
+| is_protected_Odivu : is_protected Odivu
+| is_protected_Omod : is_protected Omod
+| is_protected_Omodu : is_protected Omodu
+| is_protected_Odivl : is_protected Odivl
+| is_protected_Odivlu : is_protected Odivlu
+| is_protected_Omodl : is_protected Omodl
+| is_protected_Omodlu : is_protected Omodlu
+
+(* Trying to convert NaN (and maybe something else) causes immediate
+   UB (see Val.intoffloat in common/Values.v) *)
+| is_protected_Ointofsingle : is_protected Ointofsingle
+| is_protected_Ointoffloat : is_protected Ointoffloat
+| is_protected_Olongofsingle : is_protected Olongofsingle
+| is_protected_Olongoffloat : is_protected Olongoffloat
+
+(* Shifting more than the archi word size is immediate UB (see Val.shl
+   in common/Values.v) *)
+| is_protected_Oshl : is_protected Oshl
+| is_protected_Oshr : is_protected Oshr
+| is_protected_Oshru : is_protected Oshru
+| is_protected_Oshll : is_protected Oshll
+| is_protected_Oshrl : is_protected Oshrl
+| is_protected_Oshrlu : is_protected Oshrlu
+
+(* Subtracting pointers in different blocks causes immediate UB (see
+   [Val.subl] in common/Values.v) *)
+| is_protected_Osubl : Archi.ptr64 = true -> is_protected Osubl
+
+(* A faulty selection can cause the faulty execution to take Vundef
+   into a register that the normal execution has a defined value for,
+   and subsequently encounter UB that the normal execution avoids. See
+   [Val.select] in common/Values.v. *)
+| is_protected_Osel : forall cond ty, is_protected (Osel cond ty)
+
+(* Comparing pointers in different blocks or comparing a pointer with
+   a nonzero integer causes immediate UB. *)
+| is_protected_Ocmp_Ccompu : forall c, Archi.ptr64 = false ->
+                               is_protected (Ocmp (Ccompu c))
+| is_protected_Ocmp_Ccompuimm : forall c n, Archi.ptr64 = false ->
+                                    is_protected (Ocmp (Ccompuimm c n))
+| is_protected_Ocmp_Ccomplu : forall c, Archi.ptr64 = true ->
+                                is_protected (Ocmp (Ccomplu c))
+| is_protected_Ocmp_Ccompluimm : forall c n, Archi.ptr64 = true ->
+                                     is_protected (Ocmp (Ccompluimm c n))
+.
+
+Definition is_protectedb (op : operation) : bool :=
+  match op with
+  | Odiv | Odivu | Omod | Omodu
+  | Odivl | Odivlu | Omodl | Omodlu
+  | Ointofsingle | Ointoffloat => true
+  | Olongofsingle | Olongoffloat => true
+  | Oshl | Oshr | Oshru | Oshll | Oshrl | Oshrlu => true
+  | Osubl => Archi.ptr64
+  | Osel _ _ => true
+  | Ocmp (Ccompu _) | Ocmp (Ccompuimm _ _) => negb Archi.ptr64
+  | Ocmp (Ccomplu _) | Ocmp (Ccompluimm _ _) => Archi.ptr64
+  | _ => false
+  end.
+
+Lemma is_protectedb_spec (op : operation) : reflect (is_protected op) (is_protectedb op).
+Proof.
+  destruct op; try solve [right; intro HC; inv HC];
+    try left; try constructor; auto.
+  destruct cond; simpl; try solve [right; intro HC; inv HC].
+  - destruct Archi.ptr64 eqn:Harchi; simpl.
+    + right; intro HC; inv HC; congruence.
+    + left; constructor; assumption.
+  - destruct Archi.ptr64 eqn:Harchi; simpl.
+    + right; intro HC; inv HC; congruence.
+    + left; constructor; assumption.
+  - destruct Archi.ptr64 eqn:Harchi; simpl.
+    + left; constructor; assumption.
+    + right; intro HC; inv HC; congruence.
+  - destruct Archi.ptr64 eqn:Harchi; simpl.
+    + left; constructor; assumption.
+    + right; intro HC; inv HC; congruence.
+Qed.
+
+Lemma is_protected_subl_archi_ptr64_false :
+  ~ is_protected Op.Osubl ->
+  Archi.ptr64 = false.
+Proof.
+  intro H.
+  destruct Archi.ptr64 eqn:Harchi; auto.
+  exfalso; apply H; constructor; assumption.
+Qed.
+
+Inductive is_compu : condition -> Prop :=
+| is_compu_CCompu : forall c, is_compu (Ccompu c)
+| is_compu_CCompuimm : forall c n, is_compu (Ccompuimm c n).
+
+Inductive is_complu : condition -> Prop :=
+| is_compu_CComplu : forall c, is_complu (Ccomplu c)
+| is_compu_CCompluimm : forall c n, is_complu (Ccompluimm c n).
+
+Fixpoint builtin_res_forall {A : Type} (P : A -> Prop) (bres : builtin_res A) : Prop :=
+  match bres with
+  | BR x => P x
+  | BR_none => True
+  | BR_splitlong hi lo => builtin_res_forall P hi /\ builtin_res_forall P lo
+  end.
+
+Lemma builtin_res_forall_impl {A : Type} (P Q : A -> Prop ) bres :
+  (forall a, P a -> Q a) ->
+  builtin_res_forall P bres ->
+  builtin_res_forall Q bres.
+Proof.
+  induction bres; simpl; intros Hpq Hforall; auto;
+    destruct Hforall; auto.
+Qed.
+
+Fixpoint builtin_res_forallb {A : Type} (f : A -> bool) (bres : builtin_res A) : bool :=
+  match bres with
+  | BR x => f x
+  | BR_none => true
+  | BR_splitlong hi lo => builtin_res_forallb f hi && builtin_res_forallb f lo
+  end.
+
+Lemma builtin_res_forallb_spec {A : Type} (f : A -> bool) (bres : builtin_res A) :
+  reflect (builtin_res_forall (fun a => f a = true) bres) (builtin_res_forallb f bres).
+Proof.
+  induction bres; simpl; try left; auto.
+  - destruct (f x); solve [constructor; auto].
+  - destruct IHbres1; simpl.
+    + destruct IHbres2; simpl.
+      * left; split; auto.
+      * right; intros [H0 H1]; congruence.
+    + right; intros [H0 H1]; congruence.
+Qed.
+
+Lemma builtin_res_forallb_sound {A : Type} (f : A -> bool) (bres : builtin_res A) :
+  builtin_res_forallb f bres = true -> builtin_res_forall (fun a => f a = true) bres.
+Proof. destruct (builtin_res_forallb_spec f bres); congruence. Qed.
+
+Lemma in_builtin_arg_forall {A : Type} (P : A -> Prop) barg x :
+  builtin_arg_forall P barg ->
+  in_builtin_arg x barg ->
+  P x.
+Proof.
+  revert x; induction barg; simpl; intros y Hforall Hin; inv Hin; auto;
+    try solve [apply IHbarg1; intuition]; apply IHbarg2; intuition.
+Qed.
+
+Lemma in_builtin_res_forall {A : Type} (P : A -> Prop) bres x :
+  builtin_res_forall P bres ->
+  in_builtin_res x bres ->
+  P x.
+Proof.
+  revert x; induction bres; simpl; intros y Hforall Hin; inv Hin; auto;
+    destruct Hforall as [H1 H2]; auto.
+Qed.
+
+Inductive is_green_smove_builtin : external_function -> Prop :=
+| is_green_smove_int :
+  is_green_smove_builtin (EF_builtin "__builtin_smove_int_green"
+                            [Xint ---> Xint]%asttyp)
+| is_green_smove_long :
+  is_green_smove_builtin (EF_builtin "__builtin_smove_long_green"
+                            [Xlong ---> Xlong]%asttyp)
+| is_green_smove_single :
+  is_green_smove_builtin (EF_builtin "__builtin_smove_single_green"
+                            [Xsingle ---> Xsingle]%asttyp)
+| is_green_smove_float :
+  is_green_smove_builtin (EF_builtin "__builtin_smove_float_green"
+                            [Xfloat ---> Xfloat]%asttyp).
+
+Definition is_green_smove_builtinb (ef : external_function) : bool :=
+  match ef with
+  | EF_builtin name sg =>
+      (String.eqb name "__builtin_smove_int_green" &&
+         proj_sumbool (signature_eq sg
+                         [Xint ---> Xint]%asttyp)) ||
+        (String.eqb name "__builtin_smove_long_green" &&
+           proj_sumbool (signature_eq sg
+                           [Xlong ---> Xlong]%asttyp)) ||
+        (String.eqb name "__builtin_smove_single_green" &&
+           proj_sumbool (signature_eq sg
+                           [Xsingle ---> Xsingle]%asttyp)) ||
+        (String.eqb name "__builtin_smove_float_green" &&
+           proj_sumbool (signature_eq sg
+                           [Xfloat ---> Xfloat]%asttyp))
+  | _ => false
+  end.
+
+Lemma is_green_smove_builtinb_spec (ef : external_function) :
+  reflect (is_green_smove_builtin ef) (is_green_smove_builtinb ef).
+Proof.
+  destruct ef; try solve [right; intro HC; inv HC].
+  simpl.
+  destruct (String.eqb name "__builtin_smove_single_green") eqn:H0.
+  { rewrite String.eqb_eq in H0; subst.
+    destruct (signature_eq sg
+                [Xsingle ---> Xsingle]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H0.
+  destruct (String.eqb name "__builtin_smove_int_green") eqn:H1.
+  { rewrite String.eqb_eq in H1; subst.
+    destruct (signature_eq sg
+                [Xint ---> Xint]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H1.
+  destruct (String.eqb name "__builtin_smove_float_green") eqn:H2.
+  { rewrite String.eqb_eq in H2; subst.
+    destruct (signature_eq sg
+                [Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H2.
+  destruct (String.eqb name "__builtin_smove_long_green") eqn:H3.
+  { rewrite String.eqb_eq in H3; subst.
+    destruct (signature_eq sg
+                [Xlong ---> Xlong]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H3.
+  right; intro HC; inv HC; congruence.
+Qed.
+
+Inductive is_blue_smove_builtin : external_function -> Prop :=
+| is_blue_smove_int :
+  is_blue_smove_builtin (EF_builtin "__builtin_smove_int_blue"
+                            [Xint ---> Xint]%asttyp)
+| is_blue_smove_long :
+  is_blue_smove_builtin (EF_builtin "__builtin_smove_long_blue"
+                            [Xlong ---> Xlong]%asttyp)
+| is_blue_smove_single :
+  is_blue_smove_builtin (EF_builtin "__builtin_smove_single_blue"
+                            [Xsingle ---> Xsingle]%asttyp)
+| is_blue_smove_float :
+  is_blue_smove_builtin (EF_builtin "__builtin_smove_float_blue"
+                            [Xfloat ---> Xfloat]%asttyp).
+
+Definition is_blue_smove_builtinb (ef : external_function) : bool :=
+  match ef with
+  | EF_builtin name sg =>
+      (String.eqb name "__builtin_smove_int_blue" &&
+         proj_sumbool (signature_eq sg
+                         [Xint ---> Xint]%asttyp)) ||
+        (String.eqb name "__builtin_smove_long_blue" &&
+           proj_sumbool (signature_eq sg
+                           [Xlong ---> Xlong]%asttyp)) ||
+        (String.eqb name "__builtin_smove_single_blue" &&
+           proj_sumbool (signature_eq sg
+                           [Xsingle ---> Xsingle]%asttyp)) ||
+        (String.eqb name "__builtin_smove_float_blue" &&
+           proj_sumbool (signature_eq sg
+                           [Xfloat ---> Xfloat]%asttyp))
+  | _ => false
+  end.
+
+Lemma is_blue_smove_builtinb_spec (ef : external_function) :
+  reflect (is_blue_smove_builtin ef) (is_blue_smove_builtinb ef).
+Proof.
+  destruct ef; try solve [right; intro HC; inv HC].
+  simpl.
+  destruct (String.eqb name "__builtin_smove_single_blue") eqn:H0.
+  { rewrite String.eqb_eq in H0; subst.
+    destruct (signature_eq sg
+                [Xsingle ---> Xsingle]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H0.
+  destruct (String.eqb name "__builtin_smove_int_blue") eqn:H1.
+  { rewrite String.eqb_eq in H1; subst.
+    destruct (signature_eq sg
+                [Xint ---> Xint]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H1.
+  destruct (String.eqb name "__builtin_smove_float_blue") eqn:H2.
+  { rewrite String.eqb_eq in H2; subst.
+    destruct (signature_eq sg
+                [Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H2.
+  destruct (String.eqb name "__builtin_smove_long_blue") eqn:H3.
+  { rewrite String.eqb_eq in H3; subst.
+    destruct (signature_eq sg
+                [Xlong ---> Xlong]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H3.
+  right; intro HC; inv HC; congruence.
+Qed.
+
+Inductive is_vote_builtin : external_function -> Prop :=
+| is_vote_int :
+  is_vote_builtin (EF_builtin "__builtin_vote_int"
+                     [Xint; Xint; Xint ---> Xint]%asttyp)
+| is_vote_long :
+  is_vote_builtin (EF_builtin "__builtin_vote_long"
+                     [Xlong; Xlong; Xlong ---> Xlong]%asttyp)
+| is_vote_single :
+  is_vote_builtin (EF_builtin "__builtin_vote_single"
+                     [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp)
+| is_vote_float :
+  is_vote_builtin (EF_builtin "__builtin_vote_float"
+                     [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp).
+
+Definition is_vote_builtinb (ef : external_function) : bool :=
+  match ef with
+  | EF_builtin name sg =>
+      (String.eqb name "__builtin_vote_int" &&
+         proj_sumbool (signature_eq sg
+                         [Xint; Xint; Xint ---> Xint]%asttyp)) ||
+        (String.eqb name "__builtin_vote_long" &&
+           proj_sumbool (signature_eq sg
+                           [Xlong; Xlong; Xlong ---> Xlong]%asttyp)) ||
+        (String.eqb name "__builtin_vote_single" &&
+           proj_sumbool (signature_eq sg
+                           [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp)) ||
+        (String.eqb name "__builtin_vote_float" &&
+           proj_sumbool (signature_eq sg
+                           [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp))
+  | _ => false
+  end.
+
+Lemma is_vote_builtinb_spec (ef : external_function) :
+  reflect (is_vote_builtin ef) (is_vote_builtinb ef).
+Proof.
+  destruct ef; try solve [right; intro HC; inv HC].
+  simpl.
+  destruct (String.eqb name "__builtin_vote_single") eqn:H0.
+  { rewrite String.eqb_eq in H0; subst.
+    destruct (signature_eq sg
+                [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H0.
+  destruct (String.eqb name "__builtin_vote_int") eqn:H1.
+  { rewrite String.eqb_eq in H1; subst.
+    destruct (signature_eq sg
+                [Xint; Xint; Xint ---> Xint]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H1.
+  destruct (String.eqb name "__builtin_vote_float") eqn:H2.
+  { rewrite String.eqb_eq in H2; subst.
+    destruct (signature_eq sg
+                [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H2.
+  destruct (String.eqb name "__builtin_vote_long") eqn:H3.
+  { rewrite String.eqb_eq in H3; subst.
+    destruct (signature_eq sg
+                [Xlong; Xlong; Xlong ---> Xlong]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H3.
+  right; intro HC; inv HC; congruence.
+Qed.
+  
+Lemma vote_not_green_smove (ef : external_function) :
+  is_vote_builtin ef -> ~ is_green_smove_builtin ef.
+Proof. intro H; inv H; intro HC; inv HC. Qed.
+
+Lemma vote_not_blue_smove (ef : external_function) :
+  is_vote_builtin ef -> ~ is_blue_smove_builtin ef.
+Proof. intro H; inv H; intro HC; inv HC. Qed.
+
+Inductive is_vote_runtime : external_function -> Prop :=
+| is_vote_runtime_int :
+  is_vote_runtime (EF_runtime "__builtin_vote_int"
+                     [Xint; Xint; Xint ---> Xint]%asttyp)
+| is_vote_runtime_long :
+  is_vote_runtime (EF_runtime "__builtin_vote_long"
+                     [Xlong; Xlong; Xlong ---> Xlong]%asttyp)
+| is_vote_runtime_single :
+  is_vote_runtime (EF_runtime "__builtin_vote_single"
+                     [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp)
+| is_vote_runtime_float :
+  is_vote_runtime (EF_runtime "__builtin_vote_float"
+                     [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp).
+
+Definition is_vote_runtimeb (ef : external_function) : bool :=
+  match ef with
+  | EF_runtime name sg =>
+      (String.eqb name "__builtin_vote_int" &&
+         proj_sumbool (signature_eq sg
+                         [Xint; Xint; Xint ---> Xint]%asttyp)) ||
+        (String.eqb name "__builtin_vote_long" &&
+           proj_sumbool (signature_eq sg
+                           [Xlong; Xlong; Xlong ---> Xlong]%asttyp)) ||
+        (String.eqb name "__builtin_vote_single" &&
+           proj_sumbool (signature_eq sg
+                           [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp)) ||
+        (String.eqb name "__builtin_vote_float" &&
+           proj_sumbool (signature_eq sg
+                           [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp))
+  | _ => false
+  end.
+
+Lemma is_vote_runtimeb_spec (ef : external_function) :
+  reflect (is_vote_runtime ef) (is_vote_runtimeb ef).
+Proof.
+  destruct ef; try solve [right; intro HC; inv HC].
+  simpl.
+  destruct (String.eqb name "__builtin_vote_single") eqn:H0.
+  { rewrite String.eqb_eq in H0; subst.
+    destruct (signature_eq sg
+                [Xsingle; Xsingle; Xsingle ---> Xsingle]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H0.
+  destruct (String.eqb name "__builtin_vote_int") eqn:H1.
+  { rewrite String.eqb_eq in H1; subst.
+    destruct (signature_eq sg
+                [Xint; Xint; Xint ---> Xint]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H1.
+  destruct (String.eqb name "__builtin_vote_float") eqn:H2.
+  { rewrite String.eqb_eq in H2; subst.
+    destruct (signature_eq sg
+                [Xfloat; Xfloat; Xfloat ---> Xfloat]%asttyp)eqn:H2; subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H2.
+  destruct (String.eqb name "__builtin_vote_long") eqn:H3.
+  { rewrite String.eqb_eq in H3; subst.
+    destruct (signature_eq sg
+                [Xlong; Xlong; Xlong ---> Xlong]%asttyp); subst.
+    - left; constructor.
+    - right; intro HC; inv HC; congruence. }
+  rewrite eqb_neq in H3.
+  right; intro HC; inv HC; congruence.
+Qed.
+
+Definition Regset_of_list (l : list positive) : Regset.t  :=
+  fold_right (fun acc p => Regset.add acc p) Regset.empty l.
+
+Definition Regset_of_option (x : option positive) : Regset.t :=
+  match x with
+  | Some p => Regset.singleton p
+  | None => Regset.empty
+  end.
+
+(** All registers that appear in an instruction (arguments or
+    destination). *)
+Definition instr_regs (i : instruction) : Regset.t :=
+  match i with
+  | Inop _ => Regset.empty
+  | Iop _ args res _ =>
+      Regset.union (Regset_of_list args) (Regset.singleton res)
+  | Iload _ _ args dst _ =>
+      Regset.union (Regset_of_list args) (Regset.singleton dst)
+  | Istore _ _ args src _ =>
+      Regset.union (Regset_of_list args) (Regset.singleton src)
+  | Icall _ (inl r) args res _ =>
+      Regset.union (Regset_of_list (r :: args)) (Regset.singleton res)
+  | Icall _ _ args res _ =>
+      Regset.union (Regset_of_list args) (Regset.singleton res)
+  | Itailcall _ (inl r) args => Regset_of_list (r :: args)
+  | Itailcall _ _ args => Regset_of_list args
+  | Ibuiltin _ args res _ =>
+      Regset.union (Regset_of_list (regs_of_builtin_args args))
+        (Regset_of_option (reg_of_builtin_res res))
+  | Icond _ args _ _ => Regset_of_list args
+  | Ijumptable arg _ => Regset.singleton arg
+  | Ireturn (Some arg) => Regset.singleton arg
+  | Ireturn None => Regset.empty
+  end.
+
+(** All registers that appear in the given code (used in
+    instructions). *)
+Definition code_regs (c : code) : Regset.t :=
+  PTree.fold (fun rs _ instr => Regset.union rs (instr_regs instr)) c Regset.empty.
+
+Definition all_regs (params : list reg) (c : code) : Regset.t :=
+  Regset.union (Regset_of_list params) (code_regs c).
+
+Definition all_regs_list (params : list reg) (c : code) : list reg :=
+  Regset.elements (all_regs params c).
+
+(** All registers that appear in the given function (params + regs
+    used in instructions). *)
+Definition fun_regs (f : function) : Regset.t :=
+  all_regs f.(fn_params) f.(fn_code).
+
+Definition fun_regs_list (f : function) : list positive :=
+  all_regs_list f.(fn_params) f.(fn_code).
+
+Definition max_reg (regs : Regset.t) :=
+  match Regset.max_elt regs with
+  | Some p => p
+  | None => 1%positive
+  end.

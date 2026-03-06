@@ -544,6 +544,9 @@ Proof.
 - inv WS. destruct (ident_eq lbl l). auto. apply IHs; auto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section SUBJECT_REDUCTION.
 
 Variable p: program.
@@ -800,4 +803,4 @@ Proof.
   - discriminate.
 Qed.
 
-
+End VOTE.

@@ -26,6 +26,9 @@ Proof.
   intros. eapply match_transform_partial_program_contextual; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section INLINING.
 
 Variable prog: program.
@@ -1329,3 +1332,5 @@ Proof.
 Qed.
 
 End INLINING.
+
+End VOTE.

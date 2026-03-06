@@ -45,7 +45,7 @@ cparser/pre_parser_messages.ml:
 
 DIRS=extraction \
   lib common $(ARCH) backend cfrontend cparser driver \
-  export debug
+  export debug import
 
 INCLUDES=$(patsubst %,-I %, $(DIRS))
 
@@ -110,7 +110,7 @@ LEXERS=cparser/Lexer.mll lib/Tokenize.mll \
 LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
 LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
 
-EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte
+EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte vcomp vcomp.byte
 GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml) cparser/pre_parser_messages.ml
 
 # Beginning of part that assumes .depend.extr already exists
@@ -146,6 +146,22 @@ clightgen: clightgen.byte
 endif
 
 clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
+	@echo "Linking $@"
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
+
+CMINORIMPORT_OBJS:=$(shell $(MODORDER) import/ImportDriver.cmx)
+
+ifeq ($(OCAML_NATIVE_COMP),true)
+vcomp: $(CMINORIMPORT_OBJS)
+	@echo "Linking $@"
+	@$(OCAMLOPT) -o $@ $(LIBS) $(LINK_OPT) $+
+else
+vcomp: vcomp.byte
+	@echo "Copying to $@"
+	@$(COPY) $+ $@
+endif
+
+vcomp.byte: $(CMINORIMPORT_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
 	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 

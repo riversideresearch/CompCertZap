@@ -24,6 +24,10 @@ let current_code = ref ([]: instruction list)
 
 let emit i = current_code := i :: !current_code
 
+(* Side buffer for majority vote operations *)
+let side_buf = ref ([]: instruction list)
+let side_emit i = side_buf := i :: !side_buf
+
 (* Generation of fresh labels *)
 
 let dummy_function = { fn_code = []; fn_sig = signature_main }
@@ -48,7 +52,7 @@ let new_label () =
 
 
 let set_current_function f =
-  current_function := f; next_label := None; current_code := []
+  current_function := f; next_label := None; current_code := []; side_buf := []
 
 let get_current_function_args () =
   proj_sig_args (!current_function).fn_sig
@@ -59,11 +63,18 @@ let is_current_function_variadic () =
 let get_current_function_sig () =
   (!current_function).fn_sig
 
+(* Tail-recursive list append *)
+let[@tail_mod_cons] rec app (l1 : 'a list) (l2 : 'a list) : 'a list =
+  match l1 with
+  | [] -> l2
+  | x :: xs -> x :: (app [@tailcall]) xs l2
+
 let get_current_function () =
   let c = List.rev !current_code in
+  let side_c = List.rev !side_buf in
   let fn = !current_function in
   set_current_function dummy_function;
-  {fn with fn_code = c}
+  {fn with fn_code = app c side_c}
 
 (* Expand function for debug information *)
 
@@ -97,7 +108,8 @@ let translate_annot sp preg_to_dwarf annot =
 
 let builtin_nop =
   let signature ={sig_args = []; sig_res = Xvoid; sig_cc = cc_default} in
-  Pbuiltin(EF_builtin("__builtin_nop", signature), [], BR_none)
+  let name = coqstring_of_camlstring "__builtin_nop" in
+  Pbuiltin(EF_builtin(name,signature),[],BR_none)
 
 let rec lbl_follows = function
   | Pbuiltin (EF_debug _, _, _):: rest ->

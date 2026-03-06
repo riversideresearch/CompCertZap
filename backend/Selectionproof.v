@@ -178,6 +178,9 @@ Proof.
   unfold helper_functions_declared; intros. decompose [Logic.and] H; clear H. auto 20.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section CMCONSTR.
 
 Variable cunit: Cminor.program.
@@ -380,7 +383,7 @@ Lemma eval_sel_known_builtin:
   exists v', eval_expr tge sp e m le a v' /\ Val.lessdef v v'.
 Proof.
   intros until le; intros SEL ARGS SEM.
-  destruct bf as [bf|bf]; simpl in SEL.
+  destruct bf as [bf|bf|bf]; simpl in SEL.
 - destruct bf; try discriminate.
 + (* select *)
   inv ARGS; try discriminate. inv H0; try discriminate. inv H2; try discriminate. inv H3; try discriminate.
@@ -399,6 +402,7 @@ Proof.
   inv SEL.  
   simpl in SEM; inv SEM. apply eval_absfs; auto.
 - eapply eval_platform_builtin; eauto.
+- discriminate.
 Qed.
 
 End CMCONSTR.
@@ -1489,6 +1493,8 @@ Proof.
   apply plus_one; auto.
   apply eventually_and_invariant; eauto using subject_reduction, wt_prog.
 Qed.
+
+End VOTE.
 
 End PRESERVATION.
 

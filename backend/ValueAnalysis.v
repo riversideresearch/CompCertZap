@@ -79,17 +79,17 @@ Definition transfer_builtin_default
   VA.State (set_builtin_res res av ae) am'.
 
 Definition eval_static_builtin_function
-              (ae: aenv) (am: amem) (rm: romem)
-              (bf: builtin_function) (args: list (builtin_arg reg)) :=
+  (ae: aenv) (am: amem) (rm: romem)
+  (bf: builtin_function) (args: list (builtin_arg reg)) :=
   match builtin_function_sem bf
-                 (map val_of_aval (map (abuiltin_arg ae am rm) args)) with
+          (map val_of_aval (map (abuiltin_arg ae am rm) args)) with
   | Some v => aval_of_val v
   | None => None
   end.
 
 Definition transfer_builtin
-              (ae: aenv) (am: amem) (rm: romem) (ef: external_function)
-              (args: list (builtin_arg reg)) (res: builtin_res reg) :=
+  (ae: aenv) (am: amem) (rm: romem) (ef: external_function)
+  (args: list (builtin_arg reg)) (res: builtin_res reg) :=
   match ef, args with
   | EF_vload chunk, addr :: nil =>
       let aaddr := abuiltin_arg ae am rm addr in
@@ -121,6 +121,7 @@ Definition transfer_builtin
           | Some av => VA.State (set_builtin_res res av ae) am
           | None => transfer_builtin_default ae am rm args res
           end
+          (* transfer_builtin_default ae am rm args res *)
       | None => transfer_builtin_default ae am rm args res
       end
   | _, _ =>
@@ -404,12 +405,12 @@ Lemma eval_static_builtin_function_sound:
   vmatch bc v va.
 Proof.
   unfold eval_static_builtin_function; intros.
-  exploit abuiltin_args_sound; eauto. 
+  exploit abuiltin_args_sound; eauto.
   set (vla := map (abuiltin_arg ae am rm) al) in *. intros VMA.
   destruct (builtin_function_sem bf (map val_of_aval vla)) as [v0|] eqn:A; try discriminate.
   assert (LD: Val.lessdef v0 v).
   { apply val_inject_lessdef.
-    exploit (bs_inject _ (builtin_function_sem bf)). 
+    exploit (bs_inject _ (builtin_function_sem bf)).
     apply val_inject_list_lessdef. eapply list_val_of_aval_sound; eauto.
     rewrite A, H6; simpl. auto.
   }
@@ -955,7 +956,7 @@ Theorem external_call_match:
 Proof.
   intros until am; intros EC GENV ARGS RO MM NOSTACK.
   (* Part 1: using ec_mem_inject *)
-  exploit (@external_call_mem_inject ef _ _ ge vargs m t vres m' (inj_of_bc bc) m vargs).
+  exploit (@external_call_mem_inject _ _ ef _ _ ge vargs m t vres m' (inj_of_bc bc) m vargs).
   apply inj_of_bc_preserves_globals; auto.
   exact EC.
   eapply mmatch_inj; eauto. eapply mmatch_below; eauto.

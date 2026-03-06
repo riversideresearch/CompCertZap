@@ -682,4 +682,3 @@ Definition transf_fundef (dm: defmap) (rm: romem) (f: fundef) : res fundef :=
 
 Definition transf_program (p: program) : res program :=
   transform_partial_program (transf_fundef (prog_defmap p) (romem_for p)) p.
-

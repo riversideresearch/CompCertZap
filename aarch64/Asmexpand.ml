@@ -17,6 +17,8 @@ open Asm
 open Asmexpandaux
 open AST
 open Camlcoq
+open Maps
+open TargetPrinter
 module Ptrofs = Integers.Ptrofs
 
 exception Error of string
@@ -177,7 +179,7 @@ let offset_in_range ofs =
   (* The 512 upper bound comes from ldp/stp.  Single-register load/store
      instructions support bigger offsets. *)
   let ofs = Z.to_int64 ofs in 0L <= ofs && ofs < 512L
-  
+
 let memcpy_small_arg sz arg tmp =
   match arg with
   | BA (IR r) ->
@@ -294,14 +296,14 @@ let expand_builtin_vload chunk args res =
   | [BA(IR addr)] ->
       expand_builtin_vload_common chunk (RR1 addr) _0 res
   | [BA_addrstack ofs] ->
-      if Asmgen.offset_representable (Memdata.size_chunk chunk) ofs then
+      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
         expand_builtin_vload_common chunk XSP ofs res
       else begin
         expand_addimm64 (RR1 X16) XSP ofs; (* X16 <- SP + ofs *)
         expand_builtin_vload_common chunk (RR1 X16) _0 res
       end
   | [BA_addptr(BA(IR addr), BA_long ofs)] ->
-      if Asmgen.offset_representable (Memdata.size_chunk chunk) ofs then
+      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
         expand_builtin_vload_common chunk (RR1 addr) ofs res
       else begin
         expand_addimm64 (RR1 X16) (RR1 addr) ofs; (* X16 <- addr + ofs *)
@@ -333,14 +335,14 @@ let expand_builtin_vstore chunk args =
   | [BA(IR addr); src] ->
       expand_builtin_vstore_common chunk (RR1 addr) _0 src
   | [BA_addrstack ofs; src] ->
-      if Asmgen.offset_representable (Memdata.size_chunk chunk) ofs then
+      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
         expand_builtin_vstore_common chunk XSP ofs src
       else begin
         expand_addimm64 (RR1 X16) XSP ofs; (* X16 <- SP + ofs *)
         expand_builtin_vstore_common chunk (RR1 X16) _0 src
       end
   | [BA_addptr(BA(IR addr), BA_long ofs); src] ->
-      if Asmgen.offset_representable (Memdata.size_chunk chunk) ofs then
+      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
         expand_builtin_vstore_common chunk (RR1 addr) ofs src
       else begin
         expand_addimm64 (RR1 X16) (RR1 addr) ofs; (* X16 <- addr + ofs *)
@@ -349,7 +351,241 @@ let expand_builtin_vstore chunk args =
   | _ ->
       assert false
 
+let int_reg_to_dwarf = function
+  | X0 -> 0 | X1 -> 1 | X2 -> 2 | X3 -> 3 | X4 -> 4
+  | X5 -> 5 | X6 -> 6 | X7 -> 7 | X8 -> 8 | X9 -> 9
+  | X10 -> 10 | X11 -> 11 | X12 -> 12 | X13 -> 13 | X14 -> 14
+  | X15 -> 15 | X16 -> 16 | X17 -> 17 | X18 -> 18 | X19 -> 19
+  | X20 -> 20 | X21 -> 21 | X22 -> 22 | X23 -> 23 | X24 -> 24
+  | X25 -> 25 | X26 -> 26 | X27 -> 27 | X28 -> 28 | X29 -> 29
+  | X30 -> 30
+
+let float_reg_to_dwarf = function
+  | D0 -> 64 | D1 -> 65 | D2 -> 66 | D3 -> 67 | D4 -> 68
+  | D5 -> 69 | D6 -> 70 | D7 -> 71 | D8 -> 72 | D9 -> 73
+  | D10 -> 74 | D11 -> 75 | D12 -> 76 | D13 -> 77 | D14 -> 78
+  | D15 -> 79 | D16 -> 80 | D17 -> 81 | D18 -> 82 | D19 -> 83
+  | D20 -> 84 | D21 -> 85 | D22 -> 86 | D23 -> 87 | D24 -> 88
+  | D25 -> 89 | D26 -> 90 | D27 -> 91 | D28 -> 92 | D29 -> 93
+  | D30 -> 94 | D31 -> 95
+
+let preg_to_dwarf = function
+   | IR r -> int_reg_to_dwarf r
+   | FR r -> float_reg_to_dwarf r
+   | SP -> 31
+   | _ -> assert false
+
 (* Handling of compiler-inlined builtins *)
+
+(** Generic majority vote. *)
+let maj_vote
+      (mov : 'a -> 'a -> instruction)
+      (cmp : 'a -> 'a -> instruction)
+      (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+  if a == b || a == c || b == c then begin
+      raise (Error "ill-formed majority vote")
+    end;
+  assert (a <> b && a <> c && b <> c);
+  let lbl_done = new_label () in
+  let lbl_fix = new_label () in
+  side_emit @@ Plabel lbl_fix;
+  if a = res || b = res then begin
+      side_emit @@ mov res c;
+      emit @@ cmp a b;
+      emit @@ Pbc (TCne, lbl_fix)
+    end
+  else if c = res then begin
+      side_emit @@ mov res b;
+      emit @@ cmp a c;
+      emit @@ Pbc (TCne, lbl_fix)
+    end
+  else begin
+      side_emit @@ mov res c;
+      emit @@ cmp a b;
+      emit @@ Pbc (TCne, lbl_fix);
+      emit @@ mov res a
+    end;
+  side_emit @@ Pb lbl_done;
+  emit @@ Plabel lbl_done
+
+(** Majority vote integers. *)
+let maj_vote_int sz = maj_vote
+                        (fun x y -> Pmov (RR1 x, RR1 y))
+                        (fun x y -> Pcmp (sz, RR0 x, y, SOnone))
+
+(** Majority vote floats. *)
+let maj_vote_float sz = maj_vote
+                          (fun x y -> Pfmov (x, y))
+                          (fun x y -> Pfcmp (sz, x, y))
+
+(** DMR checks. *)
+let check
+      (cmp : 'a -> 'a -> instruction)
+      (call_handler : 'a -> 'a -> label)
+      (a : 'a) (b : 'a) : unit =
+  if a == b then begin
+      raise (Error "ill-formed DMR check")
+    end;
+  let lbl_fault = call_handler a b in
+  emit @@ cmp a b;
+  emit @@ Pbc (TCne, lbl_fault)
+
+(** Diagonal functor, with [sorted] function to convert pairs into
+    canonical (sorted) form. *)
+module Diag (A : Map.OrderedType) = struct
+  type t = A.t * A.t
+
+  let compare (a1, b1) (a2, b2) =
+    let c = A.compare a1 a2 in
+    if c <> 0 then c else A.compare b1 b2
+
+  let sorted (a : A.t) (b : A.t) : t =
+    if A.compare a b <= 0 then (a, b) else (b, a)
+end
+
+(** Maps with keys of type ireg*ireg. *)
+module Iregpair = Diag(struct type t = ireg let compare = compare end)
+module Iregmap = Map.Make(Iregpair)
+
+(** Maps with keys of type freg*freg. *)
+module Fregpair = Diag(struct type t = freg let compare = compare end)
+module Fregmap = Map.Make(Fregpair)
+
+(** Check 32-bit integers. *)
+let int_handlers : label Iregmap.t ref = ref Iregmap.empty
+let handle_int (a : ireg) (b : ireg) : label =
+  let key = Iregpair.sorted a b in
+  match Iregmap.find_opt key !int_handlers with
+  | Some lbl -> lbl
+  | _ ->
+     let lbl = new_label () in
+     side_emit @@ Plabel lbl;
+     if b = X2 then begin
+         if a = X3 then begin
+             side_emit @@ Pmov (RR1 X16, RR1 b);
+             side_emit @@ Pmov (RR1 X2, RR1 a);
+             side_emit @@ Pmov (RR1 X3, RR1 X16)
+           end
+         else begin
+             side_emit @@ Pmov (RR1 X3, RR1 b);
+             side_emit @@ Pmov (RR1 X2, RR1 a)
+           end
+       end
+     else begin
+         side_emit @@ Pmov (RR1 X2, RR1 a);
+         side_emit @@ Pmov (RR1 X3, RR1 b)
+       end;
+     side_emit @@ Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero);
+     side_emit @@ Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero);
+     side_emit @@ Pbs (intern_string "__fault_int",
+                       { sig_args = [Xint; Xint; Xint; Xint]
+                       ; sig_res = Xvoid
+                       ; sig_cc = cc_default });
+     int_handlers := Iregmap.add key lbl !int_handlers;
+     lbl
+let check_int = check (fun a b -> Pcmp (W, RR0 a, b, SOnone)) handle_int
+
+(** Check 64-bit integers. *)
+let long_handlers : label Iregmap.t ref = ref Iregmap.empty
+let handle_long (a : ireg) (b : ireg) : label =
+  let key = Iregpair.sorted a b in
+  match Iregmap.find_opt key !long_handlers with
+  | Some lbl -> lbl
+  | _ ->
+     let lbl = new_label () in
+     side_emit @@ Plabel lbl;
+     if b = X2 then begin
+         if a = X3 then begin
+             side_emit @@ Pmov (RR1 X16, RR1 b);
+             side_emit @@ Pmov (RR1 X2, RR1 a);
+             side_emit @@ Pmov (RR1 X3, RR1 X16)
+           end
+         else begin
+             side_emit @@ Pmov (RR1 X2, RR1 a);
+             side_emit @@ Pmov (RR1 X3, RR1 b)
+           end
+       end
+     else begin
+         side_emit @@ Pmov (RR1 X2, RR1 a);
+         side_emit @@ Pmov (RR1 X3, RR1 b)
+       end;
+     side_emit @@ Pmovz (W, X0, Z.of_sint @@ int_reg_to_dwarf a, Z.zero);
+     side_emit @@ Pmovz (W, X1, Z.of_sint @@ int_reg_to_dwarf b, Z.zero);
+     side_emit @@ Pbs (intern_string "__fault_long",
+                       { sig_args = [Xint; Xint; Xlong; Xlong]
+                       ; sig_res = Xvoid
+                       ; sig_cc = cc_default });
+     long_handlers := Iregmap.add key lbl !long_handlers;
+     lbl
+let check_long = check (fun a b -> Pcmp (X, RR0 a, b, SOnone)) handle_long
+
+(** Check single-precision floats. *)
+let single_handlers : label Fregmap.t ref = ref Fregmap.empty
+let handle_single (a : freg) (b : freg) : label =
+  let key = Fregpair.sorted a b in
+  match Fregmap.find_opt key !single_handlers with
+  | Some lbl -> lbl
+  | _ ->
+     let lbl = new_label () in
+     side_emit @@ Plabel lbl;
+     if b = D0 then begin
+         if a = D1 then begin
+             side_emit @@ Pfmov (D2, b);
+             side_emit @@ Pfmov (D0, a);
+             side_emit @@ Pfmov (D1, D2)
+           end
+         else begin
+             side_emit @@ Pfmov (D1, b);
+             side_emit @@ Pfmov (D0, a)
+           end
+       end
+     else begin
+         side_emit @@ Pfmov (D0, a);
+         side_emit @@ Pfmov (D1, b)
+       end;
+     side_emit @@ Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero);
+     side_emit @@ Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero);
+     side_emit @@ Pbs (intern_string "__fault_single",
+                       { sig_args = [Xint; Xint; Xsingle; Xsingle]
+                       ; sig_res = Xvoid
+                       ; sig_cc = cc_default });
+     single_handlers := Fregmap.add key lbl !single_handlers;
+     lbl
+let check_single = check (fun a b -> Pfcmp (S, a, b)) handle_single
+
+(** Check double-precision floats. *)
+let float_handlers : label Fregmap.t ref = ref Fregmap.empty
+let handle_float (a : freg) (b : freg) : label =
+  let key = Fregpair.sorted a b in
+  match Fregmap.find_opt key !float_handlers with
+  | Some lbl -> lbl
+  | _ ->
+     let lbl = new_label () in
+     side_emit @@ Plabel lbl;
+     if b = D0 then begin
+         if a = D1 then begin
+             side_emit @@ Pfmov (D2, b);
+             side_emit @@ Pfmov (D0, a);
+             side_emit @@ Pfmov (D1, D2)
+           end
+         else begin
+             side_emit @@ Pfmov (D1, b);
+             side_emit @@ Pfmov (D0, a)
+           end
+       end
+     else begin
+         side_emit @@ Pfmov (D0, a);
+         side_emit @@ Pfmov (D1, b)
+       end;
+     side_emit @@ Pmovz (W, X0, Z.of_sint @@ float_reg_to_dwarf a, Z.zero);
+     side_emit @@ Pmovz (W, X1, Z.of_sint @@ float_reg_to_dwarf b, Z.zero);
+     side_emit @@ Pbs (intern_string "__fault_float",
+                       { sig_args = [Xint; Xint; Xfloat; Xfloat]
+                       ; sig_res = Xvoid
+                       ; sig_cc = cc_default });
+     float_handlers := Fregmap.add key lbl !float_handlers;
+     lbl
+let check_float = check (fun a b -> Pfcmp (D, a, b)) handle_float
 
 let expand_builtin_inline name args res =
   match name, args, res with
@@ -403,6 +639,41 @@ let expand_builtin_inline name args res =
   (* Vararg *)
   | "__builtin_va_start", [BA(IR a)], _ ->
       expand_builtin_va_start a
+
+  (* Shadow move *)
+  | "__builtin_smove_int", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov (RR1 res, RR1 a))
+  | "__builtin_smove_long", [BA(IR a)], BR(IR res) ->
+     if a <> res then
+       emit (Pmov (RR1 res, RR1 a))
+  | "__builtin_smove_single", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmov (res, a))
+  | "__builtin_smove_float", [BA(FR a)], BR(FR res) ->
+     if a <> res then
+       emit (Pfmov (res, a))
+
+  (* Majority vote *)
+  | "__builtin_vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int W a b c res
+  | "__builtin_vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+     maj_vote_int X a b c res
+  | "__builtin_vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float S a b c res
+  | "__builtin_vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+     maj_vote_float D a b c res
+
+  (* DMR check *)
+  | "__builtin_check_int", [BA(IR a); BA(IR b)], BR_none ->
+     check_int a b
+  | "__builtin_check_long", [BA(IR a); BA(IR b)], BR_none ->
+     check_long a b
+  | "__builtin_check_single", [BA(FR a); BA(FR b)], BR_none ->
+     check_single a b
+  | "__builtin_check_float", [BA(FR a); BA(FR b)], BR_none ->
+     check_float a b
+
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
@@ -433,7 +704,7 @@ let expand_instruction instr =
   | Pbuiltin (ef,args,res) ->
      begin match ef with
      | EF_builtin (name,sg) ->
-        expand_builtin_inline name args res
+        expand_builtin_inline (camlstring_of_coqstring name) args res
      | EF_vload chunk ->
         expand_builtin_vload chunk args res
      | EF_vstore chunk ->
@@ -450,37 +721,145 @@ let expand_instruction instr =
   | _ ->
      emit instr
 
-let int_reg_to_dwarf = function
-  | X0 -> 0 | X1 -> 1 | X2 -> 2 | X3 -> 3 | X4 -> 4
-  | X5 -> 5 | X6 -> 6 | X7 -> 7 | X8 -> 8 | X9 -> 9
-  | X10 -> 10 | X11 -> 11 | X12 -> 12 | X13 -> 13 | X14 -> 14
-  | X15 -> 15 | X16 -> 16 | X17 -> 17 | X18 -> 18 | X19 -> 19
-  | X20 -> 20 | X21 -> 21 | X22 -> 22 | X23 -> 23 | X24 -> 24
-  | X25 -> 25 | X26 -> 26 | X27 -> 27 | X28 -> 28 | X29 -> 29
-  | X30 -> 30
+(* Branch relaxation *)
 
-let float_reg_to_dwarf = function
-  | D0 -> 64 | D1 -> 65 | D2 -> 66 | D3 -> 67 | D4 -> 68
-  | D5 -> 69 | D6 -> 70 | D7 -> 71 | D8 -> 72 | D9 -> 73
-  | D10 -> 74 | D11 -> 75 | D12 -> 76 | D13 -> 77 | D14 -> 78
-  | D15 -> 79 | D16 -> 80 | D17 -> 81 | D18 -> 82 | D19 -> 83
-  | D20 -> 84 | D21 -> 85 | D22 -> 86 | D23 -> 87 | D24 -> 88
-  | D25 -> 89 | D26 -> 90 | D27 -> 91 | D28 -> 92 | D29 -> 93
-  | D30 -> 94 | D31 -> 95
+(** Number of actual machine code instructions corresponding to a
+    given Asm.instruction. Derived from [print_instruction] in
+    TargetPrinter.ml. *)
+let instr_size = function
+  | Plabel _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
+  | Pfmovimmd (_, f) ->
+     let d = camlint64_of_coqint (Floats.Float.to_bits f) in
+     if is_immediate_float64 d then 1 else 2
+  | Pfmovimms(_, f) ->
+     let d = camlint_of_coqint (Floats.Float32.to_bits f) in
+     if is_immediate_float32 d then 1 else 2
+  | Ploadsymbol _ -> 2
+  | Pbtbl (_, tbl) -> 4 + List.length tbl
+  | Pbuiltin(EF_inline_asm (txt, sg, clob), args, res) ->
+     (* Conservatively count number of lines. Possibly over-estimating
+        if, e.g., any of them are labels. *)
+     List.length @@ String.split_on_char '\n' @@ camlstring_of_coqstring txt
+  | Pbuiltin(_, args, res) -> assert false
+  | Pallocframe _ -> assert false
+  | Pfreeframe _ -> assert false
+  | Pcvtx2w _ -> assert false
+  | _ -> 1
 
-let preg_to_dwarf = function
-   | IR r -> int_reg_to_dwarf r
-   | FR r -> float_reg_to_dwarf r
-   | SP -> 31
-   | _ -> assert false
+(** Compute label position map for function with code [c]. The
+    position of a label is its distance (in # of instructions, i.e., #
+    bytes divided by 4) from the start of the function. *)
+let label_positions (c : code) : int PTree.t =
+  let rec go (m : int PTree.t) (pos : int) = function
+    | [] -> m
+    | Plabel lbl :: rest ->
+       go (PTree.set lbl pos m) pos rest
+    | instr :: rest ->
+       go m (pos + instr_size instr) rest
+  in
+  go PTree.Empty 0 c
+
+let negate_testcond = function
+  | TCeq -> TCne
+  | TCne -> TCeq
+  | TChs -> TClo
+  | TClo -> TChs
+  | TCmi -> TCpl
+  | TCpl -> TCmi
+  | TChi -> TCls
+  | TCls -> TChi
+  | TCge -> TClt
+  | TClt -> TCge
+  | TCgt -> TCle
+  | TCle -> TCgt
+
+(** Negate a conditional branch instruction and update its target
+    label to [new_tgt]. *)
+let negate_cond_branch new_tgt = function
+  | Pbc (cond, _) -> Pbc (negate_testcond cond, new_tgt)
+  | Ptbnz (sz, r, i, _) -> Ptbz (sz, r, i, new_tgt)
+  | Ptbz (sz, r, i, _) -> Ptbnz (sz, r, i, new_tgt)
+  | Pcbnz (sz, r, _) -> Pcbz (sz, r, new_tgt)
+  | Pcbz (sz, r, _) -> Pcbnz (sz, r, new_tgt)
+  | _ -> raise (Error "negate_cond_branch: expected conditional branch")
+
+let tgt_of_branch = function
+  | Pbc (_, tgt) -> tgt
+  | Ptbnz (_, _, _, tgt) -> tgt
+  | Ptbz (_, _, _, tgt) -> tgt
+  | Pcbnz (_, _, tgt) -> tgt
+  | Pcbz (_, _, tgt) -> tgt
+  | _ -> raise (Error "tgt_of_branch: expected conditional branch")
+
+(** This is reset to false before every iteration of
+    [relax_branches_pass]. *)
+let branch_changed : bool ref = ref false
+
+(** Emit relaxed version of [br_instr]. *)
+let relax_branch br_instr : unit =
+  let lbl = new_label () in
+  emit @@ negate_cond_branch lbl br_instr;
+  emit @@ Pb (tgt_of_branch br_instr);
+  emit @@ Plabel lbl;
+  branch_changed := true
+
+let branch_range = function
+  | Pbc _ | Pcbnz _ | Pcbz _ -> Some 262144
+  | Ptbnz _ | Ptbz _ -> Some 8192
+  | _ -> None
+
+(** Single pass of rewriting conditional branches whose target labels
+    are out of range. Precomputes the positions of labels (as offsets
+    from the beginning of the function) before running the pass. *)
+let relax_branches_pass (c : code) : unit =
+  let rec go (lbl_positions : int PTree.t) (cur_pos : int) = function
+    | [] -> ()
+    | instr :: rest -> begin
+       match branch_range instr with
+        | Some range -> begin
+            let lbl_pos = Option.get @@
+                            PTree.get (tgt_of_branch instr) lbl_positions in
+            let displacement = lbl_pos - cur_pos in
+            if displacement < -range || range <= displacement then
+              relax_branch instr
+            else
+              emit instr
+          end
+        | None ->
+           emit instr
+      end;
+      go lbl_positions (cur_pos + instr_size instr) rest
+  in
+  go (label_positions c) 0 c
+
+(** Repeat branch relaxation pass until fixed point. *)
+let relax_branches () : unit =
+  branch_changed := true;
+  while !branch_changed do
+    branch_changed := false;
+    let fn = get_current_function () in
+    set_current_function fn;
+    relax_branches_pass fn.fn_code
+  done
 
 let expand_function id fn =
   try
+    (* Reset fault handler caches *)
+    int_handlers := Iregmap.empty;
+    long_handlers := Iregmap.empty;
+    single_handlers := Fregmap.empty;
+    float_handlers := Fregmap.empty;
+
+    (* Main expansion pass *)
     set_current_function fn;
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
+
+    (* Then branch relaxation *)
+    relax_branches ();
+
     Errors.OK (get_current_function ())
   with Error s ->
-    Errors.Error (Errors.msg s)
+    Errors.Error (Errors.msg (coqstring_of_camlstring s))
 
 let expand_fundef id = function
   | Internal f ->

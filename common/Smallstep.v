@@ -464,6 +464,33 @@ Proof.
   auto.
 Qed.
 
+Definition forever_reactive' (ge: genv) s T :=
+  forall n, exists s' t, star ge s t s' /\ (length t >= n)%nat /\ traceinf_prefix t T.
+
+Lemma forever_reactive_forever_reactive' ge s T :
+  forever_reactive ge s T -> forever_reactive' ge s T.
+Proof.
+  intros Hreact n.
+  revert Hreact.
+  revert s T.
+  induction n; intros s T Hreact.
+  { exists s, E0; repeat split.
+    - apply star_refl.
+    - lia.
+    - exists T; reflexivity. }
+  inv Hreact.
+  apply IHn in H1.
+  destruct H1 as (s' & t' & Hstar & Hlen & Hpre).
+  exists s'.
+  eexists; repeat split.
+  - eapply star_trans; eauto.
+  - unfold Eapp.
+    rewrite length_app.
+    unfold E0 in H0.
+    destruct t; try congruence; simpl; lia.
+  - apply traceinf_prefix_app; auto.
+Qed.
+
 (** [eventually n s P]: all transition sequences of length [n] starting from [s]
     are silent and lead to a state satisfying [P].  However, some transitions can
     get stuck on non-final states. *)

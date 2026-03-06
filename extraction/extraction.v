@@ -18,11 +18,13 @@ From Coq Require DecidableClass.
 Require Coqlib Wfsimpl Decidableplus Iteration.
 Require AST Floats.
 Require SelectLong Selection RTLgen Inlining ValueDomain.
-Require Tailcall Allocation Bounds.
+Require Tailcall Allocation Bounds RTLcolorcheck.
 Require Ctypes Csyntax Ctyping Clight.
 Require Compiler.
 Require Parser.
 Require Initializers.
+Require ImportPrelude.
+Require ImportProgram.
 
 (* Standard lib *)
 From Coq Require Import ExtrOcamlBasic ExtrOcamlNativeString.
@@ -81,6 +83,9 @@ Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 Extract Constant SimplExpr.first_unused_ident => "Camlcoq.first_unused_ident".
 Extraction Inline SimplExpr.ret SimplExpr.error SimplExpr.bind SimplExpr.bind2.
 
+(* RTL coloring *)
+Extract Constant RTLcolorcheck.infer_coloring => "RTLinfercolor.infer_coloring".
+
 (* Compopts *)
 Extract Constant Compopts.optim_for_size =>
   "fun _ -> !Clflags.option_Osize".
@@ -102,6 +107,10 @@ Extract Constant Compopts.thumb =>
   "fun _ -> !Clflags.option_mthumb".
 Extract Constant Compopts.debug =>
   "fun _ -> !Clflags.option_g".
+Extract Constant Compopts.dmr =>
+  "fun _ -> !Clflags.option_dmr".
+Extract Constant Compopts.tmr =>
+  "fun _ -> !Clflags.option_tmr".
 
 (* Compiler *)
 Extract Constant Compiler.print_Clight => "PrintClight.print_if".
@@ -124,6 +133,9 @@ Extract Constant Cabs.loc =>
 Extract Inlined Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
+(* ImportPrelude *)
+Extract Constant ImportPrelude.intern => "ImportIdent.intern_coqstring".
+
 (* Processor-specific extraction directives *)
 
 Load extractionMachdep.
@@ -139,9 +151,10 @@ Set Extraction AccessOpaque.
 Cd "extraction".
 
 Separate Extraction
+   ImportProgram.prog
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
-   Ctypes.merge_attributes Ctypes.remove_attributes 
+   Ctypes.merge_attributes Ctypes.remove_attributes
    Ctypes.build_composite_env Ctypes.layout_struct
    Initializers.transl_init Initializers.constval
    Csyntax.Eindex Csyntax.Epreincr Csyntax.Eselection
@@ -162,4 +175,7 @@ Separate Extraction
    AST.signature_main
    Floats.Float32.from_parsed Floats.Float.from_parsed
    Globalenvs.Senv.invert_symbol
-   Parser.translation_unit_file.
+   Parser.translation_unit_file
+   RTLcolorcheck.check_program
+   Compiler.transf_c_program_to_rtl
+.

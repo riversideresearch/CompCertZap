@@ -266,13 +266,13 @@ let rec print_stmt p s =
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@])@ : @[<hov 0>%a@];@]"
                 (name_of_external ef)
                 print_expr_list (true, el)
-	        print_sig (ef_sig ef)
+          print_sig (ef_sig ef)
   | Sbuiltin(Some id, ef, el) ->
       fprintf p "@[<hv 2>%s =@ builtin %s@,(@[<hov 0>%a@]) : @[<hov 0>%a@];@]"
                 (ident_name id)
                 (name_of_external ef)
                 print_expr_list (true, el)
-	        print_sig (ef_sig ef)
+          print_sig (ef_sig ef)
   | Sseq(s1,s2) when just_skips s1 && just_skips s2 ->
       ()
   | Sseq(s1, s2) when just_skips s1 ->

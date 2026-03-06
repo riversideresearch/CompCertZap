@@ -527,6 +527,15 @@ Proof.
   destruct H2 as [t [C D]]. subst. elim (H0 (Goes_wrong t)). auto.
 Qed.
 
+Corollary backward_simulation_preserves_safety:
+  forall L1 L2, backward_simulation L1 L2 ->
+  (forall beh, program_behaves L1 beh -> not_wrong beh) ->
+  (forall beh, program_behaves L2 beh -> not_wrong beh).
+Proof.
+  intros L1 L2 Hsim Hsafe beh Hbeh.
+  eapply backward_simulation_same_safe_behavior in Hbeh; eauto.
+Qed.
+
 (** * Program behaviors for the "atomic" construction *)
 
 Section ATOMIC.

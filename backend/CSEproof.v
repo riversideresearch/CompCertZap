@@ -517,7 +517,7 @@ Lemma add_builtin_holds:
   forall valu1 ge sp rs m n bf args res vargs vres,
   numbering_holds valu1 ge sp rs m n ->
   eval_builtin_args ge (fun r => rs#r) sp m args vargs ->
-  builtin_function_sem bf vargs = Some vres ->
+  @builtin_function_sem Builtins2.Two Builtins2.VoteSemantics_Two bf vargs = Some vres ->
   exists valu2, numbering_holds valu2 ge sp (regmap_setres res vres rs) m (add_builtin n res bf args).
 Proof.
   unfold add_builtin; intros.
@@ -869,7 +869,7 @@ Lemma transfer_builtin_holds:
   forall (ge: genv) f pc ef args res pc' rs sp m vargs t vres m' valu n dm vapprox ae am bc rm,
   f.(fn_code)!pc = Some(Ibuiltin ef args res pc') ->
   eval_builtin_args ge (fun r => rs#r) (Vptr sp Ptrofs.zero) m args vargs ->
-  external_call ef ge vargs m t vres m' ->
+  @external_call Builtins2.Two Builtins2.VoteSemantics_Two ef ge vargs m t vres m' ->
   numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m n ->
   vapprox!!pc = VA.State ae am ->
   ematch bc rs ae -> romatch bc m rm -> mmatch bc m am -> genv_match bc ge -> bc sp = BCstack ->
@@ -1239,13 +1239,13 @@ Ltac TransfInstr :=
 (** The proof of simulation is a case analysis over the transition
   in the source code. *)
 
-Definition eventually := Smallstep.eventually RTL.step RTL.final_state ge.
+Definition eventually := Smallstep.eventually (@RTL.step Builtins2.Two Builtins2.VoteSemantics_Two) RTL.final_state ge.
 
 Lemma transf_step_correct:
-  forall s1 t s2, step ge s1 t s2 ->
+  forall s1 t s2, @step Builtins2.Two Builtins2.VoteSemantics_Two ge s1 t s2 ->
   forall s1' (MS: match_states s1 s1') (SOUND: sound_state prog s1),
-     (exists s2', step tge s1' t s2' /\ match_states s2 s2')
-  \/ (exists s2' n, plus step tge s1' t s2' /\ eventually n s2 (fun s3 => match_states s3 s2')).
+     (exists s2', @step Builtins2.Two Builtins2.VoteSemantics_Two tge s1' t s2' /\ match_states s2 s2')
+  \/ (exists s2' n, plus (@step Builtins2.Two Builtins2.VoteSemantics_Two) tge s1' t s2' /\ eventually n s2 (fun s3 => match_states s3 s2')).
 Proof.
   induction 1; intros; inv MS; try (TransfInstr; intro C).
 
@@ -1372,7 +1372,7 @@ Proof.
   exploit is_known_runtime_function_sound; eauto. intros (name & sg & E1 & E2). subst fd.
   simpl in TRANSF'. inv TRANSF'.
   assert (EV: forall (P: state -> Prop),
-    (forall v, builtin_function_sem bf rs##args = Some v ->
+    (forall v, @builtin_function_sem Builtins2.Two Builtins2.VoteSemantics_Two bf rs##args = Some v ->
                P (State s f sp pc' (rs#res <- v) m)) ->
     eventually 2%nat
       (Callstate (Stackframe res f sp pc' rs :: s) (External (EF_runtime name sg)) rs##args m) P).
@@ -1402,7 +1402,8 @@ Proof.
 * (* left as a call *)
   destruct (builtin_function_sem bf rs##args) as [vres|] eqn:SEM.
 ** (* the builtin function succeeds *)
-  exploit builtin_function_sem_lessdef; eauto using regs_lessdef_regs.
+  exploit (@builtin_function_sem_lessdef Builtins2.Two Builtins2.VoteSemantics_Two);
+    eauto using regs_lessdef_regs.
   intros (vres' & SEM' & LDRES).
   right. econstructor; exists 2%nat; split.
   eapply plus_three.
@@ -1447,11 +1448,11 @@ Proof.
 - (* Ibuiltin *)
   exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto.
   intros (vargs' & A & B).
-  exploit external_call_mem_extends; eauto.
+  exploit (@external_call_mem_extends Builtins2.Two Builtins2.VoteSemantics_Two); eauto.
   intros (v' & m1' & P & Q & R & S).
   assert (DEFAULT:
     (fn_code (transf_function' f cu approx)) ! pc = Some(Ibuiltin ef args res pc') ->
-    exists s2', step tge (State s' (transf_function' f cu approx) sp pc rs' m'0) t s2'
+    exists s2', @step Builtins2.Two Builtins2.VoteSemantics_Two tge (State s' (transf_function' f cu approx) sp pc rs' m'0) t s2'
              /\ match_states (State s f sp pc' (regmap_setres res vres rs) m') s2').
   { intros C'.
     econstructor; split.
@@ -1532,7 +1533,7 @@ Proof.
 
 - (* external function *)
   monadInv TFD.
-  exploit external_call_mem_extends; eauto.
+  exploit (@external_call_mem_extends Builtins2.Two Builtins2.VoteSemantics_Two); eauto.
   intros (v' & m1' & P & Q & R & S).
   left; econstructor; split.
   eapply exec_function_external; eauto.
@@ -1570,25 +1571,28 @@ Proof.
   intros. inv H0. inv H. inv RES. inv STACK. constructor.
 Qed.
 
-Theorem transf_program_correct:
+(* TODO: make this theorem take Novotes as extra hypothesis, and
+precede this step in the compiler with one that checks that
+property. *)
+Theorem transf_program_correct :
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_eventually_plus with
     (match_states := fun s1 s2 => match_states s1 s2 /\ sound_state prog s1).
-- apply senv_preserved.
-- intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
-  exists s2. auto using sound_initial.
-- intros. destruct H. eapply transf_final_states; eauto.
-- intros. destruct H0.
-  exploit transf_step_correct; eauto.
-  intros [(s2' & A & B) | (s2' & n & A & B)].
-+ exists 0%nat, s2'; split.
-  apply plus_one; auto.
-  apply eventually_now. eauto using sound_step.
-+ exists n, s2'; split; auto.
-  apply eventually_and_invariant; auto.
-  apply sound_step.
-  eapply sound_step; eauto.
+  - apply senv_preserved.
+  - intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
+    exists s2. auto using sound_initial.
+  - intros. destruct H. eapply transf_final_states; eauto.
+  - intros. destruct H0.
+    exploit transf_step_correct; eauto.
+    intros [(s2' & A & B) | (s2' & n & A & B)].
+    + exists 0%nat, s2'; split.
+      apply plus_one; auto.
+      apply eventually_now. eauto using sound_step.
+    + exists n, s2'; split; auto.
+      apply eventually_and_invariant; auto.
+      apply sound_step.
+      eapply sound_step; eauto.
 Qed.
 
 End PRESERVATION.
