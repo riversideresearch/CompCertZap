@@ -8,8 +8,8 @@
   2) begin new code with instructions that copy the function
   parameters into their shadow copies,
 
-  3) for each Iop and Iload instruction in the original code, emit two
-  additional corresponding instructions in the two shadow worlds,
+  3) for each Iop in the original code, emit two additional
+  corresponding instructions in the two shadow worlds,
 
   4) for all other instructions, emit preceding code to majority vote
   their arguments (leaving the voted results in the regular world

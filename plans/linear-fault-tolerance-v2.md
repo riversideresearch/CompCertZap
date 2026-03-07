@@ -38,8 +38,8 @@ Targeting `Linear` avoids most of the Asm-specific complexity:
 
 ## Scope
 
-This plan targets the current TMR design, where function boundaries are
-White boundaries.
+This plan targets the current TMR design, where function boundaries
+enforce a **White interface discipline**.
 
 Concretely:
 
@@ -47,8 +47,11 @@ Concretely:
   slots
 - `Incoming` and `Outgoing` locations are interface-only and must remain
   White
-- calls, returns, and tailcalls must be checked and proved with this
-  White-boundary discipline
+- call arguments, return values, and call-target channels must remain
+  White at function boundaries
+- the proof must account explicitly for `call_regs`, `return_regs`,
+  caller-save destruction, and function-entry destruction rather than
+  treating the whole boundary as "everything becomes White"
 
 Extending TMR across function boundaries is out of scope for this plan.
 If that work is revived later, it should be treated as a separate design
@@ -105,16 +108,24 @@ That means:
 - stack locations may still be colored if they are part of the
   protected separation story
 
-Crucially, this should still include **reloads**:
+Crucially, this should still include **protected local reloads**:
 
-- `Lgetstack` writes a register destination and should be faultable
+- `Lgetstack Local ...` writes a register destination and should be
+  faultable
 - if a protected value is spilled to separated `Local` slots and then
   reloaded into replicated registers, a fault on one reload should still
   be tolerated by the usual single-fault argument
 
+But this should **not** include interface reloads:
+
+- `Lgetstack Incoming ...` reads an unreplicated parameter channel and
+  must remain outside the first theorem's fault coverage
+- `Lgetstack Outgoing ...` is likewise an interface/ABI operation, not a
+  protected local reload
+
 So the first `Linear` theorem should cover faults on `Lop` and
-`Lgetstack`, while still excluding direct faults on stack-slot writes
-such as `Lsetstack` and `Lstore`.
+`Lgetstack Local ...`, while still excluding direct faults on stack-slot
+writes such as `Lsetstack` and `Lstore`.
 
 ### 3. Reuse Linear's explicit call/return structure
 
@@ -141,19 +152,12 @@ For this plan, protected values live only in:
 
 `Incoming` and `Outgoing` locations are White-only interface locations.
 
-### 5. Prefer sparse or liveness-bounded checker state
+### 5. Use liveness-bounded checker state
 
 The location domain is not fixed-size because stack slots vary by
-function. A fully dense `program point x loc` representation may become
-expensive.
-
-For the first implementation, use one of:
-
-1. only locations relevant to the function, or
-2. a proof-oriented location liveness analysis
-
-Unlike the theorem shape, this is an engineering choice, not a semantic
-one. It can be revisited as the checker/proof develops.
+function. A dense `program point x loc` representation is expected to be
+too expensive at `Linear`, so the first viable design should be
+**liveness-bounded** rather than dense.
 
 However, two representation choices should be made early because they
 affect the checker specification and the faulty simulation invariant:
@@ -174,12 +178,76 @@ Recommended initial approach:
 - build label-resolution and successor facts over those indices
 - prove bridge lemmas between runtime code suffixes and static indices
 - track all registers
-- track `Local` slots that are mentioned or proof-live
+- track stack locations in a finite per-function domain, then quantify
+  colors only over the locations that are proof-live at a given program
+  point
 - track `Incoming` / `Outgoing` locations only when needed for explicit
   White boundary obligations
 
 This is effectively "instruction indices plus a shared `Linearindex`
 library", not a new semantic IR.
+
+### 6. Make protected local non-overlap explicit
+
+The color system should not rely on an implicit global theorem that all
+mentioned `Local` slots are pairwise non-overlapping.  Instead, it
+should carry an explicit invariant:
+
+- at each program point, distinct protected non-White `Local` slots are
+  pairwise `Loc.diff`
+
+This invariant should be checked over the same finite tracked location
+domain used by the checker and the faulty simulation.
+
+Why this matters:
+
+- `Locmap.set` invalidates partially overlapping locations
+- `Linear` typing/bounds validate slots but do not by themselves give a
+  global pairwise-non-overlap theorem for all mentioned slots
+- the faulty simulation wants a direct way to conclude that updating one
+  protected location leaves the others unchanged
+
+Recommended use:
+
+- make non-overlap part of declarative well-coloredness
+- have the checker enforce it over tracked protected `Local` slots
+- consume it in the simulation via `Locmap.gso`/`Loc.diff`
+
+### 7. Make the tracked location domain overlap-closed
+
+The tracked location domain cannot be an arbitrary sparse subset.  If an
+untracked stack slot can overlap a tracked protected `Local` slot, then
+an untracked `Lsetstack` could silently invalidate the protected
+invariant.
+
+Therefore the finite tracked domain should satisfy:
+
+- all machine registers are tracked
+- all stack locations that are relevant to proof obligations are tracked
+- if a tracked `Local` slot may be protected, then any stack location
+  that is syntactically mentioned and may overlap it is also tracked
+
+This gives the checker and simulation a sound basis for using the
+checked pairwise-`Loc.diff` invariant.
+
+### 8. Make function-entry obligations explicit
+
+The hardest call-boundary issue is function entry.  `call_regs` copies
+registers from caller to callee, and `exec_function_internal` only
+applies `undef_regs destroyed_at_function_entry` on top of that.  So the
+callee does not begin in an arbitrary "all White" state.
+
+The plan should therefore require an explicit entrypoint discipline:
+
+- parameter locations at function entry are White
+- any tracked location that is live at function entry must be a
+  parameter location
+- non-parameter tracked locations must be defined before any protected
+  use
+
+This is the `Linear` analogue of making entrypoint compatibility a
+first-class checked condition, rather than discovering it ad hoc inside
+the faulty simulation proof.
 
 ## Where to cut the compiler pipeline
 
@@ -224,10 +292,29 @@ The checker must enforce:
 - returns expose only White interface values
 - tailcalls satisfy the same White interface discipline while also
   accounting for the `return_regs` / `call_regs` transition
+- distinct protected `Local` slots at a program point are pairwise
+  non-overlapping
 
 The checker still needs rules mentioning `Incoming`/`Outgoing`, but only
 to constrain them to White behavior rather than to treat them as
 protected channels.
+
+The call/return rules should be phrased over whole-location-set effects,
+not just explicit argument/result locations.  In particular, the
+specification should state the intended White/protected behavior for:
+
+- `call_regs` at function entry
+- `return_regs` at return and tailcall
+- caller-save vs. callee-save machine registers
+- `Local`, `Incoming`, and `Outgoing` slots separately
+- external-call argument/result placement via `loc_arguments` and
+  `loc_result`
+
+At function entry, the specification should also state:
+
+- parameter locations are White
+- live tracked locations at entry are restricted to parameter locations
+- non-parameter tracked locations are irrelevant until defined
 
 ### Consequences for the faulty simulation
 
@@ -248,6 +335,10 @@ transformations performed by:
 - `return_regs` at returns and tailcalls
 - `loc_arguments` / `loc_result` for external calls
 - caller-save destruction and function-entry destruction
+
+The simulation should not have to discover these obligations on its own.
+They should already be reflected in the checker/specification as
+first-class interface-discipline rules.
 
 ## Theorem Phases
 
@@ -335,7 +426,7 @@ since any indexed control-flow view must agree with it.
    - `Lgetstack`
    - `Lsetstack`
    - calls / tailcalls / returns
-   - builtins including votes and smoves
+   - builtins including votes, smoves, and `EF_debug`
    - labels / gotos / conditionals / jumptables
 
 The checker/specification should treat calls, tailcalls, returns, and
@@ -346,6 +437,37 @@ whole `locset`.
 The specification must state explicitly that only `Local` slots may
 carry protected colors among stack locations, while `Incoming` and
 `Outgoing` remain White-only interface locations.
+
+The specification should also include an explicit protected-local
+non-overlap invariant:
+
+- if two tracked `Local` slots are both protected (non-White) at a
+  program point and are distinct, then they satisfy `Loc.diff`
+
+Instruction rules should preserve this invariant at successors.
+
+For calls, returns, tailcalls, and external calls, specify the full
+location-set discipline up front:
+
+- which locations must be White before the instruction
+- how `call_regs` changes the callee-entry view
+- how `return_regs` changes the post-return / tailcall view
+- which caller-save registers may be forgotten
+- which callee-save registers and stack locations are preserved
+- how `loc_arguments` / `loc_result` interact with White boundaries
+
+For function entry, specify the live-in discipline up front:
+
+- parameter locations are White at entry
+- any tracked location live at entry must be a parameter location
+- no protected non-parameter location is assumed across the boundary
+
+For `EF_debug` builtins in the first theorem:
+
+- treat them as White/debug-interface operations
+- do not treat them as protected computation
+- keep their rule aligned with the current RTL treatment, rather than
+  trying to optimize around them initially
 
 ### Phase 3: Verified Boolean checker
 
@@ -368,14 +490,18 @@ Lemma check_program_sound :
 
 **Design note**
 
-If a dense `pc x loc` domain becomes awkward, switch early to a sparse
-or liveness-bounded formulation instead of forcing a quadratic
-representation.
-
 The Boolean checker should consume the same indexed program-point view
 and proof-liveness information used by the declarative specification, so
 that checker soundness and the faulty simulation invariant do not drift
 apart.
+
+It should also consume the same finite tracked location domain used by
+the simulation invariant.  In particular, the protected-local
+non-overlap guarantee is only as strong as the tracked domain over which
+it is checked.
+
+The tracked domain should be overlap-closed enough that an untracked
+stack write cannot overlap a tracked protected `Local` slot.
 
 ### Phase 4: Unverified inference oracle
 
@@ -390,6 +516,9 @@ apart.
 3. Reuse the shared indexed program-point representation rather than
    inventing a separate oracle-local numbering.
 4. Wire extraction similarly to the existing RTL checker pipeline.
+
+The oracle should target the same tracked location domain that the
+checker validates and the simulation consumes.
 
 ### Phase 5: Faulty Linear semantics
 
@@ -408,15 +537,18 @@ apart.
 
 - `Lop`: faultable exactly when the underlying `operation` is not
   protected
-- `Lgetstack`: faultable, since it reloads a value into a register
-  destination and should be covered by the theorem
+- `Lgetstack Local ...`: faultable, since it reloads a protected local
+  value into a register destination and should be covered by the theorem
+- `Lgetstack Incoming ...` and `Lgetstack Outgoing ...`: not faultable
+  in the first theorem, because they read interface/ABI channels rather
+  than protected local storage
 - `Lload`: likely not faultable in the first version, matching the RTL
   prototype's conservative choice
 - `Lsetstack`, `Lstore`, calls, tailcalls, and direct stack writes:
   unfaultable in the first theorem
-- votes and `smove` builtins: classify explicitly and keep them
-  unfaultable if they are intended to remain outside the single-fault
-  coverage argument
+- votes, `smove`, and `EF_debug` builtins: classify explicitly and keep
+  them unfaultable if they are intended to remain outside the
+  single-fault coverage argument
 
 ### Phase 6: Faulty backward simulation at Linear
 
@@ -451,9 +583,15 @@ The case analysis should explicitly budget proof work for:
 - external call builtins / ABI result placement
 
 The match relation should track protected registers plus `Local` slots,
-with White call boundaries. The proof should treat `call_regs`,
+with explicit interface-discipline call boundaries. The proof should
+treat `call_regs`,
 `return_regs`, external-call result placement, caller-save destruction,
 and function-entry destruction as first-class invariant transitions.
+
+The match relation should also consume the checked non-overlap invariant
+for protected local slots, so that when one protected location is
+updated the proof can show that the other protected locations are
+unchanged via `Loc.diff`.
 
 ### Phase 7: Final theorem in `driver/Complements.v`
 
@@ -502,6 +640,9 @@ Specific risks:
   obligations, just as at RTL
 - tracking too few interface locations may leave call/return proofs too
   weak
+- if protected `Local` slots are tracked but their pairwise non-overlap
+  is not checked, stack-slot overlap can invalidate the intended
+  separation invariant
 
 Likely mitigations:
 
@@ -509,6 +650,8 @@ Likely mitigations:
 - prune or bound it with a dedicated proof-oriented liveness analysis
 - include boundary-specific White obligations for `loc_arguments`,
   `loc_result`, `call_regs`, and `return_regs`
+- include an explicit pairwise-`Loc.diff` check for tracked protected
+  `Local` slots
 
 ### 2. Indexed helper layer vs. new IR
 
