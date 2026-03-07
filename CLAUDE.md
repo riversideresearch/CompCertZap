@@ -26,7 +26,7 @@ make check-proof        # Verify semantic preservation
 
 # Clean
 make clean              # Remove build artifacts
-make cleanall           # Remove everything including generated files
+make distclean          # Remove everything including generated files
 
 # Use the compiler
 ./ccomp test.c -tmr -o test    # Compile with TMR fault tolerance
@@ -60,6 +60,7 @@ Two pipeline variants:
 - **`cparser/`** - OCaml C parser (Menhir-based: `Parser.vy`, `Lexer.mll`, `Elab.ml`)
 - **`backend/`** - RTL and below: optimizations, register allocation, code generation
 - **`x86/`** - x86-64 specific: `Asm.v`, `Asmgen.v`, `Op.v`, `Machregs.v`
+- **`riscV/`** - RISC-V specific: `Asm.v`, `Asmgen.v`, `Op.v`, `Machregs.v`
 - **`driver/`** - `Compiler.v` (pipeline), `Complements.v` (top-level theorems), `Driver.ml` (entry point)
 - **`extraction/`** - `extraction.v` directs Coq extraction to OCaml
 
