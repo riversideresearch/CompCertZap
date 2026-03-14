@@ -8,7 +8,25 @@ open RTL
 open RTLcolor
 
 (* Union-find version, with liveness bounded quantification and sparse
-   colorings (hash tables). *)
+   colorings (hash tables).
+
+   At a high level, the algorithm builds a set of equality constraints
+   between register colors at RTL program points, together with explicit
+   constraints to the distinguished colors Red/Green/Blue/White/Pink.
+
+   The state is represented as an array indexed by RTL node number.  Each
+   array slot stores a hash table from registers mentioned at that node to
+   union-find classes.  Processing an instruction unions together the
+   classes forced equal by the coloring discipline for that instruction,
+   while liveness limits which unrelated registers must keep the same
+   color across control-flow edges.
+
+   Once all constraints have been accumulated, each queried (node, reg)
+   pair is mapped to the color represented by its union-find class, with
+   Red used as the default for unconstrained pairs.
+
+   This representation is efficient, but it assumes the RTL node numbers
+   are dense enough to index the per-node arrays directly. *)
 
 (* This file provides an implementation of the color inference oracle
    declared in Colorcheck.v with the following type: *)
@@ -161,6 +179,8 @@ let regs_of_function (f : coq_function) : Regset.t =
     (PTree.fold (fun acc _ instr -> Regset.union acc @@ instr_regs instr)
        f.fn_code Regset.empty) f.fn_params
 
+(* Per-node coloring state. We use one hash table per RTL node,
+   mapping registers mentioned at that node to union-find classes. *)
 let init_cols (f : coq_function) : (int, uf_node) Hashtbl.t Array.t =
   let num_instrs = List.length (PTree.elements f.fn_code) in
   Array.init num_instrs (fun _ -> Hashtbl.create 100)
@@ -177,11 +197,17 @@ let print_cols (f : coq_function) (cols : (int, uf_node) Hashtbl.t Array.t) : un
       print_col col
     ) cols
 
+(* Lazily allocate a color class for a register at one node the first
+   time some constraint mentions it. *)
 let get (col : (int, uf_node) Hashtbl.t) (r : int) : uf_node =
   match Hashtbl.find_opt col r with
   | Some n -> n
   | None -> let n = make () in Hashtbl.add col r n; n
 
+(* Generate all equality/color constraints induced by one instruction.
+   [live] is the live-out set for [pc], so registers not mentioned by
+   the instruction itself are only related across successors when
+   liveness requires it. *)
 let instr_constraints
       (cols : (int, uf_node) Hashtbl.t Array.t)
       (live : int list)
@@ -320,6 +346,8 @@ let instr_constraints
      | Some r -> union (get col r) white
      | None -> ()
 
+(* Seed the entrypoint parameter colors, then accumulate constraints
+   for every instruction in the function. *)
 let function_constraints
       (f : coq_function)
       (live : int list Array.t)
@@ -343,6 +371,7 @@ let color_of_uf_node n =
   else if eq n blue then Blue
   else if eq n white then White
   else if eq n pink then Pink
+  (* Unconstrained classes default to Red in the exported coloring. *)
   else Red
 
 let ptree_of_uf_node_array (m : uf_node Array.t) : color PTree.t =
@@ -351,6 +380,8 @@ let ptree_of_uf_node_array (m : uf_node Array.t) : color PTree.t =
     PTree.Empty
     (Array.mapi (fun i a -> (i, a)) m)
 
+(* Convert liveness information into the array layout expected by
+   [function_constraints]. *)
 let convert_live_sets (f : coq_function) (live : Regset.t PMap.t) : int list Array.t =
   let num_instrs = List.length (PTree.elements f.fn_code) in
   Array.init num_instrs (fun n ->
