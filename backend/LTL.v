@@ -307,6 +307,52 @@ Inductive final_state: state -> int -> Prop :=
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
+(** This semantics is determinate. *)
+
+Lemma semantics_determinate:
+  forall p, determinate (semantics p).
+Proof.
+  Ltac Equalities :=
+    match goal with
+    | [ H1: ?a = ?b, H2: ?a = ?c |- _ ] =>
+        rewrite H1 in H2; inv H2; Equalities
+    | _ => idtac
+    end.
+  intros; constructor; simpl; intros.
+  - (* determ *)
+    inv H; inv H0; Equalities; try solve [split; try constructor; auto].
+    + assert (vargs0 = vargs) by (eapply eval_builtin_args_determ; eauto).
+      subst vargs0.
+      match goal with
+      | HEC1: external_call _ _ _ _ _ _ _,
+        HEC2: external_call _ _ _ _ _ _ _ |- _ =>
+          exploit external_call_determ; [exact HEC1 | exact HEC2 |]
+      end.
+      intros [A B].
+      split. auto. intros. destruct B; auto. subst. auto.
+    + assert (args0 = args) by congruence. subst args0.
+      match goal with
+      | HEC1: external_call _ _ _ _ _ _ _,
+        HEC2: external_call _ _ _ _ _ _ _ |- _ =>
+          exploit external_call_determ; [exact HEC1 | exact HEC2 |]
+      end.
+      intros [A B].
+      split. auto. intros. destruct B; auto. subst. auto.
+  - (* trace length *)
+    red; intros; inv H; simpl; try lia.
+    eapply external_call_trace_length; eauto.
+    eapply external_call_trace_length; eauto.
+  - (* initial states *)
+    inv H; inv H0.
+    unfold ge in *.
+    unfold ge0 in *.
+    f_equal; congruence.
+  - (* final no step *)
+    inv H. red; intros s' STEP. inv STEP.
+  - (* final states *)
+    inv H; inv H0. congruence.
+Qed.
+
 (** * Operations over LTL *)
 
 (** Computation of the possible successors of a block.

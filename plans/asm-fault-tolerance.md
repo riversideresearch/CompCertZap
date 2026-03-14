@@ -49,6 +49,18 @@ Interpretation:
 
 So the `LTL` plan should be read as Phases 0-7 of this broader effort.
 
+However, the recommended implementation order is not "finish every
+detail of the `LTL` plan, then begin thinking about `Asm`".  The cleaner
+interpretation is:
+
+1. design the exportable `LTL` witness interface up front
+2. land the `LTL` theorem as a clean milestone using that interface
+3. treat the later `Asm` work as a consumer of that already-stabilized
+   post-allocation witness
+
+That preserves a real standalone `LTL` milestone while avoiding
+refactoring the checker contract later.
+
 ## Why this route
 
 ### 1. Why keep `LTL` as the source of truth
@@ -279,9 +291,11 @@ makes proofs simpler.
 
 ## Stage breakdown
 
-## Stage 1: Complete the existing LTL theorem plan
+## Stage 1: Land the LTL milestone with witness export built in
 
-This is the current `plans/ltl-fault-tolerance.md`.
+This is the current `plans/ltl-fault-tolerance.md`, interpreted with
+the witness layer as part of the milestone rather than as a later
+refactor.
 
 Deliverables:
 
@@ -292,18 +306,18 @@ Deliverables:
 5. `LTLfault.faulty_semantics`
 6. `LTLtolerant.faulty_backward_simulation`
 7. `transf_c_program_to_ltl_preservation_faulty`
+8. `LTLwitness.wf_witness`
+9. `LTLcolorcheck.check_program_sound` exposing witness existence
 
-Additional requirement for compatibility with this Asm plan:
+The key point is that witness export is not a post-milestone cleanup
+task.  It is part of what makes the `LTL` milestone reusable.
 
-- the `LTL` checker/specification should produce or justify an explicit
-  exportable protection witness, not only a closed Boolean fact
-
-## Stage 2: Refactor LTL checker output into an exportable witness
+## Stage 2: Stabilize the witness API for downstream lowering
 
 ### Objective
 
-Define a witness format extracted from the `LTL` protection proof state
-that later backend passes can lower into metadata.
+Freeze the post-allocation witness contract that later backend passes
+will lower into metadata.
 
 ### Files
 
@@ -313,8 +327,9 @@ that later backend passes can lower into metadata.
 
 ### Actions
 
-1. define a compact witness type for checked `LTL` programs
-2. prove that checker success yields both:
+1. validate that the milestone witness type is compact and lowering-
+   oriented rather than proof-only
+2. ensure that checker success yields both:
    - `wc_program`
    - existence of a witness satisfying the witness spec
 3. separate witness contents from proof-only derived facts where useful
@@ -329,6 +344,8 @@ that later backend passes can lower into metadata.
 
 - `LTLcolorcheck.check_program` still implies `LTLcolor.wc_program`
 - there is an explicit witness theorem consumable by later passes
+- no downstream metadata design requires changing the checker-output
+  theorem shape
 
 ## Stage 3: Choose the metadata lowering spine
 
@@ -716,9 +733,10 @@ spilling is realistic the location/provenance story becomes necessary.
 
 ## Recommended implementation order
 
-1. finish the `LTL` theorem plan, with explicit witness export in mind
-2. define the witness type and checker output theorem
-3. choose the metadata lowering spine and tagged-program surface API
+1. update the `LTL` plan so the witness layer is part of the milestone
+2. land the `LTL` milestone theorem and checker stack
+3. freeze the witness API and only then choose the metadata lowering
+   spine and tagged-program surface API
 4. implement metadata transport through post-alloc control-flow passes
 5. implement stack-location lowering in `Stacking`
 6. emit final per-position metadata in `Asmgen`

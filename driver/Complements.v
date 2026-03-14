@@ -15,7 +15,7 @@
 From Coq Require Import Classical.
 Require Import Coqlib Errors.
 Require Import AST Linking Events Smallstep Behaviors.
-Require Import Csyntax Csem Cstrategy Asm.
+Require Import Csyntax Csem Cstrategy LTL Asm.
 Require Import Compiler.
 Require Import Compopts.
 Require Import RTLagreement RTLcolorcheck RTLfault RTLtolerant.
@@ -275,6 +275,16 @@ Theorem transf_c_program_to_rtl_preservation:
 Proof.
   intros. eapply backward_simulation_behavior_improves; eauto.
   eapply transf_c_program_to_rtl_correct; eauto.
+Qed.
+
+Theorem transf_c_program_to_ltl_preservation:
+  forall p tp beh,
+  transf_c_program_to_ltl p = OK tp ->
+  program_behaves (LTL.semantics tp) beh ->
+  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh.
+Proof.
+  intros. eapply backward_simulation_behavior_improves; eauto.
+  eapply transf_c_program_to_ltl_correct; eauto.
 Qed.
 
 (* Lemma compiled_rtl_weak_agreement p tp : *)

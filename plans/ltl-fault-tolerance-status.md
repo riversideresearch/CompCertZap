@@ -363,3 +363,21 @@ Date:
 - Blockers: none
 - Next step: start `M0` by adding the truncated `LTL` pipeline and its
   ordinary preservation lemmas.
+
+### 2026-03-07
+
+- Summary: implemented the first `M0` code changes for the `LTL` cut:
+  added `transf_*_to_ltl`, `match_prog_ltl`, the ordinary `LTL`
+  preservation wrappers, and an `LTL.semantics_determinate` lemma.
+- Files touched:
+  - [backend/LTL.v](/home/alex/source/compcert/backend/LTL.v)
+  - [driver/Compiler.v](/home/alex/source/compcert/driver/Compiler.v)
+  - [driver/Complements.v](/home/alex/source/compcert/driver/Complements.v)
+- Build/test status: proof validation blocked locally. `make
+  backend/LTL.vo`, `make driver/Compiler.vo`, and `make
+  driver/Complements.vo` all fail before checking the edits because
+  `coqc` cannot resolve `Require Import Coqlib`.
+- Blockers:
+  - local Coq load-path / build configuration mismatch
+- Next step: resolve the Coq build environment, then re-run the narrow
+  proof targets and fix any remaining proof-script issues.

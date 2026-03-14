@@ -100,6 +100,32 @@ Interpretation:
 This preserves the current proof architecture while moving the target
 language from RTL to `LTL`.
 
+## Milestone discipline
+
+The `LTL` theorem should be implemented as a clean standalone milestone.
+However, it should not be engineered as a dead-end theorem whose
+checker output is only a closed Boolean fact.
+
+The intended milestone boundary is:
+
+1. land the first post-allocation fault-tolerance theorem at `LTL`
+2. expose an explicit post-allocation witness interface at the same time
+3. keep later `Asm` metadata transport out of scope for this milestone
+
+Concretely, the `LTL` milestone should finish with:
+
+- an `LTL` checker/specification over block-local points and `loc`
+- a soundness theorem that yields:
+  - `wc_program`
+  - certified fault-site information
+  - existence of an exportable protection witness
+- a faulty backward simulation theorem at `LTL`
+- a top-level `transf_c_program_to_ltl_preservation_faulty` theorem
+
+The witness should be designed as the future source artifact for the
+`Asm` plan, but the `LTL` milestone should not depend on any downstream
+metadata-lowering implementation.
+
 ## Common design decisions
 
 ### 1. Cut immediately after Allocation
@@ -518,6 +544,7 @@ facts already proved by `Allocproof`, especially:
 
 - `backend/LTLfaultspec.v`
 - `backend/LTLProofLiveness.v`
+- `backend/LTLwitness.v`
 
 **Actions**
 
@@ -528,7 +555,9 @@ facts already proved by `Allocproof`, especially:
 4. Define an independent declarative faultability specification over
    point-indexed writes, e.g. `faultable_at`
 5. Define well-coloredness for `LTL` instructions
-6. Include rules for:
+6. Define an abstract protection-witness interface derived from checked
+   `LTL` structure
+7. Include rules for:
    - `Lop`
    - `Lload`
    - `Lstore`
@@ -552,6 +581,17 @@ The specification must state explicitly:
 and continuations to static checker points so that checker soundness and
 the witness-carrying simulation invariant can talk about the coloring at
 the current instruction position.
+
+The witness interface should be deliberately narrower than "the entire
+color map at every point".  It should expose exactly the facts intended
+to survive as post-allocation source-of-truth data, for example:
+
+- protected program-point classes
+- White-boundary points
+- protected lanes / ownership facts
+- tracked protected writes and reads
+- tracked abstract `Local`-slot provenance needed later by lowering
+  proofs
 
 ### Phase 4: Verified Boolean checker
 
@@ -578,7 +618,9 @@ the current instruction position.
 ```coq
 Lemma check_program_sound :
   check_program p = Some fc ->
-  LTLcolor.wc_program p /\ LTLfaultspec.wf_faultclass p fc.
+  LTLcolor.wc_program p /\
+  LTLfaultspec.wf_faultclass p fc /\
+  exists w, LTLwitness.wf_witness p w.
 ```
 
 **Design note**
@@ -592,6 +634,10 @@ The checker API should support staged certification:
 - the initial implementation should return a `V1` fault classification
 - the later extension should enlarge the certified classification to
   `V2` without changing the theorem interface
+
+This witness theorem is part of the `LTL` milestone itself.  The later
+`Asm` plan may refine the witness representation, but it should not need
+to revisit the basic shape of the checker output contract.
 
 ### Phase 5: Faulty LTL semantics
 
@@ -729,18 +775,39 @@ Theorem transf_c_program_to_ltl_preservation_faulty :
    tolerant theorem
 2. the checker output yields both `LTLcolor.wc_program` and certified
    `LTLfaultspec.wf_faultclass`
-3. `Allocation` outputs satisfy `LTLabi.wf_program`
-4. `LTL`@Three is refined by post-TMR RTL@Three via the new allocation
+3. the same checker output also yields an exportable witness, even if
+   the `LTL` theorem itself does not consume it yet
+4. `Allocation` outputs satisfy `LTLabi.wf_program`
+5. `LTL`@Three is refined by post-TMR RTL@Three via the new allocation
    preservation lemma
-5. post-TMR RTL@Three is refined by pre-TMR RTL@Three via the existing
+6. post-TMR RTL@Three is refined by pre-TMR RTL@Three via the existing
    TMR theorem
-6. pre-TMR RTL@Three is refined by C via the existing weak-agreement +
+7. pre-TMR RTL@Three is refined by C via the existing weak-agreement +
    standard compiler-correctness chain
-7. compose `behavior_improves` transitively
+8. compose `behavior_improves` transitively
 
 The `V2` theorem should reuse the same composition and differ only in
 the larger certified fault classification admitted by the checker and
 tolerant theorem.
+
+## Exit criteria for the LTL milestone
+
+The `LTL` milestone is complete when the development has all of the
+following:
+
+1. `transf_c_program_to_ltl`
+2. `LTLabi.wf_program`
+3. `LTLcolor.wc_program`
+4. `LTLfaultspec.wf_faultclass`
+5. `LTLwitness.wf_witness`
+6. `LTLcolorcheck.check_program_sound`
+7. `LTLfault.faulty_semantics`
+8. `LTLtolerant.faulty_backward_simulation`
+9. `transf_c_program_to_ltl_preservation_faulty`
+
+The milestone does not require any `Asm` metadata transport or tagged
+`Asm` theorem.  It only requires that the checker-output interface is
+already shaped for later reuse.
 
 ## Open design questions
 
