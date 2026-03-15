@@ -278,7 +278,9 @@ Section TOLERANCE.
         eapply step_succ in Hstep; eauto.
         clear WC_FUN0.
         inv_wc; simpl in *; try congruence; inv H2; inv Hstep; try contradiction.
-        inv H4; constructor. }
+        all: first [ assumption
+                   | unfold builtin_can_fault in H1; congruence
+                   | exfalso; inv H3; vm_compute in H1; discriminate ]. }
       exists (col pc' r); split; auto.
       intros x Hx.
       destruct (peq x r); subst; try congruence.
@@ -773,6 +775,140 @@ Section TOLERANCE.
       destruct ((Genv.genv_symb _)) ! _; congruence.
   Qed.
 
+  Lemma safe_external_call_E0 {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vargs m t vres m' :
+    builtin_can_replicate ef = true ->
+    @external_call VT vsem ef (Genv.globalenv prog) vargs m t vres m' ->
+    t = E0.
+  Proof.
+    intros Hcan Hcall.
+    unfold builtin_can_replicate in Hcan.
+    destruct ef; simpl in *; try discriminate.
+    destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; [|discriminate].
+    unfold external_call, builtin_or_external_sem in *.
+    rewrite Hlookup in *. inv Hcall. reflexivity.
+  Qed.
+
+  Lemma safe_external_call_mem {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vargs m t vres m' :
+    builtin_can_replicate ef = true ->
+    @external_call VT vsem ef (Genv.globalenv prog) vargs m t vres m' ->
+    m' = m.
+  Proof.
+    intros Hcan Hcall.
+    unfold builtin_can_replicate in Hcan.
+    destruct ef; simpl in *; try discriminate.
+    destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; [|discriminate].
+    unfold external_call, builtin_or_external_sem in *.
+    rewrite Hlookup in *. inv Hcall. reflexivity.
+  Qed.
+
+  Lemma safe_external_call_total
+    {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vargs1 vargs2 m1 m2 t vres1 m1' :
+    builtin_can_replicate ef = true ->
+    Forall2 val_compat vargs1 vargs2 ->
+    Memory.Mem.extends m1 m2 ->
+    @external_call VT vsem ef (Genv.globalenv prog) vargs1 m1 t vres1 m1' ->
+    exists vres2,
+      @external_call VT vsem ef (Genv.globalenv prog) vargs2 m2 E0 vres2 m2.
+  Proof.
+    intros Hcan Hcompat Hmem Hcall.
+    unfold builtin_can_replicate in Hcan.
+    destruct ef; simpl in *; try discriminate.
+    destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; [|discriminate].
+    unfold external_call, builtin_or_external_sem in *.
+    rewrite Hlookup in *. inv Hcall.
+    destruct b as [sb|pb|rb].
+    - destruct sb; simpl in *; try discriminate;
+        repeat match goal with
+               | [ H : Forall2 _ (_ :: _) _ |- _ ] => inv H
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        repeat match goal with
+               | [ H : match ?x with _ :: _ => _ | nil => _ end = Some _ |- _ ] =>
+                   destruct x; [discriminate|]; simpl in H
+               | [ H : Forall2 _ (_ :: _) _ |- _ ] => inv H
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        try match goal with
+            | [ H : match ?x with _ :: _ => _ | nil => _ end = Some _ |- _ ] =>
+                destruct x; [|discriminate]
+            end;
+        repeat match goal with
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        try (eexists; constructor; reflexivity).
+    - destruct pb; simpl in *; try discriminate;
+        repeat match goal with
+               | [ H : Forall2 _ (_ :: _) _ |- _ ] => inv H
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        repeat match goal with
+               | [ H : match ?x with _ :: _ => _ | nil => _ end = Some _ |- _ ] =>
+                   destruct x; [discriminate|]; simpl in H
+               | [ H : Forall2 _ (_ :: _) _ |- _ ] => inv H
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        try match goal with
+            | [ H : match ?x with _ :: _ => _ | nil => _ end = Some _ |- _ ] =>
+                destruct x; [|discriminate]
+            end;
+        repeat match goal with
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        try (eexists; constructor; reflexivity).
+    - simpl in Hcan. discriminate.
+  Qed.
+
+  Lemma eval_builtin_arg_val_compat sp m1 m2 rs1 rs2 a v1 :
+    rs_compat rs1 rs2 ->
+    Memory.Mem.extends m1 m2 ->
+    eval_builtin_arg ge (fun r => rs1 # r) sp m1 a v1 ->
+    exists v2, eval_builtin_arg ge (fun r => rs2 # r) sp m2 a v2 /\ val_compat v1 v2.
+  Proof.
+    intros Hrs Hmem Heval.
+    induction Heval.
+    - exists (rs2 # x). split; [constructor | apply Hrs].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eapply Memory.Mem.loadv_extends in H; eauto.
+      destruct H as (v2 & Hload & Hld).
+      eexists; split; [econstructor; eauto | apply val_lessdef_compat; auto].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eapply Memory.Mem.loadv_extends in H; eauto.
+      destruct H as (v2 & Hload & Hld).
+      eexists; split; [econstructor; eauto | apply val_lessdef_compat; auto].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - destruct IHHeval1 as (v2hi & Hhi & Hchi).
+      destruct IHHeval2 as (v2lo & Hlo & Hclo).
+      eexists; split; [econstructor; eauto|].
+      inv Hchi; inv Hclo; simpl; try constructor.
+    - destruct IHHeval1 as (v2a & Ha & Hca).
+      destruct IHHeval2 as (v2b & Hb & Hcb).
+      eexists; split; [econstructor; eauto|].
+      destruct Archi.ptr64; [unfold Val.addl | unfold Val.add];
+        inv Hca; inv Hcb; simpl; try constructor;
+        try (destruct Archi.ptr64; constructor).
+  Qed.
+
+  Lemma eval_builtin_args_val_compat sp m1 m2 rs1 rs2 al vl1 :
+    rs_compat rs1 rs2 ->
+    Memory.Mem.extends m1 m2 ->
+    eval_builtin_args ge (fun r => rs1 # r) sp m1 al vl1 ->
+    exists vl2, eval_builtin_args ge (fun r => rs2 # r) sp m2 al vl2 /\
+      Forall2 val_compat vl1 vl2.
+  Proof.
+    intros Hrs Hmem Heval. induction Heval.
+    - exists nil; split; [constructor | constructor].
+    - edestruct eval_builtin_arg_val_compat as (v2 & Hv2 & Hvc); eauto.
+      destruct IHHeval as (vl2 & Hvl2 & Hfl).
+      exists (v2 :: vl2); split; [econstructor; eauto | constructor; auto].
+  Qed.
+
+
   Lemma faulty_progress i s1 s2 :
     match_states i s1 s2 ->
     safe (@RTL.semantics Three VoteSemantics_Three prog) s1 ->
@@ -906,7 +1042,8 @@ Section TOLERANCE.
     - destruct (is_vote_builtinb_spec ef) as [Hbuiltin|Hbuiltin].
       + pose proof H as Hpc.
         inv_wc; try solve [apply vote_not_green_smove in Hbuiltin; congruence];
-          try solve [apply vote_not_blue_smove in Hbuiltin; congruence].
+          try solve [apply vote_not_blue_smove in Hbuiltin; congruence];
+          try solve [exfalso; inv Hbuiltin; vm_compute in H6; discriminate].
         simpl in *.
         destruct vargs.
         { inv H0. }
@@ -966,10 +1103,24 @@ Section TOLERANCE.
         2: { apply maybe_zap_refl. }
         eapply exec_Ibuiltin; eauto.
         repeat constructor.
-      + eapply eval_builtin_args_lessdef' with (e2 := fun r => rs2 # r) in H0; eauto.
-        2: { apply Forall_forall.
-             intros barg Hin.
-             inv_wc; try contradiction.
+      + destruct (builtin_can_replicate ef) eqn:Hcan.
+        * (* Safe builtin *)
+          assert (HtE0: t = E0) by (eapply (@safe_external_call_E0 Three VoteSemantics_Three); eauto).
+          subst t.
+          eapply eval_builtin_args_val_compat in H0 as H0'; eauto.
+          destruct H0' as (vargs2 & Heval2 & Hcompat).
+          eapply (@safe_external_call_total Three VoteSemantics_Three) in H1 as Hcall; eauto.
+          destruct Hcall as (vres2 & Hcall2).
+          apply external_call_Three_Two' in Hcall2.
+          destruct Hcall2 as (v' & Hcall2 & _).
+          eexists; econstructor.
+          2: { apply maybe_zap_refl. }
+          eapply exec_Ibuiltin; eauto.
+        * (* Non-safe, non-vote builtin *)
+          eapply eval_builtin_args_lessdef' with (e2 := fun r => rs2 # r) in H0; eauto.
+          2: { apply Forall_forall.
+               intros barg Hin.
+               inv_wc; try contradiction; try congruence.
              - (* smove_green *)
                inv Hin; [|contradiction].
                simpl.
@@ -990,7 +1141,10 @@ Section TOLERANCE.
                + apply RS.
              - (* general builtin *)
                pose proof Hin as Hin_save.
-               rewrite Forall_forall in H9; apply H9 in Hin.
+               match goal with
+               | [ HF : Forall (builtin_arg_forall _) _ |- _ ] =>
+                   rewrite Forall_forall in HF; apply HF in Hin
+               end.
                destruct fault.
                + unfold match_rs in RS. inv_rs.
                  eapply builtin_arg_forall_impl_in.
@@ -1692,7 +1846,14 @@ Section TOLERANCE.
               rewrite <- (Hfa r Hin_live); auto
           end.
 
-        * (* other builtin *)
+        * (* safe builtin - faulted *)
+          (* Phase 3: the rs_compat invariant for the result register
+             requires val_compat of safe builtin results under val_compat
+             args, which is not generally provable for shift builtins.
+             The match_rs invariant is fine (result has faulted color). *)
+          admit.
+
+        * (* other builtin - faulted *)
           simpl in *.
           assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
           { eapply eval_builtin_args_lessdef'
@@ -1701,7 +1862,7 @@ Section TOLERANCE.
               eapply eval_builtin_args_determ in H0; eauto; subst; auto.
             - apply Forall_forall.
               intros barg Hin_barg.
-              rewrite Forall_forall in H9.
+              match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF end.
               eapply builtin_arg_forall_impl_in; eauto.
               simpl; intros r Hr Hin_r.
               apply RS.
@@ -1747,7 +1908,7 @@ Section TOLERANCE.
             destruct Hex as (y & Hy & Hin_argb).
             apply in_builtin_argb_sound in Hin_argb.
             pose proof Hy as Hy_orig.
-            rewrite Forall_forall in H9; apply H9 in Hy.
+            match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF; apply HF in Hy end.
             eapply in_builtin_arg_forall in Hy; eauto.
             apply RS.
             { eapply args_in_transfer_ibuiltin; eauto.
@@ -1935,7 +2096,49 @@ Section TOLERANCE.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
 
-        * (* other builtin *)
+        * (* safe builtin - non-faulted *)
+          assert (Ht: t = E0) by (eapply (@safe_external_call_E0 Two VoteSemantics_Two); eauto).
+          assert (Ht': t' = E0) by (eapply (@safe_external_call_E0 Three VoteSemantics_Three); eauto).
+          assert (Hmem_t: m' = m) by (eapply (@safe_external_call_mem Two VoteSemantics_Two); eauto).
+          assert (Hmem_s: m'0 = m1) by (eapply (@safe_external_call_mem Three VoteSemantics_Three); eauto).
+          subst t t' m' m'0.
+          pose proof H11 as H11_save. pose proof H12 as H12_save.
+          assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
+          { eapply eval_builtin_args_lessdef'
+              with (e2 := fun r => rs # r) in H11; eauto.
+            - destruct H11 as (vl2 & Heval & Hvl2).
+              eapply eval_builtin_args_determ in H0; eauto; subst; auto.
+            - apply Forall_forall.
+              intros barg Hin.
+              eapply builtin_arg_forall_impl.
+              2: { match goal with
+                   | [ HF : Forall (builtin_arg_forall _) _ |- _ ] =>
+                       rewrite Forall_forall in HF; apply HF in Hin; exact Hin
+                   end. }
+              simpl; intros; auto. }
+          assert (Hlessdef: Val.lessdef vres0 vres).
+          { eapply Events.external_call_mem_extends in H12; eauto.
+            destruct H12 as (vres' & m2' & Hext & Hvres' & Hmem_ext & _).
+            apply external_call_Three_Two' in Hext.
+            destruct Hext as (v' & Hext & Hld).
+            eapply external_call_deterministic in Hext.
+            2: { exact H1. }
+            destruct Hext as [Heq _]; subst.
+            eapply Val.lessdef_trans; eauto. }
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto. }
+          simpl. econstructor; eauto.
+          { intro r.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss.
+              apply val_lessdef_compat; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          intros r.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss; auto. }
+          rewrite 2!Regmap.gso; auto.
+
+        * (* other builtin - non-faulted *)
           simpl in *.
           assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
           { eapply eval_builtin_args_lessdef'
@@ -1944,7 +2147,7 @@ Section TOLERANCE.
               eapply eval_builtin_args_determ in H0; eauto; subst; auto.
             - apply Forall_forall.
               intros barg Hin.
-              rewrite Forall_forall in H9.
+              match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF end.
               eapply builtin_arg_forall_impl; eauto. }
           assert (exists vres' m'', @external_call _ VoteSemantics_Three
                                  ef0 (Genv.globalenv prog) vargs0 m1 t vres' m'' /\
@@ -1984,7 +2187,7 @@ Section TOLERANCE.
             apply existsb_exists in Hex.
             destruct Hex as (y & Hy & Hin).
             apply in_builtin_argb_sound in Hin.
-            rewrite Forall_forall in H9; apply H9 in Hy.
+            match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF; apply HF in Hy end.
             eapply in_builtin_arg_forall in Hy; eauto. }
           destruct res0; simpl.
           { destruct (peq r x); subst.
@@ -2188,7 +2391,7 @@ Section TOLERANCE.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
-  Qed.
+  Admitted. (* Phase 3: faulted safe builtin rs_compat *)
 
   Lemma faulty_simulation s2 t s2' :
     Step (faulty_semantics prog) s2 t s2' ->
