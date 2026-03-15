@@ -28,11 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `builtin_sem_val_compat` is proved for `mkbuiltin_nNt` builtins: given `val_compat`-related inputs, the builtin produces `val_compat`-related outputs
   4. `builtin_sem_val_compat` is proved for `mkbuiltin_v2t` builtins (`BI_mull`, `BI_addl`, `BI_subl`, shifts) with the same property
   5. Protocol recognizers (`smove`, `vote`, `check`) are accessible from `common/Builtins.v` and explicitly excluded from the safe classification
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md — Define classification predicates and reflection lemmas in common/Builtins.v
+- [ ] 01-02-PLAN.md — Migrate protocol recognizers from backend/RTL.v to common/Builtins.v
+- [ ] 01-03-PLAN.md — Prove val_compat monotonicity for safe builtins in backend/RTLfault.v
 
 ### Phase 2: Subsystem Updates
 **Goal**: TMR pass replicates safe builtins, color system accepts replicated safe builtins with basic colors, and faulty semantics allows faults on safe builtins
@@ -71,6 +72,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Classification and Semantic Foundation | 0/? | Not started | - |
+| 1. Classification and Semantic Foundation | 0/3 | Planned | - |
 | 2. Subsystem Updates | 0/? | Not started | - |
 | 3. Tolerant Proof and Final Integration | 0/? | Not started | - |
