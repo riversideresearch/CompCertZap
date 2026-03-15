@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 ## Current Position
 
 Phase: 1 of 3 (Classification and Semantic Foundation)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-03-15 -- Completed 01-01 (builtin classification predicates)
+Last activity: 2026-03-15 -- Completed 01-02 (protocol-builtin recognizer migration)
 
-Progress: [###░░░░░░░] 11%
+Progress: [######░░░░] 22%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 2min
-- Total execution time: 0.03 hours
+- Total plans completed: 2
+- Average duration: 3.5min
+- Total execution time: 0.12 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-classification-semantic-foundation | 1/3 | 2min | 2min |
+| 01-classification-semantic-foundation | 2/3 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01(2min)
+- Last 5 plans: 01-01(2min), 01-02(5min)
 - Trend: -
 
 *Updated after each plan completion*
@@ -47,6 +47,7 @@ Recent decisions affecting current work:
 - [01-01]: Archi.ptr64 accessed via qualified name from transitive Require Archi in AST.v -- no new import needed
 - [01-01]: BI_subl classified conditionally via negb Archi.ptr64, mirroring is_protectedb Osubl pattern
 - [01-01]: Used simple Bool-equals-true reflect pattern rather than richer inductive Prop form
+- [01-02]: Added explicit Require Import Builtins to 6 downstream consumers rather than changing RTL.v from Import to Export -- more targeted, avoids broadening RTL's re-export surface
 
 ### Pending Todos
 
@@ -59,5 +60,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-15
-Stopped at: Completed 01-01-PLAN.md (builtin classification predicates)
+Stopped at: Completed 01-02-PLAN.md (protocol-builtin recognizer migration)
 Resume file: None

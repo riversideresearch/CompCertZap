@@ -31,8 +31,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Define classification predicates and reflection lemmas in common/Builtins.v
-- [ ] 01-02-PLAN.md — Migrate protocol recognizers from backend/RTL.v to common/Builtins.v
+- [x] 01-01-PLAN.md — Define classification predicates and reflection lemmas in common/Builtins.v
+- [x] 01-02-PLAN.md — Migrate protocol recognizers from backend/RTL.v to common/Builtins.v
 - [ ] 01-03-PLAN.md — Prove val_compat monotonicity for safe builtins in backend/RTLfault.v
 
 ### Phase 2: Subsystem Updates
@@ -72,6 +72,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Classification and Semantic Foundation | 0/3 | Planned | - |
+| 1. Classification and Semantic Foundation | 2/3 | In Progress | - |
 | 2. Subsystem Updates | 0/? | Not started | - |
 | 3. Tolerant Proof and Final Integration | 0/? | Not started | - |
