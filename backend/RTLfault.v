@@ -57,7 +57,7 @@ Definition zap_allowed (i : instruction) : Prop :=
   | Istore _ _ _ _ _ => False
   | Icall _ _ _ _ _ => False
   | Itailcall _ _ _ => False
-  | Ibuiltin _ _ _ _ => False
+  | Ibuiltin ef _ _ _ => builtin_can_fault ef = true
   | _ => True
   end.
 
