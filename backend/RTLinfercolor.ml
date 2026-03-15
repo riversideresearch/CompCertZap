@@ -4,6 +4,7 @@ open Datatypes
 open Maps
 open Op
 open Registers
+open Builtins
 open RTL
 open RTLcolor
 
