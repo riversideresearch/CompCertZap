@@ -196,8 +196,7 @@ Section color_checker.
                 is_basicb (col succ res) &&
                 forallb (builtin_arg_forallb (fun r => col pc r =? col succ res)) bargs &&
                 Regset.for_all
-                  (fun r => existsb (in_builtin_argb r) bargs ||
-                           Pos.eqb r res ||
+                  (fun r => Pos.eqb r res ||
                            (col pc r =? col succ r))
                   (live !! pc)
             | _ => false
@@ -432,16 +431,9 @@ Section color_checker.
             apply builtin_arg_forallb_sound in Hin.
             eapply builtin_arg_forall_impl; eauto.
             intros; apply eqb_sound; auto. }
-          { intros r0 Hin Hnotex Hneq; specialize (Hpres r0 Hin).
+          { intros r0 Hin Hneq; specialize (Hpres r0 Hin).
             apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
-            { apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
-              - apply Forall_Exists_neg in Hnotex.
-                rewrite Forall_forall in Hnotex.
-                apply existsb_exists in Hpres.
-                destruct Hpres as (barg & Hin' & Hin'').
-                apply Hnotex in Hin'.
-                apply in_builtin_argb_sound in Hin''; contradiction.
-              - apply Pos.eqb_eq in Hpres; congruence. }
+            { apply Pos.eqb_eq in Hpres; congruence. }
             apply eqb_sound; auto. }
         * (* generic White-only builtin *)
           destruct_andb Hcheck Hpres.

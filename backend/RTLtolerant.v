@@ -861,6 +861,38 @@ Section TOLERANCE.
     - simpl in Hcan. discriminate.
   Qed.
 
+  Lemma safe_external_call_val_compat
+    {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vargs1 vargs2 m vres1 :
+    builtin_can_replicate ef = true ->
+    Forall2 val_compat vargs1 vargs2 ->
+    @external_call VT vsem ef (Genv.globalenv prog) vargs1 m E0 vres1 m ->
+    exists vres2,
+      @external_call VT vsem ef (Genv.globalenv prog) vargs2 m E0 vres2 m /\
+      val_compat vres1 vres2.
+  Proof.
+    intros Hcan Hcompat Hcall.
+    unfold builtin_can_replicate in Hcan.
+    destruct ef; simpl in *; try discriminate.
+    destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; [|discriminate].
+    unfold external_call, builtin_or_external_sem in Hcall.
+    rewrite Hlookup in Hcall. destruct Hcall as [vargs' vres' m' Hbsem].
+    assert (Hnoshift: match b with
+      | BI_standard BI_i64_shl
+      | BI_standard BI_i64_shr
+      | BI_standard BI_i64_sar => False
+      | _ => True
+      end).
+    { destruct b as [sb|pb|rb]; simpl in Hcan; try discriminate.
+      - destruct sb; simpl in Hcan; try discriminate; auto.
+      - destruct pb; simpl in Hcan; try discriminate; auto. }
+    eapply builtin_sem_val_compat in Hbsem; eauto.
+    destruct Hbsem as (vres2 & Hsem2 & Hvc).
+    exists vres2. split; auto.
+    unfold external_call, builtin_or_external_sem.
+    rewrite Hlookup. constructor; auto.
+  Qed.
+
   Lemma eval_builtin_arg_val_compat sp m1 m2 rs1 rs2 a v1 :
     rs_compat rs1 rs2 ->
     Memory.Mem.extends m1 m2 ->
@@ -1847,11 +1879,79 @@ Section TOLERANCE.
           end.
 
         * (* safe builtin - faulted *)
-          (* Phase 3: the rs_compat invariant for the result register
-             requires val_compat of safe builtin results under val_compat
-             args, which is not generally provable for shift builtins.
-             The match_rs invariant is fine (result has faulted color). *)
-          admit.
+          assert (Ht: t = E0) by (eapply (@safe_external_call_E0 Two VoteSemantics_Two); eauto).
+          assert (Ht': t' = E0) by (eapply (@safe_external_call_E0 Three VoteSemantics_Three); eauto).
+          assert (Hmem_t: m' = m) by (eapply (@safe_external_call_mem Two VoteSemantics_Two); eauto).
+          assert (Hmem_s: m'0 = m1) by (eapply (@safe_external_call_mem Three VoteSemantics_Three); eauto).
+          subst t t' m' m'0.
+          (* val_compat of args via rs_compat *)
+          assert (Hcompat_list: Forall2 val_compat vargs0 vargs).
+          { pose proof H11 as H11c.
+            eapply eval_builtin_args_val_compat in H11c; eauto.
+            destruct H11c as (vl2 & Heval & Hfl).
+            eapply eval_builtin_args_determ in Heval; [|exact H0].
+            subst; auto. }
+          (* val_compat of result via builtin_sem_val_compat *)
+          assert (Hcompat_res: val_compat vres0 vres).
+          { pose proof H12 as Hcall_src.
+            eapply safe_external_call_val_compat in Hcall_src; eauto.
+            destruct Hcall_src as (vres2 & Hcall2 & Hvc).
+            apply external_call_Three_Two' in Hcall2.
+            destruct Hcall2 as (v1 & Hcall2 & Hld1).
+            eapply Events.external_call_mem_extends in Hcall2; eauto.
+            2: { apply Val.lessdef_list_refl. }
+            destruct Hcall2 as (v2 & m2 & Hcall3 & Hld2 & _ & _).
+            eapply external_call_deterministic in Hcall3.
+            2: { exact H1. }
+            destruct Hcall3 as [? ?]; subst.
+            eapply val_compat_trans; eauto.
+            apply val_lessdef_compat.
+            eapply Val.lessdef_trans; eauto. }
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto. }
+          simpl. econstructor; eauto.
+          { intro r.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          exists c; split; auto.
+          intros r Hr Hcol_ne; simpl in *.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss.
+            (* col succ res ≠ c, so all arg registers have Val.lessdef *)
+            assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
+            { eapply eval_builtin_args_lessdef'
+                with (e2 := fun r => rs # r) in H11; eauto.
+              - destruct H11 as (vl2 & Heval & Hvl2).
+                eapply eval_builtin_args_determ in H0; eauto; subst; auto.
+              - apply Forall_forall.
+                intros barg Hin_barg.
+                match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF end.
+                eapply builtin_arg_forall_impl_in; eauto.
+                simpl; intros r Hr' Hin_r.
+                apply RS.
+                { eapply args_in_transfer_ibuiltin; eauto.
+                  eapply in_builtin_arg_in_params_args; eauto. }
+                intro HC; rewrite Hr' in HC; congruence. }
+            pose proof H12 as H12_copy.
+            eapply Events.external_call_mem_extends in H12_copy; eauto.
+            destruct H12_copy as (vres' & m2' & Hext & Hvres' & _ & _).
+            apply external_call_Three_Two' in Hext.
+            destruct Hext as (v' & Hext & Hld).
+            eapply external_call_deterministic in Hext.
+            2: { exact H1. }
+            destruct Hext as [Heq _]; subst.
+            eapply Val.lessdef_trans; eauto. }
+          rewrite 2!Regmap.gso; auto.
+          assert (Hin_live: Regset.In r (live !! pc)).
+          { eapply transfer_succ_subset; try eassumption. simpl; auto. }
+          apply RS.
+          { eapply live_in_transfer_ibuiltin; eauto. intros x Hx; inv Hx; congruence. }
+          intro HC; apply Hcol_ne.
+          match goal with
+          | [ Hfa : Regset.For_all (fun r0 => r0 <> _ -> _ = _) _ |- _ ] =>
+              rewrite <- (Hfa r Hin_live); auto
+          end.
 
         * (* other builtin - faulted *)
           simpl in *.
@@ -2391,7 +2491,7 @@ Section TOLERANCE.
           destruct (peq r res); subst.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
-  Admitted. (* Phase 3: faulted safe builtin rs_compat *)
+  Qed.
 
   Lemma faulty_simulation s2 t s2' :
     Step (faulty_semantics prog) s2 t s2' ->

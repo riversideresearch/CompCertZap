@@ -184,7 +184,6 @@ Section wc.
       is_basic (col succ res) ->
       Forall (builtin_arg_forall (fun r => col pc r = col succ res)) bargs ->
       Regset.For_all (fun r =>
-        ~ Exists (in_builtin_arg r) bargs ->
         r <> res ->
         col pc r = col succ r) (live !! pc) ->
       wc_instruction pc (Ibuiltin ef bargs (BR res) succ)
