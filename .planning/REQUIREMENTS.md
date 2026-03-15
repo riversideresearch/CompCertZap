@@ -7,13 +7,13 @@
 
 ### Classification
 
-- [ ] **CLAS-01**: `builtin_can_replicate_bf : builtin_function -> bool` defined in `common/Builtins.v`, returning `true` for all 22 safe builtins (14 standard `mkbuiltin_nNt` + 2 x86 platform + 6 `mkbuiltin_v2t`)
-- [ ] **CLAS-02**: `builtin_can_replicate : external_function -> bool` defined in `common/Builtins.v`, recognizing `EF_builtin name sg` via `lookup_builtin_function` and dispatching to `builtin_can_replicate_bf`
-- [ ] **CLAS-03**: `builtin_can_fault : external_function -> bool` aligned with `builtin_can_replicate` for first implementation
-- [ ] **CLAS-04**: Propositional forms and reflection lemmas for classification predicates
+- [x] **CLAS-01**: `builtin_can_replicate_bf : builtin_function -> bool` defined in `common/Builtins.v`, returning `true` for all 22 safe builtins (14 standard `mkbuiltin_nNt` + 2 x86 platform + 6 `mkbuiltin_v2t`)
+- [x] **CLAS-02**: `builtin_can_replicate : external_function -> bool` defined in `common/Builtins.v`, recognizing `EF_builtin name sg` via `lookup_builtin_function` and dispatching to `builtin_can_replicate_bf`
+- [x] **CLAS-03**: `builtin_can_fault : external_function -> bool` aligned with `builtin_can_replicate` for first implementation
+- [x] **CLAS-04**: Propositional forms and reflection lemmas for classification predicates
 - [ ] **CLAS-05**: Protocol-builtin recognizers (`smove`, `vote`, `check`) moved from `backend/RTL.v` to `common/Builtins.v`
-- [ ] **CLAS-06**: Classification accommodates x86, RISC-V, and aarch64 platform builtins (RISC-V and aarch64 are vacuously empty)
-- [ ] **CLAS-07**: `BI_subl` classified conditionally on `Archi.ptr64` (matching `is_protected` pattern for `Osubl`)
+- [x] **CLAS-06**: Classification accommodates x86, RISC-V, and aarch64 platform builtins (RISC-V and aarch64 are vacuously empty)
+- [x] **CLAS-07**: `BI_subl` classified conditionally on `Archi.ptr64` (matching `is_protected` pattern for `Osubl`)
 
 ### Semantic Validation
 
@@ -85,13 +85,13 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLAS-01 | Phase 1 | Pending |
-| CLAS-02 | Phase 1 | Pending |
-| CLAS-03 | Phase 1 | Pending |
-| CLAS-04 | Phase 1 | Pending |
+| CLAS-01 | Phase 1 | Complete |
+| CLAS-02 | Phase 1 | Complete |
+| CLAS-03 | Phase 1 | Complete |
+| CLAS-04 | Phase 1 | Complete |
 | CLAS-05 | Phase 1 | Pending |
-| CLAS-06 | Phase 1 | Pending |
-| CLAS-07 | Phase 1 | Pending |
+| CLAS-06 | Phase 1 | Complete |
+| CLAS-07 | Phase 1 | Complete |
 | SEMA-01 | Phase 1 | Pending |
 | SEMA-02 | Phase 1 | Pending |
 | SEMA-03 | Phase 1 | Pending |

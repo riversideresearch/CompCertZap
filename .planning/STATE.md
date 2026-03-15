@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-03-14)
 ## Current Position
 
 Phase: 1 of 3 (Classification and Semantic Foundation)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-14 -- Roadmap created
+Plan: 1 of 3 in current phase
+Status: Executing
+Last activity: 2026-03-15 -- Completed 01-01 (builtin classification predicates)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [###░░░░░░░] 11%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 2min
+- Total execution time: 0.03 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-classification-semantic-foundation | 1/3 | 2min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: -
+- Last 5 plans: 01-01(2min)
 - Trend: -
 
 *Updated after each plan completion*
@@ -44,6 +44,9 @@ Recent decisions affecting current work:
 
 - [Roadmap]: Coarse granularity compresses 5 research phases into 3: classification+semantics, subsystem updates (TMR+color+fault in parallel), tolerant proof last
 - [Roadmap]: Integration requirements (INTG-01 through INTG-04) assigned to Phase 2 with their respective subsystems; INTG-05 through INTG-07 assigned to Phase 3 as final validation
+- [01-01]: Archi.ptr64 accessed via qualified name from transitive Require Archi in AST.v -- no new import needed
+- [01-01]: BI_subl classified conditionally via negb Archi.ptr64, mirroring is_protectedb Osubl pattern
+- [01-01]: Used simple Bool-equals-true reflect pattern rather than richer inductive Prop form
 
 ### Pending Todos
 
@@ -55,6 +58,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14
-Stopped at: Roadmap created, ready to plan Phase 1
+Last session: 2026-03-15
+Stopped at: Completed 01-01-PLAN.md (builtin classification predicates)
 Resume file: None
