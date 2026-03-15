@@ -44,12 +44,12 @@ Plans:
   2. `wc_Ibuiltin_safe` exists in `RTLcolor.v`, the checker accepts replicated safe builtins with basic colors, and the oracle infers basic colors for safe builtins, with `RTLcolor.vo` and `RTLcolorcheck.vo` building successfully
   3. `zap_allowed (Ibuiltin ef _ _ _)` returns `builtin_can_fault ef`, keeping protocol and White-only builtins non-faultable
   4. Non-replicable builtins (including `check`) and protocol builtins retain their existing treatment unchanged across all three subsystems
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
-- [ ] 02-03: TBD
+- [ ] 02-01-PLAN.md — Add safe builtin triplication to TMR pass (RTLtmr.v) and match spec (RTLtmrspec.v)
+- [ ] 02-02-PLAN.md — Prove TMR backward simulation for safe builtins (RTLtmrproof.v)
+- [ ] 02-03-PLAN.md — Update color system (spec, checker, oracle) and faulty semantics for safe builtins
 
 ### Phase 3: Tolerant Proof and Final Integration
 **Goal**: The faulted backward simulation handles safe-builtin cases and the full project builds with no admitted proofs
@@ -73,5 +73,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Classification and Semantic Foundation | 3/3 | Complete | 2026-03-15 |
-| 2. Subsystem Updates | 0/? | Not started | - |
+| 2. Subsystem Updates | 0/3 | Not started | - |
 | 3. Tolerant Proof and Final Integration | 0/? | Not started | - |
