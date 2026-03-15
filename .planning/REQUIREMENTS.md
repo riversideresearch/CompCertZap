@@ -32,15 +32,15 @@
 
 ### Color System
 
-- [ ] **COLR-01**: `wc_Ibuiltin_safe` rule added to `RTLcolor.v` analogous to `wc_Iop_safe`
-- [ ] **COLR-02**: `check_col_instr` in `RTLcolorcheck.v` accepts replicated safe builtins with basic colors
-- [ ] **COLR-03**: `RTLinfercolor.ml` oracle assigns basic colors to safe builtins instead of forcing White
-- [ ] **COLR-04**: Non-replicable builtins (including `check`) remain on White-only rule
+- [x] **COLR-01**: `wc_Ibuiltin_safe` rule added to `RTLcolor.v` analogous to `wc_Iop_safe`
+- [x] **COLR-02**: `check_col_instr` in `RTLcolorcheck.v` accepts replicated safe builtins with basic colors
+- [x] **COLR-03**: `RTLinfercolor.ml` oracle assigns basic colors to safe builtins instead of forcing White
+- [x] **COLR-04**: Non-replicable builtins (including `check`) remain on White-only rule
 
 ### Faulty Semantics
 
-- [ ] **FALT-01**: `zap_allowed` in `RTLfault.v` returns `builtin_can_fault ef` for `Ibuiltin ef args res s`
-- [ ] **FALT-02**: Protocol and White-only builtins remain non-faultable
+- [x] **FALT-01**: `zap_allowed` in `RTLfault.v` returns `builtin_can_fault ef` for `Ibuiltin ef args res s`
+- [x] **FALT-02**: Protocol and White-only builtins remain non-faultable
 
 ### Tolerant Proof
 
@@ -52,8 +52,8 @@
 
 - [ ] **INTG-01**: `backend/RTLtmr.vo` rebuilds successfully
 - [ ] **INTG-02**: `backend/RTLtmrproof.vo` rebuilds successfully
-- [ ] **INTG-03**: `backend/RTLcolor.vo` rebuilds successfully
-- [ ] **INTG-04**: `backend/RTLcolorcheck.vo` rebuilds successfully
+- [x] **INTG-03**: `backend/RTLcolor.vo` rebuilds successfully
+- [x] **INTG-04**: `backend/RTLcolorcheck.vo` rebuilds successfully
 - [ ] **INTG-05**: `backend/RTLtolerant.vo` rebuilds successfully
 - [ ] **INTG-06**: `driver/Complements.vo` rebuilds successfully
 - [ ] **INTG-07**: `make check-admitted` passes (no Admitted proofs)
@@ -101,19 +101,19 @@
 | TMR-04 | Phase 2 | Pending |
 | TMR-05 | Phase 2 | Pending |
 | TMR-06 | Phase 2 | Pending |
-| COLR-01 | Phase 2 | Pending |
-| COLR-02 | Phase 2 | Pending |
-| COLR-03 | Phase 2 | Pending |
-| COLR-04 | Phase 2 | Pending |
-| FALT-01 | Phase 2 | Pending |
-| FALT-02 | Phase 2 | Pending |
+| COLR-01 | Phase 2 | Complete |
+| COLR-02 | Phase 2 | Complete |
+| COLR-03 | Phase 2 | Complete |
+| COLR-04 | Phase 2 | Complete |
+| FALT-01 | Phase 2 | Complete |
+| FALT-02 | Phase 2 | Complete |
 | TOLR-01 | Phase 3 | Pending |
 | TOLR-02 | Phase 3 | Pending |
 | TOLR-03 | Phase 3 | Pending |
 | INTG-01 | Phase 2 | Pending |
 | INTG-02 | Phase 2 | Pending |
-| INTG-03 | Phase 2 | Pending |
-| INTG-04 | Phase 2 | Pending |
+| INTG-03 | Phase 2 | Complete |
+| INTG-04 | Phase 2 | Complete |
 | INTG-05 | Phase 3 | Pending |
 | INTG-06 | Phase 3 | Pending |
 | INTG-07 | Phase 3 | Pending |

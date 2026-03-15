@@ -49,7 +49,7 @@ Plans:
 Plans:
 - [ ] 02-01-PLAN.md — Add safe builtin triplication to TMR pass (RTLtmr.v) and match spec (RTLtmrspec.v)
 - [ ] 02-02-PLAN.md — Prove TMR backward simulation for safe builtins (RTLtmrproof.v)
-- [ ] 02-03-PLAN.md — Update color system (spec, checker, oracle) and faulty semantics for safe builtins
+- [x] 02-03-PLAN.md — Update color system (spec, checker, oracle) and faulty semantics for safe builtins
 
 ### Phase 3: Tolerant Proof and Final Integration
 **Goal**: The faulted backward simulation handles safe-builtin cases and the full project builds with no admitted proofs
@@ -73,5 +73,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Classification and Semantic Foundation | 3/3 | Complete | 2026-03-15 |
-| 2. Subsystem Updates | 0/3 | Not started | - |
+| 2. Subsystem Updates | 1/3 | In progress | - |
 | 3. Tolerant Proof and Final Integration | 0/? | Not started | - |
