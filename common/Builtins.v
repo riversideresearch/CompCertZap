@@ -95,3 +95,58 @@ Proof.
   inv H. simpl. eapply lookup_builtin_sig; eauto.
   discriminate.
 Qed.
+
+(** * Builtin classification for TMR replication *)
+
+(** [builtin_can_replicate_bf b] returns [true] if the builtin function [b]
+    is safe to replicate by TMR: its semantics are purely numerical or
+    otherwise deterministic, and replicating it does not change the program
+    behavior.  Protocol builtins (votes, smoves, checks) are never replicable
+    because they are introduced by the TMR pass itself. *)
+
+Definition builtin_can_replicate_bf (b: builtin_function) : bool :=
+  match b with
+  | BI_standard sb =>
+    match sb with
+    | BI_fabs | BI_fabsf | BI_fsqrt | BI_negl => true
+    | BI_addl | BI_mull => true
+    | BI_subl => negb Archi.ptr64
+    | BI_i16_bswap | BI_i32_bswap | BI_i64_bswap => true
+    | BI_i64_umulh | BI_i64_smulh => true
+    | BI_i64_shl | BI_i64_shr | BI_i64_sar => true
+    | BI_i64_stod | BI_i64_utod | BI_i64_stof | BI_i64_utof => true
+    | BI_select _ | BI_unreachable => false
+    | BI_i64_sdiv | BI_i64_udiv | BI_i64_smod | BI_i64_umod => false
+    | BI_i64_dtos | BI_i64_dtou => false
+    end
+  | BI_platform pb =>
+    match pb with
+    | BI_fmin | BI_fmax => true
+    end
+  | BI_replicate _ => false
+  end.
+
+(** [builtin_can_replicate ef] returns [true] if the external function [ef]
+    is safe to replicate.  Only [EF_builtin] calls that resolve to a known
+    builtin function via [lookup_builtin_function] can be replicable. *)
+
+Definition builtin_can_replicate (ef: external_function) : bool :=
+  match ef with
+  | EF_builtin name sg =>
+    match lookup_builtin_function name sg with
+    | Some bf => builtin_can_replicate_bf bf
+    | None => false
+    end
+  | EF_external _ _ | EF_runtime _ _ | EF_vload _
+  | EF_vstore _ | EF_malloc | EF_free | EF_memcpy _ _
+  | EF_annot _ _ _ | EF_annot_val _ _ _ | EF_inline_asm _ _ _
+  | EF_debug _ _ _ => false
+  end.
+
+(** [builtin_can_fault ef] classifies builtins whose semantics may be affected
+    by a single-register fault.  Currently equal to [builtin_can_replicate],
+    defined separately to allow future divergence (e.g., if some replicable
+    builtins are proven fault-immune). *)
+
+Definition builtin_can_fault (ef: external_function) : bool :=
+  builtin_can_replicate ef.
