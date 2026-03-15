@@ -150,3 +150,60 @@ Definition builtin_can_replicate (ef: external_function) : bool :=
 
 Definition builtin_can_fault (ef: external_function) : bool :=
   builtin_can_replicate ef.
+
+(** ** Reflection and convenience lemmas *)
+
+(** Prop form for [builtin_can_replicate_bf]. *)
+
+Definition builtin_can_replicate_bf_prop (b: builtin_function) : Prop :=
+  builtin_can_replicate_bf b = true.
+
+Lemma builtin_can_replicate_bf_spec (b: builtin_function) :
+  reflect (builtin_can_replicate_bf_prop b) (builtin_can_replicate_bf b).
+Proof.
+  unfold builtin_can_replicate_bf_prop.
+  destruct (builtin_can_replicate_bf b) eqn:E.
+  - left; auto.
+  - right; discriminate.
+Qed.
+
+(** A replicable builtin is never a protocol builtin. *)
+
+Lemma builtin_can_replicate_bf_true (b: builtin_function) :
+  builtin_can_replicate_bf b = true ->
+  match b with BI_replicate _ => False | _ => True end.
+Proof.
+  destruct b as [sb|pb|rb]; simpl;
+    [ destruct sb | destruct pb | destruct rb ];
+    try discriminate; auto.
+Qed.
+
+(** Protocol builtins are never replicable. *)
+
+Lemma builtin_can_replicate_bf_false_replicate (b: replicate_builtin) :
+  builtin_can_replicate_bf (BI_replicate b) = false.
+Proof.
+  reflexivity.
+Qed.
+
+(** Connecting [builtin_can_replicate] to [builtin_can_replicate_bf]
+    via [lookup_builtin_function]. *)
+
+Lemma builtin_can_replicate_true_bf (ef: external_function)
+    (bf: builtin_function) (name: string) (sg: signature) :
+  ef = EF_builtin name sg ->
+  lookup_builtin_function name sg = Some bf ->
+  builtin_can_replicate_bf bf = true ->
+  builtin_can_replicate ef = true.
+Proof.
+  intros; subst; simpl; rewrite H0; auto.
+Qed.
+
+(** Non-[EF_builtin] externals are never replicable. *)
+
+Lemma builtin_can_replicate_not_ef_builtin (ef: external_function) :
+  (forall name sg, ef <> EF_builtin name sg) ->
+  builtin_can_replicate ef = false.
+Proof.
+  destruct ef; auto; intros; exfalso; eapply H; eauto.
+Qed.
