@@ -23,11 +23,11 @@
 
 ### TMR Pass
 
-- [ ] **TMR-01**: `transf_instr` in `RTLtmr.v` emits per-color copies for safe builtins (green/blue/regular), analogous to safe `Iop` triplication
-- [ ] **TMR-02**: White-only builtins keep current "vote arguments, run once, copy result" path unchanged
-- [ ] **TMR-03**: Protocol builtins (`smove`, `vote`) retain dedicated handling unchanged
-- [ ] **TMR-04**: Safe builtin argument/result remapping uses existing `AST.map_builtin_arg` and `map_builtin_res`
-- [ ] **TMR-05**: `match_Ibuiltin_safe` case added to `RTLtmrspec.v`
+- [x] **TMR-01**: `transf_instr` in `RTLtmr.v` emits per-color copies for safe builtins (green/blue/regular), analogous to safe `Iop` triplication
+- [x] **TMR-02**: White-only builtins keep current "vote arguments, run once, copy result" path unchanged
+- [x] **TMR-03**: Protocol builtins (`smove`, `vote`) retain dedicated handling unchanged
+- [x] **TMR-04**: Safe builtin argument/result remapping uses existing `AST.map_builtin_arg` and `map_builtin_res`
+- [x] **TMR-05**: `match_Ibuiltin_safe` case added to `RTLtmrspec.v`
 - [ ] **TMR-06**: TMR proof in `RTLtmrproof.v` generalized with safe-builtin case using `eval_builtin_arg` remapping facts
 
 ### Color System
@@ -50,7 +50,7 @@
 
 ### Integration
 
-- [ ] **INTG-01**: `backend/RTLtmr.vo` rebuilds successfully
+- [x] **INTG-01**: `backend/RTLtmr.vo` rebuilds successfully
 - [ ] **INTG-02**: `backend/RTLtmrproof.vo` rebuilds successfully
 - [x] **INTG-03**: `backend/RTLcolor.vo` rebuilds successfully
 - [x] **INTG-04**: `backend/RTLcolorcheck.vo` rebuilds successfully
@@ -95,11 +95,11 @@
 | SEMA-01 | Phase 1 | Complete |
 | SEMA-02 | Phase 1 | Complete |
 | SEMA-03 | Phase 1 | Complete |
-| TMR-01 | Phase 2 | Pending |
-| TMR-02 | Phase 2 | Pending |
-| TMR-03 | Phase 2 | Pending |
-| TMR-04 | Phase 2 | Pending |
-| TMR-05 | Phase 2 | Pending |
+| TMR-01 | Phase 2 | Complete |
+| TMR-02 | Phase 2 | Complete |
+| TMR-03 | Phase 2 | Complete |
+| TMR-04 | Phase 2 | Complete |
+| TMR-05 | Phase 2 | Complete |
 | TMR-06 | Phase 2 | Pending |
 | COLR-01 | Phase 2 | Complete |
 | COLR-02 | Phase 2 | Complete |
@@ -110,7 +110,7 @@
 | TOLR-01 | Phase 3 | Pending |
 | TOLR-02 | Phase 3 | Pending |
 | TOLR-03 | Phase 3 | Pending |
-| INTG-01 | Phase 2 | Pending |
+| INTG-01 | Phase 2 | Complete |
 | INTG-02 | Phase 2 | Pending |
 | INTG-03 | Phase 2 | Complete |
 | INTG-04 | Phase 2 | Complete |
