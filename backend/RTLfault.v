@@ -1,5 +1,6 @@
 Require Import
   AST
+  Builtins
   Builtins2
   Coqlib
   Events
@@ -756,3 +757,79 @@ Proof.
 Qed.
 
 End VAL_COMPAT_OPS.
+
+(** * val_compat monotonicity for safe builtins *)
+
+(** Helper: [val_compat] is preserved through [proj_num] and [inj_num].
+    For a [mkbuiltin_nNt] builtin, arguments are extracted via [proj_num]
+    (which returns a default when the value constructor doesn't match the
+    expected type), a pure function is applied, and the result is wrapped
+    via [inj_num].  Under [val_compat], inputs of the same constructor
+    produce same-constructor outputs. *)
+
+Lemma val_compat_proj_num_inj (targ: typ) (tres: xtype)
+      (f1 f2: valty targ -> valxty tres) (v1 v2: val) :
+  val_compat v1 v2 ->
+  val_compat
+    (proj_num targ Vundef v1 (fun x => inj_num tres (f1 x)))
+    (proj_num targ Vundef v2 (fun x => inj_num tres (f2 x))).
+Proof.
+  intros Hcompat; inv Hcompat; destruct targ; simpl; try constructor;
+    destruct tres; simpl; try constructor.
+Qed.
+
+(** ** Per-class lemmas for mkbuiltin_n1t builtins *)
+
+Lemma val_compat_mkbuiltin_n1t
+      (targ: typ) (tres: xtype) (f: valty targ -> valxty tres)
+      (vargs1 vargs2: list val) (vres1: val) :
+  Forall2 val_compat vargs1 vargs2 ->
+  mkbuiltin_n1t targ tres f vargs1 = Some vres1 ->
+  exists vres2,
+    mkbuiltin_n1t targ tres f vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hcompat Hsem.
+  simpl in *.
+  destruct vargs1 as [|v1 [|]]; try discriminate.
+  inv Hcompat. inv H3. inv Hsem.
+  eexists; split; [reflexivity|].
+  apply val_compat_proj_num_inj; auto.
+Qed.
+
+(** Helper: [val_compat] through nested [proj_num]/[inj_num] for 2-arg
+    numerical builtins. *)
+
+Lemma val_compat_proj_num_inj2 (targ1 targ2: typ) (tres: xtype)
+      (f1 f2: valty targ1 -> valty targ2 -> valxty tres) (v1 v2 w1 w2: val) :
+  val_compat v1 v2 ->
+  val_compat w1 w2 ->
+  val_compat
+    (proj_num targ1 Vundef v1 (fun x1 =>
+     proj_num targ2 Vundef w1 (fun x2 => inj_num tres (f1 x1 x2))))
+    (proj_num targ1 Vundef v2 (fun x1 =>
+     proj_num targ2 Vundef w2 (fun x2 => inj_num tres (f2 x1 x2)))).
+Proof.
+  intros Hv Hw; inv Hv; destruct targ1; simpl; try constructor;
+    apply val_compat_proj_num_inj; auto.
+Qed.
+
+Lemma val_compat_mkbuiltin_n2t
+      (targ1 targ2: typ) (tres: xtype)
+      (f: valty targ1 -> valty targ2 -> valxty tres)
+      (vargs1 vargs2: list val) (vres1: val) :
+  Forall2 val_compat vargs1 vargs2 ->
+  mkbuiltin_n2t targ1 targ2 tres f vargs1 = Some vres1 ->
+  exists vres2,
+    mkbuiltin_n2t targ1 targ2 tres f vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hcompat Hsem.
+  simpl in *.
+  destruct vargs1 as [|v1 [|w1 [|]]]; try discriminate.
+  inv Hcompat. inv H3.
+  match goal with H : Forall2 _ nil _ |- _ => inv H end.
+  inv Hsem.
+  eexists; split; [reflexivity|].
+  apply val_compat_proj_num_inj2; auto.
+Qed.
