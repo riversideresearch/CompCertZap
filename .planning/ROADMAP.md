@@ -12,7 +12,7 @@ This project relaxes CompCert's fault-tolerance extension so that pure, total bu
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Classification and Semantic Foundation** - Define the single shared classification and prove it is sound under the fault model
+- [x] **Phase 1: Classification and Semantic Foundation** - Define the single shared classification and prove it is sound under the fault model
 - [ ] **Phase 2: Subsystem Updates** - Apply classification to TMR pass, color system, and faulty semantics
 - [ ] **Phase 3: Tolerant Proof and Final Integration** - Close the faulted backward simulation with new builtin cases and verify full build
 
@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Define classification predicates and reflection lemmas in common/Builtins.v
 - [x] 01-02-PLAN.md — Migrate protocol recognizers from backend/RTL.v to common/Builtins.v
-- [ ] 01-03-PLAN.md — Prove val_compat monotonicity for safe builtins in backend/RTLfault.v
+- [x] 01-03-PLAN.md — Prove val_compat monotonicity for safe builtins in backend/RTLfault.v
 
 ### Phase 2: Subsystem Updates
 **Goal**: TMR pass replicates safe builtins, color system accepts replicated safe builtins with basic colors, and faulty semantics allows faults on safe builtins
@@ -72,6 +72,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Classification and Semantic Foundation | 2/3 | In Progress | - |
+| 1. Classification and Semantic Foundation | 3/3 | Complete | 2026-03-15 |
 | 2. Subsystem Updates | 0/? | Not started | - |
 | 3. Tolerant Proof and Final Integration | 0/? | Not started | - |
