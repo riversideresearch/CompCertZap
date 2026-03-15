@@ -133,3 +133,19 @@ From `backward_simulation L1 L2`:
 Interpretation: `L2` refines `L1`.
 
 Mnemonic: `backward_simulation source target` implies **target refines source**.
+
+# Rocq Workflow
+
+IMPORTANT: Load the `rocq-agent-mcp` skill when doing any Coq/Rocq proof work.
+
+When working on `.v` files, use the `rocq-agent` MCP server.
+
+Workflow:
+- Use MCP edit tools for open `.v` files.
+- Avoid patch+reopen cycles.
+- Keep one live LSP session for iterative proof work.
+
+# Advice
+
+- If a recursive tactic runs for more than 20 seconds or does not reduce goals, stop and treat it as a likely infinite loop.
+- Recursive Ltac must be progress-guarded (`progress (...)` or equivalent) before recursing.
