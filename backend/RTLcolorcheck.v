@@ -190,6 +190,18 @@ Section color_checker.
                     (live !! pc)
             | _, _ => false
             end
+          else if builtin_can_replicate ef then
+            match bres with
+            | BR res =>
+                is_basicb (col succ res) &&
+                forallb (builtin_arg_forallb (fun r => col pc r =? col succ res)) bargs &&
+                Regset.for_all
+                  (fun r => existsb (in_builtin_argb r) bargs ||
+                           Pos.eqb r res ||
+                           (col pc r =? col succ r))
+                  (live !! pc)
+            | _ => false
+            end
           else
             forallb (builtin_arg_forallb (fun r => col pc r =? White)) bargs &&
               builtin_res_forallb (fun r => col succ r =? White) bres &&
@@ -405,33 +417,60 @@ Section color_checker.
         { apply Pos.eqb_eq in Hpres; congruence. }
         apply eqb_sound; auto.
       + (* other builtin *)
-        destruct_andb Hcheck Hpres.
-        destruct_andb Hargs Hres.
-        rewrite forallb_forall in Hargs.
-        apply Regset.for_all_2 in Hpres; [| compat_bool_tac].
-        constructor; auto.
-        * apply Forall_forall.
-          intros barg Hin.
-          apply Hargs in Hin.
-          apply builtin_arg_forallb_sound in Hin.
-          eapply builtin_arg_forall_impl; eauto.
-          intros; apply eqb_sound; auto.
-        * apply builtin_res_forallb_sound in Hres.
-          eapply builtin_res_forall_impl; eauto.
-          intros r0 Hwhite; apply eqb_sound; auto.
-        * intros r0 Hin Hnotex Hnoteq; specialize (Hpres r0 Hin).
-          apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
-          { apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
-            - apply Forall_Exists_neg in Hnotex.
-              rewrite Forall_forall in Hnotex.
-              apply existsb_exists in Hpres.
-              destruct Hpres as (barg & Hin' & Hin'').
-              apply Hnotex in Hin'.
-              apply in_builtin_argb_sound in Hin''; contradiction.
-            - destruct b; try congruence.
-              apply Pos.eqb_eq in Hpres; subst.
-              exfalso; eapply Hnoteq; eauto. }
-          apply eqb_sound; auto.
+        destruct (builtin_can_replicate e) eqn:Hcan.
+        * (* safe builtin *)
+          destruct b as [res| |]; try congruence.
+          destruct_andb Hcheck Hpres.
+          destruct_andb Hbasic Hargs.
+          rewrite forallb_forall in Hargs.
+          apply Regset.for_all_2 in Hpres; [| compat_bool_tac].
+          apply wc_Ibuiltin_safe; auto.
+          { destruct (is_basicb_spec (col n res)); auto; congruence. }
+          { apply Forall_forall.
+            intros barg Hin.
+            apply Hargs in Hin.
+            apply builtin_arg_forallb_sound in Hin.
+            eapply builtin_arg_forall_impl; eauto.
+            intros; apply eqb_sound; auto. }
+          { intros r0 Hin Hnotex Hneq; specialize (Hpres r0 Hin).
+            apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
+            { apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
+              - apply Forall_Exists_neg in Hnotex.
+                rewrite Forall_forall in Hnotex.
+                apply existsb_exists in Hpres.
+                destruct Hpres as (barg & Hin' & Hin'').
+                apply Hnotex in Hin'.
+                apply in_builtin_argb_sound in Hin''; contradiction.
+              - apply Pos.eqb_eq in Hpres; congruence. }
+            apply eqb_sound; auto. }
+        * (* generic White-only builtin *)
+          destruct_andb Hcheck Hpres.
+          destruct_andb Hargs Hres.
+          rewrite forallb_forall in Hargs.
+          apply Regset.for_all_2 in Hpres; [| compat_bool_tac].
+          constructor; auto.
+          { apply Forall_forall.
+            intros barg Hin.
+            apply Hargs in Hin.
+            apply builtin_arg_forallb_sound in Hin.
+            eapply builtin_arg_forall_impl; eauto.
+            intros; apply eqb_sound; auto. }
+          { apply builtin_res_forallb_sound in Hres.
+            eapply builtin_res_forall_impl; eauto.
+            intros r0 Hwhite; apply eqb_sound; auto. }
+          { intros r0 Hin Hnotex Hnoteq; specialize (Hpres r0 Hin).
+            apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
+            { apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
+              - apply Forall_Exists_neg in Hnotex.
+                rewrite Forall_forall in Hnotex.
+                apply existsb_exists in Hpres.
+                destruct Hpres as (barg & Hin' & Hin'').
+                apply Hnotex in Hin'.
+                apply in_builtin_argb_sound in Hin''; contradiction.
+              - destruct b; try congruence.
+                apply Pos.eqb_eq in Hpres; subst.
+                exfalso; eapply Hnoteq; eauto. }
+            apply eqb_sound; auto. }
     - (* Icond *)
       destruct_andb Hargs Hpres.
       rewrite forallb_forall in Hargs.

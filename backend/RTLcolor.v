@@ -179,10 +179,20 @@ Section wc.
       Regset.For_all (fun r => r <> res -> col pc r = col succ r)
         (live !! pc) ->
       wc_instruction pc (Ibuiltin ef (BA arg1 :: BA arg2 :: BA arg3 :: nil) (BR res) succ)
+  | wc_Ibuiltin_safe : forall ef bargs res succ,
+      builtin_can_replicate ef = true ->
+      is_basic (col succ res) ->
+      Forall (builtin_arg_forall (fun r => col pc r = col succ res)) bargs ->
+      Regset.For_all (fun r =>
+        ~ Exists (in_builtin_arg r) bargs ->
+        r <> res ->
+        col pc r = col succ r) (live !! pc) ->
+      wc_instruction pc (Ibuiltin ef bargs (BR res) succ)
   | wc_Ibuiltin : forall ef bargs bres succ,
       ~ is_green_smove_builtin ef ->
       ~ is_blue_smove_builtin ef ->
       ~ is_vote_builtin ef ->
+      builtin_can_replicate ef = false ->
       Forall (builtin_arg_forall (fun r => col pc r = White)) bargs ->
       builtin_res_forall (fun r => col succ r = White) bres ->
       Regset.For_all (fun r => ~ Exists (in_builtin_arg r) bargs ->
