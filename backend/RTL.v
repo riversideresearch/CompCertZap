@@ -673,47 +673,6 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   | Ireturn None => nil
   end.
 
-Definition inb (p : positive) (l : list positive) : bool :=
-  existsb (fun x => Pos.eqb x p) l.
-
-Lemma inb_spec (p : positive) (l : list positive) :
-  reflect (In p l) (inb p l).
-Proof.
-  revert p; induction l; intros; simpl.
-  { right; auto. }
-  destruct (peq a p); subst.
-  - rewrite Pos.eqb_refl; left; left; reflexivity.
-  - destruct (IHl p).
-    + rewrite orb_true_r; left; right; assumption.
-    + apply Pos.eqb_neq in n; rewrite n; right; intros [H|H]; subst.
-      * rewrite Pos.eqb_refl in n; discriminate.
-      * contradiction.
-Qed.
-
-Lemma not_in_inb x l :
-  ~ In x l ->
-  inb x l = true ->
-  False.
-Proof. intros Hnotin Hinb; destruct (inb_spec x l); congruence. Qed.
-
-Fixpoint dedup (l : list positive) : list positive :=
-  match l with
-  | nil => nil
-  | x :: xs =>
-      let l' := dedup xs in
-      if inb x l' then l' else x :: l'
-  end.
-
-Lemma in_dedup (p : positive) (l : list positive) :
-  In p (dedup l) -> In p l.
-Proof.
-  revert p; induction l; simpl; intros p Hin; auto.
-  destruct (inb_spec a (dedup l)).
-  - right; apply IHl; assumption.
-  - inv Hin.
-    + left; reflexivity.
-    + right; apply IHl; assumption.
-Qed.
 
 Definition succ_of_instruction (instr : instruction) : option node :=
   match instr with
@@ -762,14 +721,6 @@ Definition res_of_instruction (instr : instruction) : option reg :=
   | _ => None
   end.
 
-Definition Regset_of_list (l : list positive) : Regset.t  :=
-  fold_right (fun acc p => Regset.add acc p) Regset.empty l.
-
-Definition Regset_of_option (x : option positive) : Regset.t :=
-  match x with
-  | Some p => Regset.singleton p
-  | None => Regset.empty
-  end.
 
 (** All registers that appear in an instruction (arguments or
     destination). *)

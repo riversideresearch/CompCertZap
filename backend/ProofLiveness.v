@@ -132,52 +132,6 @@ Proof.
     + apply IHargs. assumption.
 Qed.
 
-(** Bridge: [in_builtin_arg] implies membership in [params_of_builtin_arg]. *)
-
-Lemma in_builtin_arg_in_params {A : Type} (a : A) barg :
-  in_builtin_arg a barg -> In a (params_of_builtin_arg barg).
-Proof.
-  induction barg; simpl; intro H; inv H;
-    try (left; reflexivity);
-    try (apply in_or_app; left; auto; fail);
-    try (apply in_or_app; right; auto; fail).
-Qed.
-
-Lemma in_builtin_arg_in_params_args {A : Type} (a : A) barg bargs :
-  In barg bargs ->
-  in_builtin_arg a barg ->
-  In a (params_of_builtin_args bargs).
-Proof.
-  induction bargs; simpl; intros Hin Harg.
-  - destruct Hin.
-  - destruct Hin as [-> | Hin].
-    + apply in_or_app; left. apply in_builtin_arg_in_params; auto.
-    + apply in_or_app; right. eapply IHbargs; eauto.
-Qed.
-
-(** Variant of [builtin_arg_forall_impl] that also provides
-    [in_builtin_arg a barg] evidence to the callback. *)
-
-Lemma builtin_arg_forall_impl_in {A : Type} (P Q : A -> Prop) barg :
-  (forall a, P a -> in_builtin_arg a barg -> Q a) ->
-  builtin_arg_forall P barg ->
-  builtin_arg_forall Q barg.
-Proof.
-  induction barg; simpl; intros Hpq Hforall; auto.
-  - apply Hpq; auto. constructor.
-  - destruct Hforall as [H1 H2]; split.
-    + apply IHbarg1; auto.
-      intros a Ha Hin. apply Hpq; auto. constructor; auto.
-    + apply IHbarg2; auto.
-      intros a Ha Hin. apply Hpq; auto.
-      apply in_builtin_arg_splitlong_lo; auto.
-  - destruct Hforall as [H1 H2]; split.
-    + apply IHbarg1; auto.
-      intros a Ha Hin. apply Hpq; auto. constructor; auto.
-    + apply IHbarg2; auto.
-      intros a Ha Hin. apply Hpq; auto.
-      apply in_builtin_arg_addptr_a2; auto.
-Qed.
 
 (** Per-instruction liveness membership helpers.
     These prove that instruction arguments are in the transfer-function

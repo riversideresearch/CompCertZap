@@ -28,6 +28,7 @@ Require Import
   FaultPolicy
   Builtins2
   Coqlib
+  CompCertZapUtils
   Errors
   Integers
   Maps

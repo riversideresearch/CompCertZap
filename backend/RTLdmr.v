@@ -25,6 +25,7 @@ Require Import
   AST
   Builtins2
   Coqlib
+  CompCertZapUtils
   Errors
   Integers
   Maps

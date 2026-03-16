@@ -36,6 +36,59 @@ Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
   | _ => None
   end.
 
+(** * Generic positive-list and register-set helpers *)
+
+Definition inb (p : positive) (l : list positive) : bool :=
+  existsb (fun x => Pos.eqb x p) l.
+
+Lemma inb_spec (p : positive) (l : list positive) :
+  reflect (In p l) (inb p l).
+Proof.
+  revert p; induction l; intros; simpl.
+  { right; auto. }
+  destruct (peq a p); subst.
+  - rewrite Pos.eqb_refl; left; left; reflexivity.
+  - destruct (IHl p).
+    + rewrite orb_true_r; left; right; assumption.
+    + apply Pos.eqb_neq in n; rewrite n; right; intros [H|H]; subst.
+      * rewrite Pos.eqb_refl in n; discriminate.
+      * contradiction.
+Qed.
+
+Lemma not_in_inb x l :
+  ~ In x l ->
+  inb x l = true ->
+  False.
+Proof. intros Hnotin Hinb; destruct (inb_spec x l); congruence. Qed.
+
+Fixpoint dedup (l : list positive) : list positive :=
+  match l with
+  | nil => nil
+  | x :: xs =>
+      let l' := dedup xs in
+      if inb x l' then l' else x :: l'
+  end.
+
+Lemma in_dedup (p : positive) (l : list positive) :
+  In p (dedup l) -> In p l.
+Proof.
+  revert p; induction l; simpl; intros p Hin; auto.
+  destruct (inb_spec a (dedup l)).
+  - right; apply IHl; assumption.
+  - inv Hin.
+    + left; reflexivity.
+    + right; apply IHl; assumption.
+Qed.
+
+Definition Regset_of_list (l : list positive) : Regset.t :=
+  fold_right (fun acc p => Regset.add acc p) Regset.empty l.
+
+Definition Regset_of_option (x : option positive) : Regset.t :=
+  match x with
+  | Some p => Regset.singleton p
+  | None => Regset.empty
+  end.
+
 Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
 | in_builtin_arg_BA : in_builtin_arg a (BA a)
 | in_builtin_arg_splitlong_hi : forall hi lo,
@@ -200,6 +253,53 @@ Lemma in_builtin_arg_forall {A : Type} (P : A -> Prop) barg x :
 Proof.
   revert x; induction barg; simpl; intros y Hforall Hin; inv Hin; auto;
     try solve [apply IHbarg1; intuition]; apply IHbarg2; intuition.
+Qed.
+
+(** Bridge: [in_builtin_arg] implies membership in [params_of_builtin_arg]. *)
+
+Lemma in_builtin_arg_in_params {A : Type} (a : A) barg :
+  in_builtin_arg a barg -> In a (params_of_builtin_arg barg).
+Proof.
+  induction barg; simpl; intro H; inv H;
+    try (left; reflexivity);
+    try (apply in_or_app; left; auto; fail);
+    try (apply in_or_app; right; auto; fail).
+Qed.
+
+Lemma in_builtin_arg_in_params_args {A : Type} (a : A) barg bargs :
+  In barg bargs ->
+  in_builtin_arg a barg ->
+  In a (params_of_builtin_args bargs).
+Proof.
+  induction bargs; simpl; intros Hin Harg.
+  - destruct Hin.
+  - destruct Hin as [-> | Hin].
+    + apply in_or_app; left. apply in_builtin_arg_in_params; auto.
+    + apply in_or_app; right. eapply IHbargs; eauto.
+Qed.
+
+(** Variant of [builtin_arg_forall_impl] that also provides
+    [in_builtin_arg a barg] evidence to the callback. *)
+
+Lemma builtin_arg_forall_impl_in {A : Type} (P Q : A -> Prop) barg :
+  (forall a, P a -> in_builtin_arg a barg -> Q a) ->
+  builtin_arg_forall P barg ->
+  builtin_arg_forall Q barg.
+Proof.
+  induction barg; simpl; intros Hpq Hforall; auto.
+  - apply Hpq; auto. constructor.
+  - destruct Hforall as [H1 H2]; split.
+    + apply IHbarg1; auto.
+      intros a Ha Hin. apply Hpq; auto. constructor; auto.
+    + apply IHbarg2; auto.
+      intros a Ha Hin. apply Hpq; auto.
+      apply in_builtin_arg_splitlong_lo; auto.
+  - destruct Hforall as [H1 H2]; split.
+    + apply IHbarg1; auto.
+      intros a Ha Hin. apply Hpq; auto. constructor; auto.
+    + apply IHbarg2; auto.
+      intros a Ha Hin. apply Hpq; auto.
+      apply in_builtin_arg_addptr_a2; auto.
 Qed.
 
 Lemma in_builtin_res_forall {A : Type} (P : A -> Prop) bres x :
