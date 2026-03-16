@@ -227,15 +227,8 @@ Definition transf_instr
                         (BR res3) n2);
             update_instr n2 instr
         | _ =>
-            (* BR_none or BR_splitlong: fall through to generic vote-run-copy *)
-            do n <- maj_vote_regs re rm (dedup (args_of_instruction instr)) pc;
-            match res_of_instruction instr, succ_of_instruction instr with
-            | Some res, Some succ' =>
-                do m <- reserve_instr;
-                do _ <- copy_to_shadows rm (re res) res m succ';
-                update_instr n (change_succ instr m)
-            | _, _ => update_instr n instr
-            end
+            error (MSG "Replicate.v:transf_instr: replicable builtin with non-register result"
+                   :: POS pc :: nil)
         end
       else
         (* Non-replicable builtin: vote args, run once, copy result *)

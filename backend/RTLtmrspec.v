@@ -797,30 +797,14 @@ Proof.
         { rewrite PTree.gso; try lia.
           rewrite PTree.gss; reflexivity. }
         { rewrite PTree.gss; reflexivity. }
-      * (* BR_none -- fall through to generic *)
+      * (* BR_none -- rejected *)
         unfold RTLgen.bind in Htransf; simpl in Htransf.
-        repeat egen_case.
-        unfold update_instr in *.
-        repeat lr_case; simpl.
-        eapply match_Ibuiltin_1.
-        { intro HC; inv HC. }
-        { eapply maj_vote_regsR_ptree_set; auto.
-          eapply state_incr_maj_vote_regsR.
-          2: { eapply maj_vote_regs_maj_vote_regsR; eauto. }
-          intros pc0; inv s1; auto. }
-        rewrite PTree.gss; reflexivity.
-      * (* BR_splitlong -- fall through to generic *)
+        unfold error in Htransf; simpl in Htransf.
+        inversion Htransf.
+      * (* BR_splitlong -- rejected *)
         unfold RTLgen.bind in Htransf; simpl in Htransf.
-        repeat egen_case.
-        unfold update_instr in *.
-        repeat lr_case; simpl.
-        eapply match_Ibuiltin_1.
-        { intro HC; inv HC. }
-        { eapply maj_vote_regsR_ptree_set; auto.
-          eapply state_incr_maj_vote_regsR.
-          2: { eapply maj_vote_regs_maj_vote_regsR; eauto. }
-          intros pc0; inv s1; auto. }
-        rewrite PTree.gss; reflexivity.
+        unfold error in Htransf; simpl in Htransf.
+        inversion Htransf.
     + (* Non-safe builtin *)
       unfold RTLgen.bind in Htransf; simpl in Htransf.
       destruct (reg_of_builtin_res b) eqn:Hb.
