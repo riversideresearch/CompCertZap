@@ -3,6 +3,7 @@
 Require Import
   AST
   Builtins
+  FaultPolicy
   Coqlib
   Errors
   Globalenvs
@@ -17,7 +18,7 @@ Require Import
   Smallstep
   Values
 .
-Require Import RTL.
+Require Import CompCertZapUtils RTL.
 Require Import RTLtmr.
 Require Export RTLreplicateSpecCommon.
 Require Import Errors.

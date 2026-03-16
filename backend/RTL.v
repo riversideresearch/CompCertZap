@@ -18,7 +18,7 @@
 
 Require Import Coqlib Maps.
 Require Import AST Linking Integers Values Builtins Events Memory Globalenvs Smallstep.
-Require Import Op Registers.
+Require Import Op Registers CompCertZapUtils.
 
 (** * Abstract syntax *)
 
@@ -652,21 +652,6 @@ End VOTE.
 
 (** Helpers for CompCertZap *)
 
-Fixpoint regs_of_builtin_arg (arg : builtin_arg reg) : list reg :=
-  match arg with
-  | BA r => r :: nil
-  | BA_splitlong hi lo => regs_of_builtin_arg hi ++ regs_of_builtin_arg lo
-  | BA_addptr a1 a2 => regs_of_builtin_arg a1 ++ regs_of_builtin_arg a2
-  | _ => nil
-  end.
-
-(** Pull out registers from builtin_args. *)
-Fixpoint regs_of_builtin_args (args : list (builtin_arg reg)) : list reg :=
-  match args with
-  | nil => nil
-  | ba :: rest => regs_of_builtin_arg ba ++ regs_of_builtin_args rest
-  end.
-
 Definition regs_of_fn (fn : reg + ident) : list reg :=
   match fn with
   | inl r => r :: nil
@@ -677,7 +662,7 @@ Definition args_of_instruction (instr : instruction) : list reg :=
   match instr with
   | Inop _ => nil
   | Iop _ args _ _ => args
-  | Iload _  _ args _ _ => args
+  | Iload _ _ args _ _ => args
   | Istore _ _ args src _ => src :: args
   | Icall _ fn args _ _ => regs_of_fn fn ++ args
   | Itailcall _ fn args => regs_of_fn fn ++ args
@@ -767,15 +752,6 @@ Definition change_succ (instr : instruction) (new_succ : node) : instruction :=
   | _ => instr
   end.
 
-(** This ignores the recursive cases because according to
-    [exec_Ibuiltin] (specifically [regmap_setres]) the result is used
-    only in the [BR] case.  *)
-Definition reg_of_builtin_res (res : builtin_res reg) : option reg :=
-  match res with
-  | BR r => Some r
-  | _ => None
-  end.
-
 (** Result register of instruction. *)
 Definition res_of_instruction (instr : instruction) : option reg :=
   match instr with
@@ -785,280 +761,6 @@ Definition res_of_instruction (instr : instruction) : option reg :=
   | Ibuiltin _ _ res _ => reg_of_builtin_res res
   | _ => None
   end.
-
-Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
-| in_builtin_arg_BA : in_builtin_arg a (BA a)
-| in_builtin_arg_splitlong_hi : forall hi lo,
-    in_builtin_arg a hi ->
-    in_builtin_arg a (BA_splitlong hi lo)
-| in_builtin_arg_splitlong_lo : forall hi lo,
-    in_builtin_arg a lo ->
-    in_builtin_arg a (BA_splitlong hi lo)
-| in_builtin_arg_addptr_a1 : forall a1 a2,
-    in_builtin_arg a a1 ->
-    in_builtin_arg a (BA_addptr a1 a2)
-| in_builtin_arg_addptr_a2 : forall a1 a2,
-    in_builtin_arg a a2 ->
-    in_builtin_arg a (BA_addptr a1 a2).
-
-Fixpoint in_builtin_argb (r : reg) (barg : builtin_arg reg) : bool :=
-  match barg with
-  | BA r' => Pos.eqb r r'
-  | BA_splitlong hi lo => in_builtin_argb r hi || in_builtin_argb r lo
-  | BA_addptr a b => in_builtin_argb r a || in_builtin_argb r b
-  | _ => false
-  end.
-
-Lemma in_builtin_argb_spec (r : reg) (barg : builtin_arg reg) :
-  reflect (in_builtin_arg r barg) (in_builtin_argb r barg).
-Proof.
-  induction barg; simpl; try solve [right; intro HC; inv HC].
-  - destruct (Pos.eqb_spec r x); subst.
-    + left; constructor.
-    + right; intro HC; inv HC; congruence.
-  - destruct IHbarg1; simpl.
-    + left; constructor; auto.
-    + destruct IHbarg2; simpl.
-      * left; solve [constructor; auto].
-      * right; intro HC; inv HC; contradiction.
-  - destruct IHbarg1; simpl.
-    + left; constructor; auto.
-    + destruct IHbarg2; simpl.
-      * left; solve [constructor; auto].
-      * right; intro HC; inv HC; contradiction.
-Qed.
-
-Lemma in_builtin_argb_sound (r : reg) (barg : builtin_arg reg) :
-  in_builtin_argb r barg = true -> in_builtin_arg r barg.
-Proof. destruct (in_builtin_argb_spec r barg); congruence. Qed.
-
-Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
-  In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.
-Proof.
-  split.
-  - induction barg; simpl; intro Hin; try contradiction;
-      try (destruct Hin; subst; try contradiction; constructor);
-      apply in_app_or in Hin; destruct Hin as [Hin | Hin];
-      solve [constructor; auto].
-  - induction barg; simpl; intro Hin; inv Hin; auto; apply in_or_app; auto.
-Qed.
-
-Lemma in_regs_of_builtin_args_exists_in_builtin_arg r bargs :
-  In r (regs_of_builtin_args bargs) <-> Exists (in_builtin_arg r) bargs.
-Proof.
-  split.
-  - induction bargs; simpl; intro Hin; try contradiction.
-    apply in_app_or in Hin.
-    destruct Hin as [Hin | Hin].
-    + constructor; apply in_regs_of_builtin_arg_in_builtin_arg; auto.
-    + right; auto.
-  - induction bargs; simpl; intro Hin; inv Hin.
-    + apply in_or_app; left.
-      apply in_regs_of_builtin_arg_in_builtin_arg; auto.
-    + apply in_or_app; right; auto.
-Qed.
-
-Inductive in_builtin_res {A : Type} (a : A) : builtin_res A -> Prop :=
-| in_builtin_res_BR : in_builtin_res a (BR a)
-| in_builtin_res_splitlong_hi : forall hi lo,
-    in_builtin_res a hi ->
-    in_builtin_res a (BR_splitlong hi lo)
-| in_builtin_res_splitlong_lo : forall hi lo,
-    in_builtin_res a lo ->
-    in_builtin_res a (BR_splitlong hi lo).
-
-Fixpoint in_builtin_resb (r : reg) (bres : builtin_res reg) : bool :=
-  match bres with
-  | BR r' => Pos.eqb r r'
-  | BR_none => false
-  | BR_splitlong hi lo => in_builtin_resb r hi || in_builtin_resb r lo
-  end.
-
-Lemma in_builtin_resb_spec (r : reg) (bres : builtin_res reg) :
-  reflect (in_builtin_res r bres) (in_builtin_resb r bres).
-Proof.
-  induction bres; simpl; try solve [right; intro HC; inv HC].
-  - destruct (Pos.eqb_spec r x); subst.
-    + left; constructor.
-    + right; intro HC; inv HC; congruence.
-  - destruct IHbres1; simpl.
-    + left; constructor; auto.
-    + destruct IHbres2; simpl.
-      * left; solve [constructor; auto].
-      * right; intro HC; inv HC; contradiction.
-Qed.
-
-Lemma in_builtin_resb_sound (r : reg) (bres : builtin_res reg) :
-  in_builtin_resb r bres = true -> in_builtin_res r bres.
-Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
-
-(* Design note: maybe we can just assume faulted floats aren't NaN,
-   and then the conversions from single/float to int/long will always
-   succeed and we can consider them safe?
-
-   It seems that considering NaN conversions to int/long to be
-   immediate UB is a CompCert choice that isn't necessarily dictated
-   by the C standard.
-
-   Also: this might need to go into backend specific Op.v
-   file. And should it be called something else? 'is_protected'?
- *)
-Inductive is_protected : operation -> Prop :=
-(* Because division by zero causes immediate UB (see [Val.divs] in
-   common/Values.v) *)
-| is_protected_Odiv : is_protected Odiv
-| is_protected_Odivu : is_protected Odivu
-| is_protected_Omod : is_protected Omod
-| is_protected_Omodu : is_protected Omodu
-| is_protected_Odivl : is_protected Odivl
-| is_protected_Odivlu : is_protected Odivlu
-| is_protected_Omodl : is_protected Omodl
-| is_protected_Omodlu : is_protected Omodlu
-
-(* Trying to convert NaN (and maybe something else) causes immediate
-   UB (see Val.intoffloat in common/Values.v) *)
-| is_protected_Ointofsingle : is_protected Ointofsingle
-| is_protected_Ointoffloat : is_protected Ointoffloat
-| is_protected_Olongofsingle : is_protected Olongofsingle
-| is_protected_Olongoffloat : is_protected Olongoffloat
-
-(* Shifting more than the archi word size is immediate UB (see Val.shl
-   in common/Values.v) *)
-| is_protected_Oshl : is_protected Oshl
-| is_protected_Oshr : is_protected Oshr
-| is_protected_Oshru : is_protected Oshru
-| is_protected_Oshll : is_protected Oshll
-| is_protected_Oshrl : is_protected Oshrl
-| is_protected_Oshrlu : is_protected Oshrlu
-
-(* Subtracting pointers in different blocks causes immediate UB (see
-   [Val.subl] in common/Values.v) *)
-| is_protected_Osubl : Archi.ptr64 = true -> is_protected Osubl
-
-(* A faulty selection can cause the faulty execution to take Vundef
-   into a register that the normal execution has a defined value for,
-   and subsequently encounter UB that the normal execution avoids. See
-   [Val.select] in common/Values.v. *)
-| is_protected_Osel : forall cond ty, is_protected (Osel cond ty)
-
-(* Comparing pointers in different blocks or comparing a pointer with
-   a nonzero integer causes immediate UB. *)
-| is_protected_Ocmp_Ccompu : forall c, Archi.ptr64 = false ->
-                               is_protected (Ocmp (Ccompu c))
-| is_protected_Ocmp_Ccompuimm : forall c n, Archi.ptr64 = false ->
-                                    is_protected (Ocmp (Ccompuimm c n))
-| is_protected_Ocmp_Ccomplu : forall c, Archi.ptr64 = true ->
-                                is_protected (Ocmp (Ccomplu c))
-| is_protected_Ocmp_Ccompluimm : forall c n, Archi.ptr64 = true ->
-                                     is_protected (Ocmp (Ccompluimm c n))
-.
-
-Definition is_protectedb (op : operation) : bool :=
-  match op with
-  | Odiv | Odivu | Omod | Omodu
-  | Odivl | Odivlu | Omodl | Omodlu
-  | Ointofsingle | Ointoffloat => true
-  | Olongofsingle | Olongoffloat => true
-  | Oshl | Oshr | Oshru | Oshll | Oshrl | Oshrlu => true
-  | Osubl => Archi.ptr64
-  | Osel _ _ => true
-  | Ocmp (Ccompu _) | Ocmp (Ccompuimm _ _) => negb Archi.ptr64
-  | Ocmp (Ccomplu _) | Ocmp (Ccompluimm _ _) => Archi.ptr64
-  | _ => false
-  end.
-
-Lemma is_protectedb_spec (op : operation) : reflect (is_protected op) (is_protectedb op).
-Proof.
-  destruct op; try solve [right; intro HC; inv HC];
-    try left; try constructor; auto.
-  destruct cond; simpl; try solve [right; intro HC; inv HC].
-  - destruct Archi.ptr64 eqn:Harchi; simpl.
-    + right; intro HC; inv HC; congruence.
-    + left; constructor; assumption.
-  - destruct Archi.ptr64 eqn:Harchi; simpl.
-    + right; intro HC; inv HC; congruence.
-    + left; constructor; assumption.
-  - destruct Archi.ptr64 eqn:Harchi; simpl.
-    + left; constructor; assumption.
-    + right; intro HC; inv HC; congruence.
-  - destruct Archi.ptr64 eqn:Harchi; simpl.
-    + left; constructor; assumption.
-    + right; intro HC; inv HC; congruence.
-Qed.
-
-Lemma is_protected_subl_archi_ptr64_false :
-  ~ is_protected Op.Osubl ->
-  Archi.ptr64 = false.
-Proof.
-  intro H.
-  destruct Archi.ptr64 eqn:Harchi; auto.
-  exfalso; apply H; constructor; assumption.
-Qed.
-
-Inductive is_compu : condition -> Prop :=
-| is_compu_CCompu : forall c, is_compu (Ccompu c)
-| is_compu_CCompuimm : forall c n, is_compu (Ccompuimm c n).
-
-Inductive is_complu : condition -> Prop :=
-| is_compu_CComplu : forall c, is_complu (Ccomplu c)
-| is_compu_CCompluimm : forall c n, is_complu (Ccompluimm c n).
-
-Fixpoint builtin_res_forall {A : Type} (P : A -> Prop) (bres : builtin_res A) : Prop :=
-  match bres with
-  | BR x => P x
-  | BR_none => True
-  | BR_splitlong hi lo => builtin_res_forall P hi /\ builtin_res_forall P lo
-  end.
-
-Lemma builtin_res_forall_impl {A : Type} (P Q : A -> Prop ) bres :
-  (forall a, P a -> Q a) ->
-  builtin_res_forall P bres ->
-  builtin_res_forall Q bres.
-Proof.
-  induction bres; simpl; intros Hpq Hforall; auto;
-    destruct Hforall; auto.
-Qed.
-
-Fixpoint builtin_res_forallb {A : Type} (f : A -> bool) (bres : builtin_res A) : bool :=
-  match bres with
-  | BR x => f x
-  | BR_none => true
-  | BR_splitlong hi lo => builtin_res_forallb f hi && builtin_res_forallb f lo
-  end.
-
-Lemma builtin_res_forallb_spec {A : Type} (f : A -> bool) (bres : builtin_res A) :
-  reflect (builtin_res_forall (fun a => f a = true) bres) (builtin_res_forallb f bres).
-Proof.
-  induction bres; simpl; try left; auto.
-  - destruct (f x); solve [constructor; auto].
-  - destruct IHbres1; simpl.
-    + destruct IHbres2; simpl.
-      * left; split; auto.
-      * right; intros [H0 H1]; congruence.
-    + right; intros [H0 H1]; congruence.
-Qed.
-
-Lemma builtin_res_forallb_sound {A : Type} (f : A -> bool) (bres : builtin_res A) :
-  builtin_res_forallb f bres = true -> builtin_res_forall (fun a => f a = true) bres.
-Proof. destruct (builtin_res_forallb_spec f bres); congruence. Qed.
-
-Lemma in_builtin_arg_forall {A : Type} (P : A -> Prop) barg x :
-  builtin_arg_forall P barg ->
-  in_builtin_arg x barg ->
-  P x.
-Proof.
-  revert x; induction barg; simpl; intros y Hforall Hin; inv Hin; auto;
-    try solve [apply IHbarg1; intuition]; apply IHbarg2; intuition.
-Qed.
-
-Lemma in_builtin_res_forall {A : Type} (P : A -> Prop) bres x :
-  builtin_res_forall P bres ->
-  in_builtin_res x bres ->
-  P x.
-Proof.
-  revert x; induction bres; simpl; intros y Hforall Hin; inv Hin; auto;
-    destruct Hforall as [H1 H2]; auto.
-Qed.
 
 Definition Regset_of_list (l : list positive) : Regset.t  :=
   fold_right (fun acc p => Regset.add acc p) Regset.empty l.

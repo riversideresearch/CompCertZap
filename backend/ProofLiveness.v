@@ -17,6 +17,7 @@ Require Import AST.
 Require Import Events.
 Require Import Op.
 Require Import Registers.
+Require Import CompCertZapUtils.
 Require Import RTL.
 Require Import Kildall.
 

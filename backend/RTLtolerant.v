@@ -2,6 +2,8 @@ Require Import
   AST
   Behaviors
   Builtins
+  FaultPolicy
+  CompCertZapUtils
   Builtins2
   Coqlib
   Events

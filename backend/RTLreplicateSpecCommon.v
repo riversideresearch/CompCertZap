@@ -16,7 +16,7 @@ Require Import
   Smallstep
   Values
 .
-Require Import RTL.
+Require Import CompCertZapUtils RTL.
 Require Import Errors.
 Import ListNotations.
 
@@ -67,15 +67,6 @@ Ltac state_incr_inv :=
 
 (** ** Shared type definitions. **)
 
-Definition comp_of_typ (ty : typ) : comparison -> condition :=
-  match ty with
-  | Tint => Ccompu
-  | Tlong => Ccomplu
-  | Tsingle => Ccompfs
-  | Tfloat => Ccompf
-  | _ => Ccomp
-  end.
-
 Definition is_actual_type (ty : typ) : Prop :=
   match ty with
   | Tany32 => False
@@ -88,14 +79,14 @@ Definition is_actual_type (ty : typ) : Prop :=
 Inductive is_BR {A: Type} : builtin_res A -> Prop :=
 | is_br_BR : forall x, is_BR (BR x).
 
-Definition is_BR_dec {A : Type} (br : builtin_res A)
-  : { is_BR br } + { ~ is_BR br }.
-Proof.
-  destruct br.
-  - left; constructor.
-  - right; intro H; inv H.
-  - right; intro H; inv H.
-Qed.
+(* Definition is_BR_dec {A : Type} (br : builtin_res A) *)
+(*   : { is_BR br } + { ~ is_BR br }. *)
+(* Proof. *)
+(*   destruct br. *)
+(*   - left; constructor. *)
+(*   - right; intro H; inv H. *)
+(*   - right; intro H; inv H. *)
+(* Qed. *)
 
 (** ** Shared register-usage definitions. **)
 

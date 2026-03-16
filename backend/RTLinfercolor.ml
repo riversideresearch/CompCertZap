@@ -1,12 +1,10 @@
 open AST
 open BinNums
-open Builtins0
-open Builtins1
 open Datatypes
+open FaultPolicy
 open Maps
 open Op
 open Registers
-open Builtins
 open RTL
 open RTLcolor
 
@@ -34,40 +32,6 @@ open RTLcolor
 (* This file provides an implementation of the color inference oracle
    declared in Colorcheck.v with the following type: *)
 (* Parameter infer_coloring : function -> option (node -> PTree.t color). *)
-
-(* Local OCaml implementation of builtin_can_replicate, mirroring the Coq
-   definition in common/Builtins.v.  The oracle is unverified, so this
-   hand-written function is acceptable.  When extraction is re-run,
-   Builtins.builtin_can_replicate will be available and this can be replaced. *)
-let builtin_can_replicate_bf (b : Builtins.builtin_function) : bool =
-  match b with
-  | BI_standard sb ->
-    begin match sb with
-    | BI_fabs | BI_fabsf | BI_fsqrt | BI_negl -> true
-    | BI_addl | BI_mull -> true
-    | BI_subl -> not Archi.ptr64
-    | BI_i16_bswap | BI_i32_bswap | BI_i64_bswap -> true
-    | BI_i64_umulh | BI_i64_smulh -> true
-    | BI_i64_shl | BI_i64_shr | BI_i64_sar -> true
-    | BI_i64_stod | BI_i64_utod | BI_i64_stof | BI_i64_utof -> true
-    | BI_select _ | BI_unreachable -> false
-    | BI_i64_sdiv | BI_i64_udiv | BI_i64_smod | BI_i64_umod -> false
-    | BI_i64_dtos | BI_i64_dtou -> false
-    end
-  | BI_platform pb ->
-    begin match pb with
-    | BI_fmin | BI_fmax -> true
-    end
-  | BI_replicate _ -> false
-
-let builtin_can_replicate (ef : AST.external_function) : bool =
-  match ef with
-  | EF_builtin (name, sg) ->
-    begin match Builtins.lookup_builtin_function name sg with
-    | Some bf -> builtin_can_replicate_bf bf
-    | None -> false
-    end
-  | _ -> false
 
 exception ColorError of string
 
@@ -353,7 +317,7 @@ let instr_constraints
           let arg_regs = List.concat_map regs_of_builtin_arg bargs in
           List.iter (fun arg -> union (get col arg) res_color) arg_regs;
           List.iter (fun r ->
-              if not (List.mem r arg_regs || r = res) then
+              if r <> res then
                 union (get col r) (get succ_col r)
             ) live
        | _ ->
