@@ -1,7 +1,7 @@
 (** * Forward simulation proof for TMR pass. *)
 
-Require Import AST Coqlib Errors Events Floats Globalenvs Integers Linking Maps Op Registers RTLgen RTLtyping Smallstep Values.
-Require Import RTL.
+Require Import AST Builtins FaultPolicy Coqlib Errors Events Floats Globalenvs Integers Linking Maps Op Registers RTLgen RTLtyping Smallstep Values.
+Require Import CompCertZapUtils RTL.
 Require Import Errors.
 Require Import RTLreplicateSpecCommon.
 Export ListNotations.
@@ -1229,6 +1229,123 @@ Section PRESERVATION.
     exfalso; apply Hres; constructor.
   Qed.
 
+  (** ** Replicable-builtin trace/memory lemma *)
+
+  Lemma external_call_can_replicate_E0 ef ge0 vargs m t vres m' :
+    builtin_can_replicate ef = true ->
+    external_call ef ge0 vargs m t vres m' ->
+    t = E0 /\ m' = m.
+  Proof.
+    intros Hrep Hcall.
+    unfold builtin_can_replicate in Hrep.
+    destruct ef; try discriminate.
+    simpl in Hcall.
+    unfold builtin_or_external_sem in Hcall.
+    destruct (lookup_builtin_function name sg) eqn:Hlook; try discriminate.
+    inv Hcall; auto.
+  Qed.
+
+  (** ** Eval_builtin_arg remapping lemmas for safe builtin triplication *)
+
+  (** Green-world remapping: if [rm_builtin_arg rm ba1 ba2 ba3] and
+      [eval_builtin_arg] holds for [ba1] in [rs], then the same value
+      is produced for [ba2] in [rs'] where [match_regsets] maps
+      originals to green copies. *)
+  Lemma eval_builtin_arg_rm_2 params c rm ba1 ba2 ba3 rs rs' sp0 m0 v :
+    match_regsets params c rm rs rs' ->
+    (forall r, in_builtin_arg r ba1 -> reg_used_in_code c r) ->
+    rm_builtin_arg rm ba1 ba2 ba3 ->
+    eval_builtin_arg ge (fun r => rs # r) sp0 m0 ba1 v ->
+    eval_builtin_arg ge (fun r => rs' # r) sp0 m0 ba2 v.
+  Proof.
+    intros Hregs Hused Hrm.
+    revert v; induction Hrm; intros v Heval; inv Heval;
+      try (econstructor; eauto; fail).
+    - (* BA r -> BA r2 *)
+      rewrite (match_regsets_get_2 _ _ _ _ _ _ _ _ Hregs
+                 (or_intror (Hused _ (in_builtin_arg_BA r1))) H).
+      constructor.
+    - (* BA_splitlong *)
+      econstructor.
+      + apply IHHrm1; auto.
+        intros r Hr; apply Hused; constructor; auto.
+      + apply IHHrm2; auto.
+        intros r Hr; apply Hused.
+        apply in_builtin_arg_splitlong_lo; auto.
+    - (* BA_addptr *)
+      econstructor.
+      + apply IHHrm1; auto.
+        intros r Hr; apply Hused; constructor; auto.
+      + apply IHHrm2; auto.
+        intros r Hr; apply Hused.
+        apply in_builtin_arg_addptr_a2; auto.
+  Qed.
+
+  (** Blue-world remapping: same as green but for the third copy. *)
+  Lemma eval_builtin_arg_rm_3 params c rm ba1 ba2 ba3 rs rs' sp0 m0 v :
+    match_regsets params c rm rs rs' ->
+    (forall r, in_builtin_arg r ba1 -> reg_used_in_code c r) ->
+    rm_builtin_arg rm ba1 ba2 ba3 ->
+    eval_builtin_arg ge (fun r => rs # r) sp0 m0 ba1 v ->
+    eval_builtin_arg ge (fun r => rs' # r) sp0 m0 ba3 v.
+  Proof.
+    intros Hregs Hused Hrm.
+    revert v; induction Hrm; intros v Heval; inv Heval;
+      try (econstructor; eauto; fail).
+    - (* BA r -> BA r3 *)
+      rewrite (match_regsets_get_3 _ _ _ _ _ _ _ _ Hregs
+                 (or_intror (Hused _ (in_builtin_arg_BA r1))) H).
+      constructor.
+    - (* BA_splitlong *)
+      econstructor.
+      + apply IHHrm1; auto.
+        intros r Hr; apply Hused; constructor; auto.
+      + apply IHHrm2; auto.
+        intros r Hr; apply Hused.
+        apply in_builtin_arg_splitlong_lo; auto.
+    - (* BA_addptr *)
+      econstructor.
+      + apply IHHrm1; auto.
+        intros r Hr; apply Hused; constructor; auto.
+      + apply IHHrm2; auto.
+        intros r Hr; apply Hused.
+        apply in_builtin_arg_addptr_a2; auto.
+  Qed.
+
+  (** Lift green-world remapping to argument lists. *)
+  Lemma eval_builtin_args_rm_2 params c rm bas1 bas2 bas3 rs rs' sp0 m0 vl :
+    match_regsets params c rm rs rs' ->
+    Forall (fun ba1 => forall r, in_builtin_arg r ba1 -> reg_used_in_code c r) bas1 ->
+    rm_builtin_args rm bas1 bas2 bas3 ->
+    eval_builtin_args ge (fun r => rs # r) sp0 m0 bas1 vl ->
+    eval_builtin_args ge (fun r => rs' # r) sp0 m0 bas2 vl.
+  Proof.
+    intros Hregs Hused Hrm Heval.
+    revert bas2 bas3 Hrm vl Heval Hused.
+    induction bas1; intros bas2 bas3 Hrm vl Heval Hused; inv Hrm; inv Heval.
+    - constructor.
+    - inv Hused. constructor.
+      + eapply eval_builtin_arg_rm_2; eauto.
+      + eapply IHbas1; eauto.
+  Qed.
+
+  (** Lift blue-world remapping to argument lists. *)
+  Lemma eval_builtin_args_rm_3 params c rm bas1 bas2 bas3 rs rs' sp0 m0 vl :
+    match_regsets params c rm rs rs' ->
+    Forall (fun ba1 => forall r, in_builtin_arg r ba1 -> reg_used_in_code c r) bas1 ->
+    rm_builtin_args rm bas1 bas2 bas3 ->
+    eval_builtin_args ge (fun r => rs # r) sp0 m0 bas1 vl ->
+    eval_builtin_args ge (fun r => rs' # r) sp0 m0 bas3 vl.
+  Proof.
+    intros Hregs Hused Hrm Heval.
+    revert bas2 bas3 Hrm vl Heval Hused.
+    induction bas1; intros bas2 bas3 Hrm vl Heval Hused; inv Hrm; inv Heval.
+    - constructor.
+    - inv Hused. constructor.
+      + eapply eval_builtin_arg_rm_3; eauto.
+      + eapply IHbas1; eauto.
+  Qed.
+
   Lemma lessdef_list_refl (l : list val) :
     Val.lessdef_list l l.
   Proof. induction l; constructor; auto. Qed.
@@ -2204,6 +2321,184 @@ Section PRESERVATION.
                 ; fn_entrypoint := entrypoint |}).
       pose proof H as Hcode.
       specialize (CODE pc (Ibuiltin ef args res pc') Hcode); inv CODE.
+      { (* Safe builtin: three independent Ibuiltin steps *)
+        (* Use external_call_can_replicate_E0 to get t=E0 and m'=m *)
+        assert (Ht: t = E0 /\ m' = m).
+        { eapply external_call_can_replicate_E0; eauto. }
+        destruct Ht as [-> ->].
+        (* Show res1 is used in code *)
+        assert (Hres1_used: reg_used_in_code c res1).
+        { unfold reg_used_in_code.
+          exists pc, (Ibuiltin ef args (BR res1) pc').
+          split; [exact Hcode | apply reg_used_Ibuiltin_res]. }
+        (* Show all arg registers in args are used in code *)
+        assert (Hbargs_used: Forall (fun ba => forall r,
+                   in_builtin_arg r ba -> reg_used_in_code c r) args).
+        { apply Forall_forall; intros ba Hba r Hr.
+          eexists; eexists; split; eauto.
+          constructor.
+          apply in_regs_of_builtin_args_exists_in_builtin_arg.
+          apply Exists_exists; eexists; split; eauto. }
+        (* Key separation facts from rm_wf / rm_inv *)
+        assert (Hres1_res2: res1 <> res2).
+        { eapply rm_wf_neq_1_2; eauto.
+          eapply reg_used_in_code_in_all_regs_list; auto. }
+        assert (Hres1_res3: res1 <> res3).
+        { eapply rm_wf_neq_1_3; eauto.
+          eapply reg_used_in_code_in_all_regs_list; auto. }
+        assert (Hres2_res3: res2 <> res3).
+        { eapply rm_wf_neq_2_3; eauto.
+          eapply reg_used_in_code_in_all_regs_list; auto. }
+        (* Step 1: green copy evaluates correctly *)
+        assert (Heval2: eval_builtin_args ge (fun r => rs' # r)
+                          sp m bargs2 vargs).
+        { eapply eval_builtin_args_rm_2; eauto. }
+        assert (Hcall2: external_call ef ge vargs m E0 vres m).
+        { auto. }
+        (* Step 2: blue copy evaluates correctly after green writes res2 *)
+        assert (Heval3: eval_builtin_args ge (fun r => rs' # r)
+                          sp m bargs3 vargs).
+        { eapply eval_builtin_args_rm_3; eauto. }
+        assert (Heval3': eval_builtin_args ge
+                           (fun r => (rs' # res2 <- vres) # r)
+                           sp m bargs3 vargs).
+        { eapply eval_builtin_args_proper; eauto.
+          apply Forall_forall.
+          intros ba Hba r Hr.
+          rewrite PMap.gso; auto.
+          (* res2 = fst(rm # res1) is distinct from all regs in bargs3 *)
+          intro Heq; subst.
+          assert (Hrm_ba: exists ba1 ba2,
+                    rm_builtin_arg rm ba1 ba2 ba /\
+                    In ba1 args).
+          { clear -Hba BARGS.
+            induction BARGS.
+            - inv Hba.
+            - inv Hba.
+              + exists ba1, ba2; split; auto; left; auto.
+              + destruct (IHBARGS H0) as (ba1' & ba2' & Hrm' & Hin').
+                exists ba1', ba2'; split; auto; right; auto. }
+          destruct Hrm_ba as (ba1_orig & ba2_orig & Hrm_ba & Hin_ba1).
+          assert (Hin_orig: exists r_orig,
+                    in_builtin_arg r_orig ba1_orig /\
+                    res2 = snd (rm # r_orig)).
+          { clear -Hr Hrm_ba.
+            induction Hrm_ba; inv Hr.
+            - exists r1; split; [constructor | rewrite H; auto].
+            - destruct (IHHrm_ba1 H0) as (r_orig & Hin & Heq).
+              exists r_orig; split; auto; constructor; auto.
+            - destruct (IHHrm_ba2 H0) as (r_orig & Hin & Heq).
+              exists r_orig; split; auto.
+              apply in_builtin_arg_splitlong_lo; auto.
+            - destruct (IHHrm_ba1 H0) as (r_orig & Hin & Heq).
+              exists r_orig; split; auto; constructor; auto.
+            - destruct (IHHrm_ba2 H0) as (r_orig & Hin & Heq).
+              exists r_orig; split; auto.
+              apply in_builtin_arg_addptr_a2; auto. }
+          destruct Hin_orig as (r_orig & Hin_r_orig & Hres2_eq).
+          assert (Hused_orig: reg_used_in_code c r_orig).
+          { rewrite Forall_forall in Hbargs_used.
+            eapply Hbargs_used; eauto. }
+          destruct (rm # r_orig) as [r_orig_g r_orig_b] eqn:Hrm_orig.
+          simpl in Hres2_eq; subst.
+          (* res2 = fst(rm#res1) = r_orig_b = snd(rm#r_orig) *)
+          (* rm_wf_neq_2_3' with r1=r_orig, r1'=res1 gives
+             fst(rm#res1) <> snd(rm#r_orig), contradiction *)
+          eapply rm_wf_neq_2_3' with (r1 := r_orig) (r1' := res1); eauto.
+          - eapply reg_used_in_code_in_all_regs_list; auto.
+          - eapply reg_used_in_code_in_all_regs_list; auto. }
+        (* Step 3: regular copy evaluates correctly after green+blue writes *)
+        assert (Heval1': eval_builtin_args ge
+                           (fun r => ((rs' # res2 <- vres) # res3 <- vres) # r)
+                           sp m args vargs).
+        { eapply eval_builtin_args_proper with
+            (rs := rs); eauto.
+          apply Forall_forall.
+          intros ba Hba r Hr.
+          assert (Hused_r: reg_used_in_code c r).
+          { rewrite Forall_forall in Hbargs_used; eapply Hbargs_used; eauto. }
+          rewrite PMap.gso.
+          2: { intro Heq; subst.
+               specialize (RM_INV _ _ _ RM_RES (or_intror Hres1_used))
+                 as (_ & _ & _ & Hnotused).
+               apply Hnotused; auto. }
+          rewrite PMap.gso.
+          2: { intro Heq; subst.
+               specialize (RM_INV _ _ _ RM_RES (or_intror Hres1_used))
+                 as (_ & _ & Hnotused & _).
+               apply Hnotused; auto. }
+          eapply match_regsets_get; eauto; right; auto. }
+        (* Well-typedness of result *)
+        assert (Hty: Val.has_type vres (re res1)).
+        { inv WT_FN; simpl in *.
+          specialize (wt_instrs _ _ Hcode); inv wt_instrs; simpl in *.
+          rewrite H7.
+          eapply external_call_well_typed; eauto. }
+        (* Assemble the three target steps *)
+        eexists; split.
+        + econstructor.
+          { (* Step 1: green copy at pc -> n1 *)
+            eapply exec_Ibuiltin; simpl.
+            { eauto. }
+            { eapply eval_builtin_args_preserved.
+              - intros id; apply symbols_preserved.
+              - eauto. }
+            { eapply external_call_symbols_preserved; eauto.
+              apply senv_preserved. } }
+          eapply star_step.
+          { (* Step 2: blue copy at n1 -> n2 *)
+            eapply exec_Ibuiltin; simpl.
+            { eauto. }
+            { eapply eval_builtin_args_preserved.
+              - intros id; apply symbols_preserved.
+              - eauto. }
+            { eapply external_call_symbols_preserved; eauto.
+              apply senv_preserved. } }
+          eapply star_step.
+          { (* Step 3: regular copy at n2 -> pc' *)
+            eapply exec_Ibuiltin; simpl.
+            { eauto. }
+            { eapply eval_builtin_args_preserved.
+              - intros id; apply symbols_preserved.
+              - eauto. }
+            { eapply external_call_symbols_preserved; eauto.
+              apply senv_preserved. } }
+          { apply star_refl. }
+          reflexivity.
+          reflexivity.
+          reflexivity.
+        + (* Establish match_states for successor *)
+          simpl.
+          econstructor; eauto.
+          { (* wt_regset *)
+            eapply wt_regset_assign; eauto. }
+          { (* match_regsets *)
+            eapply match_regsets_ext_r
+              with (rs1 := ((rs' # res1 <- vres) # res2 <- vres) # res3 <- vres).
+            { intro r.
+              destruct (peq r res3); subst.
+              { rewrite PMap.gss.
+                rewrite PMap.gso; auto.
+                rewrite PMap.gss; auto. }
+              rewrite PMap.gso; auto.
+              destruct (peq r res2); subst.
+              { rewrite PMap.gss.
+                rewrite PMap.gso; auto.
+                rewrite PMap.gso; auto.
+                rewrite PMap.gss; auto. }
+              rewrite PMap.gso; auto.
+              destruct (peq r res1); subst.
+              { rewrite PMap.gss, PMap.gss; auto. }
+              rewrite PMap.gso; auto.
+              rewrite PMap.gso; auto.
+              rewrite PMap.gso; auto.
+              rewrite PMap.gso; auto. }
+            eapply match_regsets_ext_r
+              with (rs1 := ((rs' # res1 <- vres) # res2 <-
+                             ((rs' # res1 <- vres) # res1)) # res3 <-
+                             ((rs' # res1 <- vres) # res1)).
+            { intro r. rewrite PMap.gss in *. reflexivity. }
+            eapply match_regsets_update; eauto. } }
       { (* No result register *)
         eapply maj_vote_regsR_star_step with (m:=m) in VOTE_ARGS; eauto.
         2: { apply Forall_forall; intros r1 Hin.

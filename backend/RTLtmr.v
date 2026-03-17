@@ -24,8 +24,11 @@
 
 Require Import
   AST
+  Builtins
+  FaultPolicy
   Builtins2
   Coqlib
+  CompCertZapUtils
   Errors
   Integers
   Maps
@@ -207,9 +210,39 @@ Definition transf_instr
                     (snd (rm # dst))
                     n2);
         update_instr n2 instr
+  | Ibuiltin ef bargs bres succ =>
+      if builtin_can_replicate ef then
+        match bres with
+        | BR res =>
+            let (res2, res3) := rm # res in
+            do n1 <- reserve_instr;
+            do n2 <- reserve_instr;
+            do _ <- update_instr pc
+                     (Ibuiltin ef
+                        (List.map (map_builtin_arg (fun r => fst (rm # r))) bargs)
+                        (BR res2) n1);
+            do _ <- update_instr n1
+                     (Ibuiltin ef
+                        (List.map (map_builtin_arg (fun r => snd (rm # r))) bargs)
+                        (BR res3) n2);
+            update_instr n2 instr
+        | _ =>
+            error (MSG "Replicate.v:transf_instr: replicable builtin with non-register result"
+                   :: POS pc :: nil)
+        end
+      else
+        (* Non-replicable builtin: vote args, run once, copy result *)
+        do n <- maj_vote_regs re rm (dedup (args_of_instruction instr)) pc;
+        match res_of_instruction instr, succ_of_instruction instr with
+        | Some res, Some succ' =>
+            do m <- reserve_instr;
+            do _ <- copy_to_shadows rm (re res) res m succ';
+            update_instr n (change_succ instr m)
+        | _, _ => update_instr n instr
+        end
   (* For other instructions, majority vote the argument registers and
      then execute the instruction only in the regular world. For
-     instructions with result registers (Icall and Ibuiltin), copy the
+     instructions with result registers (Icall), copy the
      result into its shadow registers. *)
   | _ =>
       do n <- maj_vote_regs re rm (dedup (args_of_instruction instr)) pc;

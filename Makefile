@@ -165,6 +165,7 @@ BACKEND=\
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   RTLreplicateSpecCommon.v \
+  CompCertZapUtils.v FaultPolicy.v \
   RTLdmr.v RTLdmrspec.v RTLdmrproof.v \
   RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
   RTLagreement.v RTLfault.v RTLtolerant.v \

@@ -14,8 +14,10 @@ Require Import Coqlib.
 Require Import Maps.
 Require Import Lattice.
 Require Import AST.
+Require Import Events.
 Require Import Op.
 Require Import Registers.
+Require Import CompCertZapUtils.
 Require Import RTL.
 Require Import Kildall.
 
@@ -128,4 +130,330 @@ Proof.
   - destruct H as [H | H].
     + subst. apply reg_list_live_incl. apply Regset.add_1. reflexivity.
     + apply IHargs. assumption.
+Qed.
+
+
+(** Per-instruction liveness membership helpers.
+    These prove that instruction arguments are in the transfer-function
+    image [transfer f pc (live !! pc)], which is the
+    "live-before" set at node [pc]. *)
+
+Lemma args_in_transfer_iop f live pc op args res succ r :
+  (fn_code f) ! pc = Some (Iop op args res succ) ->
+  In r args ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_in; auto.
+Qed.
+
+Lemma args_in_transfer_iload f live pc chunk addr args dst succ r :
+  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
+  In r args ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_in; auto.
+Qed.
+
+Lemma args_in_transfer_istore f live pc chunk addr args src succ r :
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  In r args ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_in; auto.
+Qed.
+
+Lemma src_in_transfer_istore f live pc chunk addr args src succ :
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  Regset.In src (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl.
+  apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_transfer_icall f live pc sig ros args res succ r :
+  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
+  In r args ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_in; auto.
+Qed.
+
+Lemma ros_in_transfer_icall f live pc sig r args res succ :
+  (fn_code f) ! pc = Some (Icall sig (inl r) args res succ) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl.
+  simpl. apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_transfer_itailcall f live pc sig ros args r :
+  (fn_code f) ! pc = Some (Itailcall sig ros args) ->
+  In r args ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_in; auto.
+Qed.
+
+Lemma ros_in_transfer_itailcall f live pc sig r args :
+  (fn_code f) ! pc = Some (Itailcall sig (inl r) args) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl.
+  simpl. apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_transfer_icond f live pc cond args ifso ifnot r :
+  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
+  In r args ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_in; auto.
+Qed.
+
+Lemma arg_in_transfer_ijumptable f live pc arg tbl :
+  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
+  Regset.In arg (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold transfer. rewrite Hpc.
+  apply Regset.add_1. reflexivity.
+Qed.
+
+Lemma args_in_transfer_ibuiltin f live pc ef args res succ r :
+  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
+  In r (params_of_builtin_args args) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_in; auto.
+Qed.
+
+Lemma optarg_in_transfer_ireturn f live pc r :
+  (fn_code f) ! pc = Some (Ireturn (Some r)) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc.
+  unfold transfer. rewrite Hpc.
+  simpl. apply Regset.add_1. reflexivity.
+Qed.
+
+(** For step_simulation: the transfer set at a successor is a subset
+    of the solution at the current node, which in turn is a subset of
+    the transfer set at the current node (since the transfer function
+    adds arguments on top of a subset of the solution). *)
+
+Lemma transfer_succ_subset f live pc i succ :
+  analyze f = Some live ->
+  (fn_code f) ! pc = Some i ->
+  In succ (successors_instr i) ->
+  Regset.Subset (transfer f succ (live !! succ)) (live !! pc).
+Proof.
+  intros LIVE Hpc Hsucc.
+  eapply analyze_solution; eauto.
+Qed.
+
+(** Helper: if [r] is in [live !! pc] and [r <> res], then [r] is in
+    the transfer-function image for Iop / Iload instructions. *)
+
+Lemma live_in_transfer_iop f live pc op args res succ r :
+  (fn_code f) ! pc = Some (Iop op args res succ) ->
+  r <> res ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hneq Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl.
+  apply Regset.remove_2; auto.
+Qed.
+
+Lemma live_in_transfer_iload f live pc chunk addr args dst succ r :
+  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
+  r <> dst ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hneq Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl.
+  apply Regset.remove_2; auto.
+Qed.
+
+Lemma live_in_transfer_istore f live pc chunk addr args src succ r :
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl.
+  apply Regset.add_2; auto.
+Qed.
+
+Lemma live_in_transfer_icall f live pc sig ros args res succ r :
+  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
+  r <> res ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hneq Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl.
+  destruct ros; simpl.
+  - apply Regset.add_2. apply Regset.remove_2; auto.
+  - apply Regset.remove_2; auto.
+Qed.
+
+Lemma live_in_transfer_icond f live pc cond args ifso ifnot r :
+  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl; auto.
+Qed.
+
+Lemma live_in_transfer_ijumptable f live pc arg tbl r :
+  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hin.
+  unfold transfer. rewrite Hpc.
+  apply Regset.add_2; auto.
+Qed.
+
+Lemma reg_list_dead_incl rl s r :
+  Regset.In r s ->
+  ~ In r rl ->
+  Regset.In r (reg_list_dead rl s).
+Proof.
+  revert s; induction rl; simpl; intros s Hin Hnotin.
+  - assumption.
+  - apply IHrl.
+    + apply Regset.remove_2.
+      * intro Heq; apply Hnotin; left; auto.
+      * assumption.
+    + intro Hin'; apply Hnotin; right; auto.
+Qed.
+
+Lemma live_in_transfer_ibuiltin f live pc ef args res succ r :
+  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
+  (forall x, res = BR x -> r <> x) ->
+  Regset.In r (live !! pc) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros Hpc Hnotin Hin.
+  unfold transfer. rewrite Hpc.
+  apply reg_list_live_incl.
+  destruct res; simpl; auto.
+  apply Regset.remove_2; auto.
+  intro Heq; eapply Hnotin; eauto.
+Qed.
+
+(** Composite helpers: successor transfer set membership implies
+    current transfer set membership (for non-killed registers).
+    These compose [transfer_succ_subset] with [live_in_transfer_*]. *)
+
+Lemma succ_in_transfer_iop f live pc op args res succ r :
+  analyze f = Some live ->
+  (fn_code f) ! pc = Some (Iop op args res succ) ->
+  r <> res ->
+  Regset.In r (transfer f succ (live !! succ)) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hneq Hr.
+  eapply live_in_transfer_iop; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
+Qed.
+
+Lemma succ_in_transfer_iload f live pc chunk addr args dst succ r :
+  analyze f = Some live ->
+  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
+  r <> dst ->
+  Regset.In r (transfer f succ (live !! succ)) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hneq Hr.
+  eapply live_in_transfer_iload; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
+Qed.
+
+Lemma succ_in_transfer_istore f live pc chunk addr args src succ r :
+  analyze f = Some live ->
+  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
+  Regset.In r (transfer f succ (live !! succ)) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hr.
+  eapply live_in_transfer_istore; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
+Qed.
+
+Lemma succ_in_transfer_icall f live pc sig ros args res succ r :
+  analyze f = Some live ->
+  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
+  r <> res ->
+  Regset.In r (transfer f succ (live !! succ)) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hneq Hr.
+  eapply live_in_transfer_icall; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
+Qed.
+
+Lemma succ_in_transfer_icond f live pc cond args ifso ifnot succ r :
+  analyze f = Some live ->
+  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
+  In succ (successors_instr (Icond cond args ifso ifnot)) ->
+  Regset.In r (transfer f succ (live !! succ)) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hsucc Hr.
+  eapply live_in_transfer_icond; eauto.
+  eapply transfer_succ_subset; eauto.
+Qed.
+
+Lemma succ_in_transfer_ijumptable f live pc arg tbl succ r :
+  analyze f = Some live ->
+  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
+  In succ (successors_instr (Ijumptable arg tbl)) ->
+  Regset.In r (transfer f succ (live !! succ)) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hsucc Hr.
+  eapply live_in_transfer_ijumptable; eauto.
+  eapply transfer_succ_subset; eauto.
+Qed.
+
+Lemma succ_in_transfer_ibuiltin f live pc ef args res succ r :
+  analyze f = Some live ->
+  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
+  (forall x, res = BR x -> r <> x) ->
+  Regset.In r (transfer f succ (live !! succ)) ->
+  Regset.In r (transfer f pc (live !! pc)).
+Proof.
+  intros LIVE Hpc Hnotin Hr.
+  eapply live_in_transfer_ibuiltin; eauto.
+  eapply transfer_succ_subset; eauto. simpl; auto.
 Qed.

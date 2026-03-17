@@ -1,7 +1,7 @@
 (** * Forward simulation proof for DMR pass. *)
 
 Require Import AST Coqlib Errors Events Floats Globalenvs Integers Linking Maps Op Registers RTLgen RTLtyping Smallstep Values.
-Require Import RTL.
+Require Import CompCertZapUtils RTL.
 Require Import Errors.
 Require Import RTLreplicateSpecCommon.
 Export ListNotations.

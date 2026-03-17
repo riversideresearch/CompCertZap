@@ -1,5 +1,8 @@
 Require Import
   AST
+  Builtins
+  FaultPolicy
+  CompCertZapUtils
   Builtins2
   Coqlib
   Events
@@ -56,7 +59,7 @@ Definition zap_allowed (i : instruction) : Prop :=
   | Istore _ _ _ _ _ => False
   | Icall _ _ _ _ _ => False
   | Itailcall _ _ _ => False
-  | Ibuiltin _ _ _ _ => False
+  | Ibuiltin ef _ _ _ => builtin_can_fault ef = true
   | _ => True
   end.
 
@@ -107,3 +110,1011 @@ End RELSEM.
 
 Definition faulty_semantics (p : program) :=
   Semantics fstep (initial_state p) final_state (Genv.globalenv p).
+
+Definition rs_compat (rs1 rs2 : regset) : Prop :=
+  forall r, val_compat (rs1 # r) (rs2 # r).
+
+(** Pure val_compat lemmas (no global environment dependency) *)
+
+Lemma val_compat_shrx v1 v2 vres n :
+  val_compat v1 v2 ->
+  Val.shrx v1 (Vint n) = Some vres ->
+  exists vres' : val, Val.shrx v2 (Vint n) = Some vres'.
+Proof.
+  intros Hcompat Hshrx.
+  inv Hcompat; simpl in *; try congruence.
+  destruct (Integers.Int.ltu _ _); inv Hshrx.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_shrxl v1 v2 vres n :
+  val_compat v1 v2 ->
+  Val.shrxl v1 (Vint n) = Some vres ->
+  exists vres' : val, Val.shrxl v2 (Vint n) = Some vres'.
+Proof.
+  intros Hcompat Hshrxl.
+  inv Hcompat; simpl in *; try congruence.
+  destruct (Integers.Int.ltu _ _); inv Hshrxl.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_floatofint_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.floatofint v1 = Some vres ->
+  exists vres' : val, Val.floatofint v2 = Some vres'.
+Proof.
+  intros Hcompat Hfoi.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_singleofint_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.singleofint v1 = Some vres ->
+  exists vres' : val, Val.singleofint v2 = Some vres'.
+Proof.
+  intros Hcompat Hsoi.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_floatoflong_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.floatoflong v1 = Some vres ->
+  exists vres' : val, Val.floatoflong v2 = Some vres'.
+Proof.
+  intros Hcompat Hfol.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_singleoflong_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.singleoflong v1 = Some vres ->
+  exists vres' : val, Val.singleoflong v2 = Some vres'.
+Proof.
+  intros Hcompat Hsol.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_divs n1 n2 d1 d2 v1 v2 :
+  val_compat n1 n2 ->
+  val_compat d1 d2 ->
+  Val.divs n1 d1 = Some v1 ->
+  Val.divs n2 d2 = Some v2 ->
+  val_compat v1 v2.
+Proof.
+  intros Hn Hd Hdiv1 Hdiv2.
+  inv Hn; inv Hd; simpl in *; try congruence.
+  destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  - destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    inv Hdiv1.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hdiv2; constructor.
+    + inv Hdiv2; constructor.
+  - inv Hdiv1.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hdiv2; constructor.
+    + inv Hdiv2; constructor.
+Qed.
+
+Lemma val_compat_divu n1 n2 d1 d2 v1 v2 :
+  val_compat n1 n2 ->
+  val_compat d1 d2 ->
+  Val.divu n1 d1 = Some v1 ->
+  Val.divu n2 d2 = Some v2 ->
+  val_compat v1 v2.
+Proof.
+  intros Hn Hd Hdiv1 Hdiv2.
+  inv Hn; inv Hd; simpl in *; try congruence.
+  repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  inv Hdiv1; inv Hdiv2; constructor.
+Qed.
+
+Lemma val_compat_mods n1 n2 d1 d2 v1 v2 :
+  val_compat n1 n2 ->
+  val_compat d1 d2 ->
+  Val.mods n1 d1 = Some v1 ->
+  Val.mods n2 d2 = Some v2 ->
+  val_compat v1 v2.
+Proof.
+  intros Hn Hd Hmod1 Hmod2.
+  inv Hn; inv Hd; simpl in *; try congruence.
+  destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  - destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    inv Hmod1.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hmod2; constructor.
+    + inv Hmod2; constructor.
+  - inv Hmod1.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hmod2; constructor.
+    + inv Hmod2; constructor.
+Qed.
+
+Lemma val_compat_modu n1 n2 d1 d2 v1 v2 :
+  val_compat n1 n2 ->
+  val_compat d1 d2 ->
+  Val.modu n1 d1 = Some v1 ->
+  Val.modu n2 d2 = Some v2 ->
+  val_compat v1 v2.
+Proof.
+  intros Hn Hd Hmod1 Hmod2.
+  inv Hn; inv Hd; simpl in *; try congruence.
+  repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  inv Hmod1; inv Hmod2; constructor.
+Qed.
+
+Lemma val_compat_shl_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shl v (Vint n)) (Val.shl v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shr_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shr v (Vint n)) (Val.shr v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shll_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shll v (Vint n)) (Val.shll v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shrl_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shrl v (Vint n)) (Val.shrl v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shrlu_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shrlu v (Vint n)) (Val.shrlu v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shrx_imm v v' vres vres' n :
+  val_compat v v' ->
+  Val.shrx v (Vint n) = Some vres ->
+  Val.shrx v' (Vint n) = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; simpl in *; try congruence.
+  destruct (Integers.Int.ltu _ _); inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_shrxl_imm v v' vres vres' n :
+  val_compat v v' ->
+  Val.shrxl v (Vint n) = Some vres ->
+  Val.shrxl v' (Vint n) = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; simpl in *; try congruence.
+  destruct (Integers.Int.ltu _ _); inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_shru_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shru v (Vint n)) (Val.shru v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shru_dimm v1 v1' v2 v2' n :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat
+    (Val.or (Val.shl v1 (Vint n))
+       (Val.shru v2 (Vint (Integers.Int.sub Integers.Int.iwordsize n))))
+    (Val.or (Val.shl v1' (Vint n))
+       (Val.shru v2' (Vint (Integers.Int.sub Integers.Int.iwordsize n)))).
+Proof.
+  intros H0 H1; inv H0; inv H1; simpl; try constructor;
+    repeat destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_add v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.add v1 v2) (Val.add v1' v2').
+Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+Lemma val_compat_addl v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.addl v1 v2) (Val.addl v1' v2').
+Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+Lemma val_compat_mul v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.mul v1 v2) (Val.mul v1' v2').
+Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+Lemma val_compat_mull v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.mull v1 v2) (Val.mull v1' v2').
+Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+Lemma val_compat_floatofint v v' vres vres' :
+  val_compat v v' ->
+  Val.floatofint v = Some vres ->
+  Val.floatofint v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_singleofint v v' vres vres' :
+  val_compat v v' ->
+  Val.singleofint v = Some vres ->
+  Val.singleofint v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_floatoflong v v' vres vres' :
+  val_compat v v' ->
+  Val.floatoflong v = Some vres ->
+  Val.floatoflong v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_singleoflong v v' vres vres' :
+  val_compat v v' ->
+  Val.singleoflong v = Some vres ->
+  Val.singleoflong v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_cmp_bool c v1 v1' v2 v2' b :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmp_bool c v1 v2 = Some b ->
+  exists b' : bool, Val.cmp_bool c v1' v2' = Some b'.
+Proof.
+  intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpl_bool c v1 v1' v2 v2' b :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmpl_bool c v1 v2 = Some b ->
+  exists b' : bool, Val.cmpl_bool c v1' v2' = Some b'.
+Proof.
+  intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpf_bool c v1 v1' v2 v2' b :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmpf_bool c v1 v2 = Some b ->
+  exists b' : bool, Val.cmpf_bool c v1' v2' = Some b'.
+Proof.
+  intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpfs_bool c v1 v1' v2 v2' b :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmpfs_bool c v1 v2 = Some b ->
+  exists b' : bool, Val.cmpfs_bool c v1' v2' = Some b'.
+Proof.
+  intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpu_bool c v1 v1' v2 v2' b m1 m2 :
+  Archi.ptr64 = true ->
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmpu_bool (Memory.Mem.valid_pointer m1) c v1 v2 = Some b ->
+  exists b' : bool, Val.cmpu_bool (Memory.Mem.valid_pointer m2) c v1' v2' = Some b'.
+Proof.
+  intros Harchi H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence;
+    try (rewrite Harchi in *; discriminate).
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmplu_bool c v1 v1' v2 v2' b m1 m2 :
+  Archi.ptr64 = false ->
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmplu_bool (Memory.Mem.valid_pointer m1) c v1 v2 = Some b ->
+  exists b' : bool, Val.cmplu_bool (Memory.Mem.valid_pointer m2) c v1' v2' = Some b'.
+Proof.
+  intros Harchi H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence;
+    try (rewrite Harchi in *; discriminate).
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpu_bool_imm c v v' b m1 m2 n :
+  Archi.ptr64 = true ->
+  val_compat v v' ->
+  Val.cmpu_bool (Memory.Mem.valid_pointer m1) c v (Vint n) = Some b ->
+  exists b' : bool, Val.cmpu_bool (Memory.Mem.valid_pointer m2) c v' (Vint n) = Some b'.
+Proof.
+  intros Harchi H Hcmp; inv H; simpl in *; try congruence;
+    try (rewrite Harchi in *; discriminate).
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_maskzero_bool v v' n b :
+  val_compat v v' ->
+  Val.maskzero_bool v n = Some b ->
+  exists b', Val.maskzero_bool v' n = Some b'.
+Proof.
+  intros H Hmask; inv H; simpl in *; try congruence.
+  inv Hmask; eexists; reflexivity.
+Qed.
+
+Lemma option_map_some {A B : Type} (f : A -> B) o y :
+  option_map f o = Some y ->
+  exists x, o = Some x /\ y = f x.
+Proof.
+  intro Hf.
+  destruct o; simpl in *; inv Hf.
+  eexists; split; reflexivity.
+Qed.
+
+Lemma val_compat_normalize v v' t :
+  val_compat v v' ->
+  val_compat (Val.normalize v t) (Val.normalize v' t).
+Proof.
+  intro H; inv H; simpl; try constructor; destruct t; constructor.
+Qed.
+
+Lemma val_compat_subl v1 v1' v2 v2' :
+  Archi.ptr64 = false ->
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.subl v1 v2) (Val.subl v1' v2').
+Proof.
+  intros Harchi H0 H1; inv H0; inv H1; simpl; try constructor.
+  rewrite Harchi; constructor.
+Qed.
+
+(** Lemmas depending on a global environment *)
+
+Section VAL_COMPAT_OPS.
+Variable ge : genv.
+
+Local Ltac inv_Forall2 :=
+  repeat match goal with
+    | [H : Forall2 _ nil _ |- _] => inv H
+    | [H : Forall2 _ _ nil |- _] => inv H
+    | [H : Forall2 _ (_ :: _) _ |- _] => inv H
+    | [H : Forall2 _ _ (_ :: _) |- _] => inv H
+    end.
+
+Lemma val_compat_eval_addressing32 args1 args2 sp a v :
+  Forall2 val_compat args1 args2 ->
+  Op.eval_addressing32 ge sp a args1 = Some v ->
+  exists v', Op.eval_addressing32 ge sp a args2 = Some v'.
+Proof.
+  intros Hforall Hop.
+  destruct a; simpl in *; try congruence;
+    try solve [repeat (destruct args1; try congruence);
+               destruct Archi.ptr64; inv_Forall2; eexists; eauto].
+Qed.
+
+Lemma val_compat_eval_addressing64 args1 args2 sp a v :
+  Forall2 val_compat args1 args2 ->
+  Op.eval_addressing64 ge sp a args1 = Some v ->
+  exists v', Op.eval_addressing64 ge sp a args2 = Some v'.
+Proof.
+  intros Hforall Hop.
+  destruct a; simpl in *; try congruence;
+    try solve [repeat (destruct args1; try congruence);
+               destruct Archi.ptr64; inv_Forall2; eexists; eauto].
+Qed.
+
+Lemma rs_compat_eval_operation rs1 rs2 sp op args m v :
+  ~ is_protected op ->
+  rs_compat rs1 rs2 ->
+  Op.eval_operation ge sp op rs1 ## args m = Some v ->
+  exists v', Op.eval_operation ge sp op rs2 ## args m = Some v'.
+Proof.
+  intros Hnodiv Hcompat Hop.
+  destruct op; simpl in *;
+    try (destruct args; simpl in *; try congruence);
+    try (destruct args; simpl in *; try congruence);
+    try (destruct args; simpl in *; try congruence);
+    inv Hop; try solve [eexists; eauto];
+    try solve [exfalso; apply Hnodiv; constructor].
+  - eapply val_compat_shrx; eauto.
+  - eapply val_compat_eval_addressing32; eauto.
+  - eapply val_compat_eval_addressing32; eauto.
+  - eapply val_compat_shrxl; eauto.
+  - eapply val_compat_eval_addressing64; eauto.
+  - eapply val_compat_eval_addressing64; eauto.
+  - eapply val_compat_floatofint_exists; eauto.
+  - eapply val_compat_singleofint_exists; eauto.
+  - eapply val_compat_floatoflong_exists; eauto.
+  - eapply val_compat_singleoflong_exists; eauto.
+Qed.
+
+Lemma rs_compat_eval_addressing32 rs1 rs2 args sp a v v' :
+  rs_compat rs1 rs2 ->
+  Op.eval_addressing32 ge sp a rs1 ## args = Some v ->
+  Op.eval_addressing32 ge sp a rs2 ## args = Some v' ->
+  val_compat v v'.
+Proof.
+  intros Hcompat H0 H1.
+  unfold Op.eval_addressing32 in *.
+  destruct a; simpl in *.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_add; auto; constructor.
+  - do 3 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_add; try constructor.
+    apply val_compat_add; auto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_add; try constructor.
+    apply val_compat_mul; auto; constructor.
+  - do 3 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_add; auto.
+    apply val_compat_add; try constructor.
+    apply val_compat_mul; auto; constructor.
+  - do 1 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64; try congruence.
+    inv H0; inv H1; apply val_compat_refl.
+  - do 2 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64; try congruence.
+    inv H0; inv H1; apply val_compat_add; auto; apply val_compat_refl.
+  - do 2 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64; try congruence.
+    inv H0; inv H1.
+    apply val_compat_add; try apply val_compat_refl.
+    apply val_compat_mul; auto; constructor.
+  - do 1 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64; try congruence.
+    inv H0; inv H1; apply val_compat_refl.
+Qed.
+
+Lemma rs_compat_eval_addressing64 rs1 rs2 args sp a v v' :
+  rs_compat rs1 rs2 ->
+  Op.eval_addressing64 ge sp a rs1 ## args = Some v ->
+  Op.eval_addressing64 ge sp a rs2 ## args = Some v' ->
+  val_compat v v'.
+Proof.
+  intros Hcompat H0 H1.
+  unfold Op.eval_addressing32 in *.
+  destruct a; simpl in *; try congruence.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_addl; auto; constructor.
+  - do 3 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_addl; try constructor.
+    apply val_compat_addl; auto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_addl; try constructor.
+    apply val_compat_mull; auto; constructor.
+  - do 3 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_addl; auto.
+    apply val_compat_addl; try constructor.
+    apply val_compat_mull; auto; constructor.
+  - do 1 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64; try congruence.
+    inv H0; inv H1; apply val_compat_refl.
+  - do 1 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64; try congruence.
+    inv H0; inv H1; apply val_compat_refl.
+Qed.
+
+Lemma rs_compat_eval_condition cond rs1 rs2 args m1 m2 v :
+  (Archi.ptr64 = false -> ~ is_compu cond) ->
+  (Archi.ptr64 = true -> ~ is_complu cond) ->
+  rs_compat rs1 rs2 ->
+  Op.eval_condition cond rs1 ## args m1 = Some v ->
+  exists v', Op.eval_condition cond rs2 ## args m2 = Some v'.
+Proof.
+  intros Hnotcompu Hnotcomplu Hcompat Hcond.
+  destruct cond eqn:Hc; simpl in *.
+  - do 3 (destruct args; simpl in *; try congruence).
+    eapply val_compat_cmp_bool; eauto.
+  - do 3 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64 eqn:Harchi.
+    + eapply val_compat_cmpu_bool; eauto.
+    + exfalso; eapply Hnotcompu; constructor.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_cmp_bool; eauto; constructor.
+  - do 2 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64 eqn:Harchi.
+    + eapply val_compat_cmpu_bool; eauto; constructor.
+    + exfalso; eapply Hnotcompu; constructor.
+  - do 3 (destruct args; simpl in *; try congruence).
+    eapply val_compat_cmpl_bool; eauto.
+  - do 3 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64 eqn:Harchi.
+    + exfalso; apply Hnotcomplu; auto; constructor.
+    + eapply val_compat_cmplu_bool; eauto; constructor.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_cmpl_bool; eauto; constructor.
+  - do 2 (destruct args; simpl in *; try congruence).
+    destruct Archi.ptr64 eqn:Harchi.
+    + exfalso; apply Hnotcomplu; auto; constructor.
+    + eapply val_compat_cmplu_bool; eauto; constructor.
+  - do 3 (destruct args; simpl in *; try congruence).
+    eapply val_compat_cmpf_bool; eauto.
+  - do 3 (destruct args; simpl in *; try congruence).
+    apply option_map_some in Hcond.
+    destruct Hcond as (b & Hcmp & Hb); subst.
+    eapply val_compat_cmpf_bool in Hcmp; eauto.
+    destruct Hcmp as [b' Hcmp].
+    exists (negb b'); rewrite Hcmp; reflexivity.
+  - do 3 (destruct args; simpl in *; try congruence).
+    eapply val_compat_cmpfs_bool; eauto.
+  - do 3 (destruct args; simpl in *; try congruence).
+    apply option_map_some in Hcond.
+    destruct Hcond as (b & Hcmp & Hb); subst.
+    eapply val_compat_cmpfs_bool in Hcmp; eauto.
+    destruct Hcmp as [b' Hcmp].
+    exists (negb b'); rewrite Hcmp; reflexivity.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_maskzero_bool; eauto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    apply option_map_some in Hcond.
+    destruct Hcond as (b & Hcmp & Hb); subst.
+    eapply val_compat_maskzero_bool in Hcmp; eauto.
+    destruct Hcmp as [b' Hcmp].
+    exists (negb b'); rewrite Hcmp; reflexivity.
+Qed.
+
+Lemma eval_operation_val_compat rs1 rs2 sp op args m1 m2 v v' :
+  ~ is_protected op ->
+  rs_compat rs1 rs2 ->
+  Op.eval_operation ge sp op rs1 ## args m1 = Some v ->
+  Op.eval_operation ge sp op rs2 ## args m2 = Some v' ->
+  val_compat v v'.
+Proof.
+  intros Hop Hcompat H0 H1.
+  destruct op; simpl in *;
+    try solve [exfalso; apply Hop; constructor];
+    try solve [destruct args; simpl in *; try congruence;
+               try solve [inv H0; inv H1; constructor];
+               try solve [inv H0; inv H1; apply val_compat_refl];
+               destruct args; simpl in *; try congruence;
+               inv H0; inv H1; auto];
+    try solve [do 2 (destruct args; simpl in *; try congruence);
+               inv H0; inv H1;
+               specialize (Hcompat p); inv Hcompat; simpl;
+               try apply val_compat_refl; constructor];
+    try solve [do 3 (destruct args; simpl in *; try congruence);
+               inv H0; inv H1;
+               pose proof (Hcompat p0) as Hp0; specialize (Hcompat p);
+               inv Hp0; inv Hcompat; constructor].
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_shl_imm; auto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_shr_imm; auto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_shrx_imm; eauto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_shru_imm; auto.
+  - do 3 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_shru_dimm; auto.
+  - eapply rs_compat_eval_addressing32; eauto.
+  - do 3 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1.
+    apply val_compat_subl; auto.
+    apply is_protected_subl_archi_ptr64_false; assumption.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_shll_imm; auto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_shrl_imm; auto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_shrxl_imm; eauto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    inv H0; inv H1; apply val_compat_shrlu_imm; auto.
+  - eapply rs_compat_eval_addressing64; eauto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_floatofint; eauto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_singleofint; eauto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_floatoflong; eauto.
+  - do 2 (destruct args; simpl in *; try congruence).
+    eapply val_compat_singleoflong; eauto.
+  - inv H0; inv H1.
+    destruct (Op.eval_condition cond rs1 ## args m1) eqn:Hcond.
+    + eapply rs_compat_eval_condition in Hcond; eauto.
+      * destruct Hcond as [b' Hcond].
+        rewrite Hcond; simpl.
+        destruct b, b'; constructor.
+      * intros Harchi HC; inv HC; apply Hop; constructor; assumption.
+      * intros Harchi HC; inv HC; apply Hop; constructor; assumption.
+    + constructor.
+Qed.
+
+End VAL_COMPAT_OPS.
+
+(** * val_compat monotonicity for safe builtins *)
+
+(** Helper: [val_compat] is preserved through [proj_num] and [inj_num].
+    For a [mkbuiltin_nNt] builtin, arguments are extracted via [proj_num]
+    (which returns a default when the value constructor doesn't match the
+    expected type), a pure function is applied, and the result is wrapped
+    via [inj_num].  Under [val_compat], inputs of the same constructor
+    produce same-constructor outputs. *)
+
+Lemma val_compat_proj_num_inj (targ: typ) (tres: xtype)
+      (f1 f2: valty targ -> valxty tres) (v1 v2: val) :
+  val_compat v1 v2 ->
+  val_compat
+    (proj_num targ Vundef v1 (fun x => inj_num tres (f1 x)))
+    (proj_num targ Vundef v2 (fun x => inj_num tres (f2 x))).
+Proof.
+  intros Hcompat; inv Hcompat; destruct targ; simpl; try constructor;
+    destruct tres; simpl; try constructor.
+Qed.
+
+(** ** Per-class lemmas for mkbuiltin_n1t builtins *)
+
+Lemma val_compat_mkbuiltin_n1t
+      (targ: typ) (tres: xtype) (f: valty targ -> valxty tres)
+      (vargs1 vargs2: list val) (vres1: val) :
+  Forall2 val_compat vargs1 vargs2 ->
+  mkbuiltin_n1t targ tres f vargs1 = Some vres1 ->
+  exists vres2,
+    mkbuiltin_n1t targ tres f vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hcompat Hsem.
+  simpl in *.
+  destruct vargs1 as [|v1 [|]]; try discriminate.
+  inv Hcompat. inv H3. inv Hsem.
+  eexists; split; [reflexivity|].
+  apply val_compat_proj_num_inj; auto.
+Qed.
+
+(** Helper: [val_compat] through nested [proj_num]/[inj_num] for 2-arg
+    numerical builtins. *)
+
+Lemma val_compat_proj_num_inj2 (targ1 targ2: typ) (tres: xtype)
+      (f1 f2: valty targ1 -> valty targ2 -> valxty tres) (v1 v2 w1 w2: val) :
+  val_compat v1 v2 ->
+  val_compat w1 w2 ->
+  val_compat
+    (proj_num targ1 Vundef v1 (fun x1 =>
+     proj_num targ2 Vundef w1 (fun x2 => inj_num tres (f1 x1 x2))))
+    (proj_num targ1 Vundef v2 (fun x1 =>
+     proj_num targ2 Vundef w2 (fun x2 => inj_num tres (f2 x1 x2)))).
+Proof.
+  intros Hv Hw; inv Hv; destruct targ1; simpl; try constructor;
+    apply val_compat_proj_num_inj; auto.
+Qed.
+
+Lemma val_compat_mkbuiltin_n2t
+      (targ1 targ2: typ) (tres: xtype)
+      (f: valty targ1 -> valty targ2 -> valxty tres)
+      (vargs1 vargs2: list val) (vres1: val) :
+  Forall2 val_compat vargs1 vargs2 ->
+  mkbuiltin_n2t targ1 targ2 tres f vargs1 = Some vres1 ->
+  exists vres2,
+    mkbuiltin_n2t targ1 targ2 tres f vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hcompat Hsem.
+  simpl in *.
+  destruct vargs1 as [|v1 [|w1 [|]]]; try discriminate.
+  inv Hcompat. inv H3.
+  match goal with H : Forall2 _ nil _ |- _ => inv H end.
+  inv Hsem.
+  eexists; split; [reflexivity|].
+  apply val_compat_proj_num_inj2; auto.
+Qed.
+
+(** ** val_compat lemmas for mkbuiltin_v2t builtins *)
+
+(** [Val.mull'] takes [Vint * Vint -> Vlong], otherwise [Vundef].
+    Under [val_compat], both sides either produce [Vlong] or [Vundef]. *)
+
+Lemma val_compat_mull' v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.mull' v1 v2) (Val.mull' v1' v2').
+Proof.
+  intros H0 H1; inv H0; inv H1; simpl; constructor.
+Qed.
+
+(** Generic tactic for 2-arg v2t builtin val_compat proofs *)
+
+Local Ltac solve_v2t_builtin vc_lemma :=
+  let Hcompat := fresh "Hcompat" in
+  let Hsem := fresh "Hsem" in
+  intros Hcompat Hsem;
+  simpl in *;
+  destruct Hcompat as [| ? ? ? ? ? Hcompat]; [discriminate|];
+  destruct Hcompat as [| ? ? ? ? ? Hcompat]; [discriminate|];
+  destruct Hcompat; [|discriminate];
+  inv Hsem;
+  eexists; split; [reflexivity|];
+  eapply vc_lemma; eassumption.
+
+(** Lifting [val_compat_addl] to the builtin semantics wrapper. *)
+
+Lemma builtin_sem_val_compat_addl vargs1 vargs2 vres1 :
+  Forall2 val_compat vargs1 vargs2 ->
+  standard_builtin_sem BI_addl vargs1 = Some vres1 ->
+  exists vres2,
+    standard_builtin_sem BI_addl vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof. solve_v2t_builtin val_compat_addl. Qed.
+
+(** Lifting [val_compat_mull'] to the builtin semantics wrapper. *)
+
+Lemma builtin_sem_val_compat_mull vargs1 vargs2 vres1 :
+  Forall2 val_compat vargs1 vargs2 ->
+  standard_builtin_sem BI_mull vargs1 = Some vres1 ->
+  exists vres2,
+    standard_builtin_sem BI_mull vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof. solve_v2t_builtin val_compat_mull'. Qed.
+
+(** Lifting [val_compat_subl] to the builtin semantics wrapper.
+    Requires [Archi.ptr64 = false] because [BI_subl] is only classified
+    as replicable when [negb Archi.ptr64 = true] (CLAS-07). *)
+
+Lemma builtin_sem_val_compat_subl vargs1 vargs2 vres1 :
+  Archi.ptr64 = false ->
+  Forall2 val_compat vargs1 vargs2 ->
+  standard_builtin_sem BI_subl vargs1 = Some vres1 ->
+  exists vres2,
+    standard_builtin_sem BI_subl vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Harchi. solve_v2t_builtin val_compat_subl.
+Qed.
+
+(** ** Shift builtins: restricted val_compat lemmas *)
+
+(** IMPORTANT: The general val_compat monotonicity does NOT hold for shift
+    builtins (BI_i64_shl, BI_i64_shr, BI_i64_sar) when the shift amount
+    is faulted.  The issue is that [Int.ltu n2 Int64.iwordsize'] may
+    succeed on one side and fail on the other, producing [Vlong] on one side
+    and [Vundef] on the other.  Since [val_compat (Vlong _) Vundef] is NOT
+    a constructor of [val_compat], the proof does not close.
+
+    We provide restricted lemmas for the case where the shift amount is
+    identical on both sides (the [val_compat_shll_imm] pattern).  The general
+    case is left as a documented limitation -- the tolerant proof (Phase 3)
+    may only encounter shifts where the shift amount register is not the
+    faulted register, in which case the restricted lemma suffices. *)
+
+(** Demonstration that the general shift proof does not close.
+    The stuck goal is [val_compat (Vlong _) Vundef] when [Int.ltu]
+    succeeds on the left (non-faulted) and fails on the right (faulted).
+    We simply state that this lemma is NOT provable in general and abort. *)
+Lemma builtin_sem_val_compat_shl_UNPROVABLE vargs1 vargs2 vres1 :
+  Forall2 val_compat vargs1 vargs2 ->
+  standard_builtin_sem BI_i64_shl vargs1 = Some vres1 ->
+  exists vres2,
+    standard_builtin_sem BI_i64_shl vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  (* Proof cannot be completed: when both args are Vlong/Vint with
+     val_compat, Int.ltu may diverge between the two sides, producing
+     Vlong on the left and Vundef on the right.  val_compat (Vlong _) Vundef
+     is not a constructor of val_compat. *)
+Abort.
+
+(** The general proof for shifts cannot be completed.
+    Instead, provide the restricted form where the shift amount
+    is known to be the same on both sides. *)
+
+Lemma builtin_sem_val_compat_shl_restricted v1 v1' n vres1 :
+  val_compat v1 v1' ->
+  standard_builtin_sem BI_i64_shl (v1 :: Vint n :: nil) = Some vres1 ->
+  exists vres2,
+    standard_builtin_sem BI_i64_shl (v1' :: Vint n :: nil) = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hcompat Hsem.
+  simpl in *. inv Hsem.
+  eexists; split; [reflexivity|].
+  apply val_compat_shll_imm; auto.
+Qed.
+
+Lemma builtin_sem_val_compat_shr_restricted v1 v1' n vres1 :
+  val_compat v1 v1' ->
+  standard_builtin_sem BI_i64_shr (v1 :: Vint n :: nil) = Some vres1 ->
+  exists vres2,
+    standard_builtin_sem BI_i64_shr (v1' :: Vint n :: nil) = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hcompat Hsem.
+  simpl in *. inv Hsem.
+  eexists; split; [reflexivity|].
+  apply val_compat_shrlu_imm; auto.
+Qed.
+
+Lemma builtin_sem_val_compat_sar_restricted v1 v1' n vres1 :
+  val_compat v1 v1' ->
+  standard_builtin_sem BI_i64_sar (v1 :: Vint n :: nil) = Some vres1 ->
+  exists vres2,
+    standard_builtin_sem BI_i64_sar (v1' :: Vint n :: nil) = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hcompat Hsem.
+  simpl in *. inv Hsem.
+  eexists; split; [reflexivity|].
+  apply val_compat_shrl_imm; auto.
+Qed.
+
+(** ** Unified builtin_sem_val_compat dispatcher *)
+
+(** The unified dispatcher is gated by [builtin_can_replicate_bf bf = true].
+    For shift builtins, we prove the property using a different technique:
+    since [mkbuiltin_v2t] always returns [Some] for 2-argument inputs,
+    we know both sides produce [Some].  For the val_compat of the results,
+    we observe that shifts with faulted shift amounts can produce
+    incompatible results.  However, the proof for shifts CAN be completed
+    by case-splitting on all combinations of [val_compat] constructors
+    and all [Int.ltu] outcomes.  Let us attempt the full proof.
+
+    Key insight: when both arguments are NOT of the expected type
+    (e.g., not Vlong/Vint), both sides produce Vundef, which IS val_compat.
+    The problematic case is ONLY when one side's ltu succeeds and the other
+    fails.  But since val_compat_undef says val_compat Vundef v (Vundef on
+    LEFT), we can handle the case where the LEFT side's ltu FAILS (producing
+    Vundef on the left) and the RIGHT side's ltu succeeds (producing Vlong
+    on the right): that gives val_compat Vundef (Vlong _) which IS provable.
+    The ONLY unprovable case is when the LEFT side succeeds and the RIGHT
+    fails: val_compat (Vlong _) Vundef.
+
+    In the fault model, the LEFT argument is the NON-faulted value and the
+    RIGHT is the faulted value.  For the faulted side (RIGHT), the shift
+    amount could be out-of-range (ltu fails, producing Vundef on RIGHT).
+    Meanwhile the non-faulted side (LEFT) has a valid shift amount (ltu
+    succeeds, producing Vlong on LEFT).  This gives val_compat (Vlong _) Vundef
+    which is NOT provable.
+
+    DECISION: For the unified dispatcher, we handle shift builtins by
+    observing that the property holds in ALL cases except when:
+    (1) both args are Vlong/Vint respectively, AND
+    (2) Int.ltu succeeds on LEFT but fails on RIGHT.
+    Since this case IS reachable under the fault model, we CANNOT prove
+    the general property for shifts.
+
+    SOLUTION: Exclude shift builtins from the unified dispatcher by
+    adding an additional hypothesis that the builtin is NOT a shift.
+    Actually, we observe that the classification already includes shifts.
+    The cleaner solution is to prove that the general property holds
+    for ALL v2t builtins (including shifts) with an asymmetric twist:
+    we use the fact that val_compat Vundef v holds for ALL v.
+
+    Let us try: maybe the proof DOES close if we handle each case.
+    For shifts with val_compat args:
+    - Both Vundef: both sides produce Vundef. val_compat Vundef Vundef. OK.
+    - Left Vundef: proj left gives Vundef. val_compat Vundef _. OK.
+    - Both Vlong/Vint: need to handle ltu divergence. Problem case.
+    - Left Vlong/Vint but right mismatched: both sides produce Vundef. OK.
+
+    The problem case is irreducible.  So we prove the property for
+    non-shift builtins only. For shifts, we have the restricted lemmas above. *)
+
+Section BUILTIN_VAL_COMPAT.
+
+Context {VT: vote_type} {vsem: VoteSemantics VT}.
+
+(** Per-standard-builtin val_compat property for non-shift builtins.
+    The gate uses [builtin_can_replicate_bf] uniformly.  Shift builtins
+    are excluded via the separate hypothesis.  For [BI_subl], the gate
+    reduces to [negb Archi.ptr64 = true]; on ptr64 architectures this
+    is discriminated, on 32-bit architectures the proof uses
+    [val_compat_subl] with the derived [Archi.ptr64 = false]. *)
+
+Lemma standard_builtin_sem_val_compat (sb: standard_builtin) vargs1 vargs2 vres1 :
+  match sb with
+  | BI_i64_shl | BI_i64_shr | BI_i64_sar => False
+  | _ => builtin_can_replicate_bf (BI_standard sb) = true
+  end ->
+  Forall2 val_compat vargs1 vargs2 ->
+  standard_builtin_sem sb vargs1 = Some vres1 ->
+  exists vres2,
+    standard_builtin_sem sb vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hgate Hcompat Hsem.
+  destruct sb; simpl in Hgate; try discriminate; try contradiction;
+    try solve [eapply val_compat_mkbuiltin_n1t; eauto];
+    try solve [eapply val_compat_mkbuiltin_n2t; eauto];
+    try solve [eapply builtin_sem_val_compat_addl; eauto];
+    try solve [eapply builtin_sem_val_compat_mull; eauto];
+    try solve [eapply builtin_sem_val_compat_subl; eauto;
+               destruct Archi.ptr64; simpl in Hgate; congruence].
+Qed.
+
+(** Platform builtin val_compat property. *)
+
+Lemma platform_builtin_sem_val_compat (pb: platform_builtin) vargs1 vargs2 vres1 :
+  Forall2 val_compat vargs1 vargs2 ->
+  platform_builtin_sem pb vargs1 = Some vres1 ->
+  exists vres2,
+    platform_builtin_sem pb vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hcompat Hsem.
+  destruct pb;
+    eapply val_compat_mkbuiltin_n2t; eauto.
+Qed.
+
+(** The unified dispatcher: val_compat monotonicity for all builtins
+    classified as replicable by [builtin_can_replicate_bf].
+
+    Gate: [builtin_can_replicate_bf bf = true].
+    For [BI_replicate], the gate hypothesis is contradictory (reduces
+    to [false = true]).
+    For shift builtins ([BI_i64_shl], [BI_i64_shr], [BI_i64_sar]),
+    the gate IS true, so we must prove the property.  We handle this
+    by attempting the general proof.  Since the general val_compat
+    monotonicity does NOT hold for shifts (see analysis above), we
+    use a different approach: for shifts, the [mkbuiltin_v2t] wrapper
+    always returns [Some] for 2-argument inputs.  We can show that
+    both sides produce [Some], and then attempt val_compat on results.
+
+    ACTUALLY: After further analysis, the general proof for shifts
+    in the Forall2 val_compat formulation is NOT closeable.
+    Therefore we add an extra hypothesis excluding shifts. *)
+
+Lemma builtin_sem_val_compat (bf: builtin_function)
+      (vargs1 vargs2: list val) (vres1: val) :
+  builtin_can_replicate_bf bf = true ->
+  (match bf with
+   | BI_standard BI_i64_shl
+   | BI_standard BI_i64_shr
+   | BI_standard BI_i64_sar => False
+   | _ => True
+   end) ->
+  Forall2 val_compat vargs1 vargs2 ->
+  builtin_function_sem bf vargs1 = Some vres1 ->
+  exists vres2,
+    builtin_function_sem bf vargs2 = Some vres2 /\
+    val_compat vres1 vres2.
+Proof.
+  intros Hgate Hnoshift Hcompat Hsem.
+  destruct bf as [sb|pb|rb].
+  - (* BI_standard *)
+    simpl in Hsem.
+    eapply standard_builtin_sem_val_compat; eauto.
+    destruct sb; simpl in *; try exact Hgate; try contradiction.
+  - (* BI_platform *)
+    simpl in Hsem.
+    eapply platform_builtin_sem_val_compat; eauto.
+  - (* BI_replicate -- contradictory *)
+    simpl in Hgate. discriminate.
+Qed.
+
+End BUILTIN_VAL_COMPAT.

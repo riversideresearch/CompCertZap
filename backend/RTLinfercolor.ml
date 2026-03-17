@@ -1,6 +1,7 @@
 open AST
 open BinNums
 open Datatypes
+open FaultPolicy
 open Maps
 open Op
 open Registers
@@ -309,6 +310,25 @@ let instr_constraints
                 union (get col r) (get succ_col r)
             ) live
        | _ -> ()
+     else if builtin_can_replicate ef then
+       match bres with
+       | BR res ->
+          let res_color = get succ_col res in
+          let arg_regs = List.concat_map regs_of_builtin_arg bargs in
+          List.iter (fun arg -> union (get col arg) res_color) arg_regs;
+          List.iter (fun r ->
+              if r <> res then
+                union (get col r) (get succ_col r)
+            ) live
+       | _ ->
+          let arg_regs = List.concat_map regs_of_builtin_arg bargs in
+          let res_regs = regs_of_builtin_res bres in
+          List.iter (fun arg -> union (get col arg) white) arg_regs;
+          List.iter (fun res -> union (get succ_col res) white) res_regs;
+          List.iter (fun r ->
+              if not (List.mem r arg_regs || List.mem r res_regs) then
+                union (get col r) (get succ_col r)
+            ) live
      else
        let arg_regs = List.concat_map regs_of_builtin_arg bargs in
        let res_regs = regs_of_builtin_res bres in

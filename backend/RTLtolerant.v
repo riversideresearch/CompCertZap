@@ -1,6 +1,9 @@
 Require Import
   AST
   Behaviors
+  Builtins
+  FaultPolicy
+  CompCertZapUtils
   Builtins2
   Coqlib
   Events
@@ -86,380 +89,6 @@ Proof.
   - auto.
 Qed.
 
-(** Bridge: [in_builtin_arg] implies membership in [params_of_builtin_arg]. *)
-
-Lemma in_builtin_arg_in_params {A : Type} (a : A) barg :
-  in_builtin_arg a barg -> In a (params_of_builtin_arg barg).
-Proof.
-  induction barg; simpl; intro H; inv H;
-    try (left; reflexivity);
-    try (apply in_or_app; left; auto; fail);
-    try (apply in_or_app; right; auto; fail).
-Qed.
-
-Lemma in_builtin_arg_in_params_args {A : Type} (a : A) barg bargs :
-  In barg bargs ->
-  in_builtin_arg a barg ->
-  In a (params_of_builtin_args bargs).
-Proof.
-  induction bargs; simpl; intros Hin Harg.
-  - destruct Hin.
-  - destruct Hin as [-> | Hin].
-    + apply in_or_app; left. apply in_builtin_arg_in_params; auto.
-    + apply in_or_app; right. eapply IHbargs; eauto.
-Qed.
-
-(** Variant of [builtin_arg_forall_impl] that also provides
-    [in_builtin_arg a barg] evidence to the callback. *)
-
-Lemma builtin_arg_forall_impl_in {A : Type} (P Q : A -> Prop) barg :
-  (forall a, P a -> in_builtin_arg a barg -> Q a) ->
-  builtin_arg_forall P barg ->
-  builtin_arg_forall Q barg.
-Proof.
-  induction barg; simpl; intros Hpq Hforall; auto.
-  - apply Hpq; auto. constructor.
-  - destruct Hforall as [H1 H2]; split.
-    + apply IHbarg1; auto.
-      intros a Ha Hin. apply Hpq; auto. constructor; auto.
-    + apply IHbarg2; auto.
-      intros a Ha Hin. apply Hpq; auto.
-      apply in_builtin_arg_splitlong_lo; auto.
-  - destruct Hforall as [H1 H2]; split.
-    + apply IHbarg1; auto.
-      intros a Ha Hin. apply Hpq; auto. constructor; auto.
-    + apply IHbarg2; auto.
-      intros a Ha Hin. apply Hpq; auto.
-      apply in_builtin_arg_addptr_a2; auto.
-Qed.
-
-(** Per-instruction liveness membership helpers.
-    These prove that instruction arguments are in the transfer-function
-    image [ProofLiveness.transfer f pc (live !! pc)], which is the
-    "live-before" set at node [pc]. *)
-
-Lemma args_in_transfer_iop f live pc op args res succ r :
-  (fn_code f) ! pc = Some (Iop op args res succ) ->
-  In r args ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_in; auto.
-Qed.
-
-Lemma args_in_transfer_iload f live pc chunk addr args dst succ r :
-  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
-  In r args ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_in; auto.
-Qed.
-
-Lemma args_in_transfer_istore f live pc chunk addr args src succ r :
-  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
-  In r args ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_in; auto.
-Qed.
-
-Lemma src_in_transfer_istore f live pc chunk addr args src succ :
-  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
-  Regset.In src (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl.
-  apply Regset.add_1. reflexivity.
-Qed.
-
-Lemma args_in_transfer_icall f live pc sig ros args res succ r :
-  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
-  In r args ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_in; auto.
-Qed.
-
-Lemma ros_in_transfer_icall f live pc sig r args res succ :
-  (fn_code f) ! pc = Some (Icall sig (inl r) args res succ) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl.
-  simpl. apply Regset.add_1. reflexivity.
-Qed.
-
-Lemma args_in_transfer_itailcall f live pc sig ros args r :
-  (fn_code f) ! pc = Some (Itailcall sig ros args) ->
-  In r args ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_in; auto.
-Qed.
-
-Lemma ros_in_transfer_itailcall f live pc sig r args :
-  (fn_code f) ! pc = Some (Itailcall sig (inl r) args) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl.
-  simpl. apply Regset.add_1. reflexivity.
-Qed.
-
-Lemma args_in_transfer_icond f live pc cond args ifso ifnot r :
-  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
-  In r args ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_in; auto.
-Qed.
-
-Lemma arg_in_transfer_ijumptable f live pc arg tbl :
-  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
-  Regset.In arg (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply Regset.add_1. reflexivity.
-Qed.
-
-Lemma args_in_transfer_ibuiltin f live pc ef args res succ r :
-  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
-  In r (params_of_builtin_args args) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_in; auto.
-Qed.
-
-Lemma optarg_in_transfer_ireturn f live pc r :
-  (fn_code f) ! pc = Some (Ireturn (Some r)) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  simpl. apply Regset.add_1. reflexivity.
-Qed.
-
-(** For step_simulation: the transfer set at a successor is a subset
-    of the solution at the current node, which in turn is a subset of
-    the transfer set at the current node (since the transfer function
-    adds arguments on top of a subset of the solution). *)
-
-Lemma transfer_succ_subset f live pc i succ :
-  ProofLiveness.analyze f = Some live ->
-  (fn_code f) ! pc = Some i ->
-  In succ (successors_instr i) ->
-  Regset.Subset (ProofLiveness.transfer f succ (live !! succ)) (live !! pc).
-Proof.
-  intros LIVE Hpc Hsucc.
-  eapply ProofLiveness.analyze_solution; eauto.
-Qed.
-
-(** Helper: if [r] is in [live !! pc] and [r <> res], then [r] is in
-    the transfer-function image for Iop / Iload instructions. *)
-
-Lemma live_in_transfer_iop f live pc op args res succ r :
-  (fn_code f) ! pc = Some (Iop op args res succ) ->
-  r <> res ->
-  Regset.In r (live !! pc) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hneq Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl.
-  apply Regset.remove_2; auto.
-Qed.
-
-Lemma live_in_transfer_iload f live pc chunk addr args dst succ r :
-  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
-  r <> dst ->
-  Regset.In r (live !! pc) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hneq Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl.
-  apply Regset.remove_2; auto.
-Qed.
-
-Lemma live_in_transfer_istore f live pc chunk addr args src succ r :
-  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
-  Regset.In r (live !! pc) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl.
-  apply Regset.add_2; auto.
-Qed.
-
-Lemma live_in_transfer_icall f live pc sig ros args res succ r :
-  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
-  r <> res ->
-  Regset.In r (live !! pc) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hneq Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl.
-  destruct ros; simpl.
-  - apply Regset.add_2. apply Regset.remove_2; auto.
-  - apply Regset.remove_2; auto.
-Qed.
-
-Lemma live_in_transfer_icond f live pc cond args ifso ifnot r :
-  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
-  Regset.In r (live !! pc) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl; auto.
-Qed.
-
-Lemma live_in_transfer_ijumptable f live pc arg tbl r :
-  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
-  Regset.In r (live !! pc) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply Regset.add_2; auto.
-Qed.
-
-Lemma reg_list_dead_incl rl s r :
-  Regset.In r s ->
-  ~ In r rl ->
-  Regset.In r (reg_list_dead rl s).
-Proof.
-  revert s; induction rl; simpl; intros s Hin Hnotin.
-  - assumption.
-  - apply IHrl.
-    + apply Regset.remove_2.
-      * intro Heq; apply Hnotin; left; auto.
-      * assumption.
-    + intro Hin'; apply Hnotin; right; auto.
-Qed.
-
-Lemma live_in_transfer_ibuiltin f live pc ef args res succ r :
-  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
-  (forall x, res = BR x -> r <> x) ->
-  Regset.In r (live !! pc) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros Hpc Hnotin Hin.
-  unfold ProofLiveness.transfer. rewrite Hpc.
-  apply ProofLiveness.reg_list_live_incl.
-  destruct res; simpl; auto.
-  apply Regset.remove_2; auto.
-  intro Heq; eapply Hnotin; eauto.
-Qed.
-
-(** Composite helpers: successor transfer set membership implies
-    current transfer set membership (for non-killed registers).
-    These compose [transfer_succ_subset] with [live_in_transfer_*]. *)
-
-Lemma succ_in_transfer_iop f live pc op args res succ r :
-  ProofLiveness.analyze f = Some live ->
-  (fn_code f) ! pc = Some (Iop op args res succ) ->
-  r <> res ->
-  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros LIVE Hpc Hneq Hr.
-  eapply live_in_transfer_iop; eauto.
-  eapply transfer_succ_subset; eauto. simpl; auto.
-Qed.
-
-Lemma succ_in_transfer_iload f live pc chunk addr args dst succ r :
-  ProofLiveness.analyze f = Some live ->
-  (fn_code f) ! pc = Some (Iload chunk addr args dst succ) ->
-  r <> dst ->
-  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros LIVE Hpc Hneq Hr.
-  eapply live_in_transfer_iload; eauto.
-  eapply transfer_succ_subset; eauto. simpl; auto.
-Qed.
-
-Lemma succ_in_transfer_istore f live pc chunk addr args src succ r :
-  ProofLiveness.analyze f = Some live ->
-  (fn_code f) ! pc = Some (Istore chunk addr args src succ) ->
-  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros LIVE Hpc Hr.
-  eapply live_in_transfer_istore; eauto.
-  eapply transfer_succ_subset; eauto. simpl; auto.
-Qed.
-
-Lemma succ_in_transfer_icall f live pc sig ros args res succ r :
-  ProofLiveness.analyze f = Some live ->
-  (fn_code f) ! pc = Some (Icall sig ros args res succ) ->
-  r <> res ->
-  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros LIVE Hpc Hneq Hr.
-  eapply live_in_transfer_icall; eauto.
-  eapply transfer_succ_subset; eauto. simpl; auto.
-Qed.
-
-Lemma succ_in_transfer_icond f live pc cond args ifso ifnot succ r :
-  ProofLiveness.analyze f = Some live ->
-  (fn_code f) ! pc = Some (Icond cond args ifso ifnot) ->
-  In succ (successors_instr (Icond cond args ifso ifnot)) ->
-  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros LIVE Hpc Hsucc Hr.
-  eapply live_in_transfer_icond; eauto.
-  eapply transfer_succ_subset; eauto.
-Qed.
-
-Lemma succ_in_transfer_ijumptable f live pc arg tbl succ r :
-  ProofLiveness.analyze f = Some live ->
-  (fn_code f) ! pc = Some (Ijumptable arg tbl) ->
-  In succ (successors_instr (Ijumptable arg tbl)) ->
-  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros LIVE Hpc Hsucc Hr.
-  eapply live_in_transfer_ijumptable; eauto.
-  eapply transfer_succ_subset; eauto.
-Qed.
-
-Lemma succ_in_transfer_ibuiltin f live pc ef args res succ r :
-  ProofLiveness.analyze f = Some live ->
-  (fn_code f) ! pc = Some (Ibuiltin ef args res succ) ->
-  (forall x, res = BR x -> r <> x) ->
-  Regset.In r (ProofLiveness.transfer f succ (live !! succ)) ->
-  Regset.In r (ProofLiveness.transfer f pc (live !! pc)).
-Proof.
-  intros LIVE Hpc Hnotin Hr.
-  eapply live_in_transfer_ibuiltin; eauto.
-  eapply transfer_succ_subset; eauto. simpl; auto.
-Qed.
-
-Definition rs_compat (rs1 rs2 : regset) : Prop :=
-  forall r, val_compat (rs1 # r) (rs2 # r).
 
 Section match_states.
 
@@ -651,7 +280,9 @@ Section TOLERANCE.
         eapply step_succ in Hstep; eauto.
         clear WC_FUN0.
         inv_wc; simpl in *; try congruence; inv H2; inv Hstep; try contradiction.
-        inv H4; constructor. }
+        all: first [ assumption
+                   | unfold builtin_can_fault in H1; congruence
+                   | exfalso; inv H3; vm_compute in H1; discriminate ]. }
       exists (col pc' r); split; auto.
       intros x Hx.
       destruct (peq x r); subst; try congruence.
@@ -698,13 +329,6 @@ Section TOLERANCE.
     inv Hmatch; inv STK; inv LESSDEF; constructor.
   Qed.
 
-  Ltac inv_Forall2 :=
-    repeat match goal with
-      | [H : Forall2 _ nil _ |- _] => inv H
-      | [H : Forall2 _ _ nil |- _] => inv H
-      | [H : Forall2 _ (_ :: _) _ |- _] => inv H
-      | [H : Forall2 _ _ (_ :: _) |- _] => inv H
-      end.
 
   Ltac inv_rs :=
     match goal with
@@ -738,634 +362,6 @@ Section TOLERANCE.
         | ]
     end.
 
-  Lemma val_compat_eval_addressing32 args1 args2 sp a v :
-    Forall2 val_compat args1 args2 ->
-    Op.eval_addressing32 (Genv.globalenv prog) sp a args1 = Some v ->
-    exists v', Op.eval_addressing32 (Genv.globalenv prog) sp a args2 = Some v'.
-  Proof.
-    intros Hforall Hop.
-    destruct a; simpl in *; try congruence;
-      try solve [repeat (destruct args1; try congruence);
-                 destruct Archi.ptr64; inv_Forall2; eexists; eauto].
-  Qed.
-
-  Lemma val_compat_eval_addressing64 args1 args2 sp a v :
-    Forall2 val_compat args1 args2 ->
-    Op.eval_addressing64 (Genv.globalenv prog) sp a args1 = Some v ->
-    exists v', Op.eval_addressing64 (Genv.globalenv prog) sp a args2 = Some v'.
-  Proof.
-    intros Hforall Hop.
-    destruct a; simpl in *; try congruence;
-      try solve [repeat (destruct args1; try congruence);
-                 destruct Archi.ptr64; inv_Forall2; eexists; eauto].
-  Qed.
-
-  Lemma val_compat_shrx v1 v2 vres n :
-    val_compat v1 v2 ->
-    Val.shrx v1 (Vint n) = Some vres ->
-    exists vres' : val, Val.shrx v2 (Vint n) = Some vres'.
-  Proof.
-    intros Hcompat Hshrx.
-    inv Hcompat; simpl in *; try congruence.
-    destruct (Integers.Int.ltu _ _); inv Hshrx.
-    eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_shrxl v1 v2 vres n :
-    val_compat v1 v2 ->
-    Val.shrxl v1 (Vint n) = Some vres ->
-    exists vres' : val, Val.shrxl v2 (Vint n) = Some vres'.
-  Proof.
-    intros Hcompat Hshrxl.
-    inv Hcompat; simpl in *; try congruence.
-    destruct (Integers.Int.ltu _ _); inv Hshrxl.
-    eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_floatofint_exists v1 v2 vres :
-    val_compat v1 v2 ->
-    Val.floatofint v1 = Some vres ->
-    exists vres' : val, Val.floatofint v2 = Some vres'.
-  Proof.
-    intros Hcompat Hfoi.
-    inv Hcompat; simpl in *; try congruence.
-    eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_singleofint_exists v1 v2 vres :
-    val_compat v1 v2 ->
-    Val.singleofint v1 = Some vres ->
-    exists vres' : val, Val.singleofint v2 = Some vres'.
-  Proof.
-    intros Hcompat Hsoi.
-    inv Hcompat; simpl in *; try congruence.
-    eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_floatoflong_exists v1 v2 vres :
-    val_compat v1 v2 ->
-    Val.floatoflong v1 = Some vres ->
-    exists vres' : val, Val.floatoflong v2 = Some vres'.
-  Proof.
-    intros Hcompat Hfol.
-    inv Hcompat; simpl in *; try congruence.
-    eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_singleoflong_exists v1 v2 vres :
-    val_compat v1 v2 ->
-    Val.singleoflong v1 = Some vres ->
-    exists vres' : val, Val.singleoflong v2 = Some vres'.
-  Proof.
-    intros Hcompat Hsol.
-    inv Hcompat; simpl in *; try congruence.
-    eexists; reflexivity.
-  Qed.
-
-  Lemma rs_compat_eval_operation rs1 rs2 sp op args m v :
-    ~ is_protected op ->
-    rs_compat rs1 rs2 ->
-    Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m = Some v ->
-    exists v', Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m = Some v'.
-  Proof.
-    intros Hnodiv Hcompat Hop.
-    destruct op; simpl in *;
-      try (destruct args; simpl in *; try congruence);
-      try (destruct args; simpl in *; try congruence);
-      try (destruct args; simpl in *; try congruence);
-      inv Hop; try solve [eexists; eauto];
-      try solve [exfalso; apply Hnodiv; constructor].
-    - eapply val_compat_shrx; eauto.
-    - eapply val_compat_eval_addressing32; eauto.
-    - eapply val_compat_eval_addressing32; eauto.
-    - eapply val_compat_shrxl; eauto.
-    - eapply val_compat_eval_addressing64; eauto.
-    - eapply val_compat_eval_addressing64; eauto.
-    - eapply val_compat_floatofint_exists; eauto.
-    - eapply val_compat_singleofint_exists; eauto.
-    - eapply val_compat_floatoflong_exists; eauto.
-    - eapply val_compat_singleoflong_exists; eauto.
-  Qed.
-
-  Lemma val_compat_divs n1 n2 d1 d2 v1 v2 :
-    val_compat n1 n2 ->
-    val_compat d1 d2 ->
-    Val.divs n1 d1 = Some v1 ->
-    Val.divs n2 d2 = Some v2 ->
-    val_compat v1 v2.
-  Proof.
-    intros Hn Hd Hdiv1 Hdiv2.
-    inv Hn; inv Hd; simpl in *; try congruence.
-    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-    - destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      inv Hdiv1.
-      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-        inv Hdiv2; constructor.
-      + inv Hdiv2; constructor.
-    - inv Hdiv1.
-      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-        inv Hdiv2; constructor.
-      + inv Hdiv2; constructor.
-  Qed.
-
-  Lemma val_compat_divu n1 n2 d1 d2 v1 v2 :
-    val_compat n1 n2 ->
-    val_compat d1 d2 ->
-    Val.divu n1 d1 = Some v1 ->
-    Val.divu n2 d2 = Some v2 ->
-    val_compat v1 v2.
-  Proof.
-    intros Hn Hd Hdiv1 Hdiv2.
-    inv Hn; inv Hd; simpl in *; try congruence.
-    repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-    inv Hdiv1; inv Hdiv2; constructor.
-  Qed.
-
-  Lemma val_compat_mods n1 n2 d1 d2 v1 v2 :
-    val_compat n1 n2 ->
-    val_compat d1 d2 ->
-    Val.mods n1 d1 = Some v1 ->
-    Val.mods n2 d2 = Some v2 ->
-    val_compat v1 v2.
-  Proof.
-    intros Hn Hd Hmod1 Hmod2.
-    inv Hn; inv Hd; simpl in *; try congruence.
-    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-    - destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      inv Hmod1.
-      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-        inv Hmod2; constructor.
-      + inv Hmod2; constructor.
-    - inv Hmod1.
-      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-      + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-        inv Hmod2; constructor.
-      + inv Hmod2; constructor.
-  Qed.
-
-  Lemma val_compat_modu n1 n2 d1 d2 v1 v2 :
-    val_compat n1 n2 ->
-    val_compat d1 d2 ->
-    Val.modu n1 d1 = Some v1 ->
-    Val.modu n2 d2 = Some v2 ->
-    val_compat v1 v2.
-  Proof.
-    intros Hn Hd Hmod1 Hmod2.
-    inv Hn; inv Hd; simpl in *; try congruence.
-    repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
-    inv Hmod1; inv Hmod2; constructor.
-  Qed.
-
-  Lemma val_compat_shl_imm v v' n :
-    val_compat v v' ->
-    val_compat (Val.shl v (Vint n)) (Val.shl v' (Vint n)).
-  Proof.
-    intros Hcompat; inv Hcompat; simpl; try constructor.
-    destruct (Integers.Int.ltu _ _); constructor.
-  Qed.
-
-  Lemma val_compat_shr_imm v v' n :
-    val_compat v v' ->
-    val_compat (Val.shr v (Vint n)) (Val.shr v' (Vint n)).
-  Proof.
-    intros Hcompat; inv Hcompat; simpl; try constructor.
-    destruct (Integers.Int.ltu _ _); constructor.
-  Qed.
-
-  Lemma val_compat_shll_imm v v' n :
-    val_compat v v' ->
-    val_compat (Val.shll v (Vint n)) (Val.shll v' (Vint n)).
-  Proof.
-    intros Hcompat; inv Hcompat; simpl; try constructor.
-    destruct (Integers.Int.ltu _ _); constructor.
-  Qed.
-
-  Lemma val_compat_shrl_imm v v' n :
-    val_compat v v' ->
-    val_compat (Val.shrl v (Vint n)) (Val.shrl v' (Vint n)).
-  Proof.
-    intros Hcompat; inv Hcompat; simpl; try constructor.
-    destruct (Integers.Int.ltu _ _); constructor.
-  Qed.
-
-  Lemma val_compat_shrlu_imm v v' n :
-    val_compat v v' ->
-    val_compat (Val.shrlu v (Vint n)) (Val.shrlu v' (Vint n)).
-  Proof.
-    intros Hcompat; inv Hcompat; simpl; try constructor.
-    destruct (Integers.Int.ltu _ _); constructor.
-  Qed.
-
-  Lemma val_compat_shrx_imm v v' vres vres' n :
-    val_compat v v' ->
-    Val.shrx v (Vint n) = Some vres ->
-    Val.shrx v' (Vint n) = Some vres' ->
-    val_compat vres vres'.
-  Proof.
-    intros Hcompat H0 H1; inv Hcompat; simpl in *; try congruence.
-    destruct (Integers.Int.ltu _ _); inv H0; inv H1; constructor.
-  Qed.
-
-  Lemma val_compat_shrxl_imm v v' vres vres' n :
-    val_compat v v' ->
-    Val.shrxl v (Vint n) = Some vres ->
-    Val.shrxl v' (Vint n) = Some vres' ->
-    val_compat vres vres'.
-  Proof.
-    intros Hcompat H0 H1; inv Hcompat; simpl in *; try congruence.
-    destruct (Integers.Int.ltu _ _); inv H0; inv H1; constructor.
-  Qed.
-
-  Lemma val_compat_shru_imm v v' n :
-    val_compat v v' ->
-    val_compat (Val.shru v (Vint n)) (Val.shru v' (Vint n)).
-  Proof.
-    intros Hcompat; inv Hcompat; simpl; try constructor.
-    destruct (Integers.Int.ltu _ _); constructor.
-  Qed.
-
-  Lemma val_compat_shru_dimm v1 v1' v2 v2' n :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    val_compat
-      (Val.or (Val.shl v1 (Vint n))
-         (Val.shru v2 (Vint (Integers.Int.sub Integers.Int.iwordsize n))))
-      (Val.or (Val.shl v1' (Vint n))
-         (Val.shru v2' (Vint (Integers.Int.sub Integers.Int.iwordsize n)))).
-  Proof.
-    intros H0 H1; inv H0; inv H1; simpl; try constructor;
-      repeat destruct (Integers.Int.ltu _ _); constructor.
-  Qed.
-
-  Lemma val_compat_add v1 v1' v2 v2' :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    val_compat (Val.add v1 v2) (Val.add v1' v2').
-  Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
-
-  Lemma val_compat_addl v1 v1' v2 v2' :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    val_compat (Val.addl v1 v2) (Val.addl v1' v2').
-  Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
-
-  Lemma val_compat_mul v1 v1' v2 v2' :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    val_compat (Val.mul v1 v2) (Val.mul v1' v2').
-  Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
-
-  Lemma val_compat_mull v1 v1' v2 v2' :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    val_compat (Val.mull v1 v2) (Val.mull v1' v2').
-  Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
-
-  Lemma rs_compat_eval_addressing32 rs1 rs2 args sp a v v' :
-    rs_compat rs1 rs2 ->
-    Op.eval_addressing32 (Genv.globalenv prog) sp a rs1 ## args = Some v ->
-    Op.eval_addressing32 (Genv.globalenv prog) sp a rs2 ## args = Some v' ->
-    val_compat v v'.
-  Proof.
-    intros Hcompat H0 H1.
-    unfold Op.eval_addressing32 in *.
-    destruct a; simpl in *.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_add; auto; constructor.
-    - do 3 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_add; try constructor.
-      apply val_compat_add; auto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_add; try constructor.
-      apply val_compat_mul; auto; constructor.
-    - do 3 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_add; auto.
-      apply val_compat_add; try constructor.
-      apply val_compat_mul; auto; constructor.
-    - do 1 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64; try congruence.
-      inv H0; inv H1; apply val_compat_refl.
-    - do 2 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64; try congruence.
-      inv H0; inv H1; apply val_compat_add; auto; apply val_compat_refl.
-    - do 2 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64; try congruence.
-      inv H0; inv H1.
-      apply val_compat_add; try apply val_compat_refl.
-      apply val_compat_mul; auto; constructor.
-    - do 1 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64; try congruence.
-      inv H0; inv H1; apply val_compat_refl.
-  Qed.
-
-  Lemma rs_compat_eval_addressing64 rs1 rs2 args sp a v v' :
-    rs_compat rs1 rs2 ->
-    Op.eval_addressing64 (Genv.globalenv prog) sp a rs1 ## args = Some v ->
-    Op.eval_addressing64 (Genv.globalenv prog) sp a rs2 ## args = Some v' ->
-    val_compat v v'.
-  Proof.
-    intros Hcompat H0 H1.
-    unfold Op.eval_addressing32 in *.
-    destruct a; simpl in *; try congruence.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_addl; auto; constructor.
-    - do 3 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_addl; try constructor.
-      apply val_compat_addl; auto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_addl; try constructor.
-      apply val_compat_mull; auto; constructor.
-    - do 3 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_addl; auto.
-      apply val_compat_addl; try constructor.
-      apply val_compat_mull; auto; constructor.
-    - do 1 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64; try congruence.
-      inv H0; inv H1; apply val_compat_refl.
-    - do 1 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64; try congruence.
-      inv H0; inv H1; apply val_compat_refl.
-  Qed.
-
-  Lemma val_compat_floatofint v v' vres vres' :
-    val_compat v v' ->
-    Val.floatofint v = Some vres ->
-    Val.floatofint v' = Some vres' ->
-    val_compat vres vres'.
-  Proof.
-    intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
-  Qed.
-
-  Lemma val_compat_singleofint v v' vres vres' :
-    val_compat v v' ->
-    Val.singleofint v = Some vres ->
-    Val.singleofint v' = Some vres' ->
-    val_compat vres vres'.
-  Proof.
-    intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
-  Qed.
-
-  Lemma val_compat_floatoflong v v' vres vres' :
-    val_compat v v' ->
-    Val.floatoflong v = Some vres ->
-    Val.floatoflong v' = Some vres' ->
-    val_compat vres vres'.
-  Proof.
-    intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
-  Qed.
-    
-  Lemma val_compat_singleoflong v v' vres vres' :
-    val_compat v v' ->
-    Val.singleoflong v = Some vres ->
-    Val.singleoflong v' = Some vres' ->
-    val_compat vres vres'.
-  Proof.
-    intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
-  Qed.
-
-  Lemma val_compat_cmp_bool c v1 v1' v2 v2' b :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    Val.cmp_bool c v1 v2 = Some b ->
-    exists b' : bool, Val.cmp_bool c v1' v2' = Some b'.
-  Proof.
-    intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
-    inv Hcmp; eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_cmpl_bool c v1 v1' v2 v2' b :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    Val.cmpl_bool c v1 v2 = Some b ->
-    exists b' : bool, Val.cmpl_bool c v1' v2' = Some b'.
-  Proof.
-    intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
-    inv Hcmp; eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_cmpf_bool c v1 v1' v2 v2' b :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    Val.cmpf_bool c v1 v2 = Some b ->
-    exists b' : bool, Val.cmpf_bool c v1' v2' = Some b'.
-  Proof.
-    intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
-    inv Hcmp; eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_cmpfs_bool c v1 v1' v2 v2' b :
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    Val.cmpfs_bool c v1 v2 = Some b ->
-    exists b' : bool, Val.cmpfs_bool c v1' v2' = Some b'.
-  Proof.
-    intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
-    inv Hcmp; eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_cmpu_bool c v1 v1' v2 v2' b m1 m2 :
-    Archi.ptr64 = true ->
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    Val.cmpu_bool (Memory.Mem.valid_pointer m1) c v1 v2 = Some b ->
-    exists b' : bool, Val.cmpu_bool (Memory.Mem.valid_pointer m2) c v1' v2' = Some b'.
-  Proof.
-    intros Harchi H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence;
-      try (rewrite Harchi in *; discriminate).
-    inv Hcmp; eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_cmplu_bool c v1 v1' v2 v2' b m1 m2 :
-    Archi.ptr64 = false ->
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    Val.cmplu_bool (Memory.Mem.valid_pointer m1) c v1 v2 = Some b ->
-    exists b' : bool, Val.cmplu_bool (Memory.Mem.valid_pointer m2) c v1' v2' = Some b'.
-  Proof.
-    intros Harchi H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence;
-      try (rewrite Harchi in *; discriminate).
-    inv Hcmp; eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_cmpu_bool_imm c v v' b m1 m2 n :
-    Archi.ptr64 = true ->
-    val_compat v v' ->
-    Val.cmpu_bool (Memory.Mem.valid_pointer m1) c v (Vint n) = Some b ->
-    exists b' : bool, Val.cmpu_bool (Memory.Mem.valid_pointer m2) c v' (Vint n) = Some b'.
-  Proof.
-    intros Harchi H Hcmp; inv H; simpl in *; try congruence;
-      try (rewrite Harchi in *; discriminate).
-    inv Hcmp; eexists; reflexivity.
-  Qed.
-
-  Lemma val_compat_maskzero_bool v v' n b :
-    val_compat v v' ->
-    Val.maskzero_bool v n = Some b ->
-    exists b', Val.maskzero_bool v' n = Some b'.
-  Proof.
-    intros H Hmask; inv H; simpl in *; try congruence.
-    inv Hmask; eexists; reflexivity.
-  Qed.
-
-  Lemma option_map_some {A B : Type} (f : A -> B) o y :
-    option_map f o = Some y ->
-    exists x, o = Some x /\ y = f x.
-  Proof.
-    intro Hf.
-    destruct o; simpl in *; inv Hf.
-    eexists; split; reflexivity.
-  Qed.
-
-  Lemma rs_compat_eval_condition cond rs1 rs2 args m1 m2 v :
-    (Archi.ptr64 = false -> ~ is_compu cond) ->
-    (Archi.ptr64 = true -> ~ is_complu cond) ->
-    rs_compat rs1 rs2 ->
-    Op.eval_condition cond rs1 ## args m1 = Some v ->
-    exists v', Op.eval_condition cond rs2 ## args m2 = Some v'.
-  Proof.
-    intros Hnotcompu Hnotcomplu Hcompat Hcond.
-    destruct cond eqn:Hc; simpl in *.
-    - do 3 (destruct args; simpl in *; try congruence).
-      eapply val_compat_cmp_bool; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64 eqn:Harchi.
-      + eapply val_compat_cmpu_bool; eauto.
-      + exfalso; eapply Hnotcompu; constructor.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_cmp_bool; eauto; constructor.
-    - do 2 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64 eqn:Harchi.
-      + eapply val_compat_cmpu_bool; eauto; constructor.
-      + exfalso; eapply Hnotcompu; constructor.
-    - do 3 (destruct args; simpl in *; try congruence).
-      eapply val_compat_cmpl_bool; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64 eqn:Harchi.
-      + exfalso; apply Hnotcomplu; auto; constructor.
-      + eapply val_compat_cmplu_bool; eauto; constructor.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_cmpl_bool; eauto; constructor.
-    - do 2 (destruct args; simpl in *; try congruence).
-      destruct Archi.ptr64 eqn:Harchi.
-      + exfalso; apply Hnotcomplu; auto; constructor.
-      + eapply val_compat_cmplu_bool; eauto; constructor.
-    - do 3 (destruct args; simpl in *; try congruence).
-      eapply val_compat_cmpf_bool; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      apply option_map_some in Hcond.
-      destruct Hcond as (b & Hcmp & Hb); subst.
-      eapply val_compat_cmpf_bool in Hcmp; eauto.
-      destruct Hcmp as [b' Hcmp].
-      exists (negb b'); rewrite Hcmp; reflexivity.
-    - do 3 (destruct args; simpl in *; try congruence).
-      eapply val_compat_cmpfs_bool; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      apply option_map_some in Hcond.
-      destruct Hcond as (b & Hcmp & Hb); subst.
-      eapply val_compat_cmpfs_bool in Hcmp; eauto.
-      destruct Hcmp as [b' Hcmp].
-      exists (negb b'); rewrite Hcmp; reflexivity.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_maskzero_bool; eauto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      apply option_map_some in Hcond.
-      destruct Hcond as (b & Hcmp & Hb); subst.
-      eapply val_compat_maskzero_bool in Hcmp; eauto.
-      destruct Hcmp as [b' Hcmp].
-      exists (negb b'); rewrite Hcmp; reflexivity.
-  Qed.
-
-  Lemma val_compat_normalize v v' t :
-    val_compat v v' ->
-    val_compat (Val.normalize v t) (Val.normalize v' t).
-  Proof.
-    intro H; inv H; simpl; try constructor; destruct t; constructor.
-  Qed.
-
-  Lemma val_compat_subl v1 v1' v2 v2' :
-    Archi.ptr64 = false ->
-    val_compat v1 v1' ->
-    val_compat v2 v2' ->
-    val_compat (Val.subl v1 v2) (Val.subl v1' v2').
-  Proof.
-    intros Harchi H0 H1; inv H0; inv H1; simpl; try constructor.
-    rewrite Harchi; constructor.
-  Qed.
-  
-  Lemma eval_operation_val_compat rs1 rs2 sp op args m1 m2 v v' :
-    ~ is_protected op ->
-    rs_compat rs1 rs2 ->
-    Op.eval_operation (Genv.globalenv prog) sp op rs1 ## args m1 = Some v ->
-    Op.eval_operation (Genv.globalenv prog) sp op rs2 ## args m2 = Some v' ->
-    val_compat v v'.
-  Proof.
-    intros Hop Hcompat H0 H1.
-    destruct op; simpl in *;
-      try solve [exfalso; apply Hop; constructor];
-      try solve [destruct args; simpl in *; try congruence;
-                 try solve [inv H0; inv H1; constructor];
-                 try solve [inv H0; inv H1; apply val_compat_refl];
-                 destruct args; simpl in *; try congruence;
-                 inv H0; inv H1; auto];
-      try solve [do 2 (destruct args; simpl in *; try congruence);
-                 inv H0; inv H1;
-                 specialize (Hcompat p); inv Hcompat; simpl;
-                 try apply val_compat_refl; constructor];
-      try solve [do 3 (destruct args; simpl in *; try congruence);
-                 inv H0; inv H1;
-                 pose proof (Hcompat p0) as Hp0; specialize (Hcompat p);
-                 inv Hp0; inv Hcompat; constructor].
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_shl_imm; auto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_shr_imm; auto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_shrx_imm; eauto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_shru_imm; auto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_shru_dimm; auto.
-    - eapply rs_compat_eval_addressing32; eauto.
-    - do 3 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1.
-      apply val_compat_subl; auto.
-      apply is_protected_subl_archi_ptr64_false; assumption.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_shll_imm; auto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_shrl_imm; auto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_shrxl_imm; eauto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      inv H0; inv H1; apply val_compat_shrlu_imm; auto.
-    - eapply rs_compat_eval_addressing64; eauto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_floatofint; eauto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_singleofint; eauto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_floatoflong; eauto.
-    - do 2 (destruct args; simpl in *; try congruence).
-      eapply val_compat_singleoflong; eauto.
-    - inv H0; inv H1.
-      destruct (Op.eval_condition cond rs1 ## args m1) eqn:Hcond.
-      + eapply rs_compat_eval_condition in Hcond; eauto.
-        * destruct Hcond as [b' Hcond].
-          rewrite Hcond; simpl.
-          destruct b, b'; constructor.
-        * intros Harchi HC; inv HC; apply Hop; constructor; assumption.
-        * intros Harchi HC; inv HC; apply Hop; constructor; assumption.
-      + constructor.
-  Qed.
 
   Ltac inv_Forall :=
     repeat match goal with
@@ -1781,6 +777,172 @@ Section TOLERANCE.
       destruct ((Genv.genv_symb _)) ! _; congruence.
   Qed.
 
+  Lemma safe_external_call_E0 {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vargs m t vres m' :
+    builtin_can_replicate ef = true ->
+    @external_call VT vsem ef (Genv.globalenv prog) vargs m t vres m' ->
+    t = E0.
+  Proof.
+    intros Hcan Hcall.
+    unfold builtin_can_replicate in Hcan.
+    destruct ef; simpl in *; try discriminate.
+    destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; [|discriminate].
+    unfold external_call, builtin_or_external_sem in *.
+    rewrite Hlookup in *. inv Hcall. reflexivity.
+  Qed.
+
+  Lemma safe_external_call_mem {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vargs m t vres m' :
+    builtin_can_replicate ef = true ->
+    @external_call VT vsem ef (Genv.globalenv prog) vargs m t vres m' ->
+    m' = m.
+  Proof.
+    intros Hcan Hcall.
+    unfold builtin_can_replicate in Hcan.
+    destruct ef; simpl in *; try discriminate.
+    destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; [|discriminate].
+    unfold external_call, builtin_or_external_sem in *.
+    rewrite Hlookup in *. inv Hcall. reflexivity.
+  Qed.
+
+  Lemma safe_external_call_total
+    {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vargs1 vargs2 m1 m2 t vres1 m1' :
+    builtin_can_replicate ef = true ->
+    Forall2 val_compat vargs1 vargs2 ->
+    Memory.Mem.extends m1 m2 ->
+    @external_call VT vsem ef (Genv.globalenv prog) vargs1 m1 t vres1 m1' ->
+    exists vres2,
+      @external_call VT vsem ef (Genv.globalenv prog) vargs2 m2 E0 vres2 m2.
+  Proof.
+    intros Hcan Hcompat Hmem Hcall.
+    unfold builtin_can_replicate in Hcan.
+    destruct ef; simpl in *; try discriminate.
+    destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; [|discriminate].
+    unfold external_call, builtin_or_external_sem in *.
+    rewrite Hlookup in *. inv Hcall.
+    destruct b as [sb|pb|rb].
+    - destruct sb; simpl in *; try discriminate;
+        repeat match goal with
+               | [ H : Forall2 _ (_ :: _) _ |- _ ] => inv H
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        repeat match goal with
+               | [ H : match ?x with _ :: _ => _ | nil => _ end = Some _ |- _ ] =>
+                   destruct x; [discriminate|]; simpl in H
+               | [ H : Forall2 _ (_ :: _) _ |- _ ] => inv H
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        try match goal with
+            | [ H : match ?x with _ :: _ => _ | nil => _ end = Some _ |- _ ] =>
+                destruct x; [|discriminate]
+            end;
+        repeat match goal with
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        try (eexists; constructor; reflexivity).
+    - destruct pb; simpl in *; try discriminate;
+        repeat match goal with
+               | [ H : Forall2 _ (_ :: _) _ |- _ ] => inv H
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        repeat match goal with
+               | [ H : match ?x with _ :: _ => _ | nil => _ end = Some _ |- _ ] =>
+                   destruct x; [discriminate|]; simpl in H
+               | [ H : Forall2 _ (_ :: _) _ |- _ ] => inv H
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        try match goal with
+            | [ H : match ?x with _ :: _ => _ | nil => _ end = Some _ |- _ ] =>
+                destruct x; [|discriminate]
+            end;
+        repeat match goal with
+               | [ H : Forall2 _ nil _ |- _ ] => inv H
+               end;
+        try (eexists; constructor; reflexivity).
+    - simpl in Hcan. discriminate.
+  Qed.
+
+  Lemma safe_external_call_val_compat
+    {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}
+    ef vargs1 vargs2 m vres1 :
+    builtin_can_replicate ef = true ->
+    Forall2 val_compat vargs1 vargs2 ->
+    @external_call VT vsem ef (Genv.globalenv prog) vargs1 m E0 vres1 m ->
+    exists vres2,
+      @external_call VT vsem ef (Genv.globalenv prog) vargs2 m E0 vres2 m /\
+      val_compat vres1 vres2.
+  Proof.
+    intros Hcan Hcompat Hcall.
+    unfold builtin_can_replicate in Hcan.
+    destruct ef; simpl in *; try discriminate.
+    destruct (Builtins.lookup_builtin_function name sg) eqn:Hlookup; [|discriminate].
+    unfold external_call, builtin_or_external_sem in Hcall.
+    rewrite Hlookup in Hcall. destruct Hcall as [vargs' vres' m' Hbsem].
+    assert (Hnoshift: match b with
+      | BI_standard BI_i64_shl
+      | BI_standard BI_i64_shr
+      | BI_standard BI_i64_sar => False
+      | _ => True
+      end).
+    { destruct b as [sb|pb|rb]; simpl in Hcan; try discriminate.
+      - destruct sb; simpl in Hcan; try discriminate; auto.
+      - destruct pb; simpl in Hcan; try discriminate; auto. }
+    eapply builtin_sem_val_compat in Hbsem; eauto.
+    destruct Hbsem as (vres2 & Hsem2 & Hvc).
+    exists vres2. split; auto.
+    unfold external_call, builtin_or_external_sem.
+    rewrite Hlookup. constructor; auto.
+  Qed.
+
+  Lemma eval_builtin_arg_val_compat sp m1 m2 rs1 rs2 a v1 :
+    rs_compat rs1 rs2 ->
+    Memory.Mem.extends m1 m2 ->
+    eval_builtin_arg ge (fun r => rs1 # r) sp m1 a v1 ->
+    exists v2, eval_builtin_arg ge (fun r => rs2 # r) sp m2 a v2 /\ val_compat v1 v2.
+  Proof.
+    intros Hrs Hmem Heval.
+    induction Heval.
+    - exists (rs2 # x). split; [constructor | apply Hrs].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eapply Memory.Mem.loadv_extends in H; eauto.
+      destruct H as (v2 & Hload & Hld).
+      eexists; split; [econstructor; eauto | apply val_lessdef_compat; auto].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - eapply Memory.Mem.loadv_extends in H; eauto.
+      destruct H as (v2 & Hload & Hld).
+      eexists; split; [econstructor; eauto | apply val_lessdef_compat; auto].
+    - eexists; split; [constructor | apply val_compat_refl].
+    - destruct IHHeval1 as (v2hi & Hhi & Hchi).
+      destruct IHHeval2 as (v2lo & Hlo & Hclo).
+      eexists; split; [econstructor; eauto|].
+      inv Hchi; inv Hclo; simpl; try constructor.
+    - destruct IHHeval1 as (v2a & Ha & Hca).
+      destruct IHHeval2 as (v2b & Hb & Hcb).
+      eexists; split; [econstructor; eauto|].
+      destruct Archi.ptr64; [unfold Val.addl | unfold Val.add];
+        inv Hca; inv Hcb; simpl; try constructor;
+        try (destruct Archi.ptr64; constructor).
+  Qed.
+
+  Lemma eval_builtin_args_val_compat sp m1 m2 rs1 rs2 al vl1 :
+    rs_compat rs1 rs2 ->
+    Memory.Mem.extends m1 m2 ->
+    eval_builtin_args ge (fun r => rs1 # r) sp m1 al vl1 ->
+    exists vl2, eval_builtin_args ge (fun r => rs2 # r) sp m2 al vl2 /\
+      Forall2 val_compat vl1 vl2.
+  Proof.
+    intros Hrs Hmem Heval. induction Heval.
+    - exists nil; split; [constructor | constructor].
+    - edestruct eval_builtin_arg_val_compat as (v2 & Hv2 & Hvc); eauto.
+      destruct IHHeval as (vl2 & Hvl2 & Hfl).
+      exists (v2 :: vl2); split; [econstructor; eauto | constructor; auto].
+  Qed.
+
+
   Lemma faulty_progress i s1 s2 :
     match_states i s1 s2 ->
     safe (@RTL.semantics Three VoteSemantics_Three prog) s1 ->
@@ -1914,7 +1076,8 @@ Section TOLERANCE.
     - destruct (is_vote_builtinb_spec ef) as [Hbuiltin|Hbuiltin].
       + pose proof H as Hpc.
         inv_wc; try solve [apply vote_not_green_smove in Hbuiltin; congruence];
-          try solve [apply vote_not_blue_smove in Hbuiltin; congruence].
+          try solve [apply vote_not_blue_smove in Hbuiltin; congruence];
+          try solve [exfalso; inv Hbuiltin; vm_compute in H6; discriminate].
         simpl in *.
         destruct vargs.
         { inv H0. }
@@ -1974,10 +1137,24 @@ Section TOLERANCE.
         2: { apply maybe_zap_refl. }
         eapply exec_Ibuiltin; eauto.
         repeat constructor.
-      + eapply eval_builtin_args_lessdef' with (e2 := fun r => rs2 # r) in H0; eauto.
-        2: { apply Forall_forall.
-             intros barg Hin.
-             inv_wc; try contradiction.
+      + destruct (builtin_can_replicate ef) eqn:Hcan.
+        * (* Safe builtin *)
+          assert (HtE0: t = E0) by (eapply (@safe_external_call_E0 Three VoteSemantics_Three); eauto).
+          subst t.
+          eapply eval_builtin_args_val_compat in H0 as H0'; eauto.
+          destruct H0' as (vargs2 & Heval2 & Hcompat).
+          eapply (@safe_external_call_total Three VoteSemantics_Three) in H1 as Hcall; eauto.
+          destruct Hcall as (vres2 & Hcall2).
+          apply external_call_Three_Two' in Hcall2.
+          destruct Hcall2 as (v' & Hcall2 & _).
+          eexists; econstructor.
+          2: { apply maybe_zap_refl. }
+          eapply exec_Ibuiltin; eauto.
+        * (* Non-safe, non-vote builtin *)
+          eapply eval_builtin_args_lessdef' with (e2 := fun r => rs2 # r) in H0; eauto.
+          2: { apply Forall_forall.
+               intros barg Hin.
+               inv_wc; try contradiction; try congruence.
              - (* smove_green *)
                inv Hin; [|contradiction].
                simpl.
@@ -1998,7 +1175,10 @@ Section TOLERANCE.
                + apply RS.
              - (* general builtin *)
                pose proof Hin as Hin_save.
-               rewrite Forall_forall in H9; apply H9 in Hin.
+               match goal with
+               | [ HF : Forall (builtin_arg_forall _) _ |- _ ] =>
+                   rewrite Forall_forall in HF; apply HF in Hin
+               end.
                destruct fault.
                + unfold match_rs in RS. inv_rs.
                  eapply builtin_arg_forall_impl_in.
@@ -2700,7 +1880,82 @@ Section TOLERANCE.
               rewrite <- (Hfa r Hin_live); auto
           end.
 
-        * (* other builtin *)
+        * (* safe builtin - faulted *)
+          assert (Ht: t = E0) by (eapply (@safe_external_call_E0 Two VoteSemantics_Two); eauto).
+          assert (Ht': t' = E0) by (eapply (@safe_external_call_E0 Three VoteSemantics_Three); eauto).
+          assert (Hmem_t: m' = m) by (eapply (@safe_external_call_mem Two VoteSemantics_Two); eauto).
+          assert (Hmem_s: m'0 = m1) by (eapply (@safe_external_call_mem Three VoteSemantics_Three); eauto).
+          subst t t' m' m'0.
+          (* val_compat of args via rs_compat *)
+          assert (Hcompat_list: Forall2 val_compat vargs0 vargs).
+          { pose proof H11 as H11c.
+            eapply eval_builtin_args_val_compat in H11c; eauto.
+            destruct H11c as (vl2 & Heval & Hfl).
+            eapply eval_builtin_args_determ in Heval; [|exact H0].
+            subst; auto. }
+          (* val_compat of result via builtin_sem_val_compat *)
+          assert (Hcompat_res: val_compat vres0 vres).
+          { pose proof H12 as Hcall_src.
+            eapply safe_external_call_val_compat in Hcall_src; eauto.
+            destruct Hcall_src as (vres2 & Hcall2 & Hvc).
+            apply external_call_Three_Two' in Hcall2.
+            destruct Hcall2 as (v1 & Hcall2 & Hld1).
+            eapply Events.external_call_mem_extends in Hcall2; eauto.
+            2: { apply Val.lessdef_list_refl. }
+            destruct Hcall2 as (v2 & m2 & Hcall3 & Hld2 & _ & _).
+            eapply external_call_deterministic in Hcall3.
+            2: { exact H1. }
+            destruct Hcall3 as [? ?]; subst.
+            eapply val_compat_trans; eauto.
+            apply val_lessdef_compat.
+            eapply Val.lessdef_trans; eauto. }
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto. }
+          simpl. econstructor; eauto.
+          { intro r.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          exists c; split; auto.
+          intros r Hr Hcol_ne; simpl in *.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss.
+            (* col succ res ≠ c, so all arg registers have Val.lessdef *)
+            assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
+            { eapply eval_builtin_args_lessdef'
+                with (e2 := fun r => rs # r) in H11; eauto.
+              - destruct H11 as (vl2 & Heval & Hvl2).
+                eapply eval_builtin_args_determ in H0; eauto; subst; auto.
+              - apply Forall_forall.
+                intros barg Hin_barg.
+                match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF end.
+                eapply builtin_arg_forall_impl_in; eauto.
+                simpl; intros r Hr' Hin_r.
+                apply RS.
+                { eapply args_in_transfer_ibuiltin; eauto.
+                  eapply in_builtin_arg_in_params_args; eauto. }
+                intro HC; rewrite Hr' in HC; congruence. }
+            pose proof H12 as H12_copy.
+            eapply Events.external_call_mem_extends in H12_copy; eauto.
+            destruct H12_copy as (vres' & m2' & Hext & Hvres' & _ & _).
+            apply external_call_Three_Two' in Hext.
+            destruct Hext as (v' & Hext & Hld).
+            eapply external_call_deterministic in Hext.
+            2: { exact H1. }
+            destruct Hext as [Heq _]; subst.
+            eapply Val.lessdef_trans; eauto. }
+          rewrite 2!Regmap.gso; auto.
+          assert (Hin_live: Regset.In r (live !! pc)).
+          { eapply transfer_succ_subset; try eassumption. simpl; auto. }
+          apply RS.
+          { eapply live_in_transfer_ibuiltin; eauto. intros x Hx; inv Hx; congruence. }
+          intro HC; apply Hcol_ne.
+          match goal with
+          | [ Hfa : Regset.For_all (fun r0 => r0 <> _ -> _ = _) _ |- _ ] =>
+              rewrite <- (Hfa r Hin_live); auto
+          end.
+
+        * (* other builtin - faulted *)
           simpl in *.
           assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
           { eapply eval_builtin_args_lessdef'
@@ -2709,7 +1964,7 @@ Section TOLERANCE.
               eapply eval_builtin_args_determ in H0; eauto; subst; auto.
             - apply Forall_forall.
               intros barg Hin_barg.
-              rewrite Forall_forall in H9.
+              match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF end.
               eapply builtin_arg_forall_impl_in; eauto.
               simpl; intros r Hr Hin_r.
               apply RS.
@@ -2755,7 +2010,7 @@ Section TOLERANCE.
             destruct Hex as (y & Hy & Hin_argb).
             apply in_builtin_argb_sound in Hin_argb.
             pose proof Hy as Hy_orig.
-            rewrite Forall_forall in H9; apply H9 in Hy.
+            match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF; apply HF in Hy end.
             eapply in_builtin_arg_forall in Hy; eauto.
             apply RS.
             { eapply args_in_transfer_ibuiltin; eauto.
@@ -2943,7 +2198,49 @@ Section TOLERANCE.
           { rewrite 2!Regmap.gss; auto. }
           rewrite 2!Regmap.gso; auto.
 
-        * (* other builtin *)
+        * (* safe builtin - non-faulted *)
+          assert (Ht: t = E0) by (eapply (@safe_external_call_E0 Two VoteSemantics_Two); eauto).
+          assert (Ht': t' = E0) by (eapply (@safe_external_call_E0 Three VoteSemantics_Three); eauto).
+          assert (Hmem_t: m' = m) by (eapply (@safe_external_call_mem Two VoteSemantics_Two); eauto).
+          assert (Hmem_s: m'0 = m1) by (eapply (@safe_external_call_mem Three VoteSemantics_Three); eauto).
+          subst t t' m' m'0.
+          pose proof H11 as H11_save. pose proof H12 as H12_save.
+          assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
+          { eapply eval_builtin_args_lessdef'
+              with (e2 := fun r => rs # r) in H11; eauto.
+            - destruct H11 as (vl2 & Heval & Hvl2).
+              eapply eval_builtin_args_determ in H0; eauto; subst; auto.
+            - apply Forall_forall.
+              intros barg Hin.
+              eapply builtin_arg_forall_impl.
+              2: { match goal with
+                   | [ HF : Forall (builtin_arg_forall _) _ |- _ ] =>
+                       rewrite Forall_forall in HF; apply HF in Hin; exact Hin
+                   end. }
+              simpl; intros; auto. }
+          assert (Hlessdef: Val.lessdef vres0 vres).
+          { eapply Events.external_call_mem_extends in H12; eauto.
+            destruct H12 as (vres' & m2' & Hext & Hvres' & Hmem_ext & _).
+            apply external_call_Three_Two' in Hext.
+            destruct Hext as (v' & Hext & Hld).
+            eapply external_call_deterministic in Hext.
+            2: { exact H1. }
+            destruct Hext as [Heq _]; subst.
+            eapply Val.lessdef_trans; eauto. }
+          eexists; split.
+          { eapply exec_Ibuiltin; eauto. }
+          simpl. econstructor; eauto.
+          { intro r.
+            destruct (peq r res); subst.
+            - rewrite 2!Regmap.gss.
+              apply val_lessdef_compat; auto.
+            - rewrite 2!Regmap.gso; auto. }
+          intros r.
+          destruct (peq r res); subst.
+          { rewrite 2!Regmap.gss; auto. }
+          rewrite 2!Regmap.gso; auto.
+
+        * (* other builtin - non-faulted *)
           simpl in *.
           assert (Hlessdef_list: Val.lessdef_list vargs0 vargs).
           { eapply eval_builtin_args_lessdef'
@@ -2952,7 +2249,7 @@ Section TOLERANCE.
               eapply eval_builtin_args_determ in H0; eauto; subst; auto.
             - apply Forall_forall.
               intros barg Hin.
-              rewrite Forall_forall in H9.
+              match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF end.
               eapply builtin_arg_forall_impl; eauto. }
           assert (exists vres' m'', @external_call _ VoteSemantics_Three
                                  ef0 (Genv.globalenv prog) vargs0 m1 t vres' m'' /\
@@ -2992,7 +2289,7 @@ Section TOLERANCE.
             apply existsb_exists in Hex.
             destruct Hex as (y & Hy & Hin).
             apply in_builtin_argb_sound in Hin.
-            rewrite Forall_forall in H9; apply H9 in Hy.
+            match goal with | [ HF : Forall (builtin_arg_forall _) _ |- _ ] => rewrite Forall_forall in HF; apply HF in Hy end.
             eapply in_builtin_arg_forall in Hy; eauto. }
           destruct res0; simpl.
           { destruct (peq r x); subst.

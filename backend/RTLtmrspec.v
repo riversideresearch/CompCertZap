@@ -2,6 +2,8 @@
 
 Require Import
   AST
+  Builtins
+  FaultPolicy
   Coqlib
   Errors
   Globalenvs
@@ -16,7 +18,7 @@ Require Import
   Smallstep
   Values
 .
-Require Import RTL.
+Require Import CompCertZapUtils RTL.
 Require Import RTLtmr.
 Require Export RTLreplicateSpecCommon.
 Require Import Errors.
@@ -42,6 +44,44 @@ Inductive rm_l (rm : PMap.t (reg * reg))
     rm !! r1 = (r2, r3) ->
     rm_l rm rs1 rs2 rs3 ->
     rm_l rm (r1 :: rs1) (r2 :: rs2) (r3 :: rs3).
+
+Inductive rm_builtin_arg (rm : PMap.t (reg * reg))
+  : builtin_arg reg -> builtin_arg reg -> builtin_arg reg -> Prop :=
+| rm_BA : forall r1 r2 r3,
+    rm !! r1 = (r2, r3) ->
+    rm_builtin_arg rm (BA r1) (BA r2) (BA r3)
+| rm_BA_int : forall n,
+    rm_builtin_arg rm (BA_int n) (BA_int n) (BA_int n)
+| rm_BA_long : forall n,
+    rm_builtin_arg rm (BA_long n) (BA_long n) (BA_long n)
+| rm_BA_float : forall n,
+    rm_builtin_arg rm (BA_float n) (BA_float n) (BA_float n)
+| rm_BA_single : forall n,
+    rm_builtin_arg rm (BA_single n) (BA_single n) (BA_single n)
+| rm_BA_loadstack : forall chunk ofs,
+    rm_builtin_arg rm (BA_loadstack chunk ofs) (BA_loadstack chunk ofs) (BA_loadstack chunk ofs)
+| rm_BA_addrstack : forall ofs,
+    rm_builtin_arg rm (BA_addrstack ofs) (BA_addrstack ofs) (BA_addrstack ofs)
+| rm_BA_loadglobal : forall chunk id ofs,
+    rm_builtin_arg rm (BA_loadglobal chunk id ofs) (BA_loadglobal chunk id ofs) (BA_loadglobal chunk id ofs)
+| rm_BA_addrglobal : forall id ofs,
+    rm_builtin_arg rm (BA_addrglobal id ofs) (BA_addrglobal id ofs) (BA_addrglobal id ofs)
+| rm_BA_splitlong : forall hi1 hi2 hi3 lo1 lo2 lo3,
+    rm_builtin_arg rm hi1 hi2 hi3 ->
+    rm_builtin_arg rm lo1 lo2 lo3 ->
+    rm_builtin_arg rm (BA_splitlong hi1 lo1) (BA_splitlong hi2 lo2) (BA_splitlong hi3 lo3)
+| rm_BA_addptr : forall a1 a2 a3 b1 b2 b3,
+    rm_builtin_arg rm a1 a2 a3 ->
+    rm_builtin_arg rm b1 b2 b3 ->
+    rm_builtin_arg rm (BA_addptr a1 b1) (BA_addptr a2 b2) (BA_addptr a3 b3).
+
+Inductive rm_builtin_args (rm : PMap.t (reg * reg))
+  : list (builtin_arg reg) -> list (builtin_arg reg) -> list (builtin_arg reg) -> Prop :=
+| rm_bargs_nil : rm_builtin_args rm nil nil nil
+| rm_bargs_cons : forall ba1 ba2 ba3 bas1 bas2 bas3,
+    rm_builtin_arg rm ba1 ba2 ba3 ->
+    rm_builtin_args rm bas1 bas2 bas3 ->
+    rm_builtin_args rm (ba1 :: bas1) (ba2 :: bas2) (ba3 :: bas3).
 
 Inductive maj_voteR
   (c : code) (ty : typ) (r1 r2 r3 : reg) (pc succ : node) : Prop :=
@@ -195,6 +235,15 @@ Inductive match_instr
     (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_fn fn ++ args)) pc n)
     (N : c ! n = Some (Itailcall sig fn args)),
     match_instr re rm c pc (Itailcall sig fn args)
+| match_Ibuiltin_safe :
+  forall ef bargs1 bargs2 bargs3 res1 res2 res3 n1 n2 succ
+    (CAN_REP : builtin_can_replicate ef = true)
+    (BARGS : rm_builtin_args rm bargs1 bargs2 bargs3)
+    (RM_RES : rm !! res1 = (res2, res3))
+    (PC : c ! pc = Some (Ibuiltin ef bargs2 (BR res2) n1))
+    (N1 : c ! n1 = Some (Ibuiltin ef bargs3 (BR res3) n2))
+    (N2 : c ! n2 = Some (Ibuiltin ef bargs1 (BR res1) succ)),
+    match_instr re rm c pc (Ibuiltin ef bargs1 (BR res1) succ)
 | match_Ibuiltin_1 :
   forall ef bargs bres n succ
     (NORES : ~ is_BR bres) (* no result register *)
@@ -203,6 +252,7 @@ Inductive match_instr
     match_instr re rm c pc (Ibuiltin ef bargs bres succ)
 | match_Ibuiltin_2 :
   forall ef bargs res1 res2 res3 n1 n2 succ
+    (NOT_SAFE : builtin_can_replicate ef = false)
     (VOTE_ARGS : maj_vote_regsR c re rm (dedup (regs_of_builtin_args bargs)) pc n1)
     (N1 : c ! n1 = Some (Ibuiltin ef bargs (BR res1) n2))
     (RM_RES : rm # res1 = (res2, res3))
@@ -305,6 +355,24 @@ Lemma rm_l_map_rm rm l :
 Proof.
   induction l; constructor; auto.
   destruct (rm # a); reflexivity.
+Qed.
+
+Lemma rm_builtin_arg_map rm (ba : builtin_arg reg) :
+  rm_builtin_arg rm ba
+    (map_builtin_arg (fun r => fst (rm # r)) ba)
+    (map_builtin_arg (fun r => snd (rm # r)) ba).
+Proof.
+  induction ba; simpl; try constructor; auto.
+  destruct (rm # x); constructor; reflexivity.
+Qed.
+
+Lemma rm_builtin_args_map rm (bas : list (builtin_arg reg)) :
+  rm_builtin_args rm bas
+    (List.map (map_builtin_arg (fun r => fst (rm # r))) bas)
+    (List.map (map_builtin_arg (fun r => snd (rm # r))) bas).
+Proof.
+  induction bas; constructor; auto.
+  apply rm_builtin_arg_map.
 Qed.
 
 Lemma state_incr_maj_voteR s s' ty r1 r2 r3 pc succ :
@@ -413,11 +481,20 @@ Proof.
     econstructor; eauto.
     + eapply state_incr_maj_vote_regsR; eauto.
     + rewrite Hn; eauto.
-  - econstructor; auto.
+  - (* match_Ibuiltin_safe *)
+    destruct (H1 p) as [?|Hs']; try congruence.
+    destruct (H1 n1) as [?|Hs'1]; try congruence.
+    destruct (H1 n2) as [?|Hs'2]; try congruence.
+    eapply match_Ibuiltin_safe; eauto.
+    + rewrite Hs'; eauto.
+    + rewrite Hs'1; eauto.
+    + rewrite Hs'2; eauto.
+  - eapply match_Ibuiltin_1; auto.
     + eapply state_incr_maj_vote_regsR; eauto.
     + destruct (H1 n); congruence.
   - destruct (H1 n1) as [?|Hn1]; try congruence.
     eapply match_Ibuiltin_2.
+    + auto.
     + eapply state_incr_maj_vote_regsR; eauto.
     + rewrite  Hn1; eauto.
     + eauto.
@@ -699,41 +776,66 @@ Proof.
     + rewrite PTree.gss; reflexivity.
 
     (* Ibuiltin *)
-  - unfold RTLgen.bind in Htransf; simpl in Htransf.
-    destruct (reg_of_builtin_res b) eqn:Hb.
-    + repeat egen_case.
-      unfold update_instr in H2.
-      repeat lr_case; simpl.
-      destruct b; simpl in Hb; inv Hb.
-      destruct (rm # r) eqn:Hr.
-      eapply match_Ibuiltin_2.
-      { eapply maj_vote_regsR_ptree_set; auto.
-        eapply state_incr_maj_vote_regsR.
-        2: { eapply maj_vote_regs_maj_vote_regsR.
-             2: { eauto. }
-             auto. }
-        intros; clear H0; inv s3; inv s4.
-        specialize (H2 pc); specialize (H5 pc).
-        destruct H2 as [H2 | H2]; auto. }
-      2: { eauto. }
-      rewrite PTree.gss; reflexivity.
-      apply smoveR_ptree_set; auto.
-      eapply copy_to_shadows_smoveR; eauto.
-      simpl; lia.
-    + repeat egen_case.
-      unfold update_instr in H0.
-      repeat lr_case; simpl.
-      eapply match_Ibuiltin_1.
-      { intro HC; inv HC; inv Hb. }
-      { eapply maj_vote_regsR_ptree_set; auto.
-        eapply state_incr_maj_vote_regsR.
-        2: { eapply maj_vote_regs_maj_vote_regsR.
-             2: { eauto. }
-             auto. }
-        intros; inv s1.
-        specialize (H2 pc).
-        destruct H2 as [H2 | H2]; auto. }
-      rewrite PTree.gss; reflexivity.
+  - simpl in Htransf.
+    destruct (builtin_can_replicate e) eqn:Hrep.
+    + (* Safe builtin *)
+      destruct b as [r | | b1 b2] eqn:Hbres.
+      * (* BR res -- safe triplication *)
+        destruct (rm # r) eqn:Hrmr.
+        unfold RTLgen.bind in Htransf.
+        repeat egen_case.
+        unfold update_instr in *.
+        repeat lr_case.
+        repeat reserve_instr_inv.
+        simpl in *.
+        eapply match_Ibuiltin_safe with (pc := p)
+                                 (n1 := s.(st_nextnode))
+                                 (n2 := Pos.succ (s.(st_nextnode))); eauto.
+        { apply rm_builtin_args_map. }
+        { rewrite 2!PTree.gso; try lia.
+          rewrite PTree.gss; reflexivity. }
+        { rewrite PTree.gso; try lia.
+          rewrite PTree.gss; reflexivity. }
+        { rewrite PTree.gss; reflexivity. }
+      * (* BR_none -- rejected *)
+        unfold RTLgen.bind in Htransf; simpl in Htransf.
+        unfold error in Htransf; simpl in Htransf.
+        inversion Htransf.
+      * (* BR_splitlong -- rejected *)
+        unfold RTLgen.bind in Htransf; simpl in Htransf.
+        unfold error in Htransf; simpl in Htransf.
+        inversion Htransf.
+    + (* Non-safe builtin *)
+      unfold RTLgen.bind in Htransf; simpl in Htransf.
+      destruct (reg_of_builtin_res b) eqn:Hb.
+      * repeat egen_case.
+        unfold update_instr in *.
+        repeat lr_case; simpl.
+        destruct b; simpl in Hb; inv Hb.
+        destruct (rm # r) eqn:Hr.
+        eapply match_Ibuiltin_2.
+        { auto. }
+        { eapply maj_vote_regsR_ptree_set; auto.
+          eapply state_incr_maj_vote_regsR.
+          2: { eapply maj_vote_regs_maj_vote_regsR; eauto. }
+          intros pc0; clear H0; inv s3; inv s4.
+          specialize (H2 pc0); specialize (H5 pc0).
+          destruct H2 as [H2 | H2]; auto. }
+        2: { eauto. }
+        rewrite PTree.gss; reflexivity.
+        apply smoveR_ptree_set; auto.
+        eapply copy_to_shadows_smoveR; eauto.
+        simpl; lia.
+      * repeat egen_case.
+        unfold update_instr in *.
+        repeat lr_case; simpl.
+        eapply match_Ibuiltin_1.
+        { intro HC; inv HC; inv Hb. }
+        { eapply maj_vote_regsR_ptree_set; auto.
+          eapply state_incr_maj_vote_regsR.
+          2: { eapply maj_vote_regs_maj_vote_regsR; eauto. }
+          intros pc0; inv s1; auto. }
+        rewrite PTree.gss; reflexivity.
 
   (* Icond *)
   - unfold RTLgen.bind in Htransf; simpl in Htransf.
