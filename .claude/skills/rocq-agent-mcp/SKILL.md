@@ -11,7 +11,7 @@ description: Reference for using rocq-agent via MCP to interactively explore Roc
 
 Build the project before using MCP. The LSP loads dependencies from pre-compiled `.vo` files — it does not compile them from source. If `.vo` files are missing, `Require Import` will fail. Run `make` (or the project's build command) once up front, then use MCP for interactive work.
 
-When editing multiple files, prefer `refresh_dependencies` after file A is cleanly checked. This saves A's current version as a `.vo` and notifies the workspace so file B can see the refreshed artifact. Fall back to `make` only if dependency refresh fails or you need a full project rebuild.
+When editing multiple files, rebuild published `.vo` files with `make` (or the project's build command), then reopen downstream files that depend on them. Do not expect the live LSP session to compile dependency artifacts for you.
 
 ## Critical Editing Rule
 
@@ -42,6 +42,7 @@ Most proof and query tools can use the implicit current state during linear expl
 |------|------------|
 | `initialize` | Start or rebind the workspace and LSP session. Call this first. |
 | `open_file` | Open a `.v` file. Returns immediately by default; set `waitForChecking=true` to block for full-file checking. |
+| `close_file` | Close an open document and remove it from session tracking. |
 | `get_diagnostics` | Re-check document diagnostics after opening or editing a file. Supports `startLine`/`endLine` (1-based inclusive) to filter to a region. |
 | `set_view_range` | Restrict checking to a region in a large file. |
 | `edit_document` | Replace the full text of an open document via the live LSP session and write it to disk. |
@@ -51,8 +52,9 @@ Most proof and query tools can use the implicit current state during linear expl
 | `insert_after_line` | Insert text after a 1-based line number. |
 | `replace_text` | Replace an exact text occurrence. Use `requireUnique=true` for safe unique-match edits; use `occurrence=N` when multiple matches exist. |
 | `wait_for_position` | Wait until the current document version has been processed up to a target position. |
-| `refresh_dependencies` | Save the current checked file as a `.vo` and notify the workspace so dependent files can see it. Use after editing a dependency file in a multi-file project. |
 | `get_current_obligations` | Return a compact obligations summary at the most recently requested proof position for this document. |
+
+The session can track multiple open documents at once. Use `close_file` when you want to remove one and keep implicit context unambiguous.
 
 ### Proof Interaction
 
@@ -82,7 +84,7 @@ Most proof and query tools work well with the implicit current state. `stateId` 
 ### Default Loop
 
 1. `initialize workspaceRoot="/path/to/project"` once.
-2. `open_file` once (default non-blocking; set `waitForChecking=true` only when you need full-file completion first).
+2. `open_file` for the file you want to work on (default non-blocking; set `waitForChecking=true` only when you need full-file completion first).
 3. `get_proof_state` at the active position with `waitUntilReady=true`.
 4. Iterate:
    - **Inspect state first**: Before writing tactics, call `get_proof_state(waitUntilReady=true)` to see exact hypotheses and goals. This is more reliable than predicting state from the proof script.
@@ -136,14 +138,21 @@ Practical loop:
 2. `set_view_range` to the region you plan to inspect.
 3. `get_proof_state(waitUntilReady=true)` or `wait_for_position` at the target position.
 
+### Multi-File Rebuilds
+
+When edits cross module boundaries:
+
+1. Edit the dependency module.
+2. Rebuild `.vo` files with `make` (or the project's build command).
+3. Close and reopen downstream importers before continuing proof work in them.
+
 ### Only When Needed
 
 1. `set_view_range` for large files when you want to focus work near one region.
-2. `refresh_dependencies` after finishing edits to a file that other files import.
-3. `get_current_obligations` for a compact post-edit summary at your last proof position, provided that position was not edited away.
-4. `wait_for_position` when you want explicit readiness blocking without pulling full proof state.
-5. `run_query` for contextual `Search` / `Check` / `Print` / `About` / `Locate`.
-6. `save_checkpoint` and `restore_checkpoint` for branching.
+2. `get_current_obligations` for a compact post-edit summary at your last proof position, provided that position was not edited away.
+3. `wait_for_position` when you want explicit readiness blocking without pulling full proof state.
+4. `run_query` for contextual `Search` / `Check` / `Print` / `About` / `Locate`.
+5. `save_checkpoint` and `restore_checkpoint` for branching.
 
 ## State Management
 
