@@ -1,6 +1,6 @@
 ---
 name: rocq-agent-mcp
-description: Reference for using rocq-agent via MCP to interactively explore Rocq proofs. Use when working on `.v` files through an MCP-capable coding agent.
+description: Reference for using rocq-agent via MCP to interactively explore Rocq proofs. Use when working on `.v` files with rocq-agent.
 ---
 
 # rocq-agent MCP Skill
@@ -15,7 +15,7 @@ When editing multiple files, rebuild published `.vo` files with `make` (or the p
 
 ## Critical Editing Rule
 
-- For an active/open `.v` file, perform edits only through MCP edit tools: `edit_document`, `replace_range`, `replace_lines`, `insert_before_line`, `insert_after_line`, or `replace_text`. These route through LSP `didChange`, keep the live document state synchronized, and write to disk.
+- For an active/open `.v` file, perform edits only through MCP edit tools: `edit_document`, `replace_range`, `replace_lines`, `insert_before_line`, `insert_after_line`, or `replace_text`. These send LSP `didChange`, keep the live document state synchronized, and write to disk.
 - Do not use external filesystem edits (for example `apply_patch`) on an active proof file and then `open_file` again after each change.
 - Do not repeatedly reopen the same file after edits. Reopening forces reprocessing from file start and defeats the iterative MCP workflow.
 - Reopen a file only when intentionally starting a fresh session, switching files, or recovering from a broken session.
@@ -89,7 +89,7 @@ Most proof and query tools work well with the implicit current state. `stateId` 
 4. Iterate:
    - **Inspect state first**: Before writing tactics, call `get_proof_state(waitUntilReady=true)` to see exact hypotheses and goals. This is more reliable than predicting state from the proof script.
    - Use `run_tactic` / `run_tactics` for speculative exploration.
-   - Edit with MCP edit tools (live `didChange`, not external patch + reopen) when changing source. Pass `returnDiagnostics=true` on edits to get error feedback inline without a separate `get_diagnostics` call.
+   - Edit with MCP edit tools instead of patching the file externally and reopening it. Pass `returnDiagnostics=true` on edits to get error feedback inline without a separate `get_diagnostics` call.
 5. After each edit, use a position target on `run_tactic`/`run_tactics` to continue (see "Post-Edit Recovery"), or call `get_proof_state(waitUntilReady=true)` for a fresh `stateId`. Call `check_proof_closure` before assuming the theorem is finished.
 6. After writing `Qed.`, verify success with `get_diagnostics` (no errors at the `Qed` line), not `check_proof_closure` (which returns `outside_proof` past `Qed`).
 
