@@ -2,58 +2,62 @@
 
 ## Current State
 
-The operation-classification part of `backend/FaultPolicy.v` has been
-split out into target-specific files:
+The AArch64 fault-model port currently builds end-to-end in this tree:
 
-- `aarch64/FaultPolicyOps.v`
-- `arm/FaultPolicyOps.v`
-- `powerpc/FaultPolicyOps.v`
-- `riscV/FaultPolicyOps.v`
-- `x86/FaultPolicyOps.v`
+- `make -j1` succeeds
 
-`backend/FaultPolicy.v` now re-exports `FaultPolicyOps` and keeps only the
-shared builtin-policy logic.
+The target-specific fault-policy and RTL-fault proof hooks are now
+factored out of the shared backend files, and the AArch64 path no longer
+depends on x86-shaped proof code in `backend/RTLfault.v`.
 
 ## Changes Made
 
-- Added `FaultPolicyOps.v` to the target-dependent backend file list in `Makefile`.
-- Moved `is_protected`, `is_protectedb`, and `is_protectedb_spec` out of
+- Split target-specific operation classification out of
   `backend/FaultPolicy.v` into per-architecture `FaultPolicyOps.v` files.
-- Added a target-local `builtin_can_replicate_platform` helper in the same
-  `FaultPolicyOps.v` files so that `backend/FaultPolicy.v` no longer mentions
-  x86-only platform builtins in shared code.
-- Left the shared builtin classifications in `backend/FaultPolicy.v`.
+  `backend/FaultPolicy.v` now keeps the shared builtin-policy logic and
+  re-exports the target hook.
+- Moved the shared `val_compat` / `rs_compat` infrastructure and the pure
+  compatibility lemmas from `backend/RTLfault.v` into
+  `backend/CompCertZapUtils.v`.
+- Moved the AArch64-specific condition and operation compatibility lemmas
+  used by `backend/RTLfault.v` into `aarch64/FaultPolicyOps.v`.
+- Added the missing vote-polymorphic wrappers
+  (`Section VOTE` / `Context {VT} {vsem}`) to:
+  - `aarch64/SelectOpproof.v`
+  - `aarch64/SelectLongproof.v`
+  - `aarch64/Asm.v`
+  - `aarch64/Asmgenproof.v`
+- Updated `aarch64/Asmexpand.ml` to accept the same TMR shadow-move
+  builtin names as x86:
+  - `__builtin_smove_*_green`
+  - `__builtin_smove_*_blue`
+  The older unsuffixed `__builtin_smove_*` names are still accepted as
+  aliases.
+- Updated `backend/RTLinfercolor.ml` to open `FaultPolicyOps`, matching
+  the extracted OCaml side where `is_protectedb` now lives.
+- Removed the `Asmagreement` import from `driver/Complements.v`. At the
+  moment only `x86/Asmagreement.v` exists, so the old unqualified import
+  blocked the AArch64 build.
 
 ## Verification
 
-- `make depend` succeeds.
-- `make backend/FaultPolicy.vo` succeeds under the current `aarch64` configuration.
+- `make -j1 backend/CompCertZapUtils.vo`
+- `make -j1 aarch64/FaultPolicyOps.vo`
+- `make -j1 backend/RTLfault.vo`
+- `make -j1 backend/RTLtolerant.vo`
+- `make -j1 backend/SplitLongproof.vo`
+- `make -j1 backend/Selectionproof.vo`
+- `make -j1 aarch64/Asm.vo`
+- `make -j1 aarch64/Asmgenproof.vo`
+- `make -f Makefile.extr -j1 ccomp`
+- `make -j1`
 
-## Current Blocker
+## Remaining Follow-Up
 
-The next aarch64-specific failure is downstream in `backend/RTLfault.v`:
+1. Decide whether the unsuffixed AArch64 `__builtin_smove_*` aliases in
+   `aarch64/Asmexpand.ml` should remain for compatibility or be removed
+   once all callers use the canonical green/blue names.
 
-- `make backend/RTLfault.vo` fails at `backend/RTLfault.v:525`
-- Error: `The reference Op.eval_addressing32 was not found in the current environment.`
-
-This confirms that `RTLfault.v` still contains x86-shaped assumptions about
-the active `Op` module.
-
-## Next Steps
-
-1. Do for `RTLfault.v` what was done for `FaultPolicy.v`: move the
-   platform-specific pieces behind target-local modules.
-
-2. In particular, extract or rework the parts of `RTLfault.v` that assume
-   x86-specific `Op` structure:
-
-- `Op.eval_addressing32` / `Op.eval_addressing64`
-- x86-shaped `destruct op`
-- x86-shaped `destruct cond`
-
-3. Revisit the condition classifiers in `backend/CompCertZapUtils.v`
-   (`is_compu` / `is_complu`), since aarch64 has extra condition forms such as
-   shifted unsigned comparisons.
-
-4. After `backend/RTLfault.vo` builds, continue with downstream files such as
-   `backend/RTLtolerant.vo`.
+2. If `driver/Complements.v` needs an Asm-side agreement result on
+   AArch64, add an AArch64 analogue of `x86/Asmagreement.v` rather than
+   restoring the old unqualified import.
