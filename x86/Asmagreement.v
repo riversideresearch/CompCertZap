@@ -1,3 +1,5 @@
+(** This file is currently not used for anything. *)
+
 Require Import
   Asm
   AST
