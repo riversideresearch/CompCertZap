@@ -389,6 +389,9 @@ Axiom symbol_high_low:
   forall (ge: genv) (id: ident) (ofs: ptrofs),
   Val.addl (symbol_high ge id ofs) (symbol_low ge id ofs) = Genv.symbol_address ge id ofs.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section RELSEM.
 
 Variable ge: genv.
@@ -1318,3 +1321,5 @@ Definition data_preg (r: preg) : bool :=
   | SP => true
   | PC => false
   end.
+
+End VOTE.

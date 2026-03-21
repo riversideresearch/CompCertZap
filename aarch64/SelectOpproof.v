@@ -73,6 +73,9 @@ Ltac TrivialExists :=
 
 (** * Correctness of the smart constructors *)
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section CMCONSTR.
 
 Variable ge: genv.
@@ -1071,3 +1074,4 @@ Proof.
 Qed.
 
 End CMCONSTR.
+End VOTE.

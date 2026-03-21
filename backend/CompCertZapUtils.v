@@ -8,7 +8,7 @@
     development.  These are backend-specific utilities, but they are
     not part of the core RTL syntax or semantics. *)
 
-Require Import Coqlib AST Events Op Registers.
+Require Import Coqlib AST Events Integers Memory Op Registers Values.
 
 (** * Builtin-argument and builtin-result helpers *)
 
@@ -195,15 +195,505 @@ Lemma in_builtin_resb_sound (r : reg) (bres : builtin_res reg) :
   in_builtin_resb r bres = true -> in_builtin_res r bres.
 Proof. destruct (in_builtin_resb_spec r bres); congruence. Qed.
 
-(** * Condition classifiers used by the fault model *)
+(** * Fault-model value compatibility *)
 
-Inductive is_compu : condition -> Prop :=
-| is_compu_CCompu : forall c, is_compu (Ccompu c)
-| is_compu_CCompuimm : forall c n, is_compu (Ccompuimm c n).
+Inductive val_compat : val -> val -> Prop :=
+| val_compat_undef : forall v, val_compat Vundef v
+| val_compat_int : forall i j, val_compat (Vint i) (Vint j)
+| val_compat_long : forall i j, val_compat (Vlong i) (Vlong j)
+| val_compat_float : forall x y, val_compat (Vfloat x) (Vfloat y)
+| val_compat_single : forall x y, val_compat (Vsingle x) (Vsingle y)
+| val_compat_ptr : forall b1 b2 ofs1 ofs2, val_compat (Vptr b1 ofs1) (Vptr b2 ofs2).
 
-Inductive is_complu : condition -> Prop :=
-| is_compu_CComplu : forall c, is_complu (Ccomplu c)
-| is_compu_CCompluimm : forall c n, is_complu (Ccompluimm c n).
+Lemma val_compat_refl (v : val) :
+  val_compat v v.
+Proof. destruct v; constructor. Qed.
+
+Lemma val_compat_trans (v1 v2 v3 : val) :
+  val_compat v1 v2 ->
+  val_compat v2 v3 ->
+  val_compat v1 v3.
+Proof.
+  intros H1 H2.
+  inversion H1; inversion H2; subst; try solve [constructor]; congruence.
+Qed.
+
+Lemma val_lessdef_compat (v1 v2 : val) :
+  Val.lessdef v1 v2 ->
+  val_compat v1 v2.
+Proof.
+  intro H; inversion H; subst; try constructor.
+  apply val_compat_refl.
+Qed.
+
+Definition rs_compat (rs1 rs2 : Regmap.t val) : Prop :=
+  forall r, val_compat (rs1 # r) (rs2 # r).
+
+Lemma val_compat_shrx v1 v2 vres n :
+  val_compat v1 v2 ->
+  Val.shrx v1 (Vint n) = Some vres ->
+  exists vres' : val, Val.shrx v2 (Vint n) = Some vres'.
+Proof.
+  intros Hcompat Hshrx.
+  inv Hcompat; simpl in *; try congruence.
+  destruct (Integers.Int.ltu _ _); inv Hshrx.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_shrxl v1 v2 vres n :
+  val_compat v1 v2 ->
+  Val.shrxl v1 (Vint n) = Some vres ->
+  exists vres' : val, Val.shrxl v2 (Vint n) = Some vres'.
+Proof.
+  intros Hcompat Hshrxl.
+  inv Hcompat; simpl in *; try congruence.
+  destruct (Integers.Int.ltu _ _); inv Hshrxl.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_floatofint_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.floatofint v1 = Some vres ->
+  exists vres' : val, Val.floatofint v2 = Some vres'.
+Proof.
+  intros Hcompat Hfoi.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_singleofint_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.singleofint v1 = Some vres ->
+  exists vres' : val, Val.singleofint v2 = Some vres'.
+Proof.
+  intros Hcompat Hsoi.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_floatofintu_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.floatofintu v1 = Some vres ->
+  exists vres' : val, Val.floatofintu v2 = Some vres'.
+Proof.
+  intros Hcompat Hfoi.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_singleofintu_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.singleofintu v1 = Some vres ->
+  exists vres' : val, Val.singleofintu v2 = Some vres'.
+Proof.
+  intros Hcompat Hsoi.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_floatoflong_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.floatoflong v1 = Some vres ->
+  exists vres' : val, Val.floatoflong v2 = Some vres'.
+Proof.
+  intros Hcompat Hfol.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_singleoflong_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.singleoflong v1 = Some vres ->
+  exists vres' : val, Val.singleoflong v2 = Some vres'.
+Proof.
+  intros Hcompat Hsol.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_floatoflongu_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.floatoflongu v1 = Some vres ->
+  exists vres' : val, Val.floatoflongu v2 = Some vres'.
+Proof.
+  intros Hcompat Hfol.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_singleoflongu_exists v1 v2 vres :
+  val_compat v1 v2 ->
+  Val.singleoflongu v1 = Some vres ->
+  exists vres' : val, Val.singleoflongu v2 = Some vres'.
+Proof.
+  intros Hcompat Hsol.
+  inv Hcompat; simpl in *; try congruence.
+  eexists; reflexivity.
+Qed.
+
+Lemma val_compat_divs n1 n2 d1 d2 v1 v2 :
+  val_compat n1 n2 ->
+  val_compat d1 d2 ->
+  Val.divs n1 d1 = Some v1 ->
+  Val.divs n2 d2 = Some v2 ->
+  val_compat v1 v2.
+Proof.
+  intros Hn Hd Hdiv1 Hdiv2.
+  inv Hn; inv Hd; simpl in *; try congruence.
+  destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  - destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    inv Hdiv1.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hdiv2; constructor.
+    + inv Hdiv2; constructor.
+  - inv Hdiv1.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hdiv2; constructor.
+    + inv Hdiv2; constructor.
+Qed.
+
+Lemma val_compat_divu n1 n2 d1 d2 v1 v2 :
+  val_compat n1 n2 ->
+  val_compat d1 d2 ->
+  Val.divu n1 d1 = Some v1 ->
+  Val.divu n2 d2 = Some v2 ->
+  val_compat v1 v2.
+Proof.
+  intros Hn Hd Hdiv1 Hdiv2.
+  inv Hn; inv Hd; simpl in *; try congruence.
+  repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  inv Hdiv1; inv Hdiv2; constructor.
+Qed.
+
+Lemma val_compat_mods n1 n2 d1 d2 v1 v2 :
+  val_compat n1 n2 ->
+  val_compat d1 d2 ->
+  Val.mods n1 d1 = Some v1 ->
+  Val.mods n2 d2 = Some v2 ->
+  val_compat v1 v2.
+Proof.
+  intros Hn Hd Hmod1 Hmod2.
+  inv Hn; inv Hd; simpl in *; try congruence.
+  destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  - destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    inv Hmod1.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hmod2; constructor.
+    + inv Hmod2; constructor.
+  - inv Hmod1.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+    + destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+      inv Hmod2; constructor.
+    + inv Hmod2; constructor.
+Qed.
+
+Lemma val_compat_modu n1 n2 d1 d2 v1 v2 :
+  val_compat n1 n2 ->
+  val_compat d1 d2 ->
+  Val.modu n1 d1 = Some v1 ->
+  Val.modu n2 d2 = Some v2 ->
+  val_compat v1 v2.
+Proof.
+  intros Hn Hd Hmod1 Hmod2.
+  inv Hn; inv Hd; simpl in *; try congruence.
+  repeat destruct (Integers.Int.eq _ _); simpl in *; try congruence.
+  inv Hmod1; inv Hmod2; constructor.
+Qed.
+
+Lemma val_compat_shl_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shl v (Vint n)) (Val.shl v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shr_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shr v (Vint n)) (Val.shr v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shll_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shll v (Vint n)) (Val.shll v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shrl_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shrl v (Vint n)) (Val.shrl v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shrlu_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shrlu v (Vint n)) (Val.shrlu v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shrx_imm v v' vres vres' n :
+  val_compat v v' ->
+  Val.shrx v (Vint n) = Some vres ->
+  Val.shrx v' (Vint n) = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; simpl in *; try congruence.
+  destruct (Integers.Int.ltu _ _); inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_shrxl_imm v v' vres vres' n :
+  val_compat v v' ->
+  Val.shrxl v (Vint n) = Some vres ->
+  Val.shrxl v' (Vint n) = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; simpl in *; try congruence.
+  destruct (Integers.Int.ltu _ _); inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_shru_imm v v' n :
+  val_compat v v' ->
+  val_compat (Val.shru v (Vint n)) (Val.shru v' (Vint n)).
+Proof.
+  intros Hcompat; inv Hcompat; simpl; try constructor.
+  destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_shru_dimm v1 v1' v2 v2' n :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat
+    (Val.or (Val.shl v1 (Vint n))
+       (Val.shru v2 (Vint (Integers.Int.sub Integers.Int.iwordsize n))))
+    (Val.or (Val.shl v1' (Vint n))
+       (Val.shru v2' (Vint (Integers.Int.sub Integers.Int.iwordsize n)))).
+Proof.
+  intros H0 H1; inv H0; inv H1; simpl; try constructor;
+    repeat destruct (Integers.Int.ltu _ _); constructor.
+Qed.
+
+Lemma val_compat_add v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.add v1 v2) (Val.add v1' v2').
+Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+Lemma val_compat_addl v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.addl v1 v2) (Val.addl v1' v2').
+Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+Lemma val_compat_mul v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.mul v1 v2) (Val.mul v1' v2').
+Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+Lemma val_compat_mull v1 v1' v2 v2' :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.mull v1 v2) (Val.mull v1' v2').
+Proof. intros H0 H1; inv H0; inv H1; constructor. Qed.
+
+Lemma val_compat_floatofint v v' vres vres' :
+  val_compat v v' ->
+  Val.floatofint v = Some vres ->
+  Val.floatofint v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_singleofint v v' vres vres' :
+  val_compat v v' ->
+  Val.singleofint v = Some vres ->
+  Val.singleofint v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_floatofintu v v' vres vres' :
+  val_compat v v' ->
+  Val.floatofintu v = Some vres ->
+  Val.floatofintu v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_singleofintu v v' vres vres' :
+  val_compat v v' ->
+  Val.singleofintu v = Some vres ->
+  Val.singleofintu v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_floatoflong v v' vres vres' :
+  val_compat v v' ->
+  Val.floatoflong v = Some vres ->
+  Val.floatoflong v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_singleoflong v v' vres vres' :
+  val_compat v v' ->
+  Val.singleoflong v = Some vres ->
+  Val.singleoflong v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+Lemma val_compat_floatoflongu v v' vres vres' :
+  val_compat v v' ->
+  Val.floatoflongu v = Some vres ->
+  Val.floatoflongu v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_singleoflongu v v' vres vres' :
+  val_compat v v' ->
+  Val.singleoflongu v = Some vres ->
+  Val.singleoflongu v' = Some vres' ->
+  val_compat vres vres'.
+Proof.
+  intros Hcompat H0 H1; inv Hcompat; inv H0; inv H1; constructor.
+Qed.
+
+Lemma val_compat_cmp_bool c v1 v1' v2 v2' b :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmp_bool c v1 v2 = Some b ->
+  exists b' : bool, Val.cmp_bool c v1' v2' = Some b'.
+Proof.
+  intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpl_bool c v1 v1' v2 v2' b :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmpl_bool c v1 v2 = Some b ->
+  exists b' : bool, Val.cmpl_bool c v1' v2' = Some b'.
+Proof.
+  intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpf_bool c v1 v1' v2 v2' b :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmpf_bool c v1 v2 = Some b ->
+  exists b' : bool, Val.cmpf_bool c v1' v2' = Some b'.
+Proof.
+  intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpfs_bool c v1 v1' v2 v2' b :
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmpfs_bool c v1 v2 = Some b ->
+  exists b' : bool, Val.cmpfs_bool c v1' v2' = Some b'.
+Proof.
+  intros H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence.
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpu_bool c v1 v1' v2 v2' b m1 m2 :
+  Archi.ptr64 = true ->
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmpu_bool (Memory.Mem.valid_pointer m1) c v1 v2 = Some b ->
+  exists b' : bool, Val.cmpu_bool (Memory.Mem.valid_pointer m2) c v1' v2' = Some b'.
+Proof.
+  intros Harchi H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence;
+    try (rewrite Harchi in *; discriminate).
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmplu_bool c v1 v1' v2 v2' b m1 m2 :
+  Archi.ptr64 = false ->
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  Val.cmplu_bool (Memory.Mem.valid_pointer m1) c v1 v2 = Some b ->
+  exists b' : bool, Val.cmplu_bool (Memory.Mem.valid_pointer m2) c v1' v2' = Some b'.
+Proof.
+  intros Harchi H0 H1 Hcmp; inv H0; inv H1; simpl in *; try congruence;
+    try (rewrite Harchi in *; discriminate).
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_cmpu_bool_imm c v v' b m1 m2 n :
+  Archi.ptr64 = true ->
+  val_compat v v' ->
+  Val.cmpu_bool (Memory.Mem.valid_pointer m1) c v (Vint n) = Some b ->
+  exists b' : bool, Val.cmpu_bool (Memory.Mem.valid_pointer m2) c v' (Vint n) = Some b'.
+Proof.
+  intros Harchi H Hcmp; inv H; simpl in *; try congruence;
+    try (rewrite Harchi in *; discriminate).
+  inv Hcmp; eexists; reflexivity.
+Qed.
+
+Lemma val_compat_maskzero_bool v v' n b :
+  val_compat v v' ->
+  Val.maskzero_bool v n = Some b ->
+  exists b', Val.maskzero_bool v' n = Some b'.
+Proof.
+  intros H Hmask; inv H; simpl in *; try congruence.
+  inv Hmask; eexists; reflexivity.
+Qed.
+
+Lemma option_map_some {A B : Type} (f : A -> B) o y :
+  option_map f o = Some y ->
+  exists x, o = Some x /\ y = f x.
+Proof.
+  intro Hf.
+  destruct o; simpl in *; inv Hf.
+  eexists; split; reflexivity.
+Qed.
+
+Lemma val_compat_normalize v v' t :
+  val_compat v v' ->
+  val_compat (Val.normalize v t) (Val.normalize v' t).
+Proof.
+  intro H; inv H; simpl; try constructor; destruct t; constructor.
+Qed.
+
+Lemma val_compat_subl v1 v1' v2 v2' :
+  Archi.ptr64 = false ->
+  val_compat v1 v1' ->
+  val_compat v2 v2' ->
+  val_compat (Val.subl v1 v2) (Val.subl v1' v2').
+Proof.
+  intros Harchi H0 H1; inv H0; inv H1; simpl; try constructor.
+  rewrite Harchi; constructor.
+Qed.
 
 (** * Predicates over builtin results *)
 

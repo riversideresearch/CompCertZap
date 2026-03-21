@@ -2,6 +2,7 @@ open AST
 open BinNums
 open Datatypes
 open FaultPolicy
+open FaultPolicyOps
 open Maps
 open Op
 open Registers

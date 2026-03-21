@@ -641,16 +641,20 @@ let expand_builtin_inline name args res =
       expand_builtin_va_start a
 
   (* Shadow move *)
-  | "__builtin_smove_int", [BA(IR a)], BR(IR res) ->
+  | ("__builtin_smove_int_green"
+     | "__builtin_smove_int_blue"), [BA(IR a)], BR(IR res) ->
      if a <> res then
        emit (Pmov (RR1 res, RR1 a))
-  | "__builtin_smove_long", [BA(IR a)], BR(IR res) ->
+  | ("__builtin_smove_long_green"
+     | "__builtin_smove_long_blue"), [BA(IR a)], BR(IR res) ->
      if a <> res then
        emit (Pmov (RR1 res, RR1 a))
-  | "__builtin_smove_single", [BA(FR a)], BR(FR res) ->
+  | ("__builtin_smove_single_green"
+     | "__builtin_smove_single_blue"), [BA(FR a)], BR(FR res) ->
      if a <> res then
        emit (Pfmov (res, a))
-  | "__builtin_smove_float", [BA(FR a)], BR(FR res) ->
+  | ("__builtin_smove_float_green"
+     | "__builtin_smove_float_blue"), [BA(FR a)], BR(FR res) ->
      if a <> res then
        emit (Pfmov (res, a))
 
@@ -723,6 +727,20 @@ let expand_instruction instr =
 
 (* Branch relaxation *)
 
+let string_of_external_function = function
+  | EF_external _ -> "EF_external"
+  | EF_builtin _ -> "EF_builtin"
+  | EF_runtime _ -> "EF_runtime"
+  | EF_vload _ -> "EF_vload"
+  | EF_vstore _ -> "EF_vstore"
+  | EF_malloc -> "EF_malloc"
+  | EF_free -> "EF_free"
+  | EF_memcpy _ -> "EF_memcpy"
+  | EF_annot _ -> "EF_annot"
+  | EF_annot_val _ -> "EF_annot_val"
+  | EF_inline_asm _ -> "EF_inline_asm"
+  | EF_debug _ -> "EF_debug"
+  
 (** Number of actual machine code instructions corresponding to a
     given Asm.instruction. Derived from [print_instruction] in
     TargetPrinter.ml. *)
@@ -740,11 +758,15 @@ let instr_size = function
      (* Conservatively count number of lines. Possibly over-estimating
         if, e.g., any of them are labels. *)
      List.length @@ String.split_on_char '\n' @@ camlstring_of_coqstring txt
-  | Pbuiltin(_, args, res) -> assert false
+  | Pbuiltin(EF_debug _, _, _) -> 0
+  | Pbuiltin(_ef, args, res) ->
+     assert false
   | Pallocframe _ -> assert false
   | Pfreeframe _ -> assert false
   | Pcvtx2w _ -> assert false
   | _ -> 1
+
+(* | EF_builtin of string * signature *)
 
 (** Compute label position map for function with code [c]. The
     position of a label is its distance (in # of instructions, i.e., #

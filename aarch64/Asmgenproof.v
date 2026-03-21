@@ -27,6 +27,9 @@ Proof.
   intros. eapply match_transform_partial_program; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section PRESERVATION.
 
 Variable prog: Mach.program.
@@ -860,6 +863,7 @@ Local Transparent destroyed_by_op.
 
 - (* Mcond true *)
   assert (f0 = f) by congruence. subst f0.
+
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_opt_steps_goto; eauto.
   intros. simpl in TR.
@@ -1034,3 +1038,4 @@ Proof.
 Qed.
 
 End PRESERVATION.
+End VOTE.

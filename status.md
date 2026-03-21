@@ -1,24 +1,59 @@
-# RTLtolerant.v Status
+# AArch64 Fault-Model Port Status
 
 ## Current State
 
-Branch: `improve-builtins-tmr`
+The operation-classification part of `backend/FaultPolicy.v` has been
+split out into target-specific files:
 
-`step_simulation` in RTLtolerant.v is fully proved (Qed). No `Admitted` proofs remain in the project. The full chain builds: RTLtolerant.vo, RTLtmrproof.vo, Complements.vo.
+- `aarch64/FaultPolicyOps.v`
+- `arm/FaultPolicyOps.v`
+- `powerpc/FaultPolicyOps.v`
+- `riscV/FaultPolicyOps.v`
+- `x86/FaultPolicyOps.v`
+
+`backend/FaultPolicy.v` now re-exports `FaultPolicyOps` and keeps only the
+shared builtin-policy logic.
 
 ## Changes Made
 
-1. **`common/Builtins.v`**: shifts (`BI_i64_shl/shr/sar`) set to `false` in `builtin_can_replicate_bf` (needed because `val_compat` of shift results is unprovable when the shift amount is faulted).
+- Added `FaultPolicyOps.v` to the target-dependent backend file list in `Makefile`.
+- Moved `is_protected`, `is_protectedb`, and `is_protectedb_spec` out of
+  `backend/FaultPolicy.v` into per-architecture `FaultPolicyOps.v` files.
+- Added a target-local `builtin_can_replicate_platform` helper in the same
+  `FaultPolicyOps.v` files so that `backend/FaultPolicy.v` no longer mentions
+  x86-only platform builtins in shared code.
+- Left the shared builtin classifications in `backend/FaultPolicy.v`.
 
-2. **`backend/RTLcolor.v`**: strengthened `wc_Ibuiltin_safe` frame condition — removed the arg-register exclusion (`~ Exists (in_builtin_arg r) bargs ->`), so all non-res live registers preserve their color. This matches `wc_Iop_safe` and is necessary for the faulted match_rs proof (arg registers must have stable colors to carry Val.lessdef across instructions).
+## Verification
 
-3. **`backend/RTLcolorcheck.v`**: updated the Boolean checker for safe builtins to match the strengthened wc condition (removed `existsb (in_builtin_argb r) bargs ||` from the for_all check).
+- `make depend` succeeds.
+- `make backend/FaultPolicy.vo` succeeds under the current `aarch64` configuration.
 
-4. **`backend/RTLtolerant.v`**:
-   - Added `safe_external_call_val_compat` lemma: lifts `builtin_sem_val_compat` to the `external_call` level.
-   - Proved the faulted safe-builtin case of `step_simulation` (previously `admit`).
-   - Changed `Admitted` to `Qed`.
+## Current Blocker
+
+The next aarch64-specific failure is downstream in `backend/RTLfault.v`:
+
+- `make backend/RTLfault.vo` fails at `backend/RTLfault.v:525`
+- Error: `The reference Op.eval_addressing32 was not found in the current environment.`
+
+This confirms that `RTLfault.v` still contains x86-shaped assumptions about
+the active `Op` module.
 
 ## Next Steps
 
-None for the proof — the TMR backward simulation is complete. Future work could re-add shifts to `builtin_can_replicate_bf` with a refined coloring rule that separates shift-amount register colors.
+1. Do for `RTLfault.v` what was done for `FaultPolicy.v`: move the
+   platform-specific pieces behind target-local modules.
+
+2. In particular, extract or rework the parts of `RTLfault.v` that assume
+   x86-specific `Op` structure:
+
+- `Op.eval_addressing32` / `Op.eval_addressing64`
+- x86-shaped `destruct op`
+- x86-shaped `destruct cond`
+
+3. Revisit the condition classifiers in `backend/CompCertZapUtils.v`
+   (`is_compu` / `is_complu`), since aarch64 has extra condition forms such as
+   shifted unsigned comparisons.
+
+4. After `backend/RTLfault.vo` builds, continue with downstream files such as
+   `backend/RTLtolerant.vo`.

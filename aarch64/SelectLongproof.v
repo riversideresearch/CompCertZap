@@ -19,6 +19,9 @@ Require Import SelectOp SelectLong SelectOpproof.
 
 Local Open Scope cminorsel_scope.
 Local Transparent Archi.ptr64.
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 
 (** * Correctness of the smart constructors *)
 
@@ -615,6 +618,7 @@ Proof.
   TrivialExists.
 Qed.
 
+
 (** Comparisons *)
 
 Remark option_map_of_bool_inv: forall ov w,
@@ -762,3 +766,4 @@ Proof.
 Qed.
 
 End CMCONSTR.
+End VOTE.
