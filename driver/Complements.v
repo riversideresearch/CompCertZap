@@ -20,7 +20,6 @@ Require Import Compiler.
 Require Import Compopts.
 Require Import RTLagreement RTLcolorcheck RTLfault RTLtolerant.
 Require Import Novotes Novotesproof.
-Require Import Asmagreement.
 Require Import Builtins2.
 
 Local Open Scope linking_scope.
