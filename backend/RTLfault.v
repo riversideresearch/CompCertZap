@@ -884,8 +884,8 @@ Lemma builtin_sem_val_compat_mull vargs1 vargs2 vres1 :
 Proof. solve_v2t_builtin val_compat_mull'. Qed.
 
 (** Lifting [val_compat_subl] to the builtin semantics wrapper.
-    Requires [Archi.ptr64 = false] because [BI_subl] is only classified
-    as replicable when [negb Archi.ptr64 = true] (CLAS-07). *)
+    Requires [Archi.ptr64 = false] because [BI_subl] is only
+    classified as replicable when [negb Archi.ptr64 = true]. *)
 
 Lemma builtin_sem_val_compat_subl vargs1 vargs2 vres1 :
   Archi.ptr64 = false ->
@@ -900,41 +900,18 @@ Qed.
 
 (** ** Shift builtins: restricted val_compat lemmas *)
 
-(** IMPORTANT: The general val_compat monotonicity does NOT hold for shift
-    builtins (BI_i64_shl, BI_i64_shr, BI_i64_sar) when the shift amount
-    is faulted.  The issue is that [Int.ltu n2 Int64.iwordsize'] may
-    succeed on one side and fail on the other, producing [Vlong] on one side
-    and [Vundef] on the other.  Since [val_compat (Vlong _) Vundef] is NOT
-    a constructor of [val_compat], the proof does not close.
+(** The general val_compat monotonicity doesn't hold for shift
+    builtins (BI_i64_shl, BI_i64_shr, BI_i64_sar) when the shift
+    amount is faulted.  The issue is that [Int.ltu n2
+    Int64.iwordsize'] may succeed on one side and fail on the other,
+    producing [Vlong] on one side and [Vundef] on the other.  Since
+    [val_compat (Vlong _) Vundef] is NOT a constructor of
+    [val_compat], the proof does not close.
 
-    We provide restricted lemmas for the case where the shift amount is
-    identical on both sides (the [val_compat_shll_imm] pattern).  The general
-    case is left as a documented limitation -- the tolerant proof (Phase 3)
-    may only encounter shifts where the shift amount register is not the
-    faulted register, in which case the restricted lemma suffices. *)
+    We provide restricted lemmas for the case where the shift amount
+    is identical on both sides (the [val_compat_shll_imm] pattern). *)
 
-(** Demonstration that the general shift proof does not close.
-    The stuck goal is [val_compat (Vlong _) Vundef] when [Int.ltu]
-    succeeds on the left (non-faulted) and fails on the right (faulted).
-    We simply state that this lemma is NOT provable in general and abort. *)
-Lemma builtin_sem_val_compat_shl_UNPROVABLE vargs1 vargs2 vres1 :
-  Forall2 val_compat vargs1 vargs2 ->
-  standard_builtin_sem BI_i64_shl vargs1 = Some vres1 ->
-  exists vres2,
-    standard_builtin_sem BI_i64_shl vargs2 = Some vres2 /\
-    val_compat vres1 vres2.
-Proof.
-  (* Proof cannot be completed: when both args are Vlong/Vint with
-     val_compat, Int.ltu may diverge between the two sides, producing
-     Vlong on the left and Vundef on the right.  val_compat (Vlong _) Vundef
-     is not a constructor of val_compat. *)
-Abort.
-
-(** The general proof for shifts cannot be completed.
-    Instead, provide the restricted form where the shift amount
-    is known to be the same on both sides. *)
-
-Lemma builtin_sem_val_compat_shl_restricted v1 v1' n vres1 :
+Lemma builtin_sem_val_compat_shl v1 v1' n vres1 :
   val_compat v1 v1' ->
   standard_builtin_sem BI_i64_shl (v1 :: Vint n :: nil) = Some vres1 ->
   exists vres2,
@@ -947,7 +924,7 @@ Proof.
   apply val_compat_shll_imm; auto.
 Qed.
 
-Lemma builtin_sem_val_compat_shr_restricted v1 v1' n vres1 :
+Lemma builtin_sem_val_compat_shr v1 v1' n vres1 :
   val_compat v1 v1' ->
   standard_builtin_sem BI_i64_shr (v1 :: Vint n :: nil) = Some vres1 ->
   exists vres2,
@@ -960,7 +937,7 @@ Proof.
   apply val_compat_shrlu_imm; auto.
 Qed.
 
-Lemma builtin_sem_val_compat_sar_restricted v1 v1' n vres1 :
+Lemma builtin_sem_val_compat_sar v1 v1' n vres1 :
   val_compat v1 v1' ->
   standard_builtin_sem BI_i64_sar (v1 :: Vint n :: nil) = Some vres1 ->
   exists vres2,
