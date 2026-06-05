@@ -898,57 +898,21 @@ Proof.
   intros Harchi. solve_v2t_builtin val_compat_subl.
 Qed.
 
-(** ** Unified builtin_sem_val_compat dispatcher *)
+(** ** [builtin_sem_val_compat] for replicable builtins *)
 
-(** The unified dispatcher is gated by [builtin_can_replicate_bf bf = true].
-    For shift builtins, we prove the property using a different technique:
-    since [mkbuiltin_v2t] always returns [Some] for 2-argument inputs,
-    we know both sides produce [Some].  For the val_compat of the results,
-    we observe that shifts with faulted shift amounts can produce
-    incompatible results.  However, the proof for shifts CAN be completed
-    by case-splitting on all combinations of [val_compat] constructors
-    and all [Int.ltu] outcomes.  Let us attempt the full proof.
+(** The [builtin_sem_val_compat] lemma tries to prove result compatibility
+    from only pointwise [val_compat] of the builtin arguments.  That
+    assumption is not strong enough for the i64 shift builtins:
+    [val_compat] relates
+    any two [Vint] shift amounts, so the source amount can be in range
+    while the faulted amount is out of range.  The builtin can then
+    return [Vlong _] on the source side and [Vundef] on the faulted
+    side, and [val_compat (Vlong _) Vundef] is not provable.
 
-    Key insight: when both arguments are NOT of the expected type
-    (e.g., not Vlong/Vint), both sides produce Vundef, which IS val_compat.
-    The problematic case is ONLY when one side's ltu succeeds and the other
-    fails.  But since val_compat_undef says val_compat Vundef v (Vundef on
-    LEFT), we can handle the case where the LEFT side's ltu FAILS (producing
-    Vundef on the left) and the RIGHT side's ltu succeeds (producing Vlong
-    on the right): that gives val_compat Vundef (Vlong _) which IS provable.
-    The ONLY unprovable case is when the LEFT side succeeds and the RIGHT
-    fails: val_compat (Vlong _) Vundef.
-
-    In the fault model, the LEFT argument is the NON-faulted value and the
-    RIGHT is the faulted value.  For the faulted side (RIGHT), the shift
-    amount could be out-of-range (ltu fails, producing Vundef on RIGHT).
-    Meanwhile the non-faulted side (LEFT) has a valid shift amount (ltu
-    succeeds, producing Vlong on LEFT).  This gives val_compat (Vlong _) Vundef
-    which is NOT provable.
-
-    DECISION: For the unified dispatcher, we handle shift builtins by
-    observing that the property holds in ALL cases except when:
-    (1) both args are Vlong/Vint respectively, AND
-    (2) Int.ltu succeeds on LEFT but fails on RIGHT.
-    Since this case IS reachable under the fault model, we CANNOT prove
-    the general property for shifts.
-
-    SOLUTION: Exclude shift builtins from the unified dispatcher by
-    adding an additional hypothesis that the builtin is NOT a shift.
-    Actually, we observe that the classification already includes shifts.
-    The cleaner solution is to prove that the general property holds
-    for ALL v2t builtins (including shifts) with an asymmetric twist:
-    we use the fact that val_compat Vundef v holds for ALL v.
-
-    Let us try: maybe the proof DOES close if we handle each case.
-    For shifts with val_compat args:
-    - Both Vundef: both sides produce Vundef. val_compat Vundef Vundef. OK.
-    - Left Vundef: proj left gives Vundef. val_compat Vundef _. OK.
-    - Both Vlong/Vint: need to handle ltu divergence. Problem case.
-    - Left Vlong/Vint but right mismatched: both sides produce Vundef. OK.
-
-    The problem case is irreducible.  So we prove the property for
-    non-shift builtins only. For shifts, we have the restricted lemmas above. *)
+    [builtin_sem_val_compat] therefore handles only non-shift builtins.
+    In the current fault policy, the i64 shift builtins are also
+    classified as non-replicable, so the non-shift side condition follows
+    from the replication gate. *)
 
 Section BUILTIN_VAL_COMPAT.
 
@@ -996,23 +960,12 @@ Proof.
     eapply val_compat_mkbuiltin_n2t; eauto.
 Qed.
 
-(** The unified dispatcher: val_compat monotonicity for all builtins
-    classified as replicable by [builtin_can_replicate_bf].
-
-    Gate: [builtin_can_replicate_bf bf = true].
-    For [BI_replicate], the gate hypothesis is contradictory (reduces
-    to [false = true]).
-    For shift builtins ([BI_i64_shl], [BI_i64_shr], [BI_i64_sar]),
-    the gate IS true, so we must prove the property.  We handle this
-    by attempting the general proof.  Since the general val_compat
-    monotonicity does NOT hold for shifts (see analysis above), we
-    use a different approach: for shifts, the [mkbuiltin_v2t] wrapper
-    always returns [Some] for 2-argument inputs.  We can show that
-    both sides produce [Some], and then attempt val_compat on results.
-
-    ACTUALLY: After further analysis, the general proof for shifts
-    in the Forall2 val_compat formulation is NOT closeable.
-    Therefore we add an extra hypothesis excluding shifts. *)
+(** [builtin_sem_val_compat] lifts the per-builtin lemmas to
+    [builtin_function_sem].  It assumes both the replication gate and the
+    explicit non-shift side condition.  [BI_replicate] is ruled out by
+    the gate, and standard i64 shifts are ruled out by the side condition
+    (which is derivable from the current gate because they are
+    non-replicable). *)
 
 Lemma builtin_sem_val_compat (bf: builtin_function)
       (vargs1 vargs2: list val) (vres1: val) :

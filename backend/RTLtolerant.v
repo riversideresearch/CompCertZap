@@ -124,7 +124,11 @@ Section match_states.
 
   (** When a fault hasn't occurred, equality should hold between all
       registers. When a fault has occurred, it should hold between all
-      registers except those of the affected color. *)
+      registers except those of the affected color.
+
+      [RS_COMPAT] ensures data operations remain well-defined after a
+      fault occurs (else they could cause the faulty semantics to get
+      stuck). *)
   Inductive match_states : bool -> RTL.state -> fstate -> Prop :=
   | match_states_State :
     forall col stk1 stk2 f sp pc rs1 rs2 m1 m2 (b : bool) live
