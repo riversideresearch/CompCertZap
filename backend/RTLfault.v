@@ -898,58 +898,6 @@ Proof.
   intros Harchi. solve_v2t_builtin val_compat_subl.
 Qed.
 
-(** ** Shift builtins: restricted val_compat lemmas *)
-
-(** The general val_compat monotonicity doesn't hold for shift
-    builtins (BI_i64_shl, BI_i64_shr, BI_i64_sar) when the shift
-    amount is faulted.  The issue is that [Int.ltu n2
-    Int64.iwordsize'] may succeed on one side and fail on the other,
-    producing [Vlong] on one side and [Vundef] on the other.  Since
-    [val_compat (Vlong _) Vundef] is NOT a constructor of
-    [val_compat], the proof does not close.
-
-    We provide restricted lemmas for the case where the shift amount
-    is identical on both sides (the [val_compat_shll_imm] pattern). *)
-
-Lemma builtin_sem_val_compat_shl v1 v1' n vres1 :
-  val_compat v1 v1' ->
-  standard_builtin_sem BI_i64_shl (v1 :: Vint n :: nil) = Some vres1 ->
-  exists vres2,
-    standard_builtin_sem BI_i64_shl (v1' :: Vint n :: nil) = Some vres2 /\
-    val_compat vres1 vres2.
-Proof.
-  intros Hcompat Hsem.
-  simpl in *. inv Hsem.
-  eexists; split; [reflexivity|].
-  apply val_compat_shll_imm; auto.
-Qed.
-
-Lemma builtin_sem_val_compat_shr v1 v1' n vres1 :
-  val_compat v1 v1' ->
-  standard_builtin_sem BI_i64_shr (v1 :: Vint n :: nil) = Some vres1 ->
-  exists vres2,
-    standard_builtin_sem BI_i64_shr (v1' :: Vint n :: nil) = Some vres2 /\
-    val_compat vres1 vres2.
-Proof.
-  intros Hcompat Hsem.
-  simpl in *. inv Hsem.
-  eexists; split; [reflexivity|].
-  apply val_compat_shrlu_imm; auto.
-Qed.
-
-Lemma builtin_sem_val_compat_sar v1 v1' n vres1 :
-  val_compat v1 v1' ->
-  standard_builtin_sem BI_i64_sar (v1 :: Vint n :: nil) = Some vres1 ->
-  exists vres2,
-    standard_builtin_sem BI_i64_sar (v1' :: Vint n :: nil) = Some vres2 /\
-    val_compat vres1 vres2.
-Proof.
-  intros Hcompat Hsem.
-  simpl in *. inv Hsem.
-  eexists; split; [reflexivity|].
-  apply val_compat_shrl_imm; auto.
-Qed.
-
 (** ** Unified builtin_sem_val_compat dispatcher *)
 
 (** The unified dispatcher is gated by [builtin_can_replicate_bf bf = true].
