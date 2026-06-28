@@ -121,6 +121,12 @@ Proof.
   simpl. red. rewrite H1. constructor. auto.
 Qed.
 
+Locate val.
+Locate expr.
+Locate eval_expr.
+Locate ge.
+Locate Val.lessdef.
+
 Definition unary_constructor_sound (cstr: expr -> expr) (sem: val -> val) : Prop :=
   forall le a x,
   eval_expr ge sp e m le a x ->

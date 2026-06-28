@@ -28,6 +28,9 @@ Require Import SelectLong.
 Local Open Scope cminorsel_scope.
 Local Open Scope string_scope.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 (** * Correctness of the instruction selection functions for 64-bit operators *)
 
 Section CMCONSTR.
@@ -618,3 +621,5 @@ Proof.
 Qed.
 
 End CMCONSTR.
+
+End VOTE.

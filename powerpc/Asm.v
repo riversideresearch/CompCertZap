@@ -462,6 +462,9 @@ Fixpoint set_res (res: builtin_res preg) (v: val) (rs: regset) : regset :=
   | BR_splitlong hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
   end.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section RELSEM.
 
 (** Looking up instructions in a code sequence by position. *)
@@ -1300,3 +1303,5 @@ Definition data_preg (r: preg) : bool :=
   | CARRY => false
   | _ => true
   end.
+
+End VOTE.

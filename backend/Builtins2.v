@@ -372,7 +372,7 @@ Proof.
   unfold vote3, vote.
   destruct t; repeat destruct (Val.eq _ _); subst; simpl;
     destruct z; simpl; auto;
-    try destruct x; try destruct y; simpl; auto.  
+    try destruct x; try destruct y; simpl; auto; try congruence; try constructor; destruct (bool_dec _ _); simpl; try constructor.
 Qed.
 
 (** ******************)

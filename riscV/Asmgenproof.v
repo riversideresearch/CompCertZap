@@ -27,6 +27,9 @@ Proof.
   intros. eapply match_transform_partial_program; eauto.
 Qed.
 
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
+
 Section PRESERVATION.
 
 Variable prog: Mach.program.
@@ -1037,3 +1040,5 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+End VOTE.

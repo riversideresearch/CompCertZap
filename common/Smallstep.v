@@ -20,7 +20,7 @@
   the one-step transition relations that are used to specify
   operational semantics in small-step style. *)
 
-From Coq Require Import Relations Wellfounded.
+From Coq Require Import Relations Wellfounded List.
 Require Import Coqlib Events Globalenvs Integers.
 
 Set Implicit Arguments.
@@ -484,8 +484,8 @@ Proof.
   exists s'.
   eexists; repeat split.
   - eapply star_trans; eauto.
-  - unfold Eapp.
-    rewrite length_app.
+  - unfold Eapp. From Coq Require Import List.
+    rewrite app_length.
     unfold E0 in H0.
     destruct t; try congruence; simpl; lia.
   - apply traceinf_prefix_app; auto.

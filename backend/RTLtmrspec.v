@@ -3,6 +3,7 @@
 Require Import
   AST
   Builtins
+  SharedFaultPolicy
   FaultPolicy
   Coqlib
   Errors

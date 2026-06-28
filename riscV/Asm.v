@@ -28,7 +28,7 @@ Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Locations.
-Require Stacklayout.
+Require Import Stacklayout.
 Require Import Conventions.
 
 (** * Abstract syntax *)
@@ -495,6 +495,9 @@ Fixpoint set_res (res: builtin_res preg) (v: val) (rs: regset) : regset :=
   | BR_none => rs
   | BR_splitlong hi lo => set_res lo (Val.loword v) (set_res hi (Val.hiword v) rs)
   end.
+
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section RELSEM.
 
@@ -1195,3 +1198,5 @@ Definition data_preg (r: preg) : bool :=
   | FR _   => true
   | PC     => false
   end.
+
+End VOTE.

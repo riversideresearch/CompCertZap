@@ -1,6 +1,6 @@
 (** * Forward simulation proof for TMR pass. *)
 
-Require Import AST Builtins FaultPolicy Coqlib Errors Events Floats Globalenvs Integers Linking Maps Op Registers RTLgen RTLtyping Smallstep Values.
+Require Import AST Builtins SharedFaultPolicy Coqlib Errors Events Floats Globalenvs Integers Linking Maps Op Registers RTLgen RTLtyping Smallstep Values.
 Require Import CompCertZapUtils RTL.
 Require Import Errors.
 Require Import RTLreplicateSpecCommon.

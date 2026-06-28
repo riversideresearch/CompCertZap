@@ -158,14 +158,14 @@ COMMON=Errors.v AST.v Linking.v \
 # Back-end modules (in backend/, $(ARCH)/)
 
 BACKEND=\
-  Cminor.v Cminortyping.v Op.v CminorSel.v \
+  Cminor.v Cminortyping.v Op.v FaultPolicy.v CminorSel.v \
   SelectOp.v SelectDiv.v SplitLong.v SelectLong.v Selection.v \
   SelectOpproof.v SelectDivproof.v SplitLongproof.v \
   SelectLongproof.v Selectionproof.v \
   Registers.v RTL.v \
   RTLgen.v RTLgenspec.v RTLgenproof.v \
   RTLreplicateSpecCommon.v \
-  CompCertZapUtils.v FaultPolicy.v \
+  CompCertZapUtils.v SharedFaultPolicy.v \
   RTLdmr.v RTLdmrspec.v RTLdmrproof.v \
   RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
   RTLagreement.v RTLfault.v RTLtolerant.v \

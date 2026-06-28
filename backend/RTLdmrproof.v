@@ -544,8 +544,7 @@ Section PRESERVATION.
       + repeat constructor.
       + constructor; simpl.
         unfold Val.has_type in Hty.
-        destruct (rs # src); try contradiction; auto.
-        rewrite Hty; reflexivity.
+        destruct (rs # src); try contradiction; try rewrite Hty; try reflexivity; auto.
     - eapply exec_Ibuiltin; eauto.
       + repeat constructor.
       + constructor.

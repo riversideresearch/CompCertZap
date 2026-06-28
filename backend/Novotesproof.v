@@ -2,7 +2,7 @@ Require Import
   AST
   Behaviors
   Builtins
-  FaultPolicy
+  SharedFaultPolicy
   Builtins2
   Coqlib
   Errors

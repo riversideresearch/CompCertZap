@@ -2,6 +2,7 @@ Require Import
   AST
   Behaviors
   Builtins
+  SharedFaultPolicy
   FaultPolicy
   CompCertZapUtils
   Builtins2
@@ -390,7 +391,8 @@ Section TOLERANCE.
     - exists v; constructor; auto.
     - destruct b; simpl in *;
         repeat (destruct vargs; try congruence);
-        destruct v0; inv H0; eexists; eexists; constructor; reflexivity.
+        destruct v0; inv H0; eexists; eexists; simpl; simpl;
+        simpl; try repeat eexists; try rewrite H1; reflexivity.
   Qed.
 
   Lemma known_builtin_sem_Three_Two' b vargs m t v m' :
@@ -891,7 +893,9 @@ Section TOLERANCE.
       end).
     { destruct b as [sb|pb|rb]; simpl in Hcan; try discriminate.
       - destruct sb; simpl in Hcan; try discriminate; auto.
-      - destruct pb; simpl in Hcan; try discriminate; auto. }
+      - destruct pb; simpl in Hcan; try discriminate; auto.
+    }
+
     eapply builtin_sem_val_compat in Hbsem; eauto.
     destruct Hbsem as (vres2 & Hsem2 & Hvc).
     exists vres2. split; auto.

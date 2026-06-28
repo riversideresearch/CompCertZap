@@ -25,6 +25,7 @@
 Require Import
   AST
   Builtins
+  SharedFaultPolicy
   FaultPolicy
   Builtins2
   Coqlib

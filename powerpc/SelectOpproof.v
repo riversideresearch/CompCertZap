@@ -14,13 +14,15 @@
 
 Require Import Coqlib.
 Require Import AST Integers Floats.
-Require Import Values Memory Builtins Globalenvs.
+Require Import Values Memory Builtins Builtins2 Globalenvs.
 Require Import Cminor Op CminorSel.
 Require Import Compopts.
 Require Import SelectOp.
 
 Local Open Scope cminorsel_scope.
 Local Transparent Archi.ptr64.
+
+
 
 (** * Useful lemmas and tactics *)
 
@@ -68,6 +70,8 @@ Ltac TrivialExists :=
   end.
 
 (** * Correctness of the smart constructors *)
+Section VOTE.
+Context {VT: Builtins2.vote_type} {vsem: Builtins2.VoteSemantics VT}.
 
 Section CMCONSTR.
 
@@ -1069,3 +1073,4 @@ Proof.
 Qed.
 
 End CMCONSTR.
+End VOTE.

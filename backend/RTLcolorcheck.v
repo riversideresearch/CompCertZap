@@ -1,6 +1,7 @@
 Require Import
   AST
   Builtins
+  SharedFaultPolicy
   FaultPolicy
   CompCertZapUtils
   Errors

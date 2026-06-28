@@ -479,6 +479,62 @@ let int_to_int_reg = function
 
 (* Handling of compiler-inlined builtins *)
 
+(** Generic majority vote. *)
+(* 'a is neutral type. unit is the type used
+   when nothing is returned by a function *)
+let maj_vote
+    (mov : 'a -> 'a -> instruction)
+    (cmp : 'a -> 'a -> instruction)
+    (a : 'a) (b : 'a) (c : 'a) (res : 'a) : unit =
+        (* maj votes assumes there are 3 distinct registers *)
+        (* hence if any two regs are the same, then its an invalid vote *)
+    if a == b || a == c || b == c then begin
+        raise (Error "ill-formed majority vote")
+    end;
+    assert (a <> b && a <> c && b <> c);
+    let lbl_done = new_label () in
+    let lbl_fix = new_label () in
+    side_emit (Plabel lbl_fix);
+    if a = res || b = res then begin
+        side_emit (mov res c);
+        emit (cmp a b);
+        emit (Pbf (CRbit_2, lbl_fix));
+    end
+    else if c = res then begin
+        side_emit (mov res b);
+        emit (cmp a c);
+        emit (Pbf (CRbit_2, lbl_fix));
+    end
+    else begin
+        side_emit (mov res c);
+        emit (cmp a b);
+        emit (Pbf (CRbit_2, lbl_fix));
+        emit (mov res a);
+    end;
+    side_emit (Pb lbl_done);
+    emit (Plabel lbl_done)
+
+(** Majority vote integers. *)
+let maj_vote_int = maj_vote
+                        (fun x y -> Pmr (x, y))
+                        (fun x y -> Pcmpw (x, y))
+
+(** Majority vote long *)
+let maj_vote_long = maj_vote
+                        (fun x y -> Pmr (x, y))
+                        (fun x y -> Pcmpd (x, y))
+
+(** Majority vote Single *)
+let maj_vote_single = maj_vote
+                        (fun x y -> Pfmr (x, y))
+                        (fun x y -> Pfcmpu (x, y))
+                        
+(** Majority vote float *)
+let maj_vote_float = maj_vote
+                        (fun x y -> Pfmr (x, y))
+                        (fun x y -> Pfcmpu (x, y))
+
+
 let expand_builtin_inline name args res =
   (* Can use as temporaries: GPR0, FPR13 *)
   match name, args, res with
@@ -811,6 +867,53 @@ let expand_builtin_inline name args res =
       emit (Pbt (CRbit_2,lblsucc));
       emit (Pstw (GPR0,Cint _0,exp));
       emit (Plabel lblsucc)
+
+  (* Shadow move *)
+  | "__builtin_smove_int_green", [BA(IR a)], BR(IR res) ->
+          if a <> res then
+              emit (Pmr (res, a))
+  | "__builtin_smove_int_blue", [BA(IR a)], BR(IR res) ->
+          if a <> res then
+              emit (Pmr (res, a))
+  | "__builtin_smove_long_green", [BA(IR a)], BR(IR res) ->
+          if Archi.ppc64 then
+              if a <> res then
+                  emit (Pmr (res, a))
+          else
+              raise (Error "__builtin_smove_long is only supported for PPC64 targets")
+  | "__builtin_smove_long_blue", [BA(IR a)], BR(IR res) ->
+          if Archi.ppc64 then
+              if a <> res then
+                  emit (Pmr (res, a))
+          else
+              raise (Error "__builtin_smove_long is only supported for PPC64 targets")
+  | "__builtin_smove_single_green", [BA(FR a)], BR(FR res) ->
+          if a <> res then
+              emit (Pfmr (res, a))
+  | "__builtin_smove_single_blue", [BA(FR a)], BR(FR res) ->
+          if a <> res then
+              emit (Pfmr (res, a))
+  | "__builtin_smove_float_green", [BA(FR a)], BR(FR res) ->
+          if a <> res then
+              emit (Pfmr (res, a))
+  | "__builtin_smove_float_blue", [BA(FR a)], BR(FR res) ->
+          if a <> res then
+              emit (Pfmr (res, a))
+
+
+  (* Majority vote *)
+  | "__builtin_vote_int", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+          maj_vote_int a b c res
+  | "__builtin_vote_long", [BA(IR a); BA(IR b); BA(IR c)], BR(IR res) ->
+          if Archi.ppc64 then
+              maj_vote_long a b c res
+          else raise (Error "__builtin_vote_long is only supported for PPC32 targets")
+  | "__builtin_vote_single", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+          maj_vote_single a b c res
+  | "__builtin_vote_float", [BA(FR a); BA(FR b); BA(FR c)], BR(FR res) ->
+          maj_vote_float a b c res
+
+    
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))
