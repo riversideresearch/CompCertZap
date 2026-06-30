@@ -149,7 +149,3 @@ Workflow:
 
 - If a recursive tactic runs for more than 20 seconds or does not reduce goals, stop and treat it as a likely infinite loop.
 - Recursive Ltac must be progress-guarded (`progress (...)` or equivalent) before recursing.
-
-# Commits and status tracking
-
-After completing any task, update `status.md` with the current proof status and next steps and commit it along with the changes from the task. Do not accumulate a history of log entries in `status.md`; replace the old status with the new.
