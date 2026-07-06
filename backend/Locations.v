@@ -580,4 +580,5 @@ Module OrderedLoc <: OrderedType.
   Qed.
 
 End OrderedLoc.
+Module Locset := FSetAVL.Make(OrderedLoc).
 
