@@ -8,7 +8,7 @@
     development.  These are backend-specific utilities, but they are
     not part of the core RTL syntax or semantics. *)
 
-Require Import Coqlib AST Events Op Registers.
+Require Import Coqlib AST Events Op Registers Locations.
 
 (** * Builtin-argument and builtin-result helpers *)
 
@@ -103,6 +103,14 @@ Inductive in_builtin_arg {A : Type} (a : A) : builtin_arg A -> Prop :=
 | in_builtin_arg_addptr_a2 : forall a1 a2,
     in_builtin_arg a a2 ->
     in_builtin_arg a (BA_addptr a1 a2).
+
+Fixpoint in_builtin_largb (r : loc) (barg : builtin_arg loc) : bool :=
+  match barg with
+  | BA r' => Locset.MF.eqb r r'
+  | BA_splitlong hi lo => in_builtin_largb r hi || in_builtin_largb r lo
+  | BA_addptr a b => in_builtin_largb r a || in_builtin_largb r b
+  | _ => false
+  end.
 
 Fixpoint in_builtin_argb (r : reg) (barg : builtin_arg reg) : bool :=
   match barg with

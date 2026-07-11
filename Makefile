@@ -28,7 +28,7 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
-DIRS := lib common $(ARCHDIRS) backend cfrontend driver cparser
+DIRS := lib common $(ARCHDIRS) backend cfrontend driver cparser test_driver
 
 ifeq ($(CLIGHTGEN),true)
 DIRS += export
@@ -170,12 +170,13 @@ BACKEND=\
   RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
   RTLagreement.v RTLfault.v RTLtolerant.v \
   RTLcolor.v RTLcolorcheck.v \
+  LTLcolorcheck.v \
   Novotes.v Novotesproof.v \
   Tailcall.v Tailcallproof.v \
   Inlining.v Inliningspec.v Inliningproof.v \
   Renumber.v Renumberproof.v \
   RTLtyping.v \
-  Kildall.v Liveness.v ProofLiveness.v \
+  Kildall.v Liveness.v ProofLiveness.v LProofLiveness.v \
   ValueDomain.v ValueAOp.v ValueAnalysis.v \
   ConstpropOp.v Constprop.v ConstpropOpproof.v Constpropproof.v \
   CSEdomain.v CombineOp.v CSE.v CombineOpproof.v CSEproof.v \
@@ -273,6 +274,9 @@ extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMach
 
 .depend.extr: extraction/STAMP tools/modorder driver/Version.ml
 	$(MAKE) -f Makefile.extr depend
+
+rtlcheck: .depend.extr compcert.ini driver/Version.ml FORCE
+	$(MAKE) -f Makefile.extr rtlcheck
 
 ccomp: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr ccomp

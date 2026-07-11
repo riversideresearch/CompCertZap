@@ -1,16 +1,17 @@
 (* open AST *)
 open BinNums
-(* open Datatypes *)
+open Datatypes
 open FaultPolicy
-(* open SharedFaultPolicy *)
+open SharedFaultPolicy
 open Maps
 (* open Op *)
-open Registers
+(* open Registers *)
 open LTL
 open RTLcolor
 open Locations
 open Machregs
 open AST
+open Conventions1
 (* open Op *)
 
 
@@ -30,6 +31,9 @@ exception ColorError of string
 (* | Ljumptable of mreg * node list *)
 (* | Lreturn *)
 
+let rec int_of_nat = function
+    | Datatypes.O -> 0
+    | Datatypes.S n -> 1 + int_of_nat n
 
 
 type loc =
@@ -115,7 +119,7 @@ let string_of_uf_node n =
 
 
 (* Array of array of hashtables *)
-let init_cols (f : coq_function) (live : Locset.t List.t PMap.t) : (Locations.loc, uf_node) Hashtbl.t Array.t Array.t =
+let init_cols (f : coq_function) (live : (nat * Locset.t) List.t PMap.t) : (Locations.loc, uf_node) Hashtbl.t Array.t Array.t =
     let num_bb = List.length (PTree.elements f.fn_code) in
     Array.init num_bb (fun n ->
         let inl = List.length (PMap.get (convert_int n) live) in
@@ -154,6 +158,37 @@ let get (col : (Locations.loc, uf_node) Hashtbl.t) (r : Locations.loc) : uf_node
     | Some n -> n
     | None -> let n = make () in Hashtbl.add col r n; n
 
+let process_loc
+        (l : Locations.loc)
+        (col : (Locations.loc, uf_node) Hashtbl.t) : unit =
+    match l with
+    | Locations.R r ->
+        union (get col (Locations.R r)) white
+    | Locations.S (sl, ofs, ty) as s ->
+        union (get col s) white
+
+let process_args
+        (rp : 'a rpair List.t) : Locations.loc List.t =
+    List.fold_left (fun acc x ->
+        match x with
+        | One l -> l :: acc
+        | Twolong (l, l') -> l :: l' :: acc
+    ) [] rp
+
+let rec regs_of_builtin_res = function
+  | BR r -> [r]
+  | BR_none -> []
+  | BR_splitlong (hi, lo) ->
+     app (regs_of_builtin_res hi) (regs_of_builtin_res lo)
+
+let rec regs_of_builtin_arg = function
+
+  | BA r -> r :: []
+  | BA_splitlong (hi, lo) ->
+     app (regs_of_builtin_arg hi) (regs_of_builtin_arg lo)
+  | BA_addptr (a1, a2) -> app (regs_of_builtin_arg a1) (regs_of_builtin_arg a2)
+  | _ -> []
+
 
 
 let instr_constraints 
@@ -183,8 +218,8 @@ let instr_constraints
                 | Locations.R reg ->
                     if reg <> res then
                         union (get col r) (get succ_col r)
-                | Locations.S _ ->
-                        union (get col r) (get succ_col r)
+                | Locations.S _ -> ()
+                        (* union (get col r) (get succ_col r) *)
             ) live
         end
     | Lload (chunk, addr, args, dst) ->
@@ -196,56 +231,255 @@ let instr_constraints
             | Locations.R reg ->
                 if not (reg = dst || List.mem reg args) then
                     union (get col r) (get succ_col r)
-            | Locations.S _ ->
-                    union (get col r) (get succ_col r)
+            | Locations.S _ -> ()
+                    (* union (get col r) (get succ_col r) *)
 
         ) live
-    | _ -> ()
+    | Lgetstack (sl, ofs, ty, dst) ->
+        let succ_col = Array.get (Array.get cols pc) (index + 1) in
+        let s = Locations.S (sl, ofs, ty) in
+        union (get col s) white;
+        union (get succ_col (Locations.R dst)) white;
+        List.iter (fun r ->
+            match r with
+            | Locations.R reg -> ()
+            | Locations.S (sl, ofs, ty) as s' -> 
+                if not (s = s') then
+                    union (get col r) (get succ_col r)
+        ) live
+    | Lsetstack (src, sl, ofs, ty) ->
+        let succ_col = Array.get (Array.get cols pc) (index + 1) in
+        let s = Locations.S (sl, ofs, ty) in
+        union (get col (Locations.R src)) white;
+        List.iter (fun r ->
+            match r with
+            | Locations.R reg -> ()
+            | Locations.S (sl, ofs, ty) as s' ->
+                    if not (s = s') then
+                        union (get col r) (get succ_col r)
+        ) live
+    | Lstore (chunk, addr, args, src) ->
+        let succ_col = Array.get (Array.get cols pc) (index + 1) in
+        List.iter (fun arg -> union (get col (Locations.R arg)) white) args;
+        List.iter (fun r ->
+            match r with
+            | Locations.R reg ->
+                    if not (reg = src || List.mem reg args) then
+                        union (get col r) (get succ_col r)
+            | Locations.S _ ->
+                    union (get col r) (get succ_col r)
+        ) live
+    | Lcall (sg, ros) ->
+        let succ_col = Array.get (Array.get cols pc) (index + 1) in
+        let args = process_args (loc_arguments sg) in
+        (* let args = loc_arguments sg in *)
+        let res = loc_result sg in
+        List.iter (fun lp ->
+            process_loc lp col 
+        ) args;
+        (match res with
+        | One l ->
+            union (get succ_col (Locations.R l)) white
+        | Twolong (l, l') ->
+            union (get succ_col (Locations.R l)) white;
+            union (get succ_col (Locations.R l')) white);
+        (match ros with
+        | Coq_inl r -> union (get col (Locations.R r)) white
+        | Coq_inr _ -> ());
+        List.iter (fun r ->
+            match r with
+            | Locations.R reg ->
+                if not ( match res with
+                        | One l -> reg = l
+                        | Twolong (l, l') -> (reg = l) || (reg = l')
+                    || List.mem (Locations.R reg) args ||
+                        match ros with
+                        | Coq_inl reg' -> reg = reg'
+                        | Coq_inr _ -> false) then
+                    union (get col r) (get succ_col r)
+            | Locations.S (sl, ofs, ty) as s -> if not (List.mem s args) then
+                    union (get col r) (get succ_col r)
+        ) live
+    | Ltailcall (sg, ros) ->
+        let args = process_args (loc_arguments sg) in
+        List.iter (fun arg -> union (get col arg) white) args;
+        (match ros with
+        | Coq_inl r -> union (get col (Locations.R r)) white
+        | Coq_inr _ -> ())
+    | Lbuiltin (ef, args, res) ->
+        let succ_col = Array.get (Array.get cols pc) (index + 1) in
+        if is_green_smove_builtinb ef then
+            match args, res with
+            | [BA arg], BR res ->
+                union (get col arg) white;
+                union (get succ_col arg) pink;
+                union (get succ_col (Locations.R res)) green;
+                List.iter (fun r ->
+                    if not (r = arg || r = (Locations.R res)) then
+                        union (get col r) (get succ_col r)
+                ) live
+            | _ -> ()
+        else if is_blue_smove_builtinb ef then
+            match args, res with
+            | [BA arg], BR res ->
+                union (get col arg) pink;
+                union (get succ_col arg) red;
+                union (get succ_col (Locations.R res)) blue;
+                List.iter (fun r ->
+                    if not (r = arg || r = (Locations.R res)) then
+                        union (get col r) (get succ_col r)
+                ) live
+            | _ -> ()
+        else if is_vote_builtinb ef then
+            match args, res with
+            | [BA arg1; BA arg2; BA arg3], BR res ->
+                union (get col arg1) red;
+                union (get col arg2) green;
+                union (get col arg3) blue;
+                union (get succ_col (Locations.R res)) white;
+                List.iter (fun r ->
+                    if r <> (Locations.R res) then
+                        union (get col r) (get succ_col r)
+                ) live
+            | _ -> ()
+        else if builtin_can_replicate ef then
+            match res with
+            | BR res' ->
+                let res_color = get succ_col (Locations.R res') in
+                let arg_regs = List.concat_map regs_of_builtin_arg args in
+                List.iter (fun arg -> union (get col arg) res_color) arg_regs;
+                List.iter (fun r ->
+                    if r <> (Locations.R res') then
+                        union (get col r) (get succ_col r)
+                ) live
+            | _ -> 
+                let arg_regs = List.concat_map regs_of_builtin_arg args in
+                let res_regs = regs_of_builtin_res res in
+                List.iter (fun arg -> union (get col arg) white) arg_regs;
+                List.iter (fun res -> union (get succ_col (Locations.R res)) white) res_regs;
+                List.iter (fun r ->
+                    match r with
+                    | Locations.R reg ->
+                            if not (List.mem r arg_regs || List.mem reg res_regs) then
+                                union (get col r) (get succ_col r)
+                    | Locations.S (sl, ofs, ty) as s -> if not (List.mem s arg_regs) then
+                                union (get col r) (get succ_col r)
+                ) live
+        else
+            let arg_regs = List.concat_map regs_of_builtin_arg args in
+            let res_regs = regs_of_builtin_res res in
+            List.iter (fun arg ->
+                union (get col arg) white
+            ) arg_regs;
+            List.iter (fun res ->
+                union (get succ_col (Locations.R res)) white
+            ) res_regs;
+            List.iter (fun r ->
+                match r with
+                | Locations.R reg ->
+                        if not (List.mem r arg_regs || List.mem reg res_regs) then
+                            union (get col r) (get succ_col r)
+                | Locations.S (sl, ofs, ty) as s -> if not (List.mem s arg_regs) then
+                            union (get col r) (get succ_col r)
+            ) live
 
-    (* | Lload (chunk, addr, args, dst) -> *)
-    (*     let succ_col = Array.get (Array.get cols (convert_positive pc)) (index + 1) in *)
-    (* | Lgetstack (sl, ofs, ty, dst) -> *)
-    (* | Lsetstack (src, sl, ofs, ty) -> *)
-    (* | Lstore (chunk, addr, args, src) -> *)
-    (* | Lcall (sg, ros) -> *)
-    (* | Ltailcall (sg, ros) -> *)
-    (* | Lbuiltin (ef, args, res) -> *)
-    (* | Lbranch (s) -> *)
-    (* | Lcond (cond, args, s1, s2) -> *)
-    (* | Ljumptable (arg, tbl) -> *)
-    (* | Lreturn *)
+    | Lcond (cond, args, s1, s2) ->
+        let ifso_col = Array.get (Array.get cols (convert_positive s1)) 0 in
+        let ifnot_col = Array.get (Array.get cols (convert_positive s2)) 0 in
+        List.iter (fun arg -> union (get col (Locations.R arg)) white) args;
+        List.iter (fun r ->
+            match r with
+            | Locations.R reg ->
+                    if not (List.mem reg args) then begin
+                        union (get col r) (get ifso_col r);
+                        union (get col r) (get ifnot_col r)
+                    end
+            | Locations.S _ ->
+                        union (get col r) (get ifso_col r);
+                        union (get col r) (get ifnot_col r)
+        ) live
+    | Ljumptable (arg, tbl) ->
+        union (get col (Locations.R arg)) white;
+        List.iter (fun r ->
+            match r with
+            | Locations.R reg ->
+                    if reg <> arg then
+                        List.iter (fun succ ->
+                            let succ_col = Array.get (Array.get cols (convert_positive succ)) 0 in
+                            union (get col r) (get succ_col r)
+                        ) tbl
+            | Locations.S _ -> ()
+        ) live
+    | Lbranch (node) -> ()
+    | Lreturn -> ()
 
 
 
 let transf_instr_constraints 
-        (bb : instruction List.t) (llive : Locset.t List.t PMap.t)
+        (bb : instruction List.t) (llive : (nat * Locset.t) List.t PMap.t)
         (cols : (Locations.loc, uf_node) Hashtbl.t Array.t Array.t) (pc : positive) : unit =
     List.iteri (fun i instr ->
         let pc' = convert_positive pc in
-        instr_constraints instr (Locset.elements (List.nth (PMap.get pc llive) i)) cols pc' i
+        instr_constraints instr (Locset.elements (snd (List.nth (PMap.get pc llive) i))) cols pc' i
     ) bb
 
 
         
 
 let function_constraints 
-        (f : coq_function) (llive : Locset.t List.t PMap.t) 
+        (f : coq_function) (llive : (nat * Locset.t) List.t PMap.t) 
         (cols : (Locations.loc, uf_node) Hashtbl.t Array.t Array.t) : unit =
+    (* params *)
+
+    let params = process_args (loc_arguments f.fn_sig) in
+    List.iter (fun param ->
+        union (get (Array.get (Array.get cols (convert_positive f.fn_entrypoint)) 0) param) white
+    ) params;
+
+    (* code *)
     PTree.fold (fun acc n bb ->
         (* let n' = convert_positive n in *)
         transf_instr_constraints bb llive cols n
     ) f.fn_code ()
 
+let color_of_uf_node n =
+  if eq n red then Red
+  else if eq n green then Green
+  else if eq n blue then Blue
+  else if eq n white then White
+
+  else if eq n pink then Pink
+  (* Unconstrained classes default to Red in the exported coloring. *)
+  else Red
 
 
-let infer_coloring (f : coq_function) (live : Locset.t List.t PMap.t)
-    : (node -> reg -> color) option =
 
-        (* let start_time = Unix.gettimeofday () in *)
+let infer_coloring (f : coq_function) (live : (nat * Locset.t) List.t PMap.t)
+    : (node -> nat -> Locations.loc -> color) option =
+
+        let start_time = Unix.gettimeofday () in
         (* let cols = init_cols f in *)
 
         let cols = init_cols f live in
         function_constraints f live cols;
-        let _ = print_pc f in
+        (* let _ = print_pc f in *)
+        let end_time = Unix.gettimeofday () in
+        print_endline @@ "  Time = " ^ string_of_float (end_time -. start_time) ^ " s";
 
-        Some (fun n r -> Red)
+        Some (fun p i -> let px = convert_positive p in
+                        let ix = int_of_nat i in
+                            
+                        let b_cols = Array.length (Array.get cols px) in
+                        (* Printf.printf "index val: %d\n" ix; *)
+                        let i_col = Array.get (Array.get cols px) (ix - 1) in 
+                        if (ix - 1) < b_cols then
+                            fun r -> match Hashtbl.find_opt i_col r with
+                                    | Some n -> 
+                                            (* Printf.printf "pc %d; instr index: %d\n" (px + 1) (ix - 1); *)
+                                            (* Printf.printf "uf_node returned: %s\n" (string_of_uf_node n); *)
+                                            color_of_uf_node n
+
+
+                                    | None -> Red
+                        else
+                            fun r -> Red)

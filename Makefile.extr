@@ -110,12 +110,29 @@ LEXERS=cparser/Lexer.mll lib/Tokenize.mll \
 LIBS=str.cmxa unix.cmxa $(MENHIR_LIBS)
 LIBS_BYTE=$(patsubst %.cmxa,%.cma,$(patsubst %.cmx,%.cmo,$(LIBS)))
 
-EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte vcomp vcomp.byte
+EXECUTABLES=ccomp ccomp.byte cchecklink cchecklink.byte clightgen clightgen.byte vcomp vcomp.byte rtlcheck rtlcheck.byte
 GENERATED=$(PARSERS:.mly=.mli) $(PARSERS:.mly=.ml) $(LEXERS:.mll=.ml) cparser/pre_parser_messages.ml
 
 # Beginning of part that assumes .depend.extr already exists
 
 ifeq ($(wildcard .depend.extr),.depend.extr)
+
+RTLCHECK_OBJS:=$(shell $(MODORDER) driver/RTLDriver.cmx)
+
+ifeq ($(OCAML_NATIVE_COMP),true)
+
+rtlcheck: $(RTLCHECK_OBJS)
+	@echo "Linking $@"
+	@$(OCAMLOPT) -o $@ $(LIBS) $(LINK_OPT) $+
+else
+rtlcheck: rtlcheck.byte
+	@echo "Copying to $@"
+	@$(COPY) $+ $@
+endif
+
+rtlcheck.byte: $(RTLCHECK_OBJS:.cmx=.cmo)
+	@echo "Linking $@"
+	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 
 CCOMP_OBJS:=$(shell $(MODORDER) driver/Driver.cmx)
 

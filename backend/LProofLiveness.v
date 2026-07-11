@@ -14,19 +14,7 @@ Require Import Locations.
 
 Notation loc_live := Locset.add.
 Notation loc_dead := Locset.remove.
-Print slot.
-Print mreg.
-Print loc.
-Locate loc.
-Print slot.
-Locate slot.
-Check Z.
-Print Z.
-Locate mreg.
-Print register_names.
-Print reg.
-Print OrderedLoc.
-Check ident.
+
 (*
  Add the optional location to the live set, if it exists
  *)
@@ -36,10 +24,6 @@ Definition loc_option_live (or: option loc) (lv: Locset.t) :=
   | Some r => loc_live r lv
   end.
 
-(*Print sum.*)
-(*Check (mreg + ident)%type.*)
-(*Check (mreg + ident).*)
-Print loc.
 Definition loc_sum_live (ros : mreg + ident) (lv: Locset.t) :=
   match ros with
   | inl r => loc_live (R r) lv
@@ -64,9 +48,6 @@ Fixpoint loc_list_live (llv : list loc) (lv : Locset.t) {struct llv} : Locset.t 
   | h :: t => loc_list_live t (loc_live h lv)
   end.
 
-Check params_of_builtin_args.
-Print params_of_builtin_args.
-Print loc.
 
 Definition transf_in (ins : instruction) (after: Locset.t) : Locset.t :=
   match ins with
@@ -95,15 +76,18 @@ Fixpoint transf_instr (instr : list instruction) (after: Locset.t) : Locset.t :=
   | h :: t => transf_in h (transf_instr t after)
   end.
 
-Definition transf_instr_sets (instrs : list instruction) (after : Locset.t) : list Locset.t :=
-  snd
-    (fold_right
-       (fun instr acc =>
-          let '(current_after, sets) := acc in
-          let before := transf_in instr current_after in
-          (before, before :: sets))
-       (after, nil)
-       instrs).
+Definition transf_instr_sets (instrs : list instruction) (after : Locset.t) : list (nat * Locset.t) :=
+  let start := length instrs in
+  snd (
+    snd
+      (fold_right
+         (fun instr acc =>
+            let '(current_after, (index, sets)) := acc in
+            let before := transf_in instr current_after in
+            (before, (Nat.pred index, (index, before) :: sets))
+         )
+         (after, (start, nil))
+         instrs)).
 
 
 Definition transfer
@@ -145,7 +129,7 @@ Definition block_live_after
     (PTree.elements f.(fn_code))
     (PMap.init Locset.empty).
 
-Definition block_inst_llafter (f : function) (live_after : PMap.t Locset.t) : PMap.t (list Locset.t) :=
+Definition block_inst_llafter (f : function) (live_after : PMap.t Locset.t) : PMap.t (list (nat * Locset.t)) :=
   fold_left
     (fun acc node =>
       match node with
