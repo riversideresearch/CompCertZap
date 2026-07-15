@@ -170,7 +170,7 @@ BACKEND=\
   RTLtmr.v RTLtmrspec.v RTLtmrproof.v Builtins2.v \
   RTLagreement.v RTLfault.v RTLtolerant.v \
   RTLcolor.v RTLcolorcheck.v \
-  LTLcolorcheck.v \
+  LTLcolor.v LTLcolorcheck.v \
   Novotes.v Novotesproof.v \
   Tailcall.v Tailcallproof.v \
   Inlining.v Inliningspec.v Inliningproof.v \

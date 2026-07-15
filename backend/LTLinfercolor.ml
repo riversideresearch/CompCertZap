@@ -7,7 +7,7 @@ open Maps
 (* open Op *)
 (* open Registers *)
 open LTL
-open RTLcolor
+open LTLcolor
 open Locations
 open Machregs
 open AST
