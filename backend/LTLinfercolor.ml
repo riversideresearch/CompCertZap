@@ -145,10 +145,10 @@ let print_instr (instr : instruction) =
 let print_pc (f : coq_function) : unit =
     List.iter
         (fun (pc, bb) ->
-            Printf.printf "Instrucion label: %d\n" (int_of_positive pc)
-            (* List.iter  *)
-                (* (fun ( instr) ->  *)
-                (*     print_instr instr) bb *)
+            Printf.printf "Instrucion label: %d\n" (int_of_positive pc);
+            List.iter 
+                (fun ( instr) -> 
+                    print_instr instr) bb
             )
         (PTree.elements f.fn_code)
 
@@ -218,8 +218,8 @@ let instr_constraints
                 | Locations.R reg ->
                     if reg <> res then
                         union (get col r) (get succ_col r)
-                | Locations.S _ -> ()
-                        (* union (get col r) (get succ_col r) *)
+                | Locations.S _ ->
+                        union (get col r) (get succ_col r)
             ) live
         end
     | Lload (chunk, addr, args, dst) ->
@@ -231,18 +231,27 @@ let instr_constraints
             | Locations.R reg ->
                 if not (reg = dst || List.mem reg args) then
                     union (get col r) (get succ_col r)
-            | Locations.S _ -> ()
-                    (* union (get col r) (get succ_col r) *)
+            | Locations.S _ ->
+                    union (get col r) (get succ_col r)
 
         ) live
     | Lgetstack (sl, ofs, ty, dst) ->
         let succ_col = Array.get (Array.get cols pc) (index + 1) in
         let s = Locations.S (sl, ofs, ty) in
-        union (get col s) white;
-        union (get succ_col (Locations.R dst)) white;
+        (if sl = Locations.Local then
+            union (get succ_col (Locations.R dst)) (get col (Locations.S (sl, ofs, ty)))
+        else if sl = Locations.Incoming then 
+            union (get succ_col (Locations.R dst)) white
+        else
+            ()
+        );
+        (* union (get col s) white; *)
+        (* union (get succ_col (Locations.R dst)) white; *)
         List.iter (fun r ->
             match r with
-            | Locations.R reg -> ()
+            | Locations.R reg -> 
+                if not (Locations.R reg = Locations.R dst) then
+                    union (get col r) (get succ_col r)
             | Locations.S (sl, ofs, ty) as s' -> 
                 if not (s = s') then
                     union (get col r) (get succ_col r)
@@ -250,16 +259,51 @@ let instr_constraints
     | Lsetstack (src, sl, ofs, ty) ->
         let succ_col = Array.get (Array.get cols pc) (index + 1) in
         let s = Locations.S (sl, ofs, ty) in
-        union (get col (Locations.R src)) white;
-        List.iter (fun r ->
+
+
+        (*
+         * If local, we set the destination location color to the color
+         * of the register. Local slots do not need to be assigned colors;
+         * they inherit the colors from the registers they're copying from,
+         * because local slots are used by register allocation for
+         * pseudo-registers that cannot be assigned a hardware register.
+         *
+         * Incoming slot on the other hand, will retain the colors they get from the caller function
+         * and are subject to change accordingly with respect to the color constraints and at 
+         * the end of the function we set its color to white, which will just indicate the possibility
+         * this location is replicated. -> these are assigned white from the params and 
+         * eventually the values will end up in a local slot.
+         *
+         * Outgoing slots will just get a color of white.
+         *)
+        (if sl = Locations.Local then
+            union (get succ_col (Locations.S (sl, ofs, ty))) (get col (Locations.R src))
+        else if sl = Locations.Outgoing then
+            union (get succ_col (Locations.S (sl, ofs, ty))) white
+        else
+            ()
+        );
+
+        (if not (List.mem (Locations.R src) live) then
+            union (get col (Locations.R src)) (get succ_col (Locations.R src))
+        else
+            ()
+        );
+        (* we set the src location to white *)
+        (* union (get col (Locations.R src)) white; *)
+        (* so now do we propagate to the succ -> yes *)
+        List.iter (fun r -> 
             match r with
-            | Locations.R reg -> ()
+            | Locations.R reg -> 
+                    if not (Locations.R reg = Locations.R src) then
+                        union (get col r) (get succ_col r)
             | Locations.S (sl, ofs, ty) as s' ->
                     if not (s = s') then
                         union (get col r) (get succ_col r)
         ) live
     | Lstore (chunk, addr, args, src) ->
         let succ_col = Array.get (Array.get cols pc) (index + 1) in
+        union (get col (Locations.R src)) white;
         List.iter (fun arg -> union (get col (Locations.R arg)) white) args;
         List.iter (fun r ->
             match r with
@@ -297,7 +341,9 @@ let instr_constraints
                         | Coq_inl reg' -> reg = reg'
                         | Coq_inr _ -> false) then
                     union (get col r) (get succ_col r)
-            | Locations.S (sl, ofs, ty) as s -> if not (List.mem s args) then
+            | Locations.S (sl, ofs, ty) as s -> 
+                    if not (List.mem s args) then
+                    (* () *)
                     union (get col r) (get succ_col r)
         ) live
     | Ltailcall (sg, ros) ->
@@ -410,7 +456,11 @@ let instr_constraints
                         ) tbl
             | Locations.S _ -> ()
         ) live
-    | Lbranch (node) -> ()
+    | Lbranch (node) -> 
+            let succ_col = Array.get (Array.get cols (convert_positive node)) 0 in
+            List.iter (fun r ->
+                union (get col r) (get succ_col r)
+            ) live
     | Lreturn -> ()
 
 
@@ -480,6 +530,6 @@ let infer_coloring (f : coq_function) (live : (nat * Locset.t) List.t PMap.t)
                                             color_of_uf_node n
 
 
-                                    | None -> Red
+                                    | None -> Green
                         else
-                            fun r -> Red)
+                            fun r -> Pink)

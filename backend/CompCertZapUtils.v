@@ -125,7 +125,7 @@ Lemma in_builtin_argb_spec (r : reg) (barg : builtin_arg reg) :
 Proof.
   induction barg; simpl; try solve [right; intro HC; inv HC].
   - destruct (Pos.eqb_spec r x); subst.
-    + left; constructor.
+    + left. constructor.
     + right; intro HC; inv HC; congruence.
   - destruct IHbarg1; simpl.
     + left; constructor; auto.
@@ -142,6 +142,32 @@ Qed.
 Lemma in_builtin_argb_sound (r : reg) (barg : builtin_arg reg) :
   in_builtin_argb r barg = true -> in_builtin_arg r barg.
 Proof. destruct (in_builtin_argb_spec r barg); congruence. Qed.
+
+
+Lemma in_builtin_largb_spec (r : loc) (barg : builtin_arg loc) :
+  reflect (in_builtin_arg r barg) (in_builtin_largb r barg).
+Proof.
+  induction barg; simpl; try solve [right; intro HC; inv HC].
+  unfold Locset.MF.eqb.
+  - destruct (Locset.MF.eq_dec r x).
+    + left. rewrite e. constructor.
+    + right. unfold not in n. intro HC. inv HC. auto.
+  - destruct IHbarg1; simpl.
+    + left. constructor. auto.
+    + destruct IHbarg2; simpl.
+      * left; solve [constructor; auto].
+      * right; intro HC; inv HC; contradiction.
+  - destruct IHbarg1; simpl.
+    + left; constructor; auto.
+    + destruct IHbarg2; simpl.
+      * left; solve [constructor; auto].
+      * right; intro HC; inv HC; contradiction.
+Qed.
+
+
+Lemma in_builtin_largb_sound (r : loc) (barg : builtin_arg loc) :
+  in_builtin_largb r barg = true -> in_builtin_arg r barg.
+Proof. destruct (in_builtin_largb_spec r barg); congruence. Qed.
 
 Lemma in_regs_of_builtin_arg_in_builtin_arg r barg :
   In r (regs_of_builtin_arg barg) <-> in_builtin_arg r barg.

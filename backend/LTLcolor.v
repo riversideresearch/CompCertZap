@@ -105,6 +105,30 @@ Section lwc.
         Locset.For_all (fun r => or (Locset.X'.eq r (R res))
                       (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r)) (snd plive) ->
         wc_instruction pc plive (Lop op args res)
+    | wc_Lgetstack : forall sl ofs ty dst,
+        (match sl with
+         | Local => 
+              col pc (Nat.succ (fst plive)) (R dst) = col pc (fst plive) (S sl ofs ty)
+         | Incoming => 
+             col pc (Nat.succ (fst plive)) (R dst) = White 
+         | _ => True
+         end) ->
+        Locset.For_all (fun r => or (Locset.X'.eq r (S sl ofs ty)) (or (Locset.X'.eq r (R dst))
+            (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
+        wc_instruction pc plive (Lgetstack sl ofs ty dst)
+    | wc_Lsetstack : forall src sl ofs ty,
+        (match sl with
+         | Local =>
+             col pc (Nat.succ (fst plive)) (S sl ofs ty) = col pc (fst plive) (R src)
+         | Outgoing =>
+             col pc (Nat.succ (fst plive)) (S sl ofs ty) = White
+         | _ => True
+         end) ->
+         ( ~ Locset.In (R src) (snd plive) -> col pc (fst plive) (R src) = col pc (Nat.succ (fst plive)) (R src)) ->
+        Locset.For_all (fun r => or (Locset.X'.eq r (S sl ofs ty)) (or (Locset.X'.eq r (R src))
+            (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
+        wc_instruction pc plive (Lsetstack src sl ofs ty)
+
     | wc_Lload : forall chunk addr args dst,
         Forall (fun arg => col pc (fst plive) (R arg) = White) args ->
         col pc (Nat.succ (fst plive)) (R dst) = White ->
@@ -183,9 +207,60 @@ Section lwc.
           (or (forall x, res = BR x -> Locset.X'.eq r (R x))
             (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r)
           )) (snd plive) ->
-        wc_instruction pc plive (Lbuiltin ef args res).
+        wc_instruction pc plive (Lbuiltin ef args res)
+    | wc_Lbranch : forall s,
+        wc_instruction pc plive (Lbranch s)
+    | wc_Lcond : forall cond args s1 s2, 
+        Forall (fun arg => col pc (fst plive) (R arg) = White) args ->
+        Locset.For_all (fun r => or (Locset.In r (proc_args_loc args))
+        ((col pc (fst plive) r = col s1 1 r) /\ (col pc (fst plive) r = col s2 1 r))) (snd plive) ->
+        wc_instruction pc plive (Lcond cond args s1 s2)
+    | wc_Ljumptable : forall arg tbl,
+        col pc (fst plive) (R arg) = White ->
+        Locset.For_all (fun r => or (Locset.X'.eq r (R arg))
+          (Forall (fun succ => col pc (fst plive) r = col succ 1 r) tbl)) (snd plive) ->
+          wc_instruction pc plive (Ljumptable arg tbl)
+    | wc_Lreturn :
+        wc_instruction pc plive (Lreturn).
 
+  Definition wc_code (c : code) : Prop :=
+    forall pc bb ilives ilive, 
+    c ! pc = Some bb ->
+    PMap.get pc lalive = ilives ->
+    Forall (fun el => 
+      List.nth_error ilives (fst el) = Some ilive ->
+      wc_instruction pc ilive (snd el) 
+    )
+    (snd 
+    (fold_left
+    (fun acc el =>
+        let '(index, sets) := acc in
+        (Nat.succ index, (index, el) :: sets)
+    )
+    bb
+    (O, nil)
+    )).
 
 
 
 End lwc.
+
+Inductive wc_function col : function -> Prop :=
+  lwc_function : forall f live alive lalive params,
+    LProofLiveness.analyze f = Some live ->
+    block_live_after f live = alive ->
+    block_inst_llafter f alive = lalive ->
+    process_rargs (loc_arguments f.(fn_sig)) = params ->
+    Locset.For_all (fun param => col f.(fn_entrypoint) 1%nat param = White) params ->
+    wc_code lalive col f.(fn_code) ->
+    wc_function col f.
+
+Definition lwc_fundef (fd :fundef) : Prop :=
+  match fd with
+  | Internal f => exists col, wc_function col f
+  | External _ => True
+  end.
+
+Definition wc_program (p : program) : Prop :=
+  forall i fd, In (i, Gfun fd) (prog_defs p) -> lwc_fundef fd.
+    
