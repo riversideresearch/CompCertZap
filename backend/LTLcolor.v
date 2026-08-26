@@ -128,7 +128,26 @@ Section lwc.
         Locset.For_all (fun r => or (Locset.X'.eq r (S sl ofs ty)) (or (Locset.X'.eq r (R src))
             (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
         wc_instruction pc plive (Lsetstack src sl ofs ty)
-
+    | wc_Lsmove_green : forall colr src dst,
+        col pc (fst plive) src = White ->
+        col pc (Nat.succ (fst plive)) src = Pink ->
+        col pc (Nat.succ (fst plive)) dst = Green ->
+        Locset.For_all (fun r => or (Locset.X'.eq r src) (or (Locset.X'.eq r dst)
+              (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
+              wc_instruction pc plive (Lsmove colr src dst)
+    | wc_Lsmove_blue : forall colr src dst,
+        col pc (fst plive) src = Pink ->
+        col pc (Nat.succ (fst plive)) src = Red ->
+        col pc (Nat.succ (fst plive)) dst = Blue ->
+        Locset.For_all (fun r => or (Locset.X'.eq r src) (or (Locset.X'.eq r dst)
+              (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
+              wc_instruction pc plive (Lsmove colr src dst)
+    | wc_Lsmove_white : forall colr src dst,
+        col pc (fst plive) src = White ->
+        col pc (Nat.succ (fst plive)) dst = White ->
+        Locset.For_all (fun r => or (Locset.X'.eq r src) (or (Locset.X'.eq r dst)
+              (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
+              wc_instruction pc plive (Lsmove colr src dst)
     | wc_Lload : forall chunk addr args dst,
         Forall (fun arg => col pc (fst plive) (R arg) = White) args ->
         col pc (Nat.succ (fst plive)) (R dst) = White ->
@@ -171,9 +190,6 @@ Section lwc.
           col pc (fst plive) arg = White /\
           col pc (Nat.succ (fst plive)) arg = Pink /\
           col pc (Nat.succ (fst plive)) (R res) = Green) ->
-        (*col pc (fst plive) arg = White ->*)
-        (*col pc (Nat.succ (fst plive)) arg = Pink ->*)
-        (*col pc (Nat.succ (fst plive)) (R res) = Green ->*)
         Locset.For_all (fun r => or (Locset.X'.eq r arg) (or (Locset.X'.eq r (R res))
                           (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
         wc_instruction pc plive (Lbuiltin ef (BA arg :: nil) (BR res))
@@ -186,9 +202,6 @@ Section lwc.
           col pc (Nat.succ (fst plive)) arg = Red /\
           col pc (Nat.succ (fst plive)) (R res) = Blue) ->
 
-        (*col pc (fst plive) arg = Pink ->*)
-        (*col pc (Nat.succ (fst plive)) arg = Red ->*)
-        (*col pc (Nat.succ (fst plive)) (R res) = Blue ->*)
         Locset.For_all (fun r => or (Locset.X'.eq r arg) (or (Locset.X'.eq r (R res))
                           (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
         wc_instruction pc plive (Lbuiltin ef (BA arg :: nil) (BR res))
@@ -210,8 +223,6 @@ Section lwc.
           col pc (Nat.succ (fst plive)) r)) (snd plive) ->
         wc_instruction pc plive (Lbuiltin ef args (BR res))
     | wc_Lbuiltin : forall ef args res,
-        ~ is_green_smove_builtin ef ->
-        ~ is_blue_smove_builtin ef ->
         ~ is_vote_builtin ef ->
         builtin_can_replicate ef = false ->
         Forall (builtin_arg_forall (fun r => col pc (fst plive) r = White)) args ->

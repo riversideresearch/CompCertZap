@@ -25,17 +25,13 @@ Definition is_basicb (c : color) : bool :=
   | _ => false
   end.
 
-(*Lemma is_basicb_spec (c : color) :*)
-(*  reflect (is_basic c) (is_basicb c).*)
-(*Proof. destruct c; try (left; constructor); right; intro HC; inv HC. Qed.*)
-(**)
+Lemma is_basicb_spec (c : color) :
+  reflect (is_basic c) (is_basicb c).
+Proof. destruct c; try (left; constructor); right; intro HC; inv HC. Qed.
+
 Local Open Scope color_scope.
 
 
-(*Definition proc_args_loc (args : list mreg) : Locset.t :=*)
-(*  fold_left (fun acc el =>*)
-(*    Locset.add (R el) acc*)
-(*    ) args Locset.empty.*)
 
 Fixpoint forallbi {A : Type} (f : A -> nat -> bool) (l : list A) (i : nat) : bool :=
   match l with
@@ -53,7 +49,7 @@ Section color_checker.
   Variable col : node -> nat -> loc -> color.
 
 
-  Definition check_col_instr (pc : node) (instr : instruction) (bb : list instruction) (plive : (nat * Locset.t)) : bool :=
+  Definition check_col_instr (pc : node) (instr : instruction) (plive : (nat * Locset.t)) : bool :=
 
     match instr with
     | Lop op args res =>
@@ -214,13 +210,10 @@ Section color_checker.
 
   Definition check_op_instr (pc : node) (instr : instruction) (bb : list instruction) (op_plive : option (nat * Locset.t)) : bool :=
     match op_plive with
-    | Some plive => check_col_instr pc instr bb plive
+    | Some plive => check_col_instr pc instr plive
     | None => false
     end.
 
-Check (fn_code).
-Check PTree_Properties.for_all.
-About code.
   Definition check_col_function (f: function) : bool :=
     let params := process_rargs (loc_arguments f.(fn_sig)) in
     Locset.for_all (fun param => col f.(fn_entrypoint) 1 param =? White) params &&
@@ -260,44 +253,6 @@ About code.
     intros ?x ?y ?Hxy; subst; reflexivity.
 
 
-Locate forallb_forall.
-Locate Forall_forall.
-Print Forall_forall.
-Print Locset.
-Print Locset.MF.
-Print Loc.
-Search (loc -> loc -> bool).
-Print Locset.MSet.Raw.MX.eqb.
-Print Locset.MSet.Raw.L.MO.
-Print Locset.MSet.Raw.L.MO.eqb_alt.
-
-Locate " + ".
-Print sumbool.
-Check sumbool.
-Check Loc.eq.
-Print Loc.diff.
-Locate Loc.diff.
-Locate Locset.Forall_forall.
-Locate Locset.for_all_1.
-Print Locset.for_all_1.
-Locate Locset.mem.
-Locate not_in_inb.
-Print not_in_inb.
-Print Locset.MSet.
-Print Locset.MF.
-Print Locset.X'.
-Print Locset.E.
-Print Locset.MSet.mem_spec.
-Print Locset.MSet.
-Print typ_eq.
-Print zeq.
-Print Z.
-Locate Z.
-Print Loc.
-Print Locset.MSet.Raw.L.MO.eqb.
-Print Locset.MSet.Raw.L.MO.eq_dec.
-Print in_builtin_argb_sound.
-Locate in_builtin_argb_sound.
   Lemma loc_in_not : forall l0 l1,
     Locset.X'.eq l0 l1 -> Locset.MF.eqb l0 l1 = true.
   Proof.
@@ -318,363 +273,326 @@ Locate in_builtin_argb_sound.
   Qed.
 
 
-(*  Lemma lcheck_col_instr : forall (pc : node) (plive : (nat * Locset.t)) (instr : instruction),*)
-(*    check_col_instr pc instr plive = true -> wc_instruction col pc plive instr.*)
-(*  Proof.*)
-(*    destruct instr; simpl; intro Hcheck.*)
-(*    - destruct (is_protectedb_spec op).*)
-(*      + (* protected *)*)
-(*        destruct_andb Hcheck Hwhite.*)
-(*        destruct_andb Hargs Hpres.*)
-(*        rewrite forallb_forall in Hargs.*)
-(*        apply Locset.for_all_2 in Hpres; [| compat_bool_tac].*)
-(*        constructor; auto.*)
-(*        * apply Forall_forall. intros. apply eqb_sound. apply Hargs. apply H.*)
-(*        * intros l0 inl Hnotin Hneq.*)
-(*          specialize (Hpres l0 inl). apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].*)
-(*          { apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].*)
-(*            ** exfalso. apply Hnotin. apply Locset.MF.mem_2. apply Hpres.*)
-(*            ** exfalso. apply Hneq. apply loc_in_not2. apply Hpres.*)
-(*               }*)
-(*          ** apply eqb_sound. apply Hpres.*)
-(*        * apply eqb_sound. apply Hwhite.*)
-(*      + (* not protected *)*)
-(*        destruct_andb Hcheck Hwhite.*)
-(*        destruct_andb Hargs Hpres.*)
-(*        rewrite forallb_forall in Hpres.*)
-(*        apply Locset.for_all_2 in Hwhite; [| compat_bool_tac].*)
-(*        apply wc_Lop_safe; auto.*)
-(*        * destruct (is_basicb_spec (col pc (Nat.succ (fst plive)) (R res))); auto; congruence.*)
-(*        * apply Forall_forall. intros. apply Hpres in H. apply eqb_sound. apply H.*)
-(*        * intros l0 Hin.*)
-(*          specialize (Hwhite l0 Hin). apply orb_prop in Hwhite; destruct Hwhite as [Hwhite | Hwhite].*)
-(*          ** left. apply loc_in_not2. apply Hwhite.*)
-(*          ** right. apply eqb_sound. apply Hwhite.*)
-(*    - (* Lload *)*)
-(*      destruct_andb Hcheck Hwhite.*)
-(*      destruct_andb Hargs Hpres.*)
-(*      rewrite forallb_forall in Hargs.*)
-(*      apply Locset.for_all_2 in Hwhite; [| compat_bool_tac].*)
-(*      apply wc_Lload; auto.*)
-(*        * apply Forall_forall. intros. apply eqb_sound. apply Hargs in H. apply H.*)
-(*        * apply eqb_sound. apply Hpres.*)
-(*        * intros l0 Hin.*)
-(*          specialize (Hwhite l0 Hin). apply orb_prop in Hwhite;*)
-(*          destruct Hwhite as [Hwhite | Hwhite].*)
-(*          { apply orb_prop in Hwhite; destruct Hwhite as [Hwhite | Hwhite].*)
-(*            * left. apply Locset.MF.mem_2. apply Hwhite.*)
-(*            * right. left. apply loc_in_not2. apply Hwhite.*)
-(*          }*)
-(*          right. right. apply eqb_sound. apply Hwhite.*)
-(*    - (* Lgetstack *)*)
-(*      destruct_andb Hcheck Hloc.*)
-(*      apply Locset.for_all_2 in Hloc; [| compat_bool_tac].*)
-(*      destruct (sl) eqn:Hsl.*)
-(*      + constructor.*)
-(*        * apply eqb_sound. auto.*)
-(*        * intros l0 Hin. specialize (Hloc l0 Hin). apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].*)
-(*          ** left. apply loc_in_not2. auto.*)
-(*          ** right. left. apply loc_in_not2. auto.*)
-(*          ** right. right. apply eqb_sound. auto.*)
-(*      + constructor.*)
-(*        * apply eqb_sound. auto.*)
-(*        * intros l0 Hin. specialize (Hloc l0 Hin). apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].*)
-(*          ** left. apply loc_in_not2. auto.*)
-(*          ** right. left. apply loc_in_not2. auto.*)
-(*          ** right. right. apply eqb_sound. auto.*)
-(*      + constructor.*)
-(*        * exact I.*)
-(*        * intros l0 Hin. specialize (Hloc l0 Hin). apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].*)
-(*          ** left. apply loc_in_not2. auto.*)
-(*          ** right. left. apply loc_in_not2. auto.*)
-(*          ** right. right. apply eqb_sound. auto.*)
-(*    - (* Lsetstack *)*)
-(*      destruct_andb Hcheck Hloc.*)
-(*      destruct_andb Hcheck Hneg.*)
-(*      apply Locset.for_all_2 in Hloc; [|compat_bool_tac].*)
-(*      destruct (sl) eqn:Hsl.*)
-(*      + constructor.*)
-(*        * apply eqb_sound. auto.*)
-(*        * intros. unfold not in *. destruct (Locset.mem (R src) (snd plive)) eqn:Ht.*)
-(*          ** apply eqb_sound. simpl in Hneg. apply Locset.MSet.mem_spec in Ht.*)
-(*             exfalso. apply H. auto. *)
-(*          ** simpl in *. apply eqb_sound. auto.*)
-(*        * intros l0 Hin.*)
-(*          specialize (Hloc l0 Hin). *)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].*)
-(*          ** left. apply loc_in_not2. auto.*)
-(*          ** right. left. apply loc_in_not2. auto.*)
-(*          ** right. right. apply eqb_sound. auto.*)
-(*      + constructor.*)
-(*        * exact I.*)
-(*        * intros. unfold not in *. destruct (Locset.mem (R src) (snd plive)) eqn:Ht.*)
-(*          ** apply eqb_sound. simpl in Hneg. apply Locset.MSet.mem_spec in Ht.*)
-(*             exfalso. apply H. auto. *)
-(*          ** simpl in *. apply eqb_sound. auto.*)
-(*        * intros l0 Hin.*)
-(*          specialize (Hloc l0 Hin). *)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].*)
-(*          ** left. apply loc_in_not2. auto.*)
-(*          ** right. left. apply loc_in_not2. auto.*)
-(*          ** right. right. apply eqb_sound. auto.*)
-(*      + constructor.*)
-(*        * apply eqb_sound. auto.*)
-(*        * intros. unfold not in *. destruct (Locset.mem (R src) (snd plive)) eqn:Ht.*)
-(*          ** apply eqb_sound. simpl in Hneg. apply Locset.MSet.mem_spec in Ht.*)
-(*             exfalso. apply H. auto. *)
-(*          ** simpl in *. apply eqb_sound. auto.*)
-(*        * intros l0 Hin.*)
-(*          specialize (Hloc l0 Hin). *)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].*)
-(*          ** left. apply loc_in_not2. auto.*)
-(*          ** right. left. apply loc_in_not2. auto.*)
-(*          ** right. right. apply eqb_sound. auto.*)
-(*    - (* Lstore *)*)
-(*      destruct_andb Hcheck Hwhite.*)
-(*      apply Locset.for_all_2 in Hwhite; [| compat_bool_tac].*)
-(*      apply wc_Lstore; auto.*)
-(*        * apply eqb_sound. apply Hcheck.*)
-(*        * intros l0 Hin.*)
-(*          specialize (Hwhite l0 Hin). apply orb_prop in Hwhite;*)
-(*          destruct Hwhite as [Hwhite | Hwhite ].*)
-(*          { apply orb_prop in Hwhite; destruct Hwhite as [Hwhite | Hwhite].*)
-(*            * left. apply Locset.MF.mem_2. apply Hwhite.*)
-(*            * right. left. apply loc_in_not2. apply Hwhite.*)
-(*          }*)
-(*          right. right. apply eqb_sound. apply Hwhite.*)
-(*    - (* Lcall *)*)
-(*      destruct_andb Hros HLloc.*)
-(*      destruct_andb Hros Hres.*)
-(*      destruct_andb Hros Hargs.*)
-(*      apply Locset.for_all_2 in Hargs; [|compat_bool_tac].*)
-(*      apply Locset.for_all_2 in HLloc; [|compat_bool_tac].*)
-(*      apply wc_Lcall; auto.*)
-(*        * intros. rewrite H in Hros. apply eqb_sound. apply Hros.*)
-(*        * intros l0 Hin. specialize (Hargs l0 Hin). simpl in Hargs. apply eqb_sound. apply Hargs.*)
-(*        * intros. left. intros. rewrite H in Hres. apply eqb_sound. apply Hres.*)
-(*        * intros l0 Hin. specialize (HLloc l0 Hin). simpl in *.*)
-(*          apply orb_prop in HLloc; destruct HLloc as [Hloc | Hcol].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | HIros].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | HIloc].*)
-(*          ** left. apply Locset.MF.mem_2. apply Hloc.*)
-(*          ** right. intros. left. intros. rewrite H in HIloc.*)
-(*             apply loc_in_not2. apply HIloc.*)
-(*          ** right. right. right. left. intros. rewrite H in HIros. apply loc_in_not2. apply HIros.*)
-(*          ** right. right. right. right. apply eqb_sound. apply Hcol.*)
-(*    - (* Ltailcall *)*)
-(*      destruct_andb Hcheck HLoc.*)
-(*      apply Locset.for_all_2 in HLoc; [|compat_bool_tac].*)
-(*      apply wc_Ltailcall; auto.*)
-(*        * intros. rewrite H in Hcheck. apply eqb_sound. apply Hcheck.*)
-(*        * intros l0 Hin. specialize (HLoc l0 Hin). simpl in HLoc. apply eqb_sound.*)
-(*          apply HLoc.*)
-(*    - (* Lbuiltin *)*)
-(*      destruct (is_green_smove_builtinb_spec ef).*)
-(*      {*)
-(*        destruct args; try congruence.*)
-(*        destruct b; try congruence.*)
-(*        destruct args; try congruence.*)
-(*        destruct res; try congruence.*)
-(*        destruct_andb Hloc Hcol.*)
-(*        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].*)
-(*        destruct (Locset.MF.eqb x (R x0)) eqn:Heqx.*)
-(*        * apply wc_Lbuiltin_smove_green; auto.*)
-(*          ** intros. apply eqb_sound. apply Hcol.*)
-(*          ** unfold not. intros. exfalso. apply H.*)
-(*              apply loc_in_not2. auto.*)
-(*          ** intros l0 Hin. specialize (Hloc l0 Hin). simpl in Hloc.*)
-(*            apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*            apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*            + left. apply loc_in_not2. apply Hloc.*)
-(*            + right. left. apply loc_in_not2. apply Hloc.*)
-(*            + right. right. apply eqb_sound. apply Hloc. *)
-(*        * destruct_andb Hcol Hcol'.*)
-(*          destruct_andb Hcol Hcol''.*)
-(*          apply wc_Lbuiltin_smove_green; auto.*)
-(*          ** intros. apply eqb_sound. auto.*)
-(*          ** intros Hnot. split.*)
-(*            + apply eqb_sound. auto.*)
-(*            + split.*)
-(*              ++ apply eqb_sound. auto.*)
-(*              ++ apply eqb_sound. auto.*)
-(*          ** intros l0 Hin. specialize (Hloc l0 Hin). simpl in Hloc.*)
-(*             apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*             apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*            + left. apply loc_in_not2. auto.*)
-(*            + right. left. apply loc_in_not2. auto.*)
-(*            + right. right. apply eqb_sound. auto.*)
-(*      }*)
-(*      destruct (is_blue_smove_builtinb_spec ef).*)
-(*      {*)
-(*        destruct args; try congruence.*)
-(*        destruct b; try congruence.*)
-(*        destruct args; try congruence.*)
-(*        destruct res; try congruence.*)
-(*        destruct_andb Hloc Hcol.*)
-(**)
-(*        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].*)
-(*        destruct (Locset.MF.eqb x (R x0)) eqn:Heqx.*)
-(*        * apply wc_Lbuiltin_smove_blue; auto.*)
-(*          ** intros. apply eqb_sound. apply Hcol.*)
-(*          ** unfold not. intros. exfalso. apply H.*)
-(*              apply loc_in_not2. auto.*)
-(*          ** intros l0 Hin. specialize (Hloc l0 Hin). simpl in Hloc.*)
-(*            apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*            apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*            + left. apply loc_in_not2. apply Hloc.*)
-(*            + right. left. apply loc_in_not2. apply Hloc.*)
-(*            + right. right. apply eqb_sound. apply Hloc. *)
-(*        * destruct_andb Hcol Hcol'.*)
-(*          destruct_andb Hcol Hcol''.*)
-(*          apply wc_Lbuiltin_smove_blue; auto.*)
-(*          ** intros. apply eqb_sound. auto.*)
-(*          ** intros Hnot. split.*)
-(*            + apply eqb_sound. auto.*)
-(*            + split.*)
-(*              ++ apply eqb_sound. auto.*)
-(*              ++ apply eqb_sound. auto.*)
-(*          ** intros l0 Hin. specialize (Hloc l0 Hin). simpl in Hloc.*)
-(*             apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*             apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*            + left. apply loc_in_not2. auto.*)
-(*            + right. left. apply loc_in_not2. auto.*)
-(*            + right. right. apply eqb_sound. auto.*)
-(*      }*)
-(*      destruct (is_vote_builtinb_spec ef).*)
-(*      {*)
-(*        destruct args; try congruence.*)
-(*        destruct b; try congruence.*)
-(*        destruct args; try congruence.*)
-(*        destruct b; try congruence.*)
-(*        destruct args; try congruence.*)
-(*        destruct b; try congruence.*)
-(*        destruct args; try congruence.*)
-(*        destruct res; try congruence.*)
-(*        destruct_andb Hcol Hloc.*)
-(*        destruct_andb Hcol Hcol'.*)
-(*        destruct_andb Hcol Hcol''.*)
-(*        destruct_andb Hcol Hcol'''.*)
-(*        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].*)
-(*        apply wc_Lbuiltin_vote; auto.*)
-(*        * apply eqb_sound. apply Hcol.*)
-(*        * apply eqb_sound. apply Hcol'''.*)
-(*        * apply eqb_sound. apply Hcol''.*)
-(*        * apply eqb_sound. apply Hcol'.*)
-(*        * intros l0 Hin. specialize (Hloc l0 Hin).*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*          + left. apply loc_in_not2. apply Hloc.*)
-(*          + right. apply eqb_sound. apply Hloc.*)
-(*      }*)
-(*      destruct (builtin_can_replicate ef) eqn:Hcan.*)
-(*      {*)
-(*        destruct res; try congruence.*)
-(*        destruct_andb Hbasic Hloc.*)
-(*        destruct_andb Hbasic Hfcol.*)
-(*        rewrite forallb_forall in Hfcol.*)
-(*        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].*)
-(*        apply wc_Lbuiltin_safe; auto.*)
-(*        * destruct (is_basicb_spec (col pc (Nat.succ (fst plive)) (R x))); auto; congruence.*)
-(*        * apply Forall_forall. intros x0 Hin. apply Hfcol in Hin.*)
-(*          apply builtin_arg_forallb_sound in Hin.*)
-(*          eapply builtin_arg_forall_impl; eauto. simpl in *. intros. apply eqb_sound. auto.*)
-(*        * intros l0 Hin. specialize (Hloc l0 Hin). simpl in *.*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*          + left. apply loc_in_not2. apply Hloc.*)
-(*          + right. apply eqb_sound. apply Hloc.*)
-(*      }*)
-(*      {*)
-(*        destruct_andb Hcheck Hloc.*)
-(*        destruct_andb Hcheck Hres.*)
-(*        rewrite forallb_forall in Hcheck.*)
-(*        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].*)
-(*        constructor; auto.*)
-(*        * apply Forall_forall. intros x Hin. apply Hcheck in Hin.*)
-(*          apply builtin_arg_forallb_sound in Hin.*)
-(*          eapply builtin_arg_forall_impl; eauto. simpl in *. intros. apply eqb_sound. auto.*)
-(*        * apply builtin_res_forallb_sound in Hres.*)
-(*          eapply builtin_res_forall_impl; eauto. simpl in *. intros. apply eqb_sound. auto.*)
-(*        * intros l0 Hin. specialize (Hloc l0 Hin).*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*          + left. apply existsb_exists in Hloc.*)
-(*            destruct Hloc as [x [Hinarg Hbool]].*)
-(*            apply Exists_exists.*)
-(*            exists x. split.*)
-(*            ++ apply Hinarg.*)
-(*            ++ apply in_builtin_largb_sound. apply Hbool.*)
-(*          + right. left. intros. rewrite H in Hloc. apply loc_in_not2.*)
-(*            apply Hloc.*)
-(*          + right. right. apply eqb_sound. apply Hloc.*)
-(*      }*)
-(*    - (* Lbranch *)*)
-(*      constructor.*)
-(*    - (* Lcond *)*)
-(*      destruct_andb Hargs Hloc.*)
-(*      apply Locset.for_all_2 in Hloc; [|compat_bool_tac].*)
-(*      constructor; auto.*)
-(*        * apply Forall_forall. intros x Hin. apply eqb_sound. *)
-(*          rewrite forallb_forall in Hargs. apply Hargs in Hin.*)
-(*          apply Hin.*)
-(*        * intros l0 Hin. specialize (Hloc l0 Hin).*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*          ** left. apply Locset.MF.mem_2. apply Hloc.*)
-(*          ** right. destruct_andb Hloc Hloc'. split.*)
-(*             *** apply eqb_sound. auto.*)
-(*             *** apply eqb_sound. auto.*)
-(*    - (* Ljumptable *)*)
-(*      destruct_andb Hcol Hloc.*)
-(*      apply Locset.for_all_2 in Hloc; [|compat_bool_tac].*)
-(*      apply wc_Ljumptable.*)
-(*        * apply eqb_sound. apply Hcol.*)
-(*        * intros x Hin. specialize (Hloc x Hin).*)
-(*          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].*)
-(*          ** left. apply loc_in_not2. apply Hloc.*)
-(*          ** right. apply Forall_forall. intros. rewrite forallb_forall in Hloc.*)
-(*             apply Hloc in H. apply eqb_sound; auto.*)
-(*    - (* Lreturn *)*)
-(*      constructor.*)
-(*  Qed.*)
-(**)
-(*Lemma check_col_function_sound (f : function):*)
-(*  forall live alive,*)
-(*  LProofLiveness.analyze f = Some live ->*)
-(*  block_live_after f live = alive ->*)
-(*  block_inst_llafter f alive = lalive ->*)
-(*  check_col_function f = true ->*)
-(*  wc_function col f.*)
-(*Proof.*)
-(*  intros live alive Hlive Hblive Hbalive.*)
-(*  destruct f; unfold check_col_function; simpl.*)
-(*  intros H.*)
-(*  apply andb_prop in H.*)
-(*  destruct H as [Hparams Hcode].*)
-(*  econstructor; simpl; eauto.*)
-(*  - apply Locset.for_all_2 in Hparams; [|compat_bool_tac].*)
-(*    intros l0 Hin. specialize (Hparams l0 Hin).*)
-(*    simpl in *. apply eqb_sound. auto.*)
-(*  - rewrite PTree_Properties.for_all_correct in Hcode.*)
-(*    intros pc bb ilives ilive Hpc Hlalive.*)
-(*    destruct bb.*)
-(*    + apply Hcode in Hpc.*)
-(*      apply Forall_forall.*)
-(*      intros xlive Hin Hnth.*)
-(*      rewrite forallb_forall in Hpc.*)
-(*      specialize (Hpc  xlive Hin).*)
-(*      apply lcheck_col_instr. simpl in *. auto.*)
-(*    + apply Hcode in Hpc.*)
-(*      apply Forall_forall. intros xlive Hin Hnth.*)
-(*      rewrite forallb_forall in Hpc.*)
-(*      specialize (Hpc xlive Hin). simpl in *.*)
-(*      rewrite Hlalive in Hpc. simpl in *.*)
-(*      apply lcheck_col_instr. rewrite Hnth in Hpc.*)
-(*      auto.*)
-(*Qed.*)
+  Lemma lcheck_col_instr : forall (pc : node) (plive : (nat * Locset.t)) (instr : instruction),
+    check_col_instr pc instr plive = true -> wc_instruction col pc plive instr.
+  Proof.
+    destruct instr; simpl; intro Hcheck.
+    - destruct (is_protectedb_spec op).
+      + (* protected *)
+        destruct_andb Hcheck Hwhite.
+        destruct_andb Hargs Hpres.
+        rewrite forallb_forall in Hargs.
+        apply Locset.for_all_2 in Hpres; [| compat_bool_tac].
+        constructor; auto.
+        * apply Forall_forall. intros. apply eqb_sound. apply Hargs. apply H.
+        * intros l0 inl Hnotin Hneq.
+          specialize (Hpres l0 inl). apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
+          { apply orb_prop in Hpres; destruct Hpres as [Hpres | Hpres].
+            ** exfalso. apply Hnotin. apply Locset.MF.mem_2. apply Hpres.
+            ** exfalso. apply Hneq. apply loc_in_not2. apply Hpres.
+               }
+          ** apply eqb_sound. apply Hpres.
+        * apply eqb_sound. apply Hwhite.
+      + (* not protected *)
+        destruct_andb Hcheck Hwhite.
+        destruct_andb Hargs Hpres.
+        rewrite forallb_forall in Hpres.
+        apply Locset.for_all_2 in Hwhite; [| compat_bool_tac].
+        apply wc_Lop_safe; auto.
+        * destruct (is_basicb_spec (col pc (Nat.succ (fst plive)) (R res))); auto; congruence.
+        * apply Forall_forall. intros. apply Hpres in H. apply eqb_sound. apply H.
+        * intros l0 Hin.
+          specialize (Hwhite l0 Hin). apply orb_prop in Hwhite; destruct Hwhite as [Hwhite | Hwhite].
+          ** left. apply loc_in_not2. apply Hwhite.
+          ** right. apply eqb_sound. apply Hwhite.
+    - (* Lload *)
+      destruct_andb Hcheck Hwhite.
+      destruct_andb Hargs Hpres.
+      rewrite forallb_forall in Hargs.
+      apply Locset.for_all_2 in Hwhite; [| compat_bool_tac].
+      apply wc_Lload; auto.
+        * apply Forall_forall. intros. apply eqb_sound. apply Hargs in H. apply H.
+        * apply eqb_sound. apply Hpres.
+        * intros l0 Hin.
+          specialize (Hwhite l0 Hin). apply orb_prop in Hwhite;
+          destruct Hwhite as [Hwhite | Hwhite].
+          { apply orb_prop in Hwhite; destruct Hwhite as [Hwhite | Hwhite].
+            * left. apply Locset.MF.mem_2. apply Hwhite.
+            * right. left. apply loc_in_not2. apply Hwhite.
+          }
+          right. right. apply eqb_sound. apply Hwhite.
+    - (* Lgetstack *)
+      destruct_andb Hcheck Hloc.
+      apply Locset.for_all_2 in Hloc; [| compat_bool_tac].
+      destruct (sl) eqn:Hsl.
+      + constructor.
+        * apply eqb_sound. auto.
+        * intros l0 Hin. specialize (Hloc l0 Hin). apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+      + constructor.
+        * apply eqb_sound. auto.
+        * intros l0 Hin. specialize (Hloc l0 Hin). apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+      + constructor.
+        * exact I.
+        * intros l0 Hin. specialize (Hloc l0 Hin). apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+    - (* Lsetstack *)
+      destruct_andb Hcheck Hloc.
+      destruct_andb Hcheck Hneg.
+      apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+      destruct (sl) eqn:Hsl.
+      + constructor.
+        * apply eqb_sound. auto.
+        * intros. unfold not in *. destruct (Locset.mem (R src) (snd plive)) eqn:Ht.
+          ** apply eqb_sound. simpl in Hneg. apply Locset.MSet.mem_spec in Ht.
+             exfalso. apply H. auto. 
+          ** simpl in *. apply eqb_sound. auto.
+        * intros l0 Hin.
+          specialize (Hloc l0 Hin). 
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+      + constructor.
+        * exact I.
+        * intros. unfold not in *. destruct (Locset.mem (R src) (snd plive)) eqn:Ht.
+          ** apply eqb_sound. simpl in Hneg. apply Locset.MSet.mem_spec in Ht.
+             exfalso. apply H. auto. 
+          ** simpl in *. apply eqb_sound. auto.
+        * intros l0 Hin.
+          specialize (Hloc l0 Hin). 
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+      + constructor.
+        * apply eqb_sound. auto.
+        * intros. unfold not in *. destruct (Locset.mem (R src) (snd plive)) eqn:Ht.
+          ** apply eqb_sound. simpl in Hneg. apply Locset.MSet.mem_spec in Ht.
+             exfalso. apply H. auto. 
+          ** simpl in *. apply eqb_sound. auto.
+        * intros l0 Hin.
+          specialize (Hloc l0 Hin). 
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc'].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc''].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+    - (* Lsmove *)
+      destruct col0; simpl in *; try discriminate.
+      + destruct_andb Hcheck Hloc.
+        destruct_andb Hcheck Hcol'.
+        destruct_andb Hcheck Hcol''.
+        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+        apply wc_Lsmove_green; try apply eqb_sound; auto.
+        * intros l0 Hin. specialize (Hloc l0 Hin).
+          apply orb_prop in Hloc. destruct Hloc as [Hloc | Hloc].
+          apply orb_prop in Hloc. destruct Hloc as [Hloc | Hloc].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+      + destruct_andb Hcheck Hloc.
+        destruct_andb Hcheck Hcol'.
+        destruct_andb Hcheck Hcol''.
+        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+        apply wc_Lsmove_blue; try apply eqb_sound; auto.
+        * intros l0 Hin. specialize (Hloc l0 Hin).
+          apply orb_prop in Hloc. destruct Hloc as [Hloc | Hloc].
+          apply orb_prop in Hloc. destruct Hloc as [Hloc | Hloc].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+      + destruct_andb Hcheck Hloc.
+        destruct_andb Hcheck Hcol'.
+        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+        apply wc_Lsmove_white; try apply eqb_sound; auto.
+        * intros l0 Hin. specialize (Hloc l0 Hin).
+          apply orb_prop in Hloc. destruct Hloc as [Hloc | Hloc].
+          apply orb_prop in Hloc. destruct Hloc as [Hloc | Hloc].
+          ** left. apply loc_in_not2. auto.
+          ** right. left. apply loc_in_not2. auto.
+          ** right. right. apply eqb_sound. auto.
+    - (* Lstore *)
+      destruct_andb Hcheck Hwhite.
+      apply Locset.for_all_2 in Hwhite; [| compat_bool_tac].
+      apply wc_Lstore; auto.
+        * apply eqb_sound. apply Hcheck.
+        * intros l0 Hin.
+          specialize (Hwhite l0 Hin). apply orb_prop in Hwhite;
+          destruct Hwhite as [Hwhite | Hwhite ].
+          { apply orb_prop in Hwhite; destruct Hwhite as [Hwhite | Hwhite].
+            * left. apply Locset.MF.mem_2. apply Hwhite.
+            * right. left. apply loc_in_not2. apply Hwhite.
+          }
+          right. right. apply eqb_sound. apply Hwhite.
+    - (* Lcall *)
+      destruct_andb Hros HLloc.
+      destruct_andb Hros Hres.
+      destruct_andb Hros Hargs.
+      apply Locset.for_all_2 in Hargs; [|compat_bool_tac].
+      apply Locset.for_all_2 in HLloc; [|compat_bool_tac].
+      apply wc_Lcall; auto.
+        * intros. rewrite H in Hros. apply eqb_sound. apply Hros.
+        * intros l0 Hin. specialize (Hargs l0 Hin). simpl in Hargs. apply eqb_sound. apply Hargs.
+        * intros. left. intros. rewrite H in Hres. apply eqb_sound. apply Hres.
+        * intros l0 Hin. specialize (HLloc l0 Hin). simpl in *.
+          apply orb_prop in HLloc; destruct HLloc as [Hloc | Hcol].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | HIros].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | HIloc].
+          ** left. apply Locset.MF.mem_2. apply Hloc.
+          ** right. intros. left. intros. rewrite H in HIloc.
+             apply loc_in_not2. apply HIloc.
+          ** right. right. right. left. intros. rewrite H in HIros. apply loc_in_not2. apply HIros.
+          ** right. right. right. right. apply eqb_sound. apply Hcol.
+    - (* Ltailcall *)
+      destruct_andb Hcheck HLoc.
+      apply Locset.for_all_2 in HLoc; [|compat_bool_tac].
+      apply wc_Ltailcall; auto.
+        * intros. rewrite H in Hcheck. apply eqb_sound. apply Hcheck.
+        * intros l0 Hin. specialize (HLoc l0 Hin). simpl in HLoc. apply eqb_sound.
+          apply HLoc.
+    - (* Lbuiltin *)
+      destruct (is_vote_builtinb_spec ef).
+      {
+        destruct args; try congruence.
+        destruct b; try congruence.
+        destruct args; try congruence.
+        destruct b; try congruence.
+        destruct args; try congruence.
+        destruct b; try congruence.
+        destruct args; try congruence.
+        destruct res; try congruence.
+        destruct_andb Hcol Hloc.
+        destruct_andb Hcol Hcol'.
+        destruct_andb Hcol Hcol''.
+        destruct_andb Hcol Hcol'''.
+        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+        apply wc_Lbuiltin_vote; auto.
+        * apply eqb_sound. apply Hcol.
+        * apply eqb_sound. apply Hcol'''.
+        * apply eqb_sound. apply Hcol''.
+        * apply eqb_sound. apply Hcol'.
+        * intros l0 Hin. specialize (Hloc l0 Hin).
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].
+          + left. apply loc_in_not2. apply Hloc.
+          + right. apply eqb_sound. apply Hloc.
+      }
+      destruct (builtin_can_replicate ef) eqn:Hcan.
+      {
+        destruct res; try congruence.
+        destruct_andb Hbasic Hloc.
+        destruct_andb Hbasic Hfcol.
+        rewrite forallb_forall in Hfcol.
+        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+        apply wc_Lbuiltin_safe; auto.
+        * destruct (is_basicb_spec (col pc (Nat.succ (fst plive)) (R x))); auto; congruence.
+        * apply Forall_forall. intros x0 Hin. apply Hfcol in Hin.
+          apply builtin_arg_forallb_sound in Hin.
+          eapply builtin_arg_forall_impl; eauto. simpl in *. intros. apply eqb_sound. auto.
+        * intros l0 Hin. specialize (Hloc l0 Hin). simpl in *.
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].
+          + left. apply loc_in_not2. apply Hloc.
+          + right. apply eqb_sound. apply Hloc.
+      }
+      {
+        destruct_andb Hcheck Hloc.
+        destruct_andb Hcheck Hres.
+        rewrite forallb_forall in Hcheck.
+        apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+        constructor; auto.
+        * apply Forall_forall. intros x Hin. apply Hcheck in Hin.
+          apply builtin_arg_forallb_sound in Hin.
+          eapply builtin_arg_forall_impl; eauto. simpl in *. intros. apply eqb_sound. auto.
+        * apply builtin_res_forallb_sound in Hres.
+          eapply builtin_res_forall_impl; eauto. simpl in *. intros. apply eqb_sound. auto.
+        * intros l0 Hin. specialize (Hloc l0 Hin).
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].
+          + left. apply existsb_exists in Hloc.
+            destruct Hloc as [x [Hinarg Hbool]].
+            apply Exists_exists.
+            exists x. split.
+            ++ apply Hinarg.
+            ++ apply in_builtin_largb_sound. apply Hbool.
+          + right. left. intros. rewrite H in Hloc. apply loc_in_not2.
+            apply Hloc.
+          + right. right. apply eqb_sound. apply Hloc.
+      }
+    - (* Lbranch *)
+      constructor.
+    - (* Lcond *)
+      destruct_andb Hargs Hloc.
+      apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+      constructor; auto.
+        * apply Forall_forall. intros x Hin. apply eqb_sound. 
+          rewrite forallb_forall in Hargs. apply Hargs in Hin.
+          apply Hin.
+        * intros l0 Hin. specialize (Hloc l0 Hin).
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].
+          ** left. apply Locset.MF.mem_2. apply Hloc.
+          ** right. destruct_andb Hloc Hloc'. split.
+             *** apply eqb_sound. auto.
+             *** apply eqb_sound. auto.
+    - (* Ljumptable *)
+      destruct_andb Hcol Hloc.
+      apply Locset.for_all_2 in Hloc; [|compat_bool_tac].
+      apply wc_Ljumptable.
+        * apply eqb_sound. apply Hcol.
+        * intros x Hin. specialize (Hloc x Hin).
+          apply orb_prop in Hloc; destruct Hloc as [Hloc | Hloc].
+          ** left. apply loc_in_not2. apply Hloc.
+          ** right. apply Forall_forall. intros. rewrite forallb_forall in Hloc.
+             apply Hloc in H. apply eqb_sound; auto.
+    - (* Lreturn *)
+      constructor.
+  Qed.
+
+Lemma check_col_function_sound (f : function):
+  forall live alive,
+  LProofLiveness.analyze f = Some live ->
+  block_live_after f live = alive ->
+  block_inst_llafter f alive = lalive ->
+  check_col_function f = true ->
+  wc_function col f.
+Proof.
+  intros live alive Hlive Hblive Hbalive.
+  destruct f; unfold check_col_function; simpl.
+  intros H.
+  apply andb_prop in H.
+  destruct H as [Hparams Hcode].
+  econstructor; simpl; eauto.
+  - apply Locset.for_all_2 in Hparams; [|compat_bool_tac].
+    intros l0 Hin. specialize (Hparams l0 Hin).
+    simpl in *. apply eqb_sound. auto.
+  - rewrite PTree_Properties.for_all_correct in Hcode.
+    intros pc bb ilives ilive Hpc Hlalive.
+    destruct bb.
+    + apply Hcode in Hpc.
+      apply Forall_forall.
+      intros xlive Hin Hnth.
+      rewrite forallb_forall in Hpc.
+      specialize (Hpc  xlive Hin).
+      apply lcheck_col_instr. simpl in *. auto.
+    + apply Hcode in Hpc.
+      apply Forall_forall. intros xlive Hin Hnth.
+      rewrite forallb_forall in Hpc.
+      specialize (Hpc xlive Hin). simpl in *.
+      rewrite Hlalive in Hpc. simpl in *.
+      apply lcheck_col_instr. rewrite Hnth in Hpc.
+      auto.
+Qed.
 
 
 
@@ -695,17 +613,17 @@ Definition check_function (f :function) : bool :=
   | None => false
   end.
 
-(*Lemma check_function_sound (f : function) :*)
-(*  check_function f = true ->*)
-(*  exists col, wc_function col f.*)
-(*Proof.*)
-(*  unfold check_function.*)
-(*  destruct (analyze f) as [live|] eqn:Hlive; try congruence.*)
-(*  destruct (block_live_after f) as [bla bla'] eqn:Hbla; try congruence.*)
-(*  destruct (block_inst_llafter f) as [bila bila'] eqn:Hbila; try congruence.*)
-(*  destruct (infer_coloring f) as [col|]; try congruence.*)
-(*  intros Hcheck; exists col. eapply check_col_function_sound; eassumption.*)
-(*Qed.*)
+Lemma check_function_sound (f : function) :
+  check_function f = true ->
+  exists col, wc_function col f.
+Proof.
+  unfold check_function.
+  destruct (analyze f) as [live|] eqn:Hlive; try congruence.
+  destruct (block_live_after f) as [bla bla'] eqn:Hbla; try congruence.
+  destruct (block_inst_llafter f) as [bila bila'] eqn:Hbila; try congruence.
+  destruct (infer_coloring f) as [col|]; try congruence.
+  intros Hcheck; exists col. eapply check_col_function_sound; eassumption.
+Qed.
 
 
 Definition check_program (p :program) : bool :=
@@ -715,13 +633,13 @@ Definition check_program (p :program) : bool :=
                       end) p.(prog_defs).
 
 
-(*Lemma check_program_sound (p : program):*)
-(*  check_program p = true -> wc_program p.*)
-(*Proof.*)
-(*  intros Hp i f Hin.*)
-(*  unfold check_program in Hp.*)
-(*  rewrite forallb_forall in Hp.*)
-(*  apply Hp in Hin.*)
-(*  destruct f; simpl in *; auto.*)
-(*  apply check_function_sound; auto.*)
-(*Qed.*)
+Lemma check_program_sound (p : program):
+  check_program p = true -> wc_program p.
+Proof.
+  intros Hp i f Hin.
+  unfold check_program in Hp.
+  rewrite forallb_forall in Hp.
+  apply Hp in Hin.
+  destruct f; simpl in *; auto.
+  apply check_function_sound; auto.
+Qed.
