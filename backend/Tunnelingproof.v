@@ -588,6 +588,10 @@ Proof.
   left; simpl; econstructor; split.
   econstructor; eauto.
   econstructor; eauto using locmap_set_lessdef, locmap_undef_regs_lessdef.
+- (* Lsmove *)
+  left; simpl; econstructor; split.
+  econstructor; eauto.
+  econstructor; eauto using locmap_set_lessdef, locmap_undef_regs_lessdef.
 - (* Lstore *)
   exploit eval_addressing_lessdef. apply reglist_lessdef; eauto. eauto. 
   intros (ta & EV & LD).

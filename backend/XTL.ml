@@ -24,6 +24,8 @@ type var = V of reg * typ | L of loc
 
 type node = P.t
 
+type color = Green | Blue | White
+
 type instruction =
   | Xmove of var * var
   | Xreload of var * var
@@ -35,6 +37,8 @@ type instruction =
   | Xcall of signature * (var, ident) sum * var list * var list
   | Xtailcall of signature * (var, ident) sum * var list
   | Xbuiltin of external_function * var builtin_arg list * var builtin_res
+  | Xsmove of color * var * var 
+  (* | Xspilltin of var * var *)
   | Xbranch of node
   | Xcond of condition * var list * node * node
   | Xjumptable of var * node list
@@ -177,6 +181,11 @@ let type_instr = function
       let sg = ef_sig ef in
       type_builtin_args args (proj_sig_args sg);
       type_builtin_res res (proj_sig_res sg)
+  | Xsmove(col, src, dst) ->
+          unify_var_type src dst
+  (* | Xspilltin of instruction list * var list * var *)
+  (* | Xspilltin(li, args, dst) -> *)
+  (*         () *)
   | Xbranch s ->
       ()
   | Xcond(cond, args, s1, s2) ->

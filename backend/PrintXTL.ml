@@ -75,6 +75,12 @@ let print_succ pp s dfl =
   let s = P.to_int s in
   if s <> dfl then fprintf pp "goto %d" s
 
+let color = function
+    | Green -> "Green"
+    | Blue -> "Blue"
+    | White -> "White"
+
+
 let print_instruction pp succ = function
   | Xmove(src, dst) ->
       fprintf pp "%a = %a" var dst var src
@@ -101,6 +107,9 @@ let print_instruction pp succ = function
         (print_builtin_res var) res
         (name_of_external ef)
         (print_builtin_args var) args
+  | Xsmove(col, src, dst) ->
+        fprintf pp "%a = smove_%s(%a)" var dst (color col) var src 
+
   | Xbranch s ->
       print_succ pp s succ
   | Xcond(cond, args, s1, s2) ->

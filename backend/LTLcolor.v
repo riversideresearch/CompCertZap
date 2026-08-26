@@ -18,23 +18,23 @@ Require Import
   Conventions1
 .
 
-Inductive color : Type :=
-  | Red
-  | Green
-  | Blue
-  | White
-  | Pink
-      .
-Definition eqb (c1 c2 : color) : bool :=
-  match c1, c2 with
-
-  | Red, Red => true
-  | Green, Green => true
-  | Blue, Blue => true
-  | White, White => true
-  | Pink, Pink => true
-  | _, _ => false
-  end.
+(*Inductive color : Type :=*)
+(*  | Red*)
+(*  | Green*)
+(*  | Blue*)
+(*  | White*)
+(*  | Pink*)
+(*      .*)
+(*Definition eqb (c1 c2 : color) : bool :=*)
+(*  match c1, c2 with*)
+(**)
+(*  | Red, Red => true*)
+(*  | Green, Green => true*)
+(*  | Blue, Blue => true*)
+(*  | White, White => true*)
+(*  | Pink, Pink => true*)
+(*  | _, _ => false*)
+(*  end.*)
 
 
 Declare Scope color_scope.
@@ -165,17 +165,30 @@ Section lwc.
         wc_instruction pc plive (Ltailcall sig ros)
     | wc_Lbuiltin_smove_green : forall ef arg res,
         is_green_smove_builtin ef ->
-        col pc (fst plive) arg = White ->
-        col pc (Nat.succ (fst plive)) arg = Pink ->
-        col pc (Nat.succ (fst plive)) (R res) = Green ->
+        (Locset.X'.eq arg (R res) ->
+          col pc (Nat.succ (fst plive)) (R res) = Green) ->
+          (~ (Locset.X'.eq arg (R res)) ->
+          col pc (fst plive) arg = White /\
+          col pc (Nat.succ (fst plive)) arg = Pink /\
+          col pc (Nat.succ (fst plive)) (R res) = Green) ->
+        (*col pc (fst plive) arg = White ->*)
+        (*col pc (Nat.succ (fst plive)) arg = Pink ->*)
+        (*col pc (Nat.succ (fst plive)) (R res) = Green ->*)
         Locset.For_all (fun r => or (Locset.X'.eq r arg) (or (Locset.X'.eq r (R res))
                           (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
         wc_instruction pc plive (Lbuiltin ef (BA arg :: nil) (BR res))
     | wc_Lbuiltin_smove_blue : forall ef arg res,
         is_blue_smove_builtin ef ->
-        col pc (fst plive) arg = Pink ->
-        col pc (Nat.succ (fst plive)) arg = Red ->
-        col pc (Nat.succ (fst plive)) (R res) = Blue ->
+        (Locset.X'.eq arg (R res) ->
+          col pc (Nat.succ (fst plive)) (R res) = Blue) ->
+          (~ (Locset.X'.eq arg (R res)) ->
+          col pc (fst plive) arg = Pink /\
+          col pc (Nat.succ (fst plive)) arg = Red /\
+          col pc (Nat.succ (fst plive)) (R res) = Blue) ->
+
+        (*col pc (fst plive) arg = Pink ->*)
+        (*col pc (Nat.succ (fst plive)) arg = Red ->*)
+        (*col pc (Nat.succ (fst plive)) (R res) = Blue ->*)
         Locset.For_all (fun r => or (Locset.X'.eq r arg) (or (Locset.X'.eq r (R res))
                           (col pc (fst plive) r = col pc (Nat.succ (fst plive)) r))) (snd plive) ->
         wc_instruction pc plive (Lbuiltin ef (BA arg :: nil) (BR res))

@@ -20,6 +20,26 @@ Require Import AST Integers Values Events Memory Globalenvs Smallstep.
 Require Import Op Locations Conventions.
 
 (** * Abstract syntax *)
+Inductive color : Type :=
+  | Red
+  | Green
+  | Blue
+  | White
+  | Pink
+      .
+Definition eqb (c1 c2 : color) : bool :=
+  match c1, c2 with
+
+
+  | Red, Red => true
+  | Green, Green => true
+  | Blue, Blue => true
+  | White, White => true
+  | Pink, Pink => true
+  | _, _ => false
+  end.
+
+
 
 (** LTL is close to RTL, but uses machine registers and stack slots
   instead of pseudo-registers.  Also, the nodes of the control-flow
@@ -32,6 +52,7 @@ Inductive instruction: Type :=
   | Lload (chunk: memory_chunk) (addr: addressing) (args: list mreg) (dst: mreg)
   | Lgetstack (sl: slot) (ofs: Z) (ty: typ) (dst: mreg)
   | Lsetstack (src: mreg) (sl: slot) (ofs: Z) (ty: typ)
+  | Lsmove (col: color) (src: loc) (dst: loc)
   | Lstore (chunk: memory_chunk) (addr: addressing) (args: list mreg) (src: mreg)
   | Lcall (sg: signature) (ros: mreg + ident)
   | Ltailcall (sg: signature) (ros: mreg + ident)
@@ -182,6 +203,15 @@ Definition destroyed_by_getstack (s: slot): list mreg :=
   | _        => nil
   end.
 
+Definition destroyed_by_move (src dst: loc) :=
+  match src, dst with
+  | S sl ofs ty, _ => destroyed_by_getstack sl
+
+  | _, S sl ofs ty => destroyed_by_setstack ty
+  | _, _ => destroyed_by_op Omove
+  end.
+
+
 Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
   match ros with
   | inl r => Genv.find_funct ge (rs (R r))
@@ -225,6 +255,10 @@ Inductive step: state -> trace -> state -> Prop :=
       rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
       step (Block s f sp (Lsetstack src sl ofs ty :: bb) rs m)
         E0 (Block s f sp bb rs' m)
+  | exec_Lsmove: forall col s f sp src dst b rs m rs',
+      rs' = Locmap.set dst (rs src) (undef_regs (destroyed_by_move src dst) rs) ->
+      step (Block s f sp (Lsmove col src dst :: b) rs m)
+        E0 (Block s f sp b rs' m)
   | exec_Lstore: forall s f sp chunk addr args src bb rs m a rs' m',
       eval_addressing ge sp addr (reglist rs args) = Some a ->
       Mem.storev chunk m a (rs (R src)) = Some m' ->

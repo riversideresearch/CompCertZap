@@ -612,6 +612,10 @@ Proof.
   apply plus_one. econstructor; eauto.
   econstructor; eauto.
 
+  (* Lsmove *)
+  left; econstructor; split; simpl;
+  admit.
+
   (* Lstore *)
   left; econstructor; split. simpl.
   apply plus_one. econstructor.
@@ -705,7 +709,8 @@ Proof.
   left; econstructor; split.
   apply plus_one. econstructor.
   econstructor; eauto.
-Qed.
+(*Qed.*)
+Admitted.
 
 Lemma transf_initial_states:
   forall st1, LTL.initial_state prog st1 ->

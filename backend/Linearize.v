@@ -169,6 +169,8 @@ Fixpoint linearize_block (b: LTL.bblock) (k: code) : code :=
       Lgetstack sl ofs ty dst :: linearize_block b' k
   | LTL.Lsetstack src sl ofs ty :: b' =>
       Lsetstack src sl ofs ty :: linearize_block b' k
+  | LTL.Lsmove ef arg dst :: b' =>
+      k 
   | LTL.Lstore chunk addr args src :: b' =>
       Lstore chunk addr args src :: linearize_block b' k
   | LTL.Lcall sig ros :: b' =>

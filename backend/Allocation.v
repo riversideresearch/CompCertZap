@@ -18,6 +18,7 @@ Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Lattice Kildall Memdata.
 Require Archi.
 Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
+Require Import SharedFaultPolicy.
 
 (** The validation algorithm used here is described in
   "Validating register allocation and spilling",
@@ -42,6 +43,7 @@ Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
 
 Inductive move: Type :=
   | MV (src dst: loc)
+  | MVSmove (src dst: loc)
   | MVmakelong (src1 src2 dst: mreg)
   | MVlowlong (src dst: mreg)
   | MVhighlong (src dst: mreg).
@@ -51,6 +53,10 @@ Definition moves := list move.
 Inductive block_shape: Type :=
   | BSnop (mv: moves) (s: node)
   | BSmove (src: reg) (dst: reg) (mv: moves) (s: node)
+  | BSmove2 (col: color) (src: reg) (dst: reg) (mv1: moves)  (src': loc) (dst': loc) (mv2: moves) (s: node)
+      (*(arg: list (builtin_arg reg)) (res: builtin_res reg)*)
+      (*(mv1: moves) (args': list (builtin_arg loc)) (res': builtin_res loc)*)
+      (*(mv2: moves) (s: node)*)
   | BSmakelong (src1 src2: reg) (dst: reg) (mv: moves) (s: node)
   | BSlowlong (src: reg) (dst: reg) (mv: moves) (s: node)
   | BShighlong (src: reg) (dst: reg) (mv: moves) (s: node)
@@ -135,6 +141,8 @@ Fixpoint extract_moves (accu: moves) (b: bblock) {struct b} : moves * bblock :=
       | None =>
           (List.rev accu, b)
       end
+  (*| Lsmove LTL.White arg dst :: b' =>*)
+  (*    extract_moves (MV arg dst :: accu) b'*)
   | _ =>
       (List.rev accu, b)
   end.
@@ -158,6 +166,8 @@ Fixpoint extract_moves_ext (accu: moves) (b: bblock) {struct b} : moves * bblock
       | operation_other _ _ =>
           (List.rev accu, b)
       end
+  | Lsmove LTL.White arg dst :: b' =>
+      extract_moves_ext (MVSmove arg dst :: accu) b'
   | _ =>
       (List.rev accu, b)
   end.
@@ -311,6 +321,21 @@ Definition pair_instr_block
           assertion (external_function_eq ef ef');
           assertion (check_succ s b3);
           Some(BSbuiltin ef args res mv1 args' res' mv2 s)
+      | Lsmove col src dst :: b2 =>
+          let (mv2, b3) := extract_moves nil b2 in
+          match args, res with
+          | BA arg :: nil, BR r =>
+          (* add eq assertion case for ef & ef' *)
+          (*assertion (external_function_eq ef ef');*)
+          assertion (is_green_smove_builtinb ef && LTL.eqb col Green
+                    || is_blue_smove_builtinb ef && LTL.eqb col Blue);
+            assertion (check_succ s b3);
+            Some(BSmove2 col arg r mv1 src dst mv2 s)
+          | _, _ => None
+          end
+
+          (*let (mv, b1) := extract_moves nil b in*)
+          (*assertion (check_succ s b1); Some(BSmove arg res mv s)*)
       | _ => None
       end
   | Icond cond args s1 s2 =>
@@ -859,6 +884,18 @@ Definition remove_equations_builtin_res
   | _, _ => None
   end.
 
+Definition remove_equations_builtin_loc
+    (env: regenv) (res: builtin_res reg) (res': builtin_res loc) (e: eqs) : option eqs :=
+  match res, res' with
+  | BR r, BR l => Some (remove_equation (Eq Full r l) e)
+  | BR r, BR_splitlong (BR rhi) (BR rlo) =>
+      assertion (typ_eq (env r) Tlong);
+      if Loc.eq rhi rlo then None else
+        Some (remove_equation (Eq Low r rlo)
+                (remove_equation (Eq High r rhi) e))
+  | BR_none, BR_none => Some e
+  | _, _ => None
+  end.
 (** [can_undef ml] returns true if all machine registers in [ml] are
   unconstrained and can harmlessly be undefined. *)
 
@@ -968,6 +1005,11 @@ Fixpoint track_moves (env: regenv) (mv: moves) (e: eqs) : option eqs :=
       assertion (negb Archi.ptr64);
       do e1 <- track_moves env mv e;
       subst_loc_part (R dst) (R src) High e1
+  | MVSmove src dst :: mv =>
+      do e1 <- track_moves env mv e;
+      assertion (can_undef_except dst (destroyed_by_move src dst)) e1;
+      assertion (well_typed_move env dst e1);
+      subst_loc dst src e1
   end.
 
 (** [transfer_use_def args res args' res' undefs e] returns the set
@@ -1106,6 +1148,13 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
         | _              => add_equations_builtin_args env args args' e2
         end;
       track_moves env mv1 e3
+  | BSmove2 col arg res mv1 arg' res' mv2 s =>
+      do e1 <- track_moves env mv2 e;
+      let e2 := remove_equation (Eq Full res res') e1 in
+      assertion (reg_unconstrained res e2);
+      assertion (loc_unconstrained res' e2);
+      let e3 := add_equation (Eq Full arg arg') e2 in
+      track_moves env mv1 e3
   | BScond cond args mv args' s1 s2 =>
       assertion (can_undef (destroyed_by_cond cond) e);
       do e1 <- add_equations args args' e;
@@ -1132,10 +1181,12 @@ Definition transfer (f: RTL.function) (env: regenv) (shapes: PTree.t block_shape
   | Error _ => after
   | OK e =>
       match shapes!pc with
-      | None => Error(MSG "At PC " :: POS pc :: MSG ": unmatched block" :: nil)
+      (*| None => Error(MSG "At PC " :: POS pc :: MSG ": unmatched block" :: nil)*)
+      | None => after
       | Some shape =>
           match transfer_aux f env shape e with
           | None => Error(MSG "At PC " :: POS pc :: MSG ": invalid register allocation" :: nil)
+          (*| None => after*)
           | Some e' => OK e'
           end
       end
@@ -1261,6 +1312,7 @@ Definition successors_block_shape (bsh: block_shape) : list node :=
   match bsh with
   | BSnop mv s => s :: nil
   | BSmove src dst mv s => s :: nil
+  | BSmove2 col arg res mv1 arg' res' mv2 s => s :: nil
   | BSmakelong src1 src2 dst mv s => s :: nil
   | BSlowlong src dst mv s => s :: nil
   | BShighlong src dst mv s => s :: nil

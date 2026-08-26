@@ -48,6 +48,12 @@ Fixpoint loc_list_live (llv : list loc) (lv : Locset.t) {struct llv} : Locset.t 
   | h :: t => loc_list_live t (loc_live h lv)
   end.
 
+Fixpoint loc_dead_res (llv : builtin_res loc) (lv : Locset.t) {struct llv} : Locset.t :=
+  match llv with
+  | BR l => loc_dead l lv
+  | _ => lv
+  end.
+
 
 Definition transf_in (ins : instruction) (after: Locset.t) : Locset.t :=
   match ins with
@@ -55,6 +61,7 @@ Definition transf_in (ins : instruction) (after: Locset.t) : Locset.t :=
   | Lload chunk addr args dst => mreg_list_live args (loc_dead (R dst) after)
   | Lgetstack sl ofs ty dst => loc_live (S sl ofs ty) (loc_dead (R dst) after)
   | Lsetstack src sl ofs ty => loc_live (R src) (loc_dead (S sl ofs ty) after)
+  | Lsmove col src dst => loc_live src (loc_dead dst after)
   | Lstore chunk addr args src => mreg_list_live args (loc_live (R src) after)
   | Lcall sg ros => loc_sum_live ros after
   | Ltailcall sg ros => loc_sum_live ros Locset.empty

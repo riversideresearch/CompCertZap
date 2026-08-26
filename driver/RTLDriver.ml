@@ -69,9 +69,12 @@ let compile_c_file sourcename ifile ofile =
       print_endline "RTL CHECK DRIVER STARTED";
       flush stdout;
 
+
   (* if LTLcolorcheck.check_program rtl then begin *)
 if RTLcolorcheck.check_program rtl then begin
     print_endline "RTL program is well-colored";
+    let oc2 = open_out "test.rtl" in
+    PrintRTL.print_program oc2 rtl
     (* exit 0 *)
 end else begin
     print_endline "RTL program is NOT well-colored";
@@ -90,7 +93,9 @@ let ltl =
 in
 
 let oc = open_out "test.ltl" in
+
 PrintLTL.print_program oc ltl;
+
 close_out oc;
 
   if !option_tmr then begin

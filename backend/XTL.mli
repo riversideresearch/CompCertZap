@@ -25,6 +25,8 @@ type var = V of reg * typ | L of loc
 
 type node = P.t
 
+type color = Green | Blue | White
+
 type instruction =
   | Xmove of var * var
   | Xreload of var * var
@@ -36,6 +38,7 @@ type instruction =
   | Xcall of signature * (var, ident) sum * var list * var list
   | Xtailcall of signature * (var, ident) sum * var list
   | Xbuiltin of external_function * var builtin_arg list * var builtin_res
+  | Xsmove of color * var * var 
   | Xbranch of node
   | Xcond of condition * var list * node * node
   | Xjumptable of var * node list

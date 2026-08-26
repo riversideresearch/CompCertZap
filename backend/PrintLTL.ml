@@ -58,6 +58,13 @@ let print_succ pp s dfl =
   let s = P.to_int s in
   if s <> dfl then fprintf pp "goto %d" s
 
+let color = function
+    | Green -> "Green"
+    | Blue -> "Blue"
+    | White -> "White"
+    | _ -> ""
+
+
 let print_instruction pp succ = function
   | Lop(op, args, res) ->
       fprintf pp "%a = %a" mreg res (print_operation mreg) (op, args)
@@ -68,6 +75,10 @@ let print_instruction pp succ = function
       fprintf pp "%a = %a" mreg dst slot (sl, ofs, ty)
   | Lsetstack(src, sl, ofs, ty) ->
       fprintf pp "%a = %a" slot (sl, ofs, ty) mreg src
+  | Lsmove(col, src, dst) ->
+     fprintf pp " %a = smove_%s(%a)" loc dst (color col)
+        loc src 
+
   | Lstore(chunk, addr, args, src) ->
       fprintf pp "%s[%a] = %a"
          (name_of_chunk chunk) (print_addressing mreg) (addr, args) mreg src

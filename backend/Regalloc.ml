@@ -41,6 +41,7 @@ open Conventions1
 open Conventions
 open IRC
 open XTL
+open SharedFaultPolicy
 
 (* Detection of 2-address operations *)
 
@@ -92,10 +93,26 @@ let move v1 v2 k =
   end else
     Xmove(v1, v2) :: k
 
+let move2 v1 v2 k =
+  if v1 = v2 then
+    k
+  else if XTL.is_stack_reg v1 then begin
+    let t = new_temp (typeof v2) in Xsmove(White, v1, t) :: Xsmove(White, t, v2) :: k
+  end else if XTL.is_stack_reg v2 then begin
+    let t = new_temp (typeof v1) in Xsmove(White, v1, t) :: Xsmove(White, t, v2) :: k
+  end else
+    Xsmove(White, v1, v2) :: k
+    
 let rec movelist vl1 vl2 k =
   match vl1, vl2 with
   | [], [] -> k
   | v1 :: vl1, v2 :: vl2 -> move v1 v2 (movelist vl1 vl2 k)
+  | _, _ -> assert false
+
+let rec movelist2 vl1 vl2 k =
+  match vl1, vl2 with
+  | [], [] -> k
+  | v1 :: vl1, v2 :: vl2 -> move2 v1 v2 (movelist2 vl1 vl2 k)
   | _, _ -> assert false
 
 let parmove_regs2locs tyenv srcs dsts k =
@@ -105,7 +122,7 @@ let parmove_regs2locs tyenv srcs dsts k =
     | [], [] ->
         begin match srcs', dsts' with
         | [], [] -> k
-        | [src], [dst] -> move src dst k
+        | [src], [dst] -> move2 src dst k
         | _, _ -> Xparmove(srcs', dsts', new_temp Tint, new_temp Tfloat) :: k
         end
     | r :: rl, One l :: ll ->
@@ -132,7 +149,8 @@ let parmove_locs2regs tyenv srcs dsts k =
     | [], [] ->
         begin match srcs', dsts' with
         | [], [] -> k
-        | [src], [dst] -> move src dst k
+        | [src], [dst] -> move2 src dst k
+        (* | [src], [dst] -> move src dst k *)
         | _, _ -> Xparmove(srcs', dsts', new_temp Tint, new_temp Tfloat) :: k
         end
     | One l :: ll, r :: rl ->
@@ -285,16 +303,26 @@ let block_of_RTL_instr funsig tyenv = function
       let args' = loc_arguments sg in
       parmove_regs2locs tyenv args args'
         [Xtailcall(sg, sum_left_map (vreg tyenv) ros, vlocpairs args')]
-  | RTL.Ibuiltin(ef, args, res, s) ->
+  | RTL.Ibuiltin(ef, [BA arg], BR res, s) when is_green_smove_builtinb ef ->
+          [Xsmove(Green, vreg tyenv arg, vreg tyenv res); Xbranch s]
+  | RTL.Ibuiltin(ef, [BA arg], BR res, s) when is_blue_smove_builtinb ef ->
+          [Xsmove(Blue, vreg tyenv arg, vreg tyenv res); Xbranch s]
+  | RTL.Ibuiltin(ef, args, res, s)  ->
       let (cargs, cres) = mregs_for_builtin ef in
       let args1 = List.map (convert_builtin_arg tyenv) args
       and res1 = convert_builtin_res tyenv res in
       let (args2, _) = constrain_builtin_args args1 cargs
       and (res2, _)  = constrain_builtin_res res1 cres in
-      movelist (params_of_builtin_args args1) (params_of_builtin_args args2)
-         (Xbuiltin(ef, args2, res2) ::
-            movelist (params_of_builtin_res res2) (params_of_builtin_res res1)
-               [Xbranch s])
+      (* if is_vote_builtinb ef then *)
+          movelist (params_of_builtin_args args1) (params_of_builtin_args args2)
+             (Xbuiltin(ef, args2, res2) ::
+                movelist2 (params_of_builtin_res res2) (params_of_builtin_res res1)
+                   [Xbranch s])
+      (* else *)
+      (*     movelist (params_of_builtin_args args1) (params_of_builtin_args args2) *)
+      (*        (Xbuiltin(ef, args2, res2) :: *)
+      (*           movelist (params_of_builtin_res res2) (params_of_builtin_res res1) *)
+      (*              [Xbranch s]) *)
   | RTL.Icond(cond, args, s1, s2) ->
       [Xcond(cond, vregs tyenv args, s1, s2)]
   | RTL.Ijumptable(arg, tbl) ->
@@ -378,6 +406,11 @@ let live_before instr after =
       vset_removeres res after
   | Xbuiltin(ef, args, res) ->
       vset_addargs args (vset_removeres res after)
+  | Xsmove(col, src, dst) ->
+        if VSet.mem dst after then
+            VSet.add src (VSet.remove dst after)
+        else
+            after
   | Xbranch s ->
       after
   | Xcond(cond, args, s1, s2) ->
@@ -574,6 +607,9 @@ let spill_costs f =
             charge_list 10 1 (params_of_builtin_args args);
             charge_list 10 1 (params_of_builtin_res res)
         end
+    | Xsmove(col, src, dst) -> 
+            charge 10 1 src;
+            charge 10 1 dst;
     | Xbranch _ -> ()
     | Xcond(cond, args, _, _) ->
         charge_list 10 1 args
@@ -716,6 +752,10 @@ let add_interfs_instr g instr live =
             clob
       | _ -> ()
       end
+  | Xsmove(col, src, dst) -> 
+          add_interfs_def g dst live;
+          IRC.add_interf g src dst
+
   | Xbranch s ->
       ()
   | Xcond(cond, args, s1, s2) ->
@@ -795,6 +835,9 @@ let tospill_instr alloc instr ts =
   | Xbuiltin(ef, args, res) ->
       addlist_tospill alloc (params_of_builtin_args args)
          (addlist_tospill alloc (params_of_builtin_res res) ts)
+  | Xsmove(ef, arg, dst) -> ts
+          (* addlist_tospill alloc (params_of_builtin_args arg) *)
+          (* (addlist_tospill alloc (params_of_builtin_res dst) ts) *)
   | Xbranch s ->
       ts
   | Xcond(cond, args, s1, s2) ->
@@ -814,7 +857,7 @@ let tospill_function f alloc =
     (fun ts blk -> tospill_block alloc blk ts)
     f.fn_code VSet.empty
 
-
+
 (********************* Spilling ***********************)
 
 (* We follow a semi-naive spilling strategy.  By default, we spill at
@@ -883,6 +926,14 @@ let save_var tospill eqs v =
     (t, [Xspill(t, v)], add v t (kill v eqs))
   end
 
+let save_var2 tospill eqs v =
+  if not (VSet.mem v tospill) then
+    (v, [], kill v eqs)
+  else begin
+    let t = new_temp (typeof v) in
+    (t, [Xsmove(White, t, v)], add v t (kill v eqs))
+  end
+
 let rec save_res tospill eqs = function
   | BR v ->
       let (t, c1, eqs1) = save_var tospill eqs v in
@@ -892,6 +943,17 @@ let rec save_res tospill eqs = function
   | BR_splitlong(hi, lo) ->
       let (hi', c1, eqs1) = save_res tospill eqs hi in
       let (lo', c2, eqs2) = save_res tospill eqs1 lo in
+      (BR_splitlong(hi', lo'), c1 @ c2, eqs2)
+
+let rec save_res2 tospill eqs = function
+  | BR v ->
+      let (t, c1, eqs1) = save_var2 tospill eqs v in
+      (BR t, c1, eqs1)
+  | BR_none ->
+      (BR_none, [], eqs)
+  | BR_splitlong(hi, lo) ->
+      let (hi', c1, eqs1) = save_res2 tospill eqs hi in
+      let (lo', c2, eqs2) = save_res2 tospill eqs1 lo in
       (BR_splitlong(hi', lo'), c1 @ c2, eqs2)
 
 (* Trimming equations when we have too many or when they are too old.
@@ -928,6 +990,7 @@ let spill_instr tospill eqs instr =
       assert false
   | Xspill(src, dst) ->
       assert false
+
   | Xparmove(srcs, dsts, itmp, ftmp) ->
       ([instr], List.fold_right kill dsts eqs)
   | Xop(op, args, res) ->
@@ -985,9 +1048,29 @@ let spill_instr tospill eqs instr =
   | Xbuiltin((EF_annot _ | EF_debug _), args, res) ->
       ([instr], eqs)
   | Xbuiltin(ef, args, res) ->
-      let (args', c1, eqs1) = reload_args tospill eqs args in
-      let (res', c2, eqs2) = save_res tospill eqs1 res in
-      (c1 @ Xbuiltin(ef, args', res') :: c2, eqs2)
+
+          if is_vote_builtinb ef then
+              (
+              let (args', c1, eqs1) = reload_args tospill eqs args in
+              let (res', c2, eqs2) = save_res2 tospill eqs1 res in
+              c1 @ Xbuiltin(ef, args', res') :: c2, eqs2)
+          else
+
+
+              (
+                  let (args', c1, eqs1) = reload_args tospill eqs args in
+                  let (res', c2, eqs2) = save_res tospill eqs1 res in
+                  c1 @ Xbuiltin(ef, args', res') :: c2, eqs2)
+  | Xsmove(ef, arg, dst) -> 
+          ([instr], eqs)
+          (* let (args', c1, eqs1) = reload_args tospill eqs arg in *)
+          (* let (res', c2, eqs2) = save_res tospill eqs1 dst in *)
+          (* let nres = (match c2 with *)
+          (*     | Xspill(src, dst') :: _ -> (BR dst') *)
+          (*     | [] -> dst *)
+          (*     | _ :: _ -> dst *)
+          (*             ) in *)
+          (* ([Xsmove(ef, arg, nres)], []) *)
   | Xbranch s ->
       ([instr], eqs)
   | Xcond(cond, args, s1, s2) ->
@@ -1020,7 +1103,7 @@ let spill_function f tospill round =
   max_age := (if round <= 10 then 3 else if round <= 20 then 1 else 0);
   transform_basic_blocks (spill_block tospill) [] f
 
-
+
 (***************** Generation of LTL from XTL ***********************)
 
 (** Apply a register allocation to an XTL function, producing an LTL function.
@@ -1040,6 +1123,7 @@ let make_move src dst k =
   match src, dst with
   | R rsrc, R rdst ->
       if rsrc = rdst then k else LTL.Lop(Omove, [rsrc], rdst) :: k
+    (* if rsrc = rdst then k else LTL.Lsmove(LTL.White, R rsrc, R rdst) :: k *)
   | R rsrc, Locations.S(sl, ofs, ty) ->
       LTL.Lsetstack(rsrc, sl, ofs, ty) :: k
   | Locations.S(sl, ofs, ty), R rdst ->
@@ -1061,16 +1145,23 @@ let make_parmove srcs dsts itmp ftmp k =
   let add_move s d =
     match s, d with
     | R rs, R rd ->
-        code := LTL.Lop(Omove, [rs], rd) :: !code
+        (* code := LTL.Lop(Omove, [rs], rd) :: !code *)
+    (* if rsrc = rdst then k else LTL.Lsmove(LTL.White, R rsrc, R rdst) :: k *)
+        code := LTL.Lsmove(LTL.White, R rs, R rd) :: !code
     | R rs, Locations.S(sl, ofs, ty) ->
-        code := LTL.Lsetstack(rs, sl, ofs, ty) :: !code
+        (* code := LTL.Lsetstack(rs, sl, ofs, ty) :: !code *)
+        code := LTL.Lsmove(LTL.White, s, d) :: !code
     | Locations.S(sl, ofs, ty), R rd ->
-        code := LTL.Lgetstack(sl, ofs, ty, rd) :: !code
+        (* code := LTL.Lgetstack(sl, ofs, ty, rd) :: !code *)
+        code := LTL.Lsmove(LTL.White, s, d) :: !code
     | Locations.S(sls, ofss, tys), Locations.S(sld, ofsd, tyd) ->
         let tmp = temp_for (class_of_type tys) in
         (* code will be reversed at the end *)
-        code := LTL.Lsetstack(tmp, sld, ofsd, tyd) ::
-                LTL.Lgetstack(sls, ofss, tys, tmp) :: !code
+        (* code := LTL.Lsetstack(tmp, sld, ofsd, tyd) :: *)
+        (*         LTL.Lgetstack(sls, ofss, tys, tmp) :: !code *)
+        code := LTL.Lsmove(LTL.White, tmp, d) :: 
+                LTL.Lsmove(LTL.White, s, tmp) :: !code
+
     in
   let rec move_one i =
     if src.(i) <> dst.(i) then begin
@@ -1081,7 +1172,8 @@ let make_parmove srcs dsts itmp ftmp k =
           | To_move ->
               move_one j
           | Being_moved ->
-              let tmp = R (temp_for (class_of_loc src.(j))) in
+              (* let tmp = R (temp_for (class_of_loc src.(j))) in *)
+              let tmp = (temp_for (class_of_loc src.(j))) in
               add_move src.(j) tmp;
               src.(j) <- tmp
           | Moved ->
@@ -1095,13 +1187,20 @@ let make_parmove srcs dsts itmp ftmp k =
   done;
   List.rev_append !code k
 
+let conv_col = function
+    | Green -> LTL.Green
+    | Blue -> LTL.Blue
+    | White -> LTL.White
+
 let transl_instr alloc instr k =
   match instr with
   | Xmove(src, dst) | Xreload(src, dst) | Xspill(src, dst) ->
       make_move (alloc src) (alloc dst) k
-  | Xparmove(srcs, dsts, itmp, ftmp) ->
+  | Xparmove(srcs, dsts, itmp, ftmp) -> 
+      (* make_parmove (List.map alloc srcs) (List.map alloc dsts) *)
+      (*              (mreg_of alloc itmp) (mreg_of alloc ftmp) k *)
       make_parmove (List.map alloc srcs) (List.map alloc dsts)
-                   (mreg_of alloc itmp) (mreg_of alloc ftmp) k
+                   (alloc itmp) (alloc ftmp) k
   | Xop(op, args, res) ->
       let rargs = mregs_of alloc args
       and rres  = mreg_of alloc res in
@@ -1124,8 +1223,16 @@ let transl_instr alloc instr k =
   | Xtailcall(sg, vos, args) ->
       LTL.Ltailcall(sg, mros_of alloc vos) :: []
   | Xbuiltin(ef, args, res) ->
-      LTL.Lbuiltin(ef, List.map (AST.map_builtin_arg alloc) args,
-                       AST.map_builtin_res (mreg_of alloc) res) :: k
+          if not (is_green_smove_builtinb ef || is_blue_smove_builtinb ef
+                    ) then
+              LTL.Lbuiltin(ef, List.map (AST.map_builtin_arg alloc) args,
+                               AST.map_builtin_res (mreg_of alloc) res) :: k
+          else 
+              k
+  | Xsmove(col, src, dst) ->
+          LTL.Lsmove((conv_col col), (alloc src), (alloc dst)) :: k
+          (* LTL.Lsmove(ef, List.map (AST.map_builtin_arg alloc) arg,  *)
+          (*   (AST.map_builtin_res alloc) dst) :: k *)
   | Xbranch s ->
       LTL.Lbranch s :: []
   | Xcond(cond, args, s1, s2) ->
@@ -1147,7 +1254,7 @@ let transl_function fn alloc =
     LTL.fn_code = PTree.map1 (transl_block alloc) fn.fn_code
   }
 
-
+
 (******************* All together *********************)
 
 exception Timeout
